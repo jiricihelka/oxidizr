@@ -16,6 +16,10 @@ Rules:
 
 ## Agreed features
 
+Scheduling lives in `PLAN.md`: F1+F2 land with Phase 1, F4's harness from day one
+(xtask); F3/F5/F6/F7 and the `oracle` command are Phase 4; F8 rides along with JSON
+output (Phase 1 flag).
+
 ### F1 — `reconcile`: re-attach layout ids after DSL edits ✅
 
 - Problem: the shared sequential id counter regenerates ids on every parse, so reordering

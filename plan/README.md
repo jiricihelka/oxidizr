@@ -14,6 +14,7 @@ disagree, the source wins — update the notes.
 | `JSON-FORMAT.md`              | Field-level JSON reference: keys, writer rules, schema-vs-code drift   | Writing/reading workspace JSON     |
 | `FIXTURES.md`                 | Index of reference DSL/JSON test fixtures (future golden corpus)       | Building or extending test harness |
 | `STRUCTURIZR.md`              | Reference repo map: modules, deps, key classes, build                  | Hunting for a class/behavior       |
+| `PLAN.md`                     | Phase roadmap (parsers → converters → GUI → CLI tools)                 | Starting any work / scoping scope  |
 | `DEVIATIONS.md`               | Agreed, compat-safe differences from the reference + Locked list       | Before implementing ANY behavior   |
 | `ADDITIONAL_FEATURES.md`      | Registry of features Structurizr doesn't have (✅ agreed / 💡 ideas)    | Adding anything beyond parity      |
 | `research/notes-features.md`  | Raw deep notes behind FEATURES.md (see errata!)                        | Deep dive on a specific feature    |
