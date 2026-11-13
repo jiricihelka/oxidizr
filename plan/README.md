@@ -14,6 +14,8 @@ disagree, the source wins — update the notes.
 | `JSON-FORMAT.md`              | Field-level JSON reference: keys, writer rules, schema-vs-code drift   | Writing/reading workspace JSON     |
 | `FIXTURES.md`                 | Index of reference DSL/JSON test fixtures (future golden corpus)       | Building or extending test harness |
 | `STRUCTURIZR.md`              | Reference repo map: modules, deps, key classes, build                  | Hunting for a class/behavior       |
+| `DEVIATIONS.md`               | Agreed, compat-safe differences from the reference + Locked list       | Before implementing ANY behavior   |
+| `ADDITIONAL_FEATURES.md`      | Registry of features Structurizr doesn't have (✅ agreed / 💡 ideas)    | Adding anything beyond parity      |
 | `research/notes-features.md`  | Raw deep notes behind FEATURES.md (see errata!)                        | Deep dive on a specific feature    |
 | `research/notes-structure.md` | Raw deep notes behind STRUCTURIZR.md                                   | Deep dive on repo internals        |
 
@@ -31,6 +33,10 @@ disagree, the source wins — update the notes.
   (see FIXTURES.md).
 
 ## Conventions
+
+- Behavioral deviations from the reference are decided and recorded in `DEVIATIONS.md`;
+  new (non-parity) features are registered in `ADDITIONAL_FEATURES.md`. Read both before
+  implementing anything user-visible.
 
 - One topic per file; tables over prose; exact Java class names quoted as `Code`.
 - Facts marked `(verified)` were checked directly against source at the pinned commit;

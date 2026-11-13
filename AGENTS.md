@@ -21,7 +21,8 @@ Scaffolding the Cargo workspace (below) and writing design docs into `plan/` is 
 
 - `plan/` — research notes, design documents and architecture decisions (start with
   `plan/README.md` — it indexes the distilled structurizr reference: `FEATURES.md`,
-  `DSL.md`, `JSON-FORMAT.md`, `FIXTURES.md`, `STRUCTURIZR.md`). Read everything here
+  `DSL.md`, `JSON-FORMAT.md`, `FIXTURES.md`, `STRUCTURIZR.md`) plus the decision
+  registers `DEVIATIONS.md` and `ADDITIONAL_FEATURES.md`. Read everything here
   before making significant design decisions; write a short plan doc there when
   introducing or changing an architectural decision.
 - `crates/` — Cargo workspace members (to be created):
@@ -127,6 +128,14 @@ vendoring, check the license of the specific version you touch.
 
 ## Notes for agents
 
+- `plan/DEVIATIONS.md` lists the agreed, compatibility-safe ways oxidizr differs from
+  the reference (diagnostics, rejected JVM-only directives, opt-in flags) and a
+  "Locked" list that must never deviate. Check it before implementing any behavior, and
+  record any newly proposed deviation there first.
+- Purely additive features (F1–F8: reconcile, fmt, diff, oracle, lsp, query, init,
+  `--strip-volatile`; plus ideas awaiting sign-off) are registered in
+  `plan/ADDITIONAL_FEATURES.md` — check it before building anything that Structurizr
+  doesn't have, and get sign-off for 💡 ideas before implementing them.
 - First PR in an empty area: scaffold exactly the layout above; don't add exporter or
   server functionality that wasn't asked for.
 - Never "fix" a compatibility mismatch by changing the expected Structurizr behavior —
