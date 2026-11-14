@@ -17,6 +17,7 @@ pub mod model;
 pub mod properties;
 pub mod tags;
 pub mod validate;
+pub mod viewops;
 pub mod views;
 
 /// `DeploymentElement.DEFAULT_DEPLOYMENT_ENVIRONMENT` — the environment name
@@ -42,3 +43,4 @@ pub use configuration::{
 pub use error::CoreError;
 pub use ids::{ElementId, Id, IdGenerator, RelationshipId};
 pub use validate::{ValidationError, validate, validate_model, validate_views};
+pub use viewops::ViewRef;

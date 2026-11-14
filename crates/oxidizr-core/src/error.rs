@@ -88,13 +88,48 @@ pub enum CoreError {
         /// The unknown id.
         id: Id,
     },
+    /// `Model.addRelationship` returned null (reference `Element.has` matches
+    /// source+destination+description) — the DSL layer turns this into
+    /// `A relationship between "A" and "B" already exists` (canonical names).
+    DuplicateRelationship {
+        /// Canonical name of the source element.
+        source: String,
+        /// Canonical name of the destination element.
+        destination: String,
+    },
+    /// Reference `IllegalArgumentException("Relationships cannot be added
+    /// between parents and children.")` in `Model.addRelationship`.
+    ParentChildRelationship,
+    /// Reference `ElementNotPermittedInViewException` — message texts are the
+    /// reference strings verbatim (the DSL content parsers CATCH this one).
+    ElementNotPermittedInView(String),
+    /// Reference `IllegalArgumentException("The element named 'X' cannot be
+    /// removed from this view.")` in `ModelView.removeElement`.
+    ElementCannotBeRemoved {
+        /// Element name.
+        name: String,
+    },
+    /// Dynamic-view `add`: no matching model relationship. Reference texts
+    /// `A relationship between A and B does not exist in model.` (and the
+    /// `… with technology T …` variant).
+    DynamicRelationshipMissing {
+        /// Source element name.
+        source: String,
+        /// Destination element name.
+        destination: String,
+        /// Technology filter, when one was given.
+        technology: Option<String>,
+    },
+    /// Reference `IllegalArgumentException("None of the specified elements
+    /// exist in this view.")` in `addAnimation`.
+    NoAnimatableElements,
 }
 
 impl fmt::Display for CoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CoreError::NameRequired => f.write_str("A name must be specified."),
-            CoreError::ViewKeyRequired => f.write_str("A view key must be specified."),
+            CoreError::ViewKeyRequired => f.write_str("A key must be specified."),
             CoreError::DuplicateTopLevelName { name } => {
                 write!(f, "A top-level element named '{name}' already exists.")
             }
@@ -134,6 +169,40 @@ impl fmt::Display for CoreError {
             }
             CoreError::DeploymentNodeNotFound { id } => {
                 write!(f, "There is no deployment node with the ID \"{id}\".")
+            }
+            CoreError::DuplicateRelationship {
+                source,
+                destination,
+            } => write!(
+                f,
+                "A relationship between \"{source}\" and \"{destination}\" already exists"
+            ),
+            CoreError::ParentChildRelationship => {
+                f.write_str("Relationships cannot be added between parents and children.")
+            }
+            CoreError::ElementNotPermittedInView(msg) => f.write_str(msg),
+            CoreError::ElementCannotBeRemoved { name } => write!(
+                f,
+                "The element named '{name}' cannot be removed from this view."
+            ),
+            CoreError::DynamicRelationshipMissing {
+                source,
+                destination,
+                technology: Some(tech),
+            } => write!(
+                f,
+                "A relationship between {source} and {destination} with technology {tech} does not exist in model."
+            ),
+            CoreError::DynamicRelationshipMissing {
+                source,
+                destination,
+                technology: None,
+            } => write!(
+                f,
+                "A relationship between {source} and {destination} does not exist in model."
+            ),
+            CoreError::NoAnimatableElements => {
+                f.write_str("None of the specified elements exist in this view.")
             }
         }
     }
