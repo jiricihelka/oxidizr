@@ -4,18 +4,19 @@
 //! v6.2.4 truth: `WorkspaceConfiguration` is `{scope?, visibility?, users?}` —
 //! the `branding`/`styles`/`terminology` blocks seen inside a *top-level*
 //! `configuration` in v5-era JSONs are read-IGNORED (the live styles home is
-//! `views.configuration`); `users` is legacy and never written (read
-//! tolerance only), so it is deliberately absent from the model.
+//! `views.configuration`); `users` is legacy but DOES round-trip (package-
+//! private `setUsers` — Jackson setter visibility is `ANY`).
 
 /// Workspace scope (`configuration/WorkspaceScope`, drives
-/// `WorkspaceScopeValidatorFactory`).
+/// `WorkspaceScopeValidatorFactory`). Java has exactly these two constants —
+/// "undefined" is represented by `None`, not an enum value (verified @
+/// `ad34036`; JSON names are the Java constant names, `Jackson` default
+/// enum serialization).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceScope {
-    /// `"undefined"` — scope-free workspace.
-    Undefined,
-    /// `"landscape"` — landscape-scope validator.
+    /// `"Landscape"` — landscape-scope validator.
     Landscape,
-    /// `"softwareSystem"` — software-system-scope validator.
+    /// `"SoftwareSystem"` — software-system-scope validator.
     SoftwareSystem,
 }
 
@@ -24,41 +25,106 @@ impl WorkspaceScope {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            WorkspaceScope::Undefined => "undefined",
-            WorkspaceScope::Landscape => "landscape",
-            WorkspaceScope::SoftwareSystem => "softwareSystem",
+            WorkspaceScope::Landscape => "Landscape",
+            WorkspaceScope::SoftwareSystem => "SoftwareSystem",
         }
     }
 
-    /// Parse the JSON spelling (unknown values: the reference `Jackson`
-    /// deserializer FAILS; loaders map that to a structural error).
+    /// Parse the JSON spelling (exact case; unknown enum values deserialize to
+    /// null — `READ_UNKNOWN_ENUM_VALUES_AS_NULL`).
     #[must_use]
     pub fn parse(s: &str) -> Option<WorkspaceScope> {
         match s {
-            "undefined" => Some(WorkspaceScope::Undefined),
-            "landscape" => Some(WorkspaceScope::Landscape),
-            "softwareSystem" => Some(WorkspaceScope::SoftwareSystem),
+            "Landscape" => Some(WorkspaceScope::Landscape),
+            "SoftwareSystem" => Some(WorkspaceScope::SoftwareSystem),
             _ => None,
         }
     }
 }
 
-/// Workspace visibility (`configuration/Visibility`).
+/// Workspace visibility (`configuration/Visibility`; JSON = Java names).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
-    /// `"private"`.
+    /// `"Private"`.
     Private,
-    /// `"public"`.
+    /// `"Public"`.
     Public,
 }
 
+impl Visibility {
+    /// JSON spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Visibility::Private => "Private",
+            Visibility::Public => "Public",
+        }
+    }
+
+    /// Parse the JSON spelling (exact case).
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Visibility> {
+        match s {
+            "Private" => Some(Visibility::Private),
+            "Public" => Some(Visibility::Public),
+            _ => None,
+        }
+    }
+}
+
+/// Access role for a legacy `configuration.users` entry
+/// (`configuration/Role`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// `"ReadWrite"`.
+    ReadWrite,
+    /// `"ReadOnly"`.
+    ReadOnly,
+}
+
+impl Role {
+    /// JSON spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Role::ReadWrite => "ReadWrite",
+            Role::ReadOnly => "ReadOnly",
+        }
+    }
+
+    /// Parse the JSON spelling (exact case).
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Role> {
+        match s {
+            "ReadWrite" => Some(Role::ReadWrite),
+            "ReadOnly" => Some(Role::ReadOnly),
+            _ => None,
+        }
+    }
+}
+
+/// A legacy `configuration.users` entry (`configuration/User`); the reference
+/// keeps a `TreeSet` ordered by `username` (`User.compareTo`). Round-trips in
+/// both directions: `setUsers` is package-private, which Jackson sees (default
+/// setter visibility is `ANY` — proven by `setTags`/oracle probe 2026-11-14).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct User {
+    /// Username.
+    pub username: String,
+    /// Access role — nullable bean field (unknown/absent JSON `role` binds
+    /// null; the reference writer then omits the key — probe 2026-11-14).
+    pub role: Option<Role>,
+}
+
 /// The workspace `configuration` object (`configuration/WorkspaceConfiguration`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WorkspaceConfiguration {
     /// Workspace scope (drives the scope validator on load).
     pub scope: Option<WorkspaceScope>,
     /// Visibility (written only when set).
     pub visibility: Option<Visibility>,
+    /// Legacy user list (see [`User`]).
+    pub users: Vec<User>,
 }
 
 /// A Structurizr workspace: `model` + `views` + `documentation` + top-level

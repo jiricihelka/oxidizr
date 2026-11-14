@@ -185,6 +185,27 @@ pub enum InteractionStyle {
     Asynchronous,
 }
 
+impl InteractionStyle {
+    /// JSON spelling (the Java constant name).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            InteractionStyle::Synchronous => "Synchronous",
+            InteractionStyle::Asynchronous => "Asynchronous",
+        }
+    }
+
+    /// Parse the JSON spelling (exact case).
+    #[must_use]
+    pub fn parse(s: &str) -> Option<InteractionStyle> {
+        match s {
+            "Synchronous" => Some(InteractionStyle::Synchronous),
+            "Asynchronous" => Some(InteractionStyle::Asynchronous),
+            _ => None,
+        }
+    }
+}
+
 /// `Relationship.getDefaultTags()`: a linked (implied / instance-replicated)
 /// relationship has NO default tags at all; a normal one gets `Relationship`,
 /// plus the interaction style tag when a style is set.

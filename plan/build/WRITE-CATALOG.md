@@ -76,7 +76,7 @@ Accepted edge-case deviations (recorded in `DEVIATIONS.md`):
 | JSON path | Keys (alphabetical; `?`=only when non-empty/non-null) |
 | --- | --- |
 | workspace | `configuration` (bean, always), `description?`, `documentation` (always), `id` (long, always incl. 0), `lastModifiedAgent?`, `lastModifiedDate?`, `lastModifiedUser?`, `model` (always), `name?`, `properties?` (§1), `thumbnail?`, `version?`, `views` (always) |
-| workspace.configuration | `scope?` (enum name `Landscape`/`SoftwareSystem`), `users?` (`[{username, role}]`, TreeSet), `visibility?` (enum name) |
+| workspace.configuration | `scope?` (enum name `Landscape`/`SoftwareSystem`), `users?` (`[{username, role}]`, TreeSet by username; `role` **omitted when null** — unknown/absent binds null; users DO round-trip), `visibility?` (enum name) |
 | model | `customElements?`, `deploymentNodes?`, `people?`, `properties?` (§1), `softwareSystems?` — each array TreeSet-ordered by **numeric id ascending** (§5) |
 | model.*.…relationships | nested under the SOURCE element only; TreeSet numeric-id order; implied/linked rels ride along (no tags, `linkedRelationshipId` set, technology copied) |
 
@@ -97,8 +97,8 @@ Accepted edge-case deviations (recorded in `DEVIATIONS.md`):
 | CustomElement | `metadata?` (String, DSL never sets it), `parent` (getter not ignored; always null → never written) |
 | DeploymentNode | `children?`, `description?`, `environment` (String, always), `infrastructureNodes?`, `instances` (**String**, default `"1"`; primitive bean → always), `name`, `softwareSystemInstances?`, `containerInstances?`, `technology?`, `deploymentGroups?` (TreeSet sorted) |
 | InfrastructureNode | `environment`, `technology?` |
-| StaticStructureElementInstance (`softwareSystemInstances[]`/`containerInstances[]`) | `containerId`/`softwareSystemId`, `deploymentGroups?` (TreeSet), `environment`, `healthChecks?`, `id`, `instanceId` (**int**, always), `properties?`, `tags` — **no `name`, no `description`** (getName `@JsonIgnore`; reader derives name from the linked element) |
-| HealthCheck | `headers?` (**TreeMap** — keys in Java UTF-16 order), `interval` (int, always), `name`, `timeout` (long, always), `url` |
+| StaticStructureElementInstance (`softwareSystemInstances[]`/`containerInstances[]`) | full `ModelItem`+`GroupableElement` shared keys (`description?`, `group?`, `url?`, `perspectives?` — deployment elements ARE `GroupableElement`) + `containerId`/`softwareSystemId`, `deploymentGroups?` (TreeSet), `environment`, `healthChecks?` (TreeSet by name, url), `id`, `instanceId` (**int**, always) — **no `name`** (getName `@JsonIgnore` kills the whole Jackson property, both directions; reader derives name from the linked element after validation) |
+| HealthCheck | `headers?` — `getHeaders()` returns `new HashMap<>(TreeMap)`, so Jackson emits keys in **HashMap BUCKET order** replayed from UTF-16-sorted insertion (probe 2026-11-14: `{"X-A","X-B"}` writes `X-B` first — writer replays `javahash::entry_order`), `interval` (int, always), `name`, `timeout` (long, always), `url`. READ: `name` AND `url` are required non-null (`HttpHealthCheck.hashCode()` NPEs on Jackson's first `HashSet` insert otherwise — reference witness 2026-11-14); `interval`/`timeout` absent → the bean's `0`/`0` initializers (the 60 s interval is the DSL parser's, not the reader's) |
 
 Instance tag stacks (re-verified): `Software System Instance` / `Container
 Instance` only — no `Element`, no parent tags.
@@ -126,7 +126,7 @@ TreeSet-ordered `(order asc, key compareToIgnoreCase)`.
 | componentViews | same shape; `containerId`, `externalContainerBoundariesVisible` (default false) |
 | dynamicViews | `automaticLayout?`, `dimensions?`, `elementId?`, `elements?`, `externalBoundariesVisible` (**always**, default false), `paperSize?`, `relationships?` — NO `deploymentEnvironment` (private field, no accessors: invisible both directions) |
 | deploymentViews | static-view shape + `environment`, `softwareSystemId?` |
-| filteredViews | `baseViewKey`, `mode` (`Include`/`Exclude`), `tags` (**string array**, TreeSet UTF-16 order) — no elements/relationships (extends View, not ModelView); legacy `filter` read key is IGNORED (no setter) |
+| filteredViews | `baseViewKey`, `mode` (`Include`/`Exclude`; **omitted when null** — unknown/absent read value binds null), `tags` (**string array**, TreeSet UTF-16 order) — no elements/relationships (extends View, not ModelView); legacy `filter` read key is IGNORED (no setter) |
 | customViews | `animations?` + ModelView shape (no `softwareSystemId`? it is present when scoped — extends ModelView) |
 | imageViews | `content?`, `contentDark?`, `contentLight?`, `contentType?`, `elementId?` + View base only |
 
@@ -135,10 +135,15 @@ TreeSet-ordered `(order asc, key compareToIgnoreCase)`.
 `description?`, `id`, `order?` (String!), `position?`, `properties?` (§1),
 `response?` (Boolean wrapper NON_NULL — `false` IS written), `routing?`,
 `jump?`, `url?`, `vertices?` (array of `{x,y}` ints, insertion order).
-ModelView `automaticLayout` (bean when set): `edgeSeparation` (default 50),
-`nodeSeparation` (50), `rankDirection` (`LeftRight` default; enum name),
-`rankSeparation` (100), `vertices` (**primitive bool default true** — always
-written when autoLayout set). `dimensions` = `{height, width}` (primitives,
+ModelView `automaticLayout` (bean when set): `edgeSeparation`,
+`nodeSeparation`, `rankDirection` (enum name — **omitted when null**),
+`rankSeparation`, `vertices` (**primitive bool** — always written when
+autoLayout set). READ defaults are the bean's Java field initializers
+`0/0/0/false` + a NULL rank direction (probe `testdata/probes/m3b-defaults.json`);
+the `LeftRight/100/50/50/true` defaults belong to the DSL parser, NOT the
+reader. `setRankDirection` throws `A rank direction must be specified.` on a
+PRESENT-but-unparsable value (unknown enum → null) — the only guarded enum
+setter in the model; an absent key never calls it. `dimensions` = `{height, width}` (primitives,
 always). `paperSize` = enum name. `animations[]` = `{order, elements[],
 relationships[]}` (steps in insertion order; id sets TreeSet).
 
@@ -161,8 +166,11 @@ relationships[]}` (steps in insertion order; id sets TreeSet).
 `{ sections?, decisions?, images? }` — all three always-written-when-nonempty
 (TreeSet/List beans, NON_EMPTY hides the empty ones → `{ }`).
 `sections` = definition order (ArrayList); section object:
-`content`, `elementId?`, `filename?`, `format` (`Markdown`/`AsciiDoc` enum
-name), `order` (int, always), `title` (`@JsonInclude(ALWAYS)` → **always `""`**).
+`content`, `elementId?`, `format` (`Markdown`/`AsciiDoc` enum name; **omitted
+when null** — unknown/absent binds null, same for `Decision.format`), `order`
+(int, always), `title` (`@JsonInclude(ALWAYS)` → **always `""`**; `filename`
+is `@JsonIgnore` — read-only: the reader reads `filename`, the write side only
+sees the computed `title`).
 Element-level documentation: the `documentation {}` bean on
 SoftwareSystem/Container/Component always serializes (§2 table).
 decisions/images shapes are P4 (`!docs`/`!adrs` deferred) — read leniently,
@@ -178,7 +186,7 @@ write only what was read.
 | view `relationships[]` | text `id + "/" + order` UTF-16 ascending; null order concatenates as the literal string `null` |
 | styles `elements[]` / `relationships[]` | Java `AbstractStyle.compareTo`: tag UTF-16 ascending, UNLESS both sides carry `colorScheme` — then `colorScheme + "/" + tag` |
 | filtered `tags`, animation id sets, `deploymentGroups`, perspectives (by name), healthChecks (by name, then url) | Java `String.compareTo` = **UTF-16 code-unit** lexicographic (≠ Rust `str::cmp` for non-BMP vs U+E000-class keys — implement a `java_ord` comparator) |
-| headers map | UTF-16 key order (`TreeMap`) |
+| headers map | **HashMap bucket order** replayed from UTF-16-sorted (`TreeMap`) insertion — `new HashMap<>(TreeMap)` copy in `getHeaders()` (writer: `javahash::entry_order`) |
 | themes / vertices / sections / animation steps | insertion / definition order |
 | every `properties` map | §1 HashMap emulator |
 
@@ -189,12 +197,32 @@ write only what was read.
 (`READ_UNKNOWN_ENUM_VALUES_AS_NULL`), `ACCEPT_EMPTY_STRING_AS_NULL_OBJECT`.
 Jackson binding additionally gives:
 
-- **Read**: aliases/setters — `enterpriseContextViews` → landscape views;
-  `theme` (string) → `themes[]`; `defaultView`/`lastSavedView`;
-  `instances` accepts JSON numbers (coerced to string) and validates: positive
-  int, `a..b` (a ≤ b), `N..M`/`N..*` shapes — violations throw a read error
-  (`Number of instances must be a positive integer or a range.` /
+- **Read**: aliases/setters — `enterpriseContextViews` → landscape views
+  (REPLACES the set: the last key in document order wins); `theme` (string) →
+  `themes[]`; `defaultView`/`lastSavedView`; `users` (`setUsers` is
+  package-private — Jackson setter visibility ANY — so users round-trip;
+  `Section.filename` binds from the read side);
+  `instances` accepts JSON numbers (coerced to string) and validates exactly as
+  `DeploymentNode.setInstances`: `Integer.parseInt` first (only `< 1` throws),
+  else the `\d*\.\.\d*` (a ≤ b) and `\d*..N` / `\d*..\*` shapes — where the
+  middle dots of the last two are UNESCAPED regex dots (backtracking lets
+  `12N` match with an empty `\d*`); `""` fails both branches (rejected); an
+  ABSENT key never calls the setter (default `"1"` survives). Violations throw
+  a read error (`Number of instances must be a positive integer or a range.` /
   `Range upper bound must be greater than the lower bound.`).
+- **Read normalizes** (setter-side value changes, oracle probes 2026-11-14):
+  style colors `background`/`stroke`/`color` via `Color` — `#rrggbb`
+  lowercased, HTML name (148-entry `Color.NAMED_COLORS` table, case
+  insensitive, NO `transparent`) → lowercased hex, anything else errors
+  `<color> is not a valid hex colour code or HTML colour name.` (present-but-
+  null → message `null is not a valid …`); the same setters must normalize
+  DSL colors in M4/M5. `themes[]`: trim, skip empty, dedupe URLs
+  (`addTheme`); "installed" bare-name themes are filesystem-dependent in the
+  reference — oxidizr keeps every name (D3). `lastModifiedDate`: ISO text or
+  epoch millis (number/all-digit string) → epoch seconds.
+- **Read requires**: healthCheck `name` + `url` non-null (§2 row — the
+  reference's own read NPEs; oxidizr surfaces `JsonError::Read`);
+  `automaticLayout.rankDirection` present ⇒ must parse (guarded setter, §3).
 - **Read-and-keep** (round-trip): every key listed in §2–§4, incl.
   `structurizr.dsl` / arbitrary `properties` maps (document order becomes
   insertion order).
@@ -203,9 +231,11 @@ Jackson binding additionally gives:
   `numberOfInstances`/`dependencies`/`deploymentGroup` (string); dynamic
   `deploymentEnvironment`; filtered `filter` object; automaticLayout
   `applied`/`implementation`/`seed`; view `name` (computed on write);
-  `canonicalName`; `users` (getter-only on WorkspaceConfiguration —
-  never round-trips); section `title` (`@JsonGetter` — read side sees the
-  `setFilename`-style setter? No: title has no setter → ignored).
+  `canonicalName`; section `title` (`@JsonGetter`, no setter — the
+  read side binds `filename` instead; `filename` itself is `@JsonIgnore`
+  WRITE-side, so a read→write cycle rewrites `title` as the computed name
+  — `""` when the input had no `filename`; `Decision.title` is a normal
+  round-tripping property).
 - Reader post-step: `workspace.hydrate()` = exactly the M2 validation catalog
   (`validate()`), i.e. JSON loads run validation the same way the app does.
   Instance `name`/`description` derive from the linked element AFTER the

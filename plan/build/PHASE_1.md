@@ -126,6 +126,31 @@ Ids: newtype String `ElementId`/`RelationshipId`, `ViewKey(String)`; env name `E
 
 ## P1-D5 JSON I/O (`oxidizr-json`) — serde derives, streaming, no Value pass
 
+> **AMENDED 2026-11-14 (P1-M3a)** — three premises failed against reality, so the
+> implementation is a **hand-rolled emitter + a `serde_json::Value`-based reader**,
+> both inside `oxidizr-json` (core stays serde-free, P1-D1 Locked):
+> 1. *derives on model types* is impossible without giving `oxidizr-core` a serde
+>    dependency (P1-D1 forbids any, incl. serde); a shadow-DTO mirror of the whole
+>    model would double the surface to keep in sync.
+> 2. *"its Map is a BTreeMap so properties sort for free"* is exactly WRONG for the
+>    contract: V-11 (RESOLVED, WRITE-CATALOG §1) requires Java `HashMap` bucket order
+>    for `properties` — sorted output cannot byte-match. Any derive route needs a
+>    custom `serialize_with` map serializer anyway.
+> 3. *"to_string_pretty matches"* was disproven at M0 (Jackson: `" : "` separator,
+>    `{ }`/`[ ]`, inline scalar arrays, no trailing newline) — a custom `Formatter`
+>    was needed regardless. With the WRITE-CATALOG's per-class inclusion quirks
+>    (NON_EMPTY vs NON_NULL vs NON_DEFAULT, always-written primitive ints/bools,
+>    computed view `name`, instance name suppression, TreeSet/numeric-id array sorts),
+>    a direct `Workspace → bytes` writer is ~3× smaller and reviewable line-by-line
+>    against the catalog. The writer builds a light `Json` tree (emptiness is known
+>    BEFORE output — needed for `{ }`), no `Value`, no double pass on write.
+> The reader takes the `Value` pass (one parse + walk) because Jackson's read
+> leniency (unknown-ignore, string↔number coercion, `ACCEPT_EMPTY_STRING_AS_NULL_OBJECT`,
+> unknown-enum→null, aliases) is smallest and most faithful to express as an explicit
+> walk; `preserve_order` gives document-order property maps (byte-stable round-trip).
+> If the M7 `json read` bench ever demands it, a streaming reader can replace the
+> walk behind the same API. Original analysis kept below for history.
+
 - **Writer** = serde derives on model types + `#[serde(rename_all = "camelCase")]`
   where names diverge; **fields declared alphabetically** (that IS the key sort —
   serde_json streams struct fields in declaration order; its Map is a BTreeMap so
@@ -237,6 +262,10 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   fixtures pass), unit suites.
 - **M3** `json`: reader leniency matrix + writer with WRITE-CATALOG (P1-D6 first!);
   goldens byte-match on simple fixtures; read-corpus loads; `--keep-unknown`.
+  **DONE 2026-11-14 (M3a catalog + M3b code)** — goldens byte-identical both
+  directions, read-corpus + validation corpus pinned against the reference tests;
+  `--keep-unknown` capture + `json2json` CLI wiring land with M6 (D3 opt-in only,
+  default path unaffected).
 - **M4** `dsl` parser+builder: model scope → views/styles/configuration → deployment
   → dynamic/parallel/animation; fixture-by-fixture burn-down; multi-error snapshots;
   implied relationships; archetypes; identifiers modes; portability matrix.

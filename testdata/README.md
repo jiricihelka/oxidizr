@@ -13,7 +13,18 @@ reference pretty-printer emits.
 * `dsl/` — 107 DSL fixtures (reference test resources; P1 parse corpus).
 * `probes/` — hand-written oracle-probe fixtures (WRITE-CATALOG witnesses; see
   `plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.
-* `read-corpus/` + `validation/` — 21 JSON workspaces (back-compat read + validation rules).
+  `m3-order.dsl` (P1-M3a: key tables, sorts, computed names, HashMap properties);
+  `m3b-defaults.json` (P1-M3b: JSON→JSON reader defaults — healthCheck header
+  bucket order, healthChecks/automaticLayout bean initializers, nullable enum
+  bindings, color normalization). The `m3b-defaults` golden is raw oracle bytes
+  minus the `structurizr.inspection.*` counters and the emptied `properties`
+  entry; probe inputs must stay re-readable by the reference itself (a
+  healthCheck with a null `name`/`url` NPEs the reference READ).
+* `read-corpus/` + `validation/` — 21 JSON workspaces (back-compat read + validation rules,
+  from `structurizr-client/src/test/resources`). In `validation/`, 15 fixtures must fail
+  `hydrate()` with the reference message and 1
+  (`TopLevelDeploymentNodeNamesAreNotUniqueButTheyExistInDifferentEnvironments`) must
+  LOAD — the reference test name says `exceptionNotThrown` (uniqueness is per name+environment).
 * `golden/` — committed reference goldens (byte-parity gate; regenerate sparingly).
 
 ## Deferred fixtures (D7 — `!docs`/`!adrs`, excluded from P1–P3 parse/golden gates)

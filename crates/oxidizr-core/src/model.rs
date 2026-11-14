@@ -27,7 +27,8 @@ pub struct Perspective {
 
 /// An HTTP health check (`model/HttpHealthCheck`) attached to software-system /
 /// container instances. Java primitives `interval` (seconds, default 60) and
-/// `timeout` (millis, default 0) serialize via `NON_EMPTY`, i.e. zero is omitted.
+/// `timeout` (millis, default 0) are NEVER "empty" under `NON_EMPTY` — both
+/// are ALWAYS written (WRITE-CATALOG §2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpHealthCheck {
     /// Display name (the reference defaults it to the URL).
@@ -142,6 +143,9 @@ pub struct SoftwareSystem {
     pub group: Option<String>,
     /// Owned containers.
     pub containers: Vec<Container>,
+    /// Nested documentation (`Documentable`; the lazy bean ALWAYS serializes,
+    /// at least as `{ }` — WRITE-CATALOG §2).
+    pub documentation: crate::docs::Documentation,
     /// Outgoing relationship ids, in definition order.
     pub relationships: Vec<Id>,
 }
@@ -157,6 +161,8 @@ pub struct Container {
     pub technology: Option<String>,
     /// Owned components.
     pub components: Vec<Component>,
+    /// Nested documentation (`Documentable`; the lazy bean ALWAYS serializes).
+    pub documentation: crate::docs::Documentation,
     /// Outgoing relationship ids, in definition order.
     pub relationships: Vec<Id>,
 }
@@ -170,6 +176,8 @@ pub struct Component {
     pub group: Option<String>,
     /// Optional technology.
     pub technology: Option<String>,
+    /// Nested documentation (`Documentable`; the lazy bean ALWAYS serializes).
+    pub documentation: crate::docs::Documentation,
     /// Outgoing relationship ids, in definition order.
     pub relationships: Vec<Id>,
 }

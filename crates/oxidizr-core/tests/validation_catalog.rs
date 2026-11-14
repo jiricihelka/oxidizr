@@ -14,6 +14,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use oxidizr_core::DEFAULT_ENVIRONMENT;
+use oxidizr_core::docs::Documentation;
 use oxidizr_core::ids::Id;
 use oxidizr_core::model::{
     Component, Container, ContainerInstance, DeploymentNode, InfrastructureNode, Model, ModelItem,
@@ -100,6 +101,7 @@ fn component(v: &Value, rels: &mut Vec<Relationship>) -> Component {
         item: item(v),
         group: s(v, "group").map(str::to_string),
         technology: s(v, "technology").map(str::to_string),
+        documentation: Documentation::default(),
         relationships: Vec::new(),
     }
 }
@@ -114,6 +116,7 @@ fn container(v: &Value, rels: &mut Vec<Relationship>) -> Container {
             .iter()
             .map(|c| component(c, rels))
             .collect(),
+        documentation: Documentation::default(),
         relationships: Vec::new(),
     }
 }
@@ -234,6 +237,7 @@ fn load_model(model: &Value) -> Model {
                     .iter()
                     .map(|c| container(c, &mut relationships))
                     .collect(),
+                documentation: Documentation::default(),
                 relationships: Vec::new(),
             }
         })
@@ -264,6 +268,10 @@ fn base(v: &Value) -> ViewBase {
             .unwrap_or(0),
         title: s(v, "title").map(str::to_string),
         description: s(v, "description").map(str::to_string),
+        generated_key: v
+            .get("generatedKey")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         properties: oxidizr_core::properties::Properties::new(),
     }
 }
@@ -309,6 +317,7 @@ fn load_views(views: &Value) -> ViewSet {
             base: base(v),
             content: content(v),
             animations: Vec::new(),
+            software_system_id: s(v, "softwareSystemId").map(str::to_string).map(Id::new),
         });
     }
     for v in arr(views, "systemLandscapeViews") {
@@ -392,11 +401,11 @@ fn load_views_tail(views: &Value, out: &mut ViewSet) {
         out.filtered_views.push(FilteredView {
             base: base(v),
             base_view_key: s(v, "baseViewKey").unwrap_or_default().to_string(),
-            mode: if s(v, "mode") == Some("Exclude") {
+            mode: Some(if s(v, "mode") == Some("Exclude") {
                 FilterMode::Exclude
             } else {
                 FilterMode::Include
-            },
+            }),
             tags: arr(v, "tags")
                 .iter()
                 .filter_map(Value::as_str)

@@ -1,0 +1,97 @@
+{
+  "configuration" : {
+    "users" : [ {
+      "username" : "bob"
+    } ]
+  },
+  "documentation" : {
+    "sections" : [ {
+      "content" : "c",
+      "order" : 1,
+      "title" : ""
+    } ]
+  },
+  "id" : 0,
+  "model" : {
+    "deploymentNodes" : [ {
+      "containerInstances" : [ {
+        "containerId" : "2",
+        "environment" : "Default",
+        "healthChecks" : [ {
+          "headers" : {
+            "X-B" : "2",
+            "X-A" : "1"
+          },
+          "interval" : 0,
+          "name" : "hc",
+          "timeout" : 0,
+          "url" : "http://e.com/x"
+        } ],
+        "id" : "3",
+        "instanceId" : 0,
+        "tags" : "Deployment Element,Container Instance"
+      } ],
+      "environment" : "Default",
+      "id" : "1",
+      "instances" : "1",
+      "name" : "Node",
+      "tags" : "Element,Deployment Node,Deployment Element"
+    } ],
+    "softwareSystems" : [ {
+      "containers" : [ {
+        "documentation" : { },
+        "id" : "2",
+        "name" : "Container",
+        "tags" : "Element,Container"
+      } ],
+      "documentation" : { },
+      "id" : "4",
+      "name" : "System",
+      "tags" : "Element,Software System,Extra"
+    } ]
+  },
+  "name" : "Defaults",
+  "views" : {
+    "configuration" : {
+      "styles" : {
+        "elements" : [ {
+          "background" : "#ff0000",
+          "tag" : "Element"
+        } ]
+      },
+      "terminology" : { }
+    },
+    "filteredViews" : [ {
+      "baseViewKey" : "L1",
+      "key" : "F1",
+      "name" : "Filtered: System Landscape View",
+      "order" : 3,
+      "tags" : [ "Element" ]
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 0,
+        "nodeSeparation" : 0,
+        "rankSeparation" : 12,
+        "vertices" : false
+      },
+      "enterpriseBoundaryVisible" : true,
+      "key" : "C1",
+      "name" : "System Context View: System",
+      "order" : 2,
+      "softwareSystemId" : "4"
+    } ],
+    "systemLandscapeViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 0,
+        "nodeSeparation" : 0,
+        "rankSeparation" : 0,
+        "vertices" : false
+      },
+      "enterpriseBoundaryVisible" : false,
+      "key" : "L1",
+      "name" : "System Landscape View",
+      "order" : 1
+    } ]
+  }
+}

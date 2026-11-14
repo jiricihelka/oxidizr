@@ -139,6 +139,7 @@ impl WorkspaceBuilder {
             item: item.clone(),
             group: None,
             containers: Vec::new(),
+            documentation: crate::docs::Documentation::default(),
             relationships: Vec::new(),
         });
         Ok(item.id)
@@ -198,6 +199,7 @@ impl WorkspaceBuilder {
                 group: None,
                 technology,
                 components: Vec::new(),
+                documentation: crate::docs::Documentation::default(),
                 relationships: Vec::new(),
             });
         Ok(item.id)
@@ -237,6 +239,7 @@ impl WorkspaceBuilder {
                 item: item.clone(),
                 group: None,
                 technology,
+                documentation: crate::docs::Documentation::default(),
                 relationships: Vec::new(),
             });
         Ok(item.id)
@@ -373,12 +376,13 @@ impl WorkspaceBuilder {
             .node_mut(node)
             .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?;
         // `Model.addSoftwareSystemInstance`: instanceId counts instances of the
-        // SAME system within this node (1-based).
+        // SAME system within this node (1-based: reference starts at 1).
         let instance_id = node
             .software_system_instances
             .iter()
             .filter(|i| &i.software_system_id == system)
             .count()
+            .saturating_add(1)
             .try_into()
             .unwrap_or(i32::MAX);
         let environment = node.environment.clone();
@@ -422,6 +426,7 @@ impl WorkspaceBuilder {
             .iter()
             .filter(|i| &i.container_id == container)
             .count()
+            .saturating_add(1)
             .try_into()
             .unwrap_or(i32::MAX);
         let environment = node.environment.clone();
@@ -718,7 +723,7 @@ impl WorkspaceBuilder {
         self.workspace.views.filtered_views.push(FilteredView {
             base,
             base_view_key: base_key.to_string(),
-            mode,
+            mode: Some(mode),
             tags,
         });
         Ok(())
@@ -751,6 +756,7 @@ impl WorkspaceBuilder {
             base,
             content: ViewContent::default(),
             animations: Vec::new(),
+            software_system_id: None,
         });
         Ok(())
     }

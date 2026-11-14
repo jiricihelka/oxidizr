@@ -1,0 +1,81 @@
+{
+  "id": 0,
+  "name": "Defaults",
+  "description": "",
+  "version": "",
+  "properties": {},
+  "configuration": { "scope": "BogusScope", "visibility": "Bogus", "users": [ { "username": "bob", "role": "Bogus" } ] },
+  "model": {
+    "customElements": [],
+    "people": [],
+    "deploymentNodes": [
+      {
+        "id": "1",
+        "name": "Node",
+        "tags": "Deployment Element,Deployment Node",
+        "properties": {},
+        "children": [],
+        "containerInstances": [
+          {
+            "id": "3",
+            "containerId": "2",
+            "instanceId": 0,
+            "properties": {},
+            "tags": "Deployment Element,Container Instance",
+            "healthChecks": [ { "name": "hc", "url": "http://e.com/x", "headers": { "X-A": "1", "X-B": "2" } } ],
+            "relationships": []
+          }
+        ]
+      }
+    ],
+    "softwareSystems": [
+      {
+        "id": "4",
+        "name": "System",
+        "tags": "Extra,Element,Software System",
+        "properties": {},
+        "containers": [
+          { "id": "2", "name": "Container", "tags": "Element,Container", "properties": {}, "components": [], "relationships": [] }
+        ],
+        "relationships": []
+      }
+    ],
+    "properties": {}
+  },
+  "views": {
+    "configuration": {
+      "properties": {},
+      "metadataSymbols": "BOGUS",
+      "styles": { "elements": [ { "tag": "Element", "colorScheme": "BOGUS", "background": "red" } ], "relationships": [] },
+      "terminology": {}
+    },
+    "systemLandscapeViews": [
+      {
+        "key": "L1",
+        "order": 1,
+        "automaticLayout": { },
+        "elements": [],
+        "relationships": [],
+        "enterpriseBoundaryVisible": false
+      }
+    ],
+    "systemContextViews": [
+      {
+        "key": "C1",
+        "order": 2,
+        "softwareSystemId": "4",
+        "automaticLayout": { "rankSeparation": 12, "vertices": false, "applied": true, "implementation": "GraphViz", "seed": 7 },
+        "elements": [],
+        "relationships": []
+      }
+    ],
+    "filteredViews": [
+      { "key": "F1", "order": 3, "baseViewKey": "L1", "mode": "BOGUS", "tags": [ "Element" ] }
+    ]
+  },
+  "documentation": {
+    "sections": [ { "order": 1, "title": "T", "content": "c" } ],
+    "decisions": [],
+    "images": []
+  }
+}

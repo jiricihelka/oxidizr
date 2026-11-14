@@ -36,7 +36,9 @@ pub const DEFAULT_WORKSPACE_NAME: &str = "Name";
 pub const DEFAULT_WORKSPACE_DESCRIPTION: &str = "Description";
 
 pub use builder::WorkspaceBuilder;
-pub use configuration::{Visibility, Workspace, WorkspaceConfiguration, WorkspaceScope};
+pub use configuration::{
+    Role, User, Visibility, Workspace, WorkspaceConfiguration, WorkspaceScope,
+};
 pub use error::CoreError;
 pub use ids::{ElementId, Id, IdGenerator, RelationshipId};
 pub use validate::{ValidationError, validate, validate_model, validate_views};

@@ -24,8 +24,11 @@ oxidizr-diag = { path = "crates/oxidizr-diag", version = "0.1.0" }
 oxidizr-dsl = { path = "crates/oxidizr-dsl", version = "0.1.0" }
 oxidizr-json = { path = "crates/oxidizr-json", version = "0.1.0" }
 
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order`: property maps must iterate in DOCUMENT order on read
+# (byte-stable round-trip, WRITE-CATALOG §1) — the default BTreeMap sorts.
+# (No plain `serde`: the P1-D5 amendment dropped the derive route — the JSON
+# layer is hand-rolled over `serde_json`.)
+serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
@@ -37,6 +40,15 @@ criterion = "0.5"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+# Skeleton crates pre-declare the agreed P1-D9 dependency set before the code
+# that uses it lands (M3+); the cargo manifest lints (warn-by-default, see the
+# Cargo Book "Lints" chapter — both names fire: `unused_dependencies` on the
+# crate tables, `unused_workspace_dependencies` on workspace tables) would
+# otherwise fire on every crate until each dependency's code lands.
+[workspace.lints.cargo]
+unused_dependencies = "allow"
+unused_workspace_dependencies = "allow"
 
 [workspace.lints.clippy]
 all = "warn"

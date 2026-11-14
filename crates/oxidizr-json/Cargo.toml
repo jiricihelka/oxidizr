@@ -1,12 +1,10 @@
 [package]
 name = "oxidizr-json"
-description = "oxidizr Structurizr-JSON reader/writer — serde derives, byte-parity writer (P1-D5/D6)"
+description = "oxidizr Structurizr-JSON reader/writer — byte-parity writer per plan/build/WRITE-CATALOG.md (P1-D5 amended, P1-D6)"
 publish = true
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
 
 [lints]
 workspace = true
@@ -20,12 +18,9 @@ reference = []
 
 [dependencies]
 oxidizr-core = { workspace = true }
-oxidizr-diag = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-expect-test = { workspace = true }
 proptest = "1"

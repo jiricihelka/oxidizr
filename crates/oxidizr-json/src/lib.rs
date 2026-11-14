@@ -1,19 +1,57 @@
-//! `oxidizr-json` — the JSON contract (P1-D5): serde derives over `oxidizr-core`
-//! types, `rename_all = "camelCase"` where names diverge, POJO fields **declared
-//! alphabetically** because `serde_json` streams struct fields in declaration order —
-//! that declaration order *is* the golden's POJO key order. Free-form `properties`
-//! maps are the exception: the reference serializes them in Java `HashMap` order
-//! (`PHASE_1` V-11), settled at M3 (replicate or canonicalize in the comparator).
+//! `oxidizr-json` — the JSON contract (P1-D5 amended, P1-D6).
 //!
-//! Writer omissions mirror the reference per-field (`skip_serializing_if`), pinned by
-//! `plan/build/WRITE-CATALOG.md` (P1-D6) — never guessed. Output is Jackson-style
-//! pretty: 2-space indent and `"key" : value` spacing (custom `serde_json` Formatter;
-//! see plan/PROGRESS.md M0 note — `to_string_pretty` alone does NOT byte-match).
+//! The serde-derive route turned out to be unable to reproduce the reference's
+//! byte order (see the P1-D5 amendment in `plan/build/PHASE_1.md`): Jackson
+//! writes POJO keys alphabetically at every level, applies per-field
+//! `NON_EMPTY`/`NON_NULL` inclusion, sorts `TreeSet`-backed arrays, orders
+//! free-form `properties` maps in Java `HashMap` bucket order, and computes
+//! view `name` values on the fly. So this crate hand-rolls the two directions:
 //!
-//! Reader leniency: string-or-number ids, empty-as-none, numeric tolerance,
-//! `enterpriseContextViews` alias, unknown keys ignored (captured only under
-//! `--keep-unknown`, D3). Dates: UTC `yyyy-MM-dd'T'HH:mm:ss'Z'` on write, tolerant on
-//! read.
-// P1-M0 skeleton: manifest declares the agreed P1-D9 set before the code that uses
-// it (M3+). Remove this allow when the derives land.
-#![allow(unused_crate_dependencies)]
+//! - [`to_vec`] builds a `printer::Json` tree with FINAL key order and
+//!   omissions already decided per `plan/build/WRITE-CATALOG.md` (the §-cites
+//!   in `writer.rs`), then renders it with the Jackson pretty-printer
+//!   emulation (`printer.rs`, `"key" : value`, 2-space indent, no trailing
+//!   newline).
+//! - [`from_slice`] walks a `serde_json::Value` (document-order maps via the
+//!   `preserve_order` feature) applying the §6 leniency matrix, then runs the
+//!   M2 validation catalog exactly like the reference `hydrate()`.
+//!
+//! The byte witness for both directions is `testdata/golden/` (Category A
+//! byte-diff tests); the reader tolerates everything the reference reader
+//! tolerates and rejects with the reference's first `hydrate()` message.
+
+mod colors;
+pub mod error;
+mod javahash;
+mod printer;
+mod reader;
+mod writer;
+
+pub use error::JsonError;
+
+use oxidizr_core::Workspace;
+
+/// Serialize to the reference's exact JSON bytes (Jackson pretty, no
+/// trailing newline — WRITE-CATALOG §0).
+///
+/// # Errors
+///
+/// [`JsonError::Write`] when a computed value cannot be produced — a
+/// `CustomView`/`FilteredView` with a missing base view, or a missing
+/// relationship an entry references.
+pub fn to_vec(workspace: &Workspace) -> Result<Vec<u8>, JsonError> {
+    writer::to_vec(workspace)
+}
+
+/// Deserialize a workspace JSON document (WRITE-CATALOG §6 leniency, then
+/// `hydrate()`-equivalent validation).
+///
+/// # Errors
+///
+/// [`JsonError::Parse`] for malformed JSON, [`JsonError::Read`] for
+/// structurally invalid values (e.g. a non-numeric `instances` spec),
+/// [`JsonError::Validation`] when the reference `hydrate()` would reject the
+/// workspace (the first validation message is carried verbatim).
+pub fn from_slice(bytes: &[u8]) -> Result<Workspace, JsonError> {
+    reader::from_slice(bytes)
+}

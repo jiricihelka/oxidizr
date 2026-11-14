@@ -23,6 +23,27 @@ pub enum Format {
     AsciiDoc,
 }
 
+impl Format {
+    /// JSON spelling (the Java constant name).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Format::Markdown => "Markdown",
+            Format::AsciiDoc => "AsciiDoc",
+        }
+    }
+
+    /// Parse the JSON spelling (exact case).
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Format> {
+        match s {
+            "Markdown" => Some(Format::Markdown),
+            "AsciiDoc" => Some(Format::AsciiDoc),
+            _ => None,
+        }
+    }
+}
+
 /// A documentation section (`documentation/Section`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Section {
@@ -32,8 +53,9 @@ pub struct Section {
     pub filename: Option<String>,
     /// Markdown/AsciiDoc content.
     pub content: String,
-    /// Content format.
-    pub format: Format,
+    /// Content format — nullable bean field (unknown/absent JSON `format`
+    /// binds null; omitted on write — probe 2026-11-14).
+    pub format: Option<Format>,
     /// Element this section is attached to (JSON `elementId`).
     pub element_id: Option<Id>,
 }
@@ -64,8 +86,8 @@ pub struct Decision {
     pub links: Vec<Link>,
     /// Markdown/AsciiDoc content (the decision body).
     pub content: String,
-    /// Content format.
-    pub format: Format,
+    /// Content format — nullable bean field (see [`Section::format`]).
+    pub format: Option<Format>,
     /// Element this decision is attached to (JSON `elementId`).
     pub element_id: Option<Id>,
 }

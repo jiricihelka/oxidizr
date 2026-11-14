@@ -8,11 +8,12 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 
 | Phase | Milestone | State |
 |---|---|---|
-| P1 | M0 scaffold | **done 2026-11-14** (this commit) |
-| P1 | M1 ast+lexer | **done 2026-11-14** (next commit) |
-| P1 | M2 core model + validation | **done 2026-11-14** (this commit) |
-| P1 | M3a write catalog (P1-D6) | **done 2026-11-14** (this commit) |
-| P1 | M3b … M7 | M3b (`oxidizr-json` crate) next, rest pending |
+| P1 | M0 scaffold | **done 2026-11-14** |
+| P1 | M1 ast+lexer | **done 2026-11-14** |
+| P1 | M2 core model + validation | **done 2026-11-14** |
+| P1 | M3a write catalog (P1-D6) | **done 2026-11-14** (commit 7848c5e) |
+| P1 | M3b json writer + reader | **done 2026-11-14** (this commit) |
+| P1 | M4 … M7 | M4 (`dsl` parser+builder) next, rest pending |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -91,6 +92,51 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   theme URLs are fetched during PNG/SVG export only, not `--format json`.
 
 ## Milestone log
+
+### P1-M3b — `oxidizr-json`: byte-parity writer + lenient reader ✅ (2026-11-14)
+
+`oxidizr-json` per the amended P1-D5: hand-rolled writer (`Json` tree → Jackson-shaped
+printer + `javahash` `HashMap` emulator) and a `serde_json::Value`-walk reader (with
+`preserve_order` — document-order property maps are the precondition for byte-stable
+round-trips). Every WRITE-CATALOG §1–§5 rule is explicit code (sort functions, inclusion
+per class, computed view names, instance name suppression); `Workspace → bytes` and
+`bytes → Workspace` now bracket the compatibility contract:
+
+- **Writer goldens byte-identical**: `m3-order.json` + `workspace-properties.json`
+  re-written from the public core API (key tables, all §5 sorts, HashMap property order,
+  `{ }`/`[ ]`, no trailing newline). `golden_m3.rs`.
+- **Reader**: §6 leniency matrix (unknown-ignore, coercions, aliases incl. the
+  document-order `enterpriseContextViews` replacement, `theme`→`themes` + `addTheme`
+  dedupe), hydrate-equivalent validation (`JsonError::Validation` carrying the FIRST
+  reference message), instance `name`/`description` derived after the link checks.
+  `read-corpus/` (5) loads; `reader_m3.rs` + 15 tests.
+- **Reader probes vs the oracle (2026-11-14)** — committed as
+  `testdata/probes/m3b-defaults.json` + its golden (read→write byte-identical witness;
+  probe inputs must stay re-readable — a healthCheck with null `name`/`url` NPEs the
+  reference READ via `HttpHealthCheck.hashCode()` on Jackson's first HashSet insert).
+  Settled: healthCheck `headers` write in **HashMap bucket order** replayed from
+  TreeMap-sorted insertion (`getHeaders()` copies — writer uses `javahash::entry_order`;
+  `{"X-A","X-B"}` writes `X-B` first); `name`+`url` required on read; `interval`/
+  `timeout` read defaults 0/0 (60 is DSL-only); `automaticLayout` read defaults
+  0/0/0/false + NULL `rankDirection`, and a PRESENT-but-unparsable `rankDirection`
+  throws `A rank direction must be specified.` (the only guarded enum setter);
+  style colors normalized by the `Color` setters — vendored 148-name table
+  (`colors.rs`), `#rrggbb` lowercased, else `<x> is not a valid hex colour code or
+  HTML colour name.` (M4/M5 DSL side must apply the same normalization).
+- **Core faithfulness**: `AutomaticLayout.rank_direction`, `FilteredView.mode`,
+  `Section.format`, `Decision.format`, `User.role` became `Option` (null bean fields —
+  unknown/absent JSON enums bind null, the writer omits the key; builder wraps DSL
+  values in `Some`). `users` DO round-trip (old catalog claim corrected in §6 errata).
+- **Validation-corpus erratum**: per the reference `WorkspaceRulesValidationTests`,
+  15/16 fixtures throw and `TopLevelDeploymentNodeNamesAreNotUniqueButTheyExistIn…`
+  must LOAD (uniqueness is per name+environment). The harness now pins every first
+  message against the Java test strings verbatim.
+- **proptest**: `to_vec → from_slice → to_vec` byte-stable for random property maps
+  (the `H(H(I)) == H(I)` idempotence behind JSON→JSON stability).
+- Deferred to M6 (CLI milestone): the `--keep-unknown` capture and the `json2json`
+  command wiring (D3 opt-in, no default-parity effect) — noted on the PHASE_1 M3 line.
+- Gates: 113 tests green, `cargo fmt --check`, `cargo clippy --workspace --all-targets
+  -- -D warnings` clean.
 
 ### P1-M3a — write catalog (P1-D6) + core model alignment ✅ (2026-11-14)
 

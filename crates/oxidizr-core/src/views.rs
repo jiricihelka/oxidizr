@@ -4,11 +4,12 @@
 //!
 //! v6 shape notes (verified @ `ad34036`; several `plan/JSON-FORMAT.md` "verify"
 //! items resolved here): views have NO `background`; `ElementView` is exactly
-//! `{id,x,y}` (x,y serialized only when nonzero — `NON_EMPTY` on primitive int);
-//! included/excluded lists are GONE (the entry arrays ARE the content);
-//! `ImageView` extends `View` (not `ModelView`); animations exist only on
-//! `DeploymentView` and `CustomView`; `FilteredView.tags` is a `TreeSet<String>`
-//! (alphabetical serialization — an M3 write-catalog rule).
+//! `{id,x,y}` with `x`/`y` primitive ints — ALWAYS serialized (V-2,
+//! WRITE-CATALOG §3); included/excluded lists are GONE (the entry arrays ARE
+//! the content); `ImageView` extends `View` (not `ModelView`); animations exist
+//! on the four static views + `DeploymentView` + `CustomView` (NOT on
+//! `DynamicView`); `FilteredView.tags` is a `TreeSet<String>` (UTF-16
+//! alphabetical on write — WRITE-CATALOG §5).
 
 use crate::ids::Id;
 
@@ -24,6 +25,11 @@ pub struct ViewBase {
     pub title: Option<String>,
     /// Optional description.
     pub description: Option<String>,
+    /// Auto-generated key (`generatedKey`; reference primitive `boolean` with
+    /// `NON_DEFAULT` inclusion — written only when `true`; read sets it via the
+    /// package-private setter, which Jackson sees — default setter visibility
+    /// is `ANY`, so JSON→JSON round-trips it).
+    pub generated_key: bool,
     /// Free-form properties.
     pub properties: crate::properties::Properties,
 }
@@ -37,6 +43,7 @@ impl ViewBase {
             order,
             title: None,
             description: None,
+            generated_key: false,
             properties: crate::properties::Properties::new(),
         }
     }
@@ -165,6 +172,9 @@ pub struct CustomView {
     pub content: ViewContent,
     /// Animation steps.
     pub animations: Vec<Animation>,
+    /// Optional software-system scope (`ModelView.softwareSystemId` — the
+    /// public getter makes it visible in JSON when set).
+    pub software_system_id: Option<Id>,
 }
 
 /// A filtered view (`view/FilteredView`): a saved filter over a base view.
@@ -174,8 +184,9 @@ pub struct FilteredView {
     pub base: ViewBase,
     /// The base view key (JSON `baseViewKey`).
     pub base_view_key: String,
-    /// Include/exclude.
-    pub mode: FilterMode,
+    /// Include/exclude — nullable bean field: the reference omits the key
+    /// when the JSON input carried an unknown/absent mode (probe 2026-11-14).
+    pub mode: Option<FilterMode>,
     /// Filter terms (serialized as the JSON `tags` ARRAY; reference stores a
     /// `TreeSet`, i.e. alphabetical on write).
     pub tags: Vec<String>,
@@ -263,8 +274,10 @@ pub struct Animation {
 /// Defaults verified from the reference constants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutomaticLayout {
-    /// Rank direction (default `LeftRight`).
-    pub rank_direction: RankDirection,
+    /// Rank direction — nullable bean field: the JSON reader stores `None`
+    /// when the key is absent (then the writer omits it; the reference
+    /// `setRankDirection` throws when the key is present but unparsable).
+    pub rank_direction: Option<RankDirection>,
     /// Rank separation (default 100).
     pub rank_separation: i32,
     /// Node separation (default 50).
@@ -278,7 +291,7 @@ pub struct AutomaticLayout {
 impl Default for AutomaticLayout {
     fn default() -> Self {
         AutomaticLayout {
-            rank_direction: RankDirection::LeftRight,
+            rank_direction: Some(RankDirection::LeftRight),
             rank_separation: 100,
             node_separation: 50,
             edge_separation: 50,
@@ -369,25 +382,6 @@ pub enum FilterMode {
     Exclude,
 }
 
-/// `view/ViewSortOrder`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ViewSortOrder {
-    Default,
-    Type,
-    Key,
-}
-
-/// `view/MetadataSymbols`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MetadataSymbols {
-    SquareBrackets,
-    RoundBrackets,
-    CurlyBrackets,
-    AngleBrackets,
-    DoubleAngleBrackets,
-    None,
-}
-
 /// `view/PaperSize` (JSON writes the enum name, e.g. `A4_Landscape`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaperSize {
@@ -414,9 +408,135 @@ pub enum PaperSize {
     Slide1610,
 }
 
+impl PaperSize {
+    /// JSON spelling — the Java constant names (`A6_Portrait` … `Slide_16_10`).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            PaperSize::A6Portrait => "A6_Portrait",
+            PaperSize::A6Landscape => "A6_Landscape",
+            PaperSize::A5Portrait => "A5_Portrait",
+            PaperSize::A5Landscape => "A5_Landscape",
+            PaperSize::A4Portrait => "A4_Portrait",
+            PaperSize::A4Landscape => "A4_Landscape",
+            PaperSize::A3Portrait => "A3_Portrait",
+            PaperSize::A3Landscape => "A3_Landscape",
+            PaperSize::A2Portrait => "A2_Portrait",
+            PaperSize::A2Landscape => "A2_Landscape",
+            PaperSize::A1Portrait => "A1_Portrait",
+            PaperSize::A1Landscape => "A1_Landscape",
+            PaperSize::A0Portrait => "A0_Portrait",
+            PaperSize::A0Landscape => "A0_Landscape",
+            PaperSize::LetterPortrait => "Letter_Portrait",
+            PaperSize::LetterLandscape => "Letter_Landscape",
+            PaperSize::LegalPortrait => "Legal_Portrait",
+            PaperSize::LegalLandscape => "Legal_Landscape",
+            PaperSize::Slide43 => "Slide_4_3",
+            PaperSize::Slide169 => "Slide_16_9",
+            PaperSize::Slide1610 => "Slide_16_10",
+        }
+    }
+
+    /// Parse the JSON spelling (exact case).
+    #[must_use]
+    pub fn parse(s: &str) -> Option<PaperSize> {
+        Self::ALL.into_iter().find(|p| p.as_str() == s)
+    }
+
+    /// All variants (for `parse`).
+    const ALL: [PaperSize; 21] = [
+        PaperSize::A6Portrait,
+        PaperSize::A6Landscape,
+        PaperSize::A5Portrait,
+        PaperSize::A5Landscape,
+        PaperSize::A4Portrait,
+        PaperSize::A4Landscape,
+        PaperSize::A3Portrait,
+        PaperSize::A3Landscape,
+        PaperSize::A2Portrait,
+        PaperSize::A2Landscape,
+        PaperSize::A1Portrait,
+        PaperSize::A1Landscape,
+        PaperSize::A0Portrait,
+        PaperSize::A0Landscape,
+        PaperSize::LetterPortrait,
+        PaperSize::LetterLandscape,
+        PaperSize::LegalPortrait,
+        PaperSize::LegalLandscape,
+        PaperSize::Slide43,
+        PaperSize::Slide169,
+        PaperSize::Slide1610,
+    ];
+}
+
+/// Implements `as_str`/`parse` for enums whose JSON name IS the variant name
+/// (Rust variants mirror the Java constant names exactly — JSON enum values
+/// are the Java names, verified `ad34036`).
+macro_rules! json_names {
+    ($($ty:ident { $($variant:ident),* $(,)? }),* $(,)?) => {
+        $(
+            impl $ty {
+                /// JSON spelling (the Java constant name).
+                #[must_use]
+                pub const fn as_str(self) -> &'static str {
+                    match self { $(Self::$variant => stringify!($variant)),* }
+                }
+
+                /// Parse the JSON spelling (exact case; the reference maps
+                /// unknown values to null — `READ_UNKNOWN_ENUM_VALUES_AS_NULL`).
+                #[must_use]
+                pub fn parse(s: &str) -> Option<Self> {
+                    match s {
+                        $(stringify!($variant) => Some(Self::$variant),)*
+                        _ => None,
+                    }
+                }
+            }
+        )*
+    };
+}
+
+/// `view/ViewSortOrder`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewSortOrder {
+    Default,
+    Type,
+    Key,
+}
+
+/// `view/MetadataSymbols`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MetadataSymbols {
+    SquareBrackets,
+    RoundBrackets,
+    CurlyBrackets,
+    AngleBrackets,
+    DoubleAngleBrackets,
+    None,
+}
+
+json_names! {
+    RankDirection { TopBottom, BottomTop, LeftRight, RightLeft },
+    Routing { Direct, Curved, Orthogonal },
+    LineStyle { Solid, Dashed, Dotted },
+    Shape {
+        Box, RoundedBox, Circle, Ellipse, Hexagon, Diamond, Cylinder, Bucket,
+        Pipe, Person, Robot, Folder, WebBrowser, Window, Terminal, Shell,
+        MobileDevicePortrait, MobileDeviceLandscape, Component,
+    },
+    IconPosition { Top, Bottom, Left },
+    ColorScheme { Light, Dark },
+    FilterMode { Include, Exclude },
+    ViewSortOrder { Default, Type, Key },
+    MetadataSymbols {
+        SquareBrackets, RoundBrackets, CurlyBrackets, AngleBrackets,
+        DoubleAngleBrackets, None,
+    },
+}
+
 /// An element style (`view/ElementStyle`), matched by `tag`. All paint fields
 /// are Option (`NON_EMPTY`: only set fields serialize).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ElementStyle {
     /// Tag this style applies to.
     pub tag: String,
@@ -457,7 +577,7 @@ pub struct ElementStyle {
 }
 
 /// A relationship style (`view/RelationshipStyle`), matched by `tag`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RelationshipStyle {
     /// Tag this style applies to.
     pub tag: String,
@@ -634,10 +754,11 @@ pub enum View<'a> {
     Image(&'a ImageView),
 }
 
-impl View<'_> {
-    /// The view's common base.
+impl<'a> View<'a> {
+    /// The view's common base (taken by value, tied to `'a`, so callers can
+    /// store the key beyond any local borrow of the enum).
     #[must_use]
-    pub const fn base(&self) -> &ViewBase {
+    pub const fn base(self) -> &'a ViewBase {
         match self {
             View::Custom(v) => &v.base,
             View::Landscape(v) => &v.base,
@@ -653,13 +774,13 @@ impl View<'_> {
 
     /// The view key.
     #[must_use]
-    pub fn key(&self) -> &str {
+    pub fn key(self) -> &'a str {
         &self.base().key
     }
 
     /// The view's `order`.
     #[must_use]
-    pub const fn order(&self) -> i32 {
+    pub const fn order(self) -> i32 {
         self.base().order
     }
 
