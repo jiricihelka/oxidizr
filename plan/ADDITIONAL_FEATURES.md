@@ -49,9 +49,12 @@ output (Phase 1 flag).
 
 ### F4 — `oracle`: golden generation/verification against the official tool ✅
 
-- Harness commands that run the official `structurizr` application (via Docker, pinned
-  version) to (re)generate golden JSON from fixtures and verify oxidizr output against
-  them; records the tool version used (AGENTS.md testing strategy).
+- Harness commands that run the official `structurizr` application **binary**
+  (`$OXIDZR_STRUCTURIZR_BIN` → PATH; pinned version; the nix dev flake provides it) to
+  (re)generate golden JSON from fixtures and verify oxidizr output against them; records
+  the tool version used (AGENTS.md testing strategy). The reference tool is slow: runs
+  are sparing (goldens committed) and every such test sits behind the default-off
+  `reference` feature.
 - Compatibility: development-time only; never a runtime dependency — the default test
   suite and shipping binary remain pure Rust and Java-free.
 

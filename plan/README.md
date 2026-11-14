@@ -16,6 +16,9 @@ disagree, the source wins — update the notes.
 | `STRUCTURIZR.md`              | Reference repo map: modules, deps, key classes, build                  | Hunting for a class/behavior       |
 | `PLAN.md`                     | Phase roadmap (parsers → converters → GUI → CLI tools)                 | Starting any work / scoping scope  |
 | `build/PHASE_1.md`            | Detailed Phase 1 implementation plan (all architectural decisions)    | Implementing Phase 1               |
+| `build/PHASE_2.md`            | Phase 2 plan: exporters (PlantUML ×2, Mermaid, theme); semantic parity | Implementing Phase 2               |
+| `build/PHASE_3.md`            | Phase 3 plan: egui viewer + layout editing, own layout engine          | Implementing Phase 3               |
+| `build/PHASE_4.md`            | Phase 4 plan: diff/query/init/lsp/inspect/importers, release           | Implementing Phase 4               |
 | `DEVIATIONS.md`               | Agreed, compat-safe differences from the reference + Locked list       | Before implementing ANY behavior   |
 | `ADDITIONAL_FEATURES.md`      | Registry of features Structurizr doesn't have (✅ agreed / 💡 ideas)    | Adding anything beyond parity      |
 | `research/notes-features.md`  | Raw deep notes behind FEATURES.md (see errata!)                        | Deep dive on a specific feature    |
@@ -33,6 +36,10 @@ disagree, the source wins — update the notes.
   autoLayout `implementation`) — read-compat oracle, not a write golden.
 - There is no public `structurizr/samples` repo; fixtures = monorepo test resources
   (see FIXTURES.md).
+- The reference `export` command DOES wire `websequencediagrams` (verified in
+  `ExportCommand.java`, pinned commit); only DOT and ilograph are library-only. An
+  earlier planning note claimed otherwise — oxidizr still defers WSD export to
+  Phase 4 (decision 2026-11-14, `build/PHASE_4.md` P4-D8).
 
 ## Conventions
 

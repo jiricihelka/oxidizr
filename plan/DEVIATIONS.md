@@ -69,6 +69,9 @@ as a tombstone so old references keep resolving.
   `--allow-net` ships in Phase 2** (`plan/build/PHASE_1.md` P1-D8). JSON output is
   unaffected in all cases (theme URLs are stored verbatim; resolution only ever matters
   for diagram rendering/export).
+- `--allow-net` is **one global flag** gating all URL input (theme URLs, `!include
+  <url>`, `workspace extends <url>`); deliberately **no env var** can enable network
+  (agreed 2026-11-14; policy bundle in AGENTS.md §Dev environment & CLI/config policy).
 
 ## D6 — Internal quality decisions (no behavioral surface)
 
@@ -76,9 +79,12 @@ as a tombstone so old references keep resolving.
   defined checkpoints (vs Java setters throwing `IllegalArgumentException`, producing
   partially built workspaces). Validation semantics themselves match the reference
   (rule catalogue: `plan/FIXTURES.md` §C validation fixtures).
-- Schema-first: the JSON contract is generated from one machine-readable definition and
-  drift-checked against goldens in CI — preventing Structurizr's chronic
-  schema-lags-code failures (schema 6.1.0 vs code 6.2.4 at time of writing).
+- Contract-first JSON: one source of truth for the JSON contract — the `oxidizr-json`
+  serde mapping, pinned field-by-field by the write catalog (`plan/build/PHASE_1.md`
+  P1-D6) and drift-checked against goldens in CI — preventing Structurizr's chronic
+  schema-lags-code failures (schema 6.1.0 vs code 6.2.4 at time of writing). (An earlier
+  wording said "generated from one machine-readable definition"; PHASE_1.md P1-D5 chose
+  serde derives on the model — the derives ARE the single definition.)
 - Diagnostics-grade lexer/parser with a real CST feeding workspace construction, enabling
   D1, `fmt`, `diff` (vs Java's per-scope keyword dispatch over preprocessed strings).
 

@@ -6,8 +6,8 @@ implementation can proceed without re-litigating design. Decisions are numbered
 override everything here.
 
 Exit gate (unchanged): every fixture in `testdata/` parses; written JSON byte-matches
-goldens from the pinned reference; read-corpus loads; `fmt` invariant + `reconcile`
-tests green; `--strict` off by default.
+goldens from the pinned reference; read-corpus loads; `fmt` invariant +
+`reconcile` tests green; `--strict` off by default.
 
 ---
 
@@ -21,7 +21,8 @@ crates/
   oxidizr-json    JSON reader/writer (serde derives); deps: core, diag
   oxidizr-diag    Span, Severity, Code (OXZ-nnnn), Diagnostic, collectors; NO deps
   oxidizr-cli     binary: commands, flags, miette rendering, reconcile logic; deps: all above
-  xtask           dev-only: oracle (Docker golden gen/verify), vendor, update-goldens
+  xtask           dev-only: oracle (golden gen/verify via $OXIDZR_STRUCTURIZR_BIN),
+                  vendor, update-goldens
 ```
 
 - Dependency graph: `ast ← dsl`; `core ← dsl, json`; `diag ← dsl, json, core(?no), cli`;
@@ -195,19 +196,26 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
 - `testdata/` layout: `dsl/` (vendored reference fixtures, Apache-2.0 attribution
   README + upstream commit), `golden/` (generated `.json`), `read-corpus/` (v5-era +
   back-compat workspaces), `validation/` (the 16 rule fixtures).
-- Harness: `cargo xtask oracle gen` (Docker `structurizr` image, version-pinned in
-  `xtask/src/oracle.rs` const + recorded in `testdata/README.md`) / `verify` (byte-diff
-  oxidizr output vs goldens). Pure-Rust `cargo test` never needs Docker (AGENTS.md).
+- Harness: `cargo xtask oracle gen` / `verify` invoke the official `structurizr`
+  application **binary** via the AGENTS.md discovery rule (`$OXIDZR_STRUCTURIZR_BIN` →
+  PATH; the nix dev flake pins it; version recorded in `testdata/README.md`). The tool
+  is slow: goldens are **committed** and regenerated sparingly; oracle verification is
+  the Category B job (`--features reference`, skip=fail there), never per-PR default.
+  Pure-Rust `cargo test` never touches it (AGENTS.md §Testing).
 - Per-module: `expect-test` snapshots for tokens/CST/parse errors; hand-rolled
   round-trip property for fmt; writer key-sorted CI invariant (scan output for object
   keys out of order); portability-matrix test (each trigger → property present/absent);
   diagnostics snapshot incl. suggestions.
-- CI gates: fmt --check, clippy -D warnings, test, `xtask oracle verify`, key-sort
-  invariant.
+- CI gates: fmt --check, clippy -D warnings, Category A tests, key-sort invariant — per
+  PR; plus the scheduled/manual **reference job** (`cargo test --features reference` +
+  `xtask oracle verify`, skip = failure).
 
 ## P1-D11 Milestones (ordered, each ends green)
 
-- **M0** scaffold: workspace, 7 crates, `rust-toolchain.toml` + `NIGHTLY.md`, lints, CI
+- **M0** scaffold: workspace, 7 crates, `rust-toolchain.toml` + `NIGHTLY.md`, `flake.nix`
+  (pinned nightly + JDK + structurizr bin for Category B; plain `cargo` still works
+  without nix), MIT OR Apache-2.0 LICENSE files + workspace metadata,
+  `docs/diagnostics.md` stub (OXZ code registry target), lints, CI
   (3-OS matrix: build + Category A tests; bench job posts numbers; coverage report;
   reference job runs Category B where `structurizr` bin exists), criterion skeleton +
   committed baseline, xtask+oracle v0 (gen from ONE fixture), testdata vendoring script
@@ -245,9 +253,14 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   reference before trusting globset config.
 - V-7 canonical-name form for custom elements and instances (docs vs code drift).
 - V-8 ISO-8859 fixture: Java read encoding (default charset?) → choose identical
-  behavior; else explicit error.
+  behavior; else explicit error. Also pins newline handling: what CRLF input produces
+  in text fields and in the `structurizr.dsl` property bytes.
 - V-9 decision-status/date parsing corners per ADR tool format (MADR v2/v3,
   log4brains front matter).
+- V-10 Does the reference **app layer generate default views during `export`/`validate`**
+  for view-less models (Locked list keeps generation out of parser/library, but the
+  oracle IS the app — goldens decide whether `dsl2json` must mirror app behavior;
+  verify at M0 with one view-less fixture).
 Each gets a checkbox + evidence link in the PR that implements it; results folded back
 into `plan/*.md` if notes were wrong (errata process).
 

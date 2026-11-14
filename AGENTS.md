@@ -33,9 +33,12 @@ Scaffolding the Cargo workspace (below) and writing design docs into `plan/` is 
     No parsing or serialization dependencies beyond what the model itself needs.
   - `oxidizr-dsl` — DSL lexer/parser → `oxidizr-core` workspace, plus validation.
   - `oxidizr-json` — serde (de)serialization of the Structurizr JSON format.
-  - `oxidizr-export` — (later) diagram exporters (PlantUML, Mermaid, D2, ...). Not in
-    scope for the first milestones.
+  - `oxidizr-export` — diagram exporters (Structurizr/C4-PlantUML PlantUML, Mermaid,
+    WebSequenceDiagrams, theme). Lands in Phase 2 (exporters) / Phase 4 (WSD).
   - `oxidizr-cli` — binary crate: `dsl → json`, `json → json`, validation, diffing.
+  The list above is the seed; later phases add `oxidizr-ast`, `oxidizr-diag`, `xtask`
+  (P1), `oxidizr-layout`, `oxidizr-viewer` (P3), `oxidizr-import`, `oxidizr-lsp`,
+  `oxidizr-inspect` (P4) — `plan/build/PHASE_N.md` is authoritative for crate topology.
 
 ## Commands
 
@@ -45,11 +48,28 @@ Until the workspace is scaffolded these will fail; afterwards:
 cargo fmt --all                            # format
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                     # Category A only (no structurizr bin needed)
+cargo test --workspace --features reference  # + Category B (slow — run sparingly)
 cargo bench --workspace                    # criterion benches
 cargo xtask oracle verify                  # Category B (needs $OXIDZR_STRUCTURIZR_BIN)
 cargo llvm-cov --workspace                 # coverage report (CI, report only)
 cargo run -p oxidizr-cli -- dsl2json workspace.dsl -o workspace.json
 ```
+
+## Dev environment & CLI/config policy
+
+- Development happens **in nix (flake.nix)**: the dev shell pins the nightly Rust
+  toolchain, a JDK and the pinned `structurizr` reference binary (for Category B work).
+  CI and end users need no nix — plain `cargo` must build and pass Category A on the
+  3-OS matrix without it.
+- **No config files.** Flags + env vars only. Env family: `OXIDZR_STRUCTURIZR_BIN`,
+  `OXIDZR_DOT_BIN`, `OXIDZR_THEMES_DIR`, `NO_COLOR`. One global `--allow-net` gates all
+  URL input (theme URLs, `!include <url>`, `workspace extends <url>`) and is never
+  settable via env (D5). `-` = stdin/stdout where a command takes a file argument.
+- Shipped binaries: `oxidizr` (CLI), `oxidizr-viewer` (Phase 3 GUI), `oxidizr-lsp`
+  (Phase 4).
+- License: **MIT OR Apache-2.0** dual (LICENSE-MIT + LICENSE-APACHE at root, workspace
+  metadata); library crates publish to crates.io; vendored fixtures keep their
+  Apache-2.0 attribution (§Test data & goldens).
 
 ## Source of truth for compatibility
 
@@ -111,7 +131,8 @@ vendoring, check the license of the specific version you touch.
 - Goldens are generated with the official `structurizr export -format json` command
   (unified application binary; the old `structurizr-cli` is archived; see
   [docs.structurizr.com/commands](https://docs.structurizr.com/commands)). Record the
-  tool version used in `testdata/README.md`.
+  tool version used in `testdata/README.md`. Goldens are **committed**; regenerate
+  sparingly (fixture changes, milestones) — per-PR CI never calls the reference tool.
 - Category A/B split and the `$OXIDZR_STRUCTURIZR_BIN` discovery/skip rules are defined
   in §Testing — that section governs; this one defines the corpus.
 - Round-trip tests: JSON → model → JSON must be lossless for the fields Structurizr
@@ -156,10 +177,13 @@ Every test belongs to exactly one of two categories:
   Runs on the 3-OS CI matrix.
 - **Category B — reference-backed**: needs the official `structurizr` binary (golden
   (re)generation via `cargo xtask oracle`, oracle verification, behavioral
-  tie-breakers). The binary is located via `$OXIDZR_STRUCTURIZR_BIN`, falling back to
-  `structurizr` on PATH; when absent these tests **skip with a loud summary line** —
-  except in the dedicated CI job, where a skip is a failure (coverage may not silently
-  vanish).
+  tie-breakers). The reference tool is **slow — use it minimally**: these tests are
+  compiled and run only behind a default-OFF `reference` feature, and goldens are
+  committed so per-PR CI never invokes the binary. The binary is located via
+  `$OXIDZR_STRUCTURIZR_BIN`, falling back to `structurizr` on PATH (the nix dev flake
+  provides it); when absent these tests **skip with a loud summary line** — except in
+  the dedicated CI job (feature enabled), where a skip is a failure (coverage may not
+  silently vanish).
 
 Use all test kinds where they pay off: unit tests for rules (tags, id counter,
 canonical names, validation), snapshot tests for lexer/parser shapes and diagnostics,
