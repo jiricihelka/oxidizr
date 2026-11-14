@@ -65,8 +65,10 @@ as a tombstone so old references keep resolving.
 - oxidizr: never touches the network unless explicitly asked. Default theme (and any
   referenced theme URL needed for diagram export) resolves from a local cache /
   `--themes-dir` (same layout as `STRUCTURIZR_THEMES`); `!include <url>` requires
-  `--allow-net`. JSON output is unaffected in all cases (theme URLs are stored verbatim;
-  resolution only ever matters for diagram rendering/export).
+  `--allow-net`. **Phase 1 is stricter: ALL network input is rejected (OXZ-5001);
+  `--allow-net` ships in Phase 2** (`plan/build/PHASE_1.md` P1-D8). JSON output is
+  unaffected in all cases (theme URLs are stored verbatim; resolution only ever matters
+  for diagram rendering/export).
 
 ## D6 — Internal quality decisions (no behavioral surface)
 

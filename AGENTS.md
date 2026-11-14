@@ -23,8 +23,10 @@ Scaffolding the Cargo workspace (below) and writing design docs into `plan/` is 
   `plan/README.md` — it indexes the distilled structurizr reference: `FEATURES.md`,
   `DSL.md`, `JSON-FORMAT.md`, `FIXTURES.md`, `STRUCTURIZR.md`) plus the decision
   registers `DEVIATIONS.md` and `ADDITIONAL_FEATURES.md` and the phase roadmap
-  `PLAN.md`. Read everything here before making significant design decisions; write
-  a short plan doc there when introducing or changing an architectural decision.
+  `PLAN.md`. Per-phase implementation plans with all architectural decisions live in
+  `plan/build/PHASE_N.md`. Read everything here before making significant design
+  decisions; write a short plan doc there when introducing or changing an architectural
+  decision.
 - `crates/` — Cargo workspace members (to be created):
   - `oxidizr-core` — the domain model: workspace, people, software systems, containers,
     components, relationships, deployment nodes/instances, views, styles, configuration.
