@@ -44,7 +44,10 @@ Until the workspace is scaffolded these will fail; afterwards:
 ```sh
 cargo fmt --all                            # format
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test --workspace                     # Category A only (no structurizr bin needed)
+cargo bench --workspace                    # criterion benches
+cargo xtask oracle verify                  # Category B (needs $OXIDZR_STRUCTURIZR_BIN)
+cargo llvm-cov --workspace                 # coverage report (CI, report only)
 cargo run -p oxidizr-cli -- dsl2json workspace.dsl -o workspace.json
 ```
 
@@ -99,7 +102,7 @@ vendoring, check the license of the specific version you touch.
 - Parser errors must carry file, line and the offending source line (the reference
   emits no column; adding one is fine, omitting line info is not).
 
-## Testing strategy
+## Test data & goldens
 
 - `testdata/` holds vendored `.dsl` fixtures (start with the reference test fixtures in
   `structurizr-dsl/src/test/resources` and the golden workspaces in
@@ -109,12 +112,70 @@ vendoring, check the license of the specific version you touch.
   (unified application binary; the old `structurizr-cli` is archived; see
   [docs.structurizr.com/commands](https://docs.structurizr.com/commands)). Record the
   tool version used in `testdata/README.md`.
-- Default test suite is pure Rust: parse each fixture → serialize → diff against golden.
-  Tests that shell out to Java (regenerating goldens or using the official tool as an
-  oracle) must be opt-in (feature flag or `#[ignore]`) so CI and local runs never
-  require Java.
+- Category A/B split and the `$OXIDZR_STRUCTURIZR_BIN` discovery/skip rules are defined
+  in §Testing — that section governs; this one defines the corpus.
 - Round-trip tests: JSON → model → JSON must be lossless for the fields Structurizr
   itself preserves.
+
+## Code quality guidelines
+
+Priorities: **portability, reliability, performance** — and never any of them at the
+expense of the compatibility contract.
+
+- Performance: minimize allocations — zero-copy lexing over `&str`, reused buffers,
+  `Arc<str>`/small-string handling only where measured; lean on Rust's ownership model
+  (moves, borrowing, newtypes, iterators over index loops). No `clone()` on hot paths
+  without benchmark evidence; perf claims must be backed by criterion numbers
+  (§Benchmarks).
+- Reliability: no `unsafe` — any exception needs an audit note in the code and explicit
+  sign-off first. Handle errors as values, not control flow (panics abort user work).
+- Portability: std-only; no `libc`/platform APIs; every `#[cfg(target_…)]` needs a
+  justifying comment. Builds + Category A tests must pass on Linux, macOS and Windows
+  (CI matrix). Path/encoding/locale differences are test territory, not `cfg` territory.
+- Toolchain: **nightly is pinned** in `rust-toolchain.toml`. Use only reasonably stable
+  nightly features (active stabilization path or long incubation — no specialization-
+  class megafeatures); every usage is recorded with a one-line rationale in
+  `NIGHTLY.md`, re-checked for stabilization at each milestone.
+
+## Working style: when to ask
+
+- Planning phase: ask lots of questions — every decision gets recorded with rationale
+  in `plan/` (this file's registers are the output of that process).
+- Development phase: implement per the plan without stopping to ask; break the silence
+  ONLY when reality contradicts a plan assumption — a V-n verification item comes out
+  differently, the reference behaves surprisingly, or a compat gate fails in a way
+  PHASE_1.md did not anticipate.
+
+## Testing
+
+Every test belongs to exactly one of two categories:
+
+- **Category A — pure Rust** (default `cargo test --workspace`): unit, integration,
+  snapshot (`expect-test`), golden byte-diffs against `testdata/golden/`, property
+  tests (`proptest`), read-corpus loads. Must never need network, Java or Docker.
+  Runs on the 3-OS CI matrix.
+- **Category B — reference-backed**: needs the official `structurizr` binary (golden
+  (re)generation via `cargo xtask oracle`, oracle verification, behavioral
+  tie-breakers). The binary is located via `$OXIDZR_STRUCTURIZR_BIN`, falling back to
+  `structurizr` on PATH; when absent these tests **skip with a loud summary line** —
+  except in the dedicated CI job, where a skip is a failure (coverage may not silently
+  vanish).
+
+Use all test kinds where they pay off: unit tests for rules (tags, id counter,
+canonical names, validation), snapshot tests for lexer/parser shapes and diagnostics,
+golden byte-diffs for the JSON contract, property tests for invariants (fmt
+idempotence, parse↔print, round-trips), fuzzing (`cargo-fuzz`, nightly) on the
+lexer/parser against the fixture corpus, and `cargo-llvm-cov` in CI as a **report
+only** — no percentage gate. Dev-only deps: `proptest`/`arbitrary`, `criterion`,
+`cargo-fuzz`; no mutation testing (poor ROI here).
+
+## Benchmarks
+
+`criterion` benches live in `benches/` per crate; mandated targets: DSL parse (full
+fixture corpus + worst-case per feature), JSON read, JSON write, `fmt`, `reconcile`.
+Baselines are committed at milestones M0/M3/M4/M7; compare with `critcmp`. An
+optimization is accepted only with before/after numbers; >~10% regression against the
+committed baseline is flagged by the CI bench job for human review (no auto-fail).
 
 ## Code style
 

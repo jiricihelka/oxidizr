@@ -181,12 +181,14 @@ explicitly (sort functions, not incidental order). Catalog items are the V-list 
 
 ## P1-D9 Dependencies (lean set, agreed)
 
-`serde`+`serde_json`, `thiserror` (libs), `anyhow`+`clap`+`miette` (cli), `chrono`
-(default-features off, `std`), `globset` (docs/ADR excludes), `expect-test` (dev).
-None of: indexmap (Vec+explicit sorts; maps are BTreeMap), chumsky/nom/winnow/pest,
-miette-in-libs, serde_yaml (ADR front matter hand-parsed: status/date only), rayon.
-Dev-optional: `cargo-fuzz` target for lexer/parser (seed corpus = fixtures) — set up in
-M6 if time permits (risk §R-2 mitigation).
+Prod: `serde`+`serde_json`, `thiserror` (libs), `anyhow`+`clap`+`miette` (cli), `chrono`
+(default-features off, `std`), `globset` (docs/ADR excludes).
+Dev: `expect-test`, `criterion` (benches + M0 baseline), `proptest`+`arbitrary`,
+`cargo-fuzz` (nightly; lexer/parser targets, corpus = fixtures), `cargo-llvm-cov` (CI
+report only). None of: indexmap (Vec+explicit sorts; maps are BTreeMap), chumsky/nom/
+winnow/pest, miette-in-libs, serde_yaml (ADR front matter hand-parsed: status/date
+only), rayon. Toolchain: pinned nightly in `rust-toolchain.toml` (date set at M0) with
+the `NIGHTLY.md` feature register (AGENTS.md policy).
 
 ## P1-D10 Test & golden strategy
 
@@ -205,8 +207,11 @@ M6 if time permits (risk §R-2 mitigation).
 
 ## P1-D11 Milestones (ordered, each ends green)
 
-- **M0** scaffold: workspace, 7 crates, lints, CI, xtask+oracle v0 (gen from ONE
-  fixture), testdata vendoring script + attribution.
+- **M0** scaffold: workspace, 7 crates, `rust-toolchain.toml` + `NIGHTLY.md`, lints, CI
+  (3-OS matrix: build + Category A tests; bench job posts numbers; coverage report;
+  reference job runs Category B where `structurizr` bin exists), criterion skeleton +
+  committed baseline, xtask+oracle v0 (gen from ONE fixture), testdata vendoring script
+  + attribution.
 - **M1** `ast`+lexer: lossless CST, `expect-test` corpus, preprocess incl. text
   blocks/continuations/BOM (fixtures: text-block, multi-line*, utf8, iso-8859, bom*).
 - **M2** `core`: model, tags/ids/canonical names, builder+validation catalog (rule
@@ -221,8 +226,9 @@ M6 if time permits (risk §R-2 mitigation).
   `!docs`/`!adrs` (all 4 formats, asciidoc passthrough, globset excludes), finders,
   `!element(s)`/`!relationship(s)`, URL/`!script`/`!plugin`/`!components` clean
   rejects; **M5 complete = full-fixture parse gate**.
-- **M6** `fmt` + invariants, `reconcile`, `validate` polish, CLI flags/exit codes,
-  miette rendering, suggestions; fuzz setup if time.
+- **M6** `fmt` + invariants (incl. proptest), `reconcile`, `validate` polish, CLI
+  flags/exit codes, miette rendering, suggestions; cargo-fuzz targets with fixture seed
+  corpus running in CI (nightly, time-boxed runs).
 - **M7** hardening: perf sanity (parse whole corpus < 100 ms in release — informational),
   docs (`--help`, README quickstart), tag v0.1.0.
 
