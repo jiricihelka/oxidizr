@@ -10,7 +10,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 |---|---|---|
 | P1 | M0 scaffold | **done 2026-11-14** (this commit) |
 | P1 | M1 ast+lexer | **done 2026-11-14** (next commit) |
-| P1 | M2 … M7 | M2 next, rest pending |
+| P1 | M2 core model + validation | **done 2026-11-14** (this commit) |
+| P1 | M3 … M7 | M3 next, rest pending |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -89,6 +90,102 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   theme URLs are fetched during PNG/SVG export only, not `--format json`.
 
 ## Milestone log
+
+### P1-M2 design notes (2026-11-14, from reference source `ad34036`)
+
+Core-model facts verified before coding (`plan/FEATURES.md` corrections inline
+in its tables where noted):
+
+- **Ids are strings in the model**, not ints: `ModelItem implements Comparable`
+  with `Integer.parseInt` both → numeric compare, else string compare;
+  `Model.getElement(id)` is a Java `HashMap<String,…>` (TEXT equality lookup);
+  legacy workspaces may carry non-numeric ids and
+  `SequentialIntegerIdGeneratorStrategy.found()` silently ignores those.
+  → `core::ids::Id { text: Arc<str>, num: Option<i32> }`; Eq/Hash/Ord = text;
+  numeric view cached for the counter bump and the M3 TreeSet-order comparator.
+- **Tags**: `getTags() = LinkedHashSet(getDefaultTags() ++ stored)`; the stored
+  field keeps only custom tags in memory but JSON loads re-store the defaults
+  (harmless dedup on write). `setTags(csv)` = `split(",")` NO trim (bug);
+  `addTags` trims. Relationship defaults are STATEFUL: linked rel → NO defaults;
+  else `Relationship` (+`Synchronous`/`Asynchronous` if interactionStyle set).
+  Instances (`SoftwareSystemInstance`/`ContainerInstance`): NO inherited-parent
+  tags in v6 — FEATURES §3 "parent system's tags + …" is OUTDATED; the ctor
+  stores just the instance tag, and JSON load keeps exactly the tags string.
+- **Canonical names are URI-style** (FEATURES §2 `Person[X]` table is OUTDATED):
+  `Person://X`, `SoftwareSystem://S`, `Container://S.C`, `Component://S.C.K`,
+  `Custom://X`, `DeploymentNode://ENV/A/B`, `InfrastructureNode://ENV/A/B/N`,
+  `SoftwareSystemInstance://ENV/A/B/System[instanceId]`,
+  `ContainerInstance://ENV/A/B/Sys/Container[instanceId]` (note: the node-chain
+  drops the `DeploymentNode://` prefix; instanceId is the instance's OWN int,
+  the static link is `softwareSystemId`/`containerId` — FEATURES §2 "instances
+  link via instanceId" is OUTDATED). Every name part has `.` and `/` REMOVED
+  (`formatName`) before joining; static separator `.`, deployment separator `/`.
+- **v6.2.4 field truth** (JSON-FORMAT "verify" items): no `background` on View;
+  ElementView = `{id,x,y}` only (+nothing — no width/height/z/orientation);
+  RelationshipView = `{id, description, url, order, response, vertices[],
+  routing, jump, position, properties}`; `numberOfInstances`/`dependencies`
+  DO NOT EXIST; health checks live on INSTANCES only (not nodes/infra nodes);
+  DeploymentNode has `instances` (int in JSON), `technology`, `deploymentGroups`,
+  `platform`/`usage` DO NOT EXIST; animations only on DeploymentView+CustomView;
+  FilteredView `tags` is a TreeSet (serialized ALPHABETICAL); workspace-level
+  `configuration` = `{scope?, visibility?, users?}` (v6 `WorkspaceConfiguration`,
+  legacy `branding`/`styles` inside top-level `configuration` in old goldens are
+  IGNORED by the reader — `views.configuration` is the real styles home);
+  `ImageView` extends View (NOT ModelView — no dimensions/elementViews);
+  DynamicView has `elementId` + `deploymentEnvironment` + `externalBoundariesVisible`.
+- **Validation catalog** = `Model.hydrate()` then `ViewSet.hydrate(model)`
+  (messages + order transcribed in `core::validate`, fixtures
+  `testdata/validation/*.json` + expected messages from
+  `structurizr-client` `WorkspaceRulesValidationTests`). Model checks run in
+  hydrate order: unique element ids → unique relationship ids → instance static
+  links → person/system name uniqueness → containers → components → top-level
+  nodes (per environment) → recursive children → rel description uniqueness
+  (per source, by (destination, description)) → linked-rel ids exist. ViewSet
+  checks: view-key uniqueness (walks a TreeSet ordered by (order, key-ci), the
+  `ViewKeysAreNotUnique` fixture relies on distinct `order` to survive the set) →
+  per-view-type element links → element/relationship view entries exist →
+  filtered base view exists and is static/deployment → image view element.
+  First violation aborts (reference throws); we collect ALL (D1) but keep rule
+  ORDER stable.
+
+### P1-M2 — core domain model + validation catalog ✅ (2026-11-14)
+
+Landed (`cargo test -p oxidizr-core` green on the first run — the design notes
+above held, no errata):
+
+- `crates/oxidizr-core`: ten modules (`ids`, `tags`, `canonical`, `model`,
+  `views`, `docs`, `configuration`, `error`, `validate`, `builder`) over a
+  dependency-free core (P1-D1; `serde_json` is a **dev**-dependency for the
+  fixture test only). `lib.rs` hosts the workspace default name/description
+  consts plus `DEFAULT_ENVIRONMENT`/`DEFAULT_INSTANCES`.
+- 20 unit tests + `tests/validation_catalog.rs`: a deliberate mini-reader over
+  `serde_json::Value` (flattens nested `relationships` arrays like
+  `JsonReader` + `Model.hydrate` do — M3 replaces it) loads all 16 vendored
+  `testdata/validation/*.json` fixtures; each asserts the EXACT
+  `WorkspaceValidationException` message `WorkspaceRulesValidationTests`
+  expects, the "different environments" fixture asserts NONE, and
+  `every_fixture_is_covered` fails if a fixture appears without an expectation.
+- Full gates: 78 workspace tests, `cargo fmt --check`, clippy `all`+`pedantic`
+  under `-D warnings` all clean.
+
+Facts verified against the reference **while coding** (all now encoded in
+`validate.rs`/`builder.rs` with source references):
+
+- Validation catalog = `Model.hydrate()` then `ViewSet.hydrate(model)`;
+  per-view check order custom → landscape → context → container → component →
+  dynamic → deployment → filtered → image; filtered views get NO
+  element/relationship entry checks; every violation is collected (D1) and the
+  FIRST message is what the reference throws.
+- Exact strings verified (fixtures assert them): `A view with the key key
+  already exists.` (key unquoted), the filtered-view base-view message
+  (`(key=SystemContext)` unquoted), the instance-link messages
+  (`(id=1) … that does not exist in the model`).
+- Multiple violations: the reference's exact winner depends on Java `TreeSet`
+  iteration order — with one violation per fixture our first message is
+  byte-identical; noted in `validate.rs` header for multi-violation work.
+- Builder API names follow the reference (`add_person`, `add_relationship`, …);
+  `IdGenerator::generate` (not `next`) to avoid `should_implement_trait`;
+  the interim view-order rule is `views.size()+1` (V-4 revisits it in M4).
 
 ### P1-M1 — DSL lexer + lossless CST ✅ (2026-11-14)
 

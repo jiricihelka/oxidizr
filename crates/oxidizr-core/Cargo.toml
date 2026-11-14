@@ -13,3 +13,8 @@ workspace = true
 
 [dependencies]
 # NO dependencies — not even serde (P1-D1).
+
+[dev-dependencies]
+# Validation fixtures are loaded as raw `serde_json::Value` in tests (M3 lands
+# the real reader in `oxidizr-json`).
+serde_json.workspace = true

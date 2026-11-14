@@ -57,12 +57,14 @@ class locations: `STRUCTURIZR.md`. `(verified)` = checked against source directl
 | custom element           | `Element`                                                            |
 | DeploymentNode           | `Element,Deployment Node`                                            |
 | InfrastructureNode       | `Element,Infrastructure Node`                                        |
-| SoftwareSystemInstance   | parent system's tags + `Software System Instance` (NO `Element`)     |
-| ContainerInstance        | parent container's tags + `Container Instance` (NO `Element`)        |
-| Relationship (normal)    | `Relationship` only                                                  |
+| SoftwareSystemInstance   | NONE derived — ctor stores `Software System Instance` only (M2-corrected: v6 has NO parent-tag inheritance) |
+| ContainerInstance        | NONE derived — ctor stores `Container Instance` only (M2-corrected) |
+| Relationship (normal)    | `Relationship` (+ `Synchronous`/`Asynchronous` when `interactionStyle` set) |
 | Implied/linked rel       | **no tags at all** + `linkedRelationshipId`                          |
 
-Tags serialize as ONE comma-separated string, default tags first.
+Tags serialize as ONE comma-separated string, default tags first. `getTags()` is
+DERIVED (`defaults ++ stored`, LinkedHashSet); the stored field holds custom tags
+only in memory, but JSON `setTags` re-stores everything (trim-free `split(",")`).
 
 ## 4. Views (`view/`)
 
