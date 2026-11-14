@@ -101,6 +101,24 @@ as a tombstone so old references keep resolving.
   Until then, never emit a workspace whose `documentation` silently lacks imported
   content — the loud error is the point.
 
+## D8 — `HashMap` order emulation: two pathological edge cases (accepted)
+
+- Structurizr: free-form `properties` maps are Java `HashMap`s; Jackson serializes them
+  in hash-bucket order. oxidizr REPLICATES this exactly (`build/WRITE-CATALOG.md` §1) —
+  the replication itself is Locked-territory (JSON byte parity).
+- Two inputs are replicated by the general rule rather than Java's exact behavior:
+  1. **treeified buckets** — ≥ 8 keys landing in one bucket at capacity ≥ 64 iterate in
+     tree order there, insertion order here (needs a 64+-key property map whose keys
+     collide in Java's low bits; no realistic workspace, and property keys are
+     developer-authored);
+  2. **capacity inputs with stripped keys** — reference-emitted workspaces carrying the
+     four `structurizr.inspection.*` properties (which change the final capacity) are
+     compared after the M0 golden-stripping rule, so capacity is computed from the
+     stripped map, matching what the reference itself would produce for the same
+     content it stores.
+- Nature: bounded unreachable-in-practice divergence, discovered while writing the M3
+  write catalog (2026-11-14); a property test pins the emulator for all normal maps.
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact

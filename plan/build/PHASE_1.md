@@ -254,8 +254,14 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
 
 ## P1-D12 Verification list (empirical, before the code that depends on it)
 
-- V-1 Java array iteration/TreeSet comparators per JSON path → WRITE-CATALOG.
-- V-2 per-field omission quirks (e.g. ElementView `z == 0`) → WRITE-CATALOG.
+- V-1 ✅ (2026-11-14) Java array iteration/TreeSet comparators per JSON path →
+  `WRITE-CATALOG.md` §5 (numeric-id element arrays, `(order, key-ci)` view lists,
+  `id/order` relationship views, UTF-16 `String.compareTo` sets; probe witness
+  `testdata/golden/m3-order.json`).
+- V-2 ✅ (2026-11-14) per-field omission quirks → `WRITE-CATALOG.md` §0/§3: inclusion is
+  `NON_EMPTY`; primitive ints/bools are NEVER empty (`x:0`/`y:0`/`instanceId`/boundary
+  booleans ALWAYS written), `Integer`/`Boolean` with `NON_NULL` write their zero/false
+  (`response:false`), `generatedKey` `NON_DEFAULT` (true only).
 - V-3 actual default of `structurizr.feature.dsl.environment` (env fallback on/off) →
   match it with `--env` default.
 - V-4 auto view-key generation exact rule (`Prefix-NNN` numbering incl. collisions)
@@ -279,13 +285,13 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   `ViewSet.createDefaultViews`); (b) is a harness artifact — goldens strip it
   (`xtask::normalize_reference_output`). Parser default workspace name/description are
   the literals `"Name"`/`"Description"` (`WorkspaceParser.java:28`), *not* empty.
-- V-11 (M3, before the writer) `properties`-style free-form maps are serialized in
-  **Java HashMap iteration order** (hash-bucket order of the string keys, capacity
-  power-of-2 ≥ n/0.75, chain = insertion order within a bucket), NOT sorted and NOT
-  input order — proven from reference output (PROGRESS.md 2026-11-14). POJO fields are
-  declaration-order (happens-alphabetical). Decide: replicate `String.hashCode`+HashMap
-  ordering in the writer (deterministic; needs reference insertion order per object —
-  WRITE-CATALOG), or canonicalize key order JSON-aware in the parity comparator.
+- V-11 ✅ (2026-11-14, `WRITE-CATALOG.md` §1) `properties` free-form maps serialize in
+  **Java `HashMap` bucket order** (spread `h^(h>>>16)`, cap power-of-2 ≥ 16 doubling when
+  `size > 3cap/4`, bucket = `spread & (cap-1)`, within-bucket = insertion order), NOT
+  sorted/input order. **Decision: replicate exactly** in the writer; core stores
+  properties insertion-ordered (new `Properties` type, `BTreeMap` is wrong). Reads replay
+  document order (byte-stable round-trip); DSL reads use parser put order (identifier
+  property first). Tree-bin/inspection-capacity edge cases → `DEVIATIONS.md` D8.
   Empty objects print `{ }`, empty arrays `[ ]`.
 - V-12 Date/volatility fields: export stamps NOTHING volatile — `lastModifiedDate`/
   `lastModifiedAgent`/`lastModifiedUser` only round-trip from JSON inputs

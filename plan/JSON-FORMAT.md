@@ -5,6 +5,23 @@ Truth = Jackson serialization of core objects by `structurizr-client` (`io/json/
 **lags the code** — drift marked below. Verified against goldens @ v6.2.4 `ad34036`.
 Field names below are JSON keys (camelCase). `(verified)` = checked in source/goldens.
 
+> **2026-11-14 errata — `plan/build/WRITE-CATALOG.md` is now authoritative** for every
+> byte-level write rule (P1-M3a). Corrections to the notes below, all probe-verified:
+> - Inclusion is `NON_EMPTY` only (`NON_NULL` is dead — `setSerializationInclusion` is
+>   called twice, the last wins). **Primitive `int`/`boolean` and their boxed `Integer 0`
+>   /`Boolean false` with `NON_NULL` are NEVER "empty", so always written**: `id:0`,
+>   `x:0`/`y:0`, `instanceId`, `enterpriseBoundaryVisible:true` (default),
+>   `externalBoundariesVisible:false`, `response:false`.
+> - Non-null POJO beans always serialize: `configuration{}`, `documentation{}` (also on
+>   every Documentable element — SoftwareSystem/Container/Component), `views.configuration`
+>   `{ styles{}, terminology{} }`.
+> - View `name` is ALWAYS written and COMPUTED (exact per-kind strings in WRITE-CATALOG
+>   §3.1); `@JsonIgnore` on ANY accessor suppresses the whole Jackson property.
+> - Deployment instances serialize with NO `name`/`description` (reader derives from the
+>   linked element); `DynamicView.deploymentEnvironment` is invisible both directions.
+> - `properties` map ordering is decided: **replicate Java `HashMap` bucket order**
+>   (WRITE-CATALOG §1), not comparator-canonicalize.
+
 ## 1. Writer/reader rules (byte-level contract)
 
 - Writer: POJO keys in Jackson field order (happens-alphabetical at every level — the

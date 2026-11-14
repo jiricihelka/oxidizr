@@ -14,6 +14,7 @@ pub mod docs;
 pub mod error;
 pub mod ids;
 pub mod model;
+pub mod properties;
 pub mod tags;
 pub mod validate;
 pub mod views;

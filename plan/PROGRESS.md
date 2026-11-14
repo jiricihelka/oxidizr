@@ -11,7 +11,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M0 scaffold | **done 2026-11-14** (this commit) |
 | P1 | M1 ast+lexer | **done 2026-11-14** (next commit) |
 | P1 | M2 core model + validation | **done 2026-11-14** (this commit) |
-| P1 | M3 … M7 | M3 next, rest pending |
+| P1 | M3a write catalog (P1-D6) | **done 2026-11-14** (this commit) |
+| P1 | M3b … M7 | M3b (`oxidizr-json` crate) next, rest pending |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -90,6 +91,45 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   theme URLs are fetched during PNG/SVG export only, not `--format json`.
 
 ## Milestone log
+
+### P1-M3a — write catalog (P1-D6) + core model alignment ✅ (2026-11-14)
+
+`plan/build/WRITE-CATALOG.md` is the authoritative JSON write contract (resolves V-1,
+V-2, V-11). Built by (a) reading `structurizr-client` `io/json/JsonWriter`/`AbstractJson*`
+and every `structurizr-core` POJO getter (Jackson `SORT_PROPERTIES_ALPHABETICALLY` +
+`NON_EMPTY`), and (b) a single oracle probe `testdata/probes/m3-order.dsl` exported
+twice (`cmp` byte-identical → deterministic) whose raw output is the byte witness
+`testdata/golden/m3-order.json`.
+
+Headline findings (all verified, not recalled):
+
+- **V-11 resolved: replicate Java `HashMap` bucket order exactly** — free-form
+  `properties` are NOT sorted. Core `properties` moved from `BTreeMap` to a new
+  insertion-ordered `oxidizr_core::properties::Properties` (the writer replays insertion
+  order through a `HashMap` emulator). Two pathological edge cases accepted (tree bins,
+  inspection-key capacity) → `DEVIATIONS.md` D8.
+- **V-2 resolved: primitive ints/bools are NEVER "empty"** — `x`/`y` (`0`),
+  `instanceId`, `enterpriseBoundaryVisible` (`true` default), `*BoundariesVisible`
+  (`false`) are ALWAYS written. `generatedKey` only when `true` (`NON_DEFAULT`);
+  RelationshipView `response` (`NON_NULL`) writes `false`.
+- Computed view `name` is always written (exact strings per kind, §3.1); instances
+  serialize with NO name/description; DynamicView `deploymentEnvironment` is invisible
+  both directions (private, no Jackson accessors); `filtered` legacy `filter` key is
+  read-IGNORED (no setter).
+- Array order (V-1): element arrays numeric-id ascending; view lists `(order, key-ci)`;
+  relationship views `id/order`; filtered tags & style sets UTF-16 `String.compareTo`.
+- Core model aligned to the catalog: `Properties` everywhere; `metadata` on
+  CustomElement; static-view `animations`; landscape/context `enterpriseBoundaryVisible`
+  default **true**; dropped `RelationshipView.technology`, `FilteredView.legacy_filter`;
+  `@JsonIgnore` on ANY accessor suppresses the whole Jackson property (the mystery of
+  the invisible `name`/`mergeFromRemote` getters, resolved).
+- DSL grammar discoveries logged in WRITE-CATALOG §8 (filtered/deployment view
+  signatures, `deploymentGroup` declaration vs reference semantics, no async arrow,
+  Landscape scope rejects containers, parent↔child relationships throw at parse).
+
+`xtask oracle` fixes surfaced by the new golden: `normalize_reference_output` preserves a
+missing trailing newline (M0 goldens had an artifact `\n` — the reference emits none), and
+`find_fixture` now also scans `testdata/probes`. Both goldens regenerated EOF-correct.
 
 ### P1-M2 design notes (2026-11-14, from reference source `ad34036`)
 

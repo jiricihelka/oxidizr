@@ -71,7 +71,7 @@ pub struct ModelItem {
     /// Optional URL.
     pub url: Option<String>,
     /// Free-form properties.
-    pub properties: BTreeMap<String, String>,
+    pub properties: crate::properties::Properties,
     /// Perspectives, in definition order.
     pub perspectives: Vec<Perspective>,
 }
@@ -86,7 +86,7 @@ impl ModelItem {
             description: None,
             tags: Tags::new(),
             url: None,
-            properties: BTreeMap::new(),
+            properties: crate::properties::Properties::new(),
             perspectives: Vec::new(),
         }
     }
@@ -113,7 +113,7 @@ pub struct Relationship {
     /// Optional URL.
     pub url: Option<String>,
     /// Free-form properties.
-    pub properties: BTreeMap<String, String>,
+    pub properties: crate::properties::Properties,
     /// Perspectives.
     pub perspectives: Vec<Perspective>,
     /// Interaction style; NOT settable from the DSL (JSON round-trip only).
@@ -181,6 +181,8 @@ pub struct CustomElement {
     pub item: ModelItem,
     /// Optional group.
     pub group: Option<String>,
+    /// Free-form `metadata` string (Java-only; the DSL never sets it).
+    pub metadata: Option<String>,
     /// Outgoing relationship ids, in definition order.
     pub relationships: Vec<Id>,
 }
@@ -291,7 +293,7 @@ pub struct Model {
     /// ALL relationships (each element's `relationships` lists reference these).
     pub relationships: Vec<Relationship>,
     /// Model-level properties.
-    pub properties: BTreeMap<String, String>,
+    pub properties: crate::properties::Properties,
 }
 
 impl Default for DeploymentNode {

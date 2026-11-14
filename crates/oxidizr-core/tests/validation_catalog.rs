@@ -9,7 +9,6 @@
 //! the full lenient reader. Nested `relationships` arrays are flattened into
 //! the model's flat arena, like `JsonReader` + `Model.hydrate` do.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde_json::Value;
@@ -67,7 +66,7 @@ fn item(v: &Value) -> ModelItem {
         description: s(v, "description").map(str::to_string),
         tags: Tags::set_from_csv(s(v, "tags").unwrap_or("")),
         url: s(v, "url").map(str::to_string),
-        properties: BTreeMap::new(),
+        properties: oxidizr_core::properties::Properties::new(),
         perspectives: Vec::new(),
     }
 }
@@ -83,7 +82,7 @@ fn relationships_of(v: &Value, out: &mut Vec<Relationship>) {
             technology: s(r, "technology").map(str::to_string),
             tags: Tags::set_from_csv(s(r, "tags").unwrap_or("")),
             url: s(r, "url").map(str::to_string),
-            properties: BTreeMap::new(),
+            properties: oxidizr_core::properties::Properties::new(),
             perspectives: Vec::new(),
             interaction_style: match s(r, "interactionStyle") {
                 Some("Synchronous") => Some(InteractionStyle::Synchronous),
@@ -208,6 +207,7 @@ fn load_model(model: &Value) -> Model {
             CustomElement {
                 item: item(e),
                 group: s(e, "group").map(str::to_string),
+                metadata: s(e, "metadata").map(str::to_string),
                 relationships: Vec::new(),
             }
         })
@@ -248,7 +248,7 @@ fn load_model(model: &Value) -> Model {
         software_systems,
         deployment_nodes,
         relationships,
-        properties: BTreeMap::new(),
+        properties: oxidizr_core::properties::Properties::new(),
     }
 }
 
@@ -264,7 +264,7 @@ fn base(v: &Value) -> ViewBase {
             .unwrap_or(0),
         title: s(v, "title").map(str::to_string),
         description: s(v, "description").map(str::to_string),
-        properties: BTreeMap::new(),
+        properties: oxidizr_core::properties::Properties::new(),
     }
 }
 
@@ -286,8 +286,7 @@ fn content(v: &Value) -> ViewContent {
                 url: s(r, "url").map(str::to_string),
                 order: s(r, "order").map(str::to_string),
                 response: r.get("response").and_then(Value::as_bool),
-                technology: s(r, "technology").map(str::to_string),
-                properties: BTreeMap::new(),
+                properties: oxidizr_core::properties::Properties::new(),
                 vertices: Vec::new(),
                 routing: None,
                 jump: r.get("jump").and_then(Value::as_bool),
@@ -316,6 +315,11 @@ fn load_views(views: &Value) -> ViewSet {
         out.system_landscape_views.push(SystemLandscapeView {
             base: base(v),
             content: content(v),
+            enterprise_boundary_visible: v
+                .get("enterpriseBoundaryVisible")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            animations: Vec::new(),
         });
     }
     for v in arr(views, "systemContextViews") {
@@ -326,7 +330,8 @@ fn load_views(views: &Value) -> ViewSet {
             enterprise_boundary_visible: v
                 .get("enterpriseBoundaryVisible")
                 .and_then(Value::as_bool)
-                .unwrap_or(false),
+                .unwrap_or(true),
+            animations: Vec::new(),
         });
     }
     for v in arr(views, "containerViews") {
@@ -338,6 +343,7 @@ fn load_views(views: &Value) -> ViewSet {
                 .get("externalSoftwareSystemBoundariesVisible")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
+            animations: Vec::new(),
         });
     }
     for v in arr(views, "componentViews") {
@@ -349,6 +355,7 @@ fn load_views(views: &Value) -> ViewSet {
                 .get("externalContainerBoundariesVisible")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
+            animations: Vec::new(),
         });
     }
     for v in arr(views, "dynamicViews") {
@@ -363,6 +370,13 @@ fn load_views(views: &Value) -> ViewSet {
                 .unwrap_or(false),
         });
     }
+    load_views_tail(views, &mut out);
+    out
+}
+
+/// The deployment/filtered/image view kinds (split from [`load_views`] for
+/// the line budget).
+fn load_views_tail(views: &Value, out: &mut ViewSet) {
     for v in arr(views, "deploymentViews") {
         out.deployment_views.push(DeploymentView {
             base: base(v),
@@ -388,7 +402,6 @@ fn load_views(views: &Value) -> ViewSet {
                 .filter_map(Value::as_str)
                 .map(str::to_string)
                 .collect(),
-            legacy_filter: s(v, "filter").map(str::to_string),
         });
     }
     for v in arr(views, "imageViews") {
@@ -401,7 +414,6 @@ fn load_views(views: &Value) -> ViewSet {
             content_type: s(v, "contentType").map(str::to_string),
         });
     }
-    out
 }
 
 fn load(doc: &Value) -> (Model, ViewSet) {

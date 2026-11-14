@@ -181,8 +181,12 @@ fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Resu
 /// has NO volatile members (`lastModifiedDate*` only round-trips from JSON inputs,
 /// deterministically) — nothing else is stripped.
 fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(raw);
+    // Byte parity includes EOF: the reference pretty-printer emits NO trailing
+    // newline; `lines()` would invent one (M0 goldens carried that artifact).
+    let raw_trailing_newline = text.ends_with('\n');
     let mut out = String::new();
-    for line in String::from_utf8_lossy(raw).lines() {
+    for line in text.lines() {
         let t = line.trim_start();
         let removed = (t.starts_with("\"structurizr.inspection.error\"")
             || t.starts_with("\"structurizr.inspection.warning\"")
@@ -204,6 +208,9 @@ fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
         }
         out.push_str(line);
         out.push('\n');
+    }
+    if !raw_trailing_newline {
+        out.pop();
     }
     out.into_bytes()
 }
@@ -268,6 +275,8 @@ fn cmd_vendor(src: &Path) -> Result<()> {
                counters the reference app injects on load are stripped at generation time (see\n\
                `xtask::normalize_reference_output` and `plan/PROGRESS.md`). Requires Java 21.\n\
              * `dsl/` — {dsl_count} DSL fixtures (reference test resources; P1 parse corpus).\n\
+             * `probes/` — hand-written oracle-probe fixtures (WRITE-CATALOG witnesses; see\n\
+               `plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.\n\
              * `read-corpus/` + `validation/` — {json_count} JSON workspaces (back-compat read + validation rules).\n\
              * `golden/` — committed reference goldens (byte-parity gate; regenerate sparingly).\n\n\
              ## Deferred fixtures (D7 — `!docs`/`!adrs`, excluded from P1–P3 parse/golden gates)\n\n\
@@ -350,10 +359,11 @@ fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>> {
 // ---------------------------------------------------------------- oracle gen/verify
 
 fn find_fixture(root: &Path, name: &str) -> Result<PathBuf> {
-    let candidates = walk_files(&root.join("testdata").join("dsl"), ".dsl")?
-        .into_iter()
-        .filter(|p| p.file_stem().is_some_and(|s| s == name))
-        .collect::<Vec<_>>();
+    let mut candidates = walk_files(&root.join("testdata").join("dsl"), ".dsl")?;
+    // Probe fixtures (testdata/probes) are first-class golden sources too
+    // (WRITE-CATALOG witnesses).
+    candidates.extend(walk_files(&root.join("testdata").join("probes"), ".dsl")?);
+    candidates.retain(|p| p.file_stem().is_some_and(|s| s == name));
     match candidates.as_slice() {
         [] => bail!("fixture `{name}` not found under testdata/dsl"),
         [one] => Ok(one.clone()),
@@ -434,6 +444,14 @@ mod tests {
             norm(src),
             "{\n  \"properties\" : {\n    \"a\" : \"1\",\n    \"z\" : \"9\"\n  }\n}\n"
         );
+    }
+
+    #[test]
+    fn preserves_missing_trailing_newline() {
+        // The reference pretty-printer emits no trailing newline; goldens must
+        // not invent one (byte parity includes EOF).
+        let src = "{\n  \"a\" : \"1\"\n}";
+        assert_eq!(norm(src), "{\n  \"a\" : \"1\"\n}");
     }
 
     #[test]

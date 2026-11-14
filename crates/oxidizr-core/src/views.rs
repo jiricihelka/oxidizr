@@ -10,8 +10,6 @@
 //! `DeploymentView` and `CustomView`; `FilteredView.tags` is a `TreeSet<String>`
 //! (alphabetical serialization — an M3 write-catalog rule).
 
-use std::collections::BTreeMap;
-
 use crate::ids::Id;
 
 /// Common fields of every view (`view/View`). `order` is a reference `int`
@@ -27,7 +25,7 @@ pub struct ViewBase {
     /// Optional description.
     pub description: Option<String>,
     /// Free-form properties.
-    pub properties: BTreeMap<String, String>,
+    pub properties: crate::properties::Properties,
 }
 
 impl ViewBase {
@@ -39,7 +37,7 @@ impl ViewBase {
             order,
             title: None,
             description: None,
-            properties: BTreeMap::new(),
+            properties: crate::properties::Properties::new(),
         }
     }
 }
@@ -66,6 +64,11 @@ pub struct SystemLandscapeView {
     pub base: ViewBase,
     /// Entries + layout.
     pub content: ViewContent,
+    /// JSON `enterpriseBoundaryVisible` (primitive bool — ALWAYS written;
+    /// reference default `true`).
+    pub enterprise_boundary_visible: bool,
+    /// Animation steps (`StaticView implements AnimatedView`).
+    pub animations: Vec<Animation>,
 }
 
 /// A system context view (`view/SystemContextView`).
@@ -77,8 +80,11 @@ pub struct SystemContextView {
     pub content: ViewContent,
     /// Scoped software system (JSON `softwareSystemId`).
     pub software_system_id: Id,
-    /// JSON `enterpriseBoundaryVisible` (primitive; written when true).
+    /// JSON `enterpriseBoundaryVisible` (primitive bool — ALWAYS written;
+    /// reference default `true`).
     pub enterprise_boundary_visible: bool,
+    /// Animation steps.
+    pub animations: Vec<Animation>,
 }
 
 /// A container view (`view/ContainerView`).
@@ -90,8 +96,11 @@ pub struct ContainerView {
     pub content: ViewContent,
     /// Scoped software system (JSON `softwareSystemId`).
     pub software_system_id: Id,
-    /// JSON `externalSoftwareSystemBoundariesVisible`.
+    /// JSON `externalSoftwareSystemBoundariesVisible` (primitive bool —
+    /// ALWAYS written; reference default `false`).
     pub external_software_system_boundaries_visible: bool,
+    /// Animation steps.
+    pub animations: Vec<Animation>,
 }
 
 /// A component view (`view/ComponentView`).
@@ -103,12 +112,16 @@ pub struct ComponentView {
     pub content: ViewContent,
     /// Scoped container (JSON `containerId`).
     pub container_id: Id,
-    /// JSON `externalContainerBoundariesVisible`.
+    /// JSON `externalContainerBoundariesVisible` (primitive bool — ALWAYS
+    /// written; reference default `false`).
     pub external_container_boundaries_visible: bool,
+    /// Animation steps.
+    pub animations: Vec<Animation>,
 }
 
 /// A dynamic view (`view/DynamicView`). The entry arrays are ORDERED
-/// (`RelationshipView.order` numbers the steps).
+/// (`RelationshipView.order` numbers the steps). `DynamicView` extends
+/// `ModelView` but NOT `AnimatedView` — no animations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DynamicView {
     /// Common fields.
@@ -117,9 +130,12 @@ pub struct DynamicView {
     pub content: ViewContent,
     /// Scope element, if any (JSON `elementId`).
     pub element_id: Option<Id>,
-    /// Deployment-scope dynamic views (JSON `deploymentEnvironment`).
+    /// Deployment-scope dynamic views. The reference keeps this field PRIVATE
+    /// with no Jackson accessors — invisible in JSON in BOTH directions
+    /// (WRITE-CATALOG §3); it exists for the DSL only and is never
+    /// (de)serialized.
     pub deployment_environment: Option<String>,
-    /// JSON `externalBoundariesVisible` (primitive; written when true).
+    /// JSON `externalBoundariesVisible` (primitive bool — ALWAYS written).
     pub external_boundaries_visible: bool,
 }
 
@@ -163,8 +179,6 @@ pub struct FilteredView {
     /// Filter terms (serialized as the JSON `tags` ARRAY; reference stores a
     /// `TreeSet`, i.e. alphabetical on write).
     pub tags: Vec<String>,
-    /// Legacy `filter` expression string — read-tolerance only, never written.
-    pub legacy_filter: Option<String>,
 }
 
 /// An image view (`view/ImageView`) — raw diagram text (PlantUML/Mermaid/…).
@@ -185,8 +199,8 @@ pub struct ImageView {
 }
 
 /// One included element (JSON `elements[]` entry). `x`/`y` are reference
-/// primitive ints: serialized only when nonzero (V-2 quirk), and
-/// `x == y == 0` round-trips to an omitted pair.
+/// primitive ints: NEVER "empty" under `NON_EMPTY`, so they are ALWAYS
+/// written, including the `0`/`0` pair (V-2 resolved — WRITE-CATALOG §3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementView {
     /// Referenced element id.
@@ -198,7 +212,7 @@ pub struct ElementView {
 }
 
 /// One included relationship (JSON `relationships[]` entry). Dynamic views
-/// populate `order`/`description`/`technology`.
+/// populate `order`/`description`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationshipView {
     /// Referenced relationship id.
@@ -209,13 +223,11 @@ pub struct RelationshipView {
     pub url: Option<String>,
     /// Dynamic-step order number (reference stores it as a STRING).
     pub order: Option<String>,
-    /// Async response marker (`response`).
+    /// Async response marker (`response`; `Boolean` with `NON_NULL`
+    /// inclusion — `false` IS written).
     pub response: Option<bool>,
-    /// Optional technology override (DSL dynamic steps; not on the Java
-    /// `RelationshipView` JSON — verify at M3).
-    pub technology: Option<String>,
     /// Free-form properties.
-    pub properties: BTreeMap<String, String>,
+    pub properties: crate::properties::Properties,
     /// Waypoints (`vertices` in v6 JSON).
     pub vertices: Vec<Vertex>,
     /// Routing override.
@@ -439,6 +451,9 @@ pub struct ElementStyle {
     pub metadata: Option<bool>,
     /// Show description.
     pub description: Option<bool>,
+    /// Free-form properties (`AbstractStyle implements PropertyHolder`;
+    /// `NON_EMPTY` — only written when set).
+    pub properties: crate::properties::Properties,
 }
 
 /// A relationship style (`view/RelationshipStyle`), matched by `tag`.
@@ -472,6 +487,8 @@ pub struct RelationshipStyle {
     pub metadata: Option<bool>,
     /// Show description.
     pub description: Option<bool>,
+    /// Free-form properties (`AbstractStyle implements PropertyHolder`).
+    pub properties: crate::properties::Properties,
 }
 
 /// Element + relationship styles (`view/Styles`).
@@ -525,7 +542,7 @@ pub struct ViewConfiguration {
     /// View sort order.
     pub view_sort_order: Option<ViewSortOrder>,
     /// Free-form properties.
-    pub properties: BTreeMap<String, String>,
+    pub properties: crate::properties::Properties,
 }
 
 /// All views onto the model (`view/ViewSet`). Each collection preserves

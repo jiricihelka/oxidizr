@@ -13,8 +13,6 @@
 // as per-method `# Errors`/`# Panics` sections.
 #![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
-use std::collections::BTreeMap;
-
 use crate::Workspace;
 use crate::configuration::WorkspaceScope;
 use crate::error::CoreError;
@@ -159,6 +157,7 @@ impl WorkspaceBuilder {
         self.workspace.model.custom_elements.push(CustomElement {
             item: item.clone(),
             group: None,
+            metadata: None,
             relationships: Vec::new(),
         });
         Ok(item.id)
@@ -478,7 +477,7 @@ impl WorkspaceBuilder {
             technology,
             tags,
             url: None,
-            properties: BTreeMap::new(),
+            properties: crate::properties::Properties::new(),
             perspectives: Vec::new(),
             interaction_style: None,
             linked_relationship_id: None,
@@ -600,6 +599,9 @@ impl WorkspaceBuilder {
             .push(SystemLandscapeView {
                 base,
                 content: ViewContent::default(),
+                // Java field initializer: `enterpriseBoundaryVisible = true`.
+                enterprise_boundary_visible: true,
+                animations: Vec::new(),
             });
         Ok(())
     }
@@ -620,7 +622,9 @@ impl WorkspaceBuilder {
                 base,
                 content: ViewContent::default(),
                 software_system_id: system.clone(),
-                enterprise_boundary_visible: false,
+                // Java field initializer: `enterpriseBoundaryVisible = true`.
+                enterprise_boundary_visible: true,
+                animations: Vec::new(),
             });
         Ok(())
     }
@@ -639,6 +643,7 @@ impl WorkspaceBuilder {
             content: ViewContent::default(),
             software_system_id: system.clone(),
             external_software_system_boundaries_visible: false,
+            animations: Vec::new(),
         });
         Ok(())
     }
@@ -660,6 +665,7 @@ impl WorkspaceBuilder {
                 content: ViewContent::default(),
                 container_id: container.clone(),
                 external_container_boundaries_visible: false,
+                animations: Vec::new(),
             });
         Ok(())
     }
@@ -714,7 +720,6 @@ impl WorkspaceBuilder {
             base_view_key: base_key.to_string(),
             mode,
             tags,
-            legacy_filter: None,
         });
         Ok(())
     }

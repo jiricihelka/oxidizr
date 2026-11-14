@@ -83,7 +83,7 @@ pub struct Workspace {
     /// Base64 thumbnail.
     pub thumbnail: Option<String>,
     /// Top-level properties (`structurizr.dsl` lives here when portable).
-    pub properties: std::collections::BTreeMap<String, String>,
+    pub properties: crate::properties::Properties,
     /// The architecture model.
     pub model: crate::model::Model,
     /// The views.
