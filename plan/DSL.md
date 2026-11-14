@@ -15,6 +15,16 @@ Pinned v6.2.4 @ `ad34036`.
   (ISO-8859/Latin-1 files also supported); `${NAME}` substitution over ALL strings:
   `!const`/`!var` map first, then **env vars** (feature `structurizr.feature.dsl.environment`).
 - `${NAME}` name chars `[a-zA-Z0-9-_.]`. No `env()`/`$()` function (legacy, gone).
+- **M1-verified corrections** (from `preProcessLines` @ `ad34036`, implemented + tested in
+  `oxidizr-dsl/src/preprocess.rs`; plan/PROGRESS.md M1 has the details): middle lines of a
+  `\`-continuation keep their indentation (only the final completing line is `stripLeading`ed);
+  a joined logical line is reported under its LAST physical line's number; a text block's
+  value = text after the FIRST `"""` (incl. opener-line tail) + dedented middle lines each
+  +`\n`, truncated at the first interior `"""`, last char dropped; text-block lines are
+  classified BEFORE blank/comment checks; the whole-line comment pattern is
+  `^\s*(//|#).*$`; the block-comment machine's check order is load-bearing (whole-line
+  `/* … */` neither opens nor closes a region; first-token `/*` opens — after the
+  `x =`-assignment strip; trimmed-line `*/` closes).
 - Parse aborts on FIRST error: `StructurizrDslParserException` =
   `"<msg> at line N of <abs-path>: <trimmed source line>"` — no column.
 - Per-scope context classes each define a permitted-token set; unknown statement there →

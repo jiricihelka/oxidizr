@@ -9,8 +9,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | Phase | Milestone | State |
 |---|---|---|
 | P1 | M0 scaffold | **done 2026-11-14** (this commit) |
-| P1 | M1 ast+lexer | next |
-| P1 | M2 … M7 | pending |
+| P1 | M1 ast+lexer | **done 2026-11-14** (next commit) |
+| P1 | M2 … M7 | M2 next, rest pending |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -90,6 +90,80 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
 
 ## Milestone log
 
+### P1-M1 — DSL lexer + lossless CST ✅ (2026-11-14)
+
+`oxidizr-diag` (Span/FileId/Code/Collector), `oxidizr-ast` (lossless
+`Cst`/`Node`/`NodeKind` + byte-coverage `verify_lossless`), and the
+`oxidizr-dsl` front stages: `preprocess` → `lexer` → `cst` (M4 adds the
+statement parser on top).
+
+Pipeline shape (P1-D3 realized):
+- `preprocess::preprocess(source) -> Vec<Logical>` — the reference's
+  `preProcessLines`: physical lines are byte-spanned (`\r?\n`, EOF),
+  `\\`-continuations join into segment lists, text blocks fold into a
+  `TextBlock` raw region, EOF tails of unfinished groups are marked `dropped`
+  (the reference discards them).
+- `lexer::lex_line/comment/blank` — bug-compatible `Tokenizer.java` over the
+  UNtrimmed bytes: token VALUES equal the Java tokenizer's, leaves tile every
+  physical byte (whitespace/newline/continuation/BOM trivia; token hull leaves
+  include quote delimiters, multi-segment tokens produce multi-leaves with
+  exact pieces).
+- `cst::build` — classification + block-comment state machine (see checks
+  below) → flat lossless tree `Root > line nodes > leaves`; `cst::LineIndex`
+  gives (line, char-col) for diagnostics (D1).
+
+**Reference-semantics corrections found during M1** (verified against
+`ad34036` `StructurizrDslParser.preProcessLines` + `Tokenizer.java`; the
+earlier notes in this file were wrong on all four — `plan/DSL.md` must be
+re-checked against these when M4 documents statements):
+1. **Continuation joins keep indentation**: only the FINAL completing line is
+   `stripLeading`ed; middle lines append verbatim (join of
+   `a \` / `  b \` / `  c` is `a   b   c`).
+2. **Logical lines are emitted under the LAST physical line's number** — the
+   parse loop flushes with its already-incremented `lineNumber` (multi-line
+   statement errors point at the closing line).
+3. **Text-block values include the opener line's post-`"""` text**: the
+   reference buffers the WHOLE opener line, so `split(TEXT_BLOCK_MARKER)`
+   leaves `parts[1]` = tail-after-first-`"""` + dedented middle lines each +
+   `\n`; then `substring(0, len-1)` drops the last char. Value = that.
+   Throwing inputs (empty value, middle line shallower than first-line indent)
+   are modeled as `text_block_value() -> Option<String>` returning `None`
+   (M4 will report them as diagnostics instead of Java's
+   StringIndexOutOfBoundsException — DEVIATIONS candidate).
+4. **Text-block checks precede blank/comment checks** in the reference loop,
+   and the whole-line-comment pattern is `^\s*(//|#).*$` (`#` included, like
+   scripts — `plan/DSL.md` "no `#` comments" is WRONG; recorded below).
+
+Other verified facts encoded in the code:
+- Block-comment machine check ORDER is load-bearing: whole-line `/* … */`
+  neither opens nor closes a region (so it does NOT close an open one); a
+  line whose FIRST token (after `x =`-assignment strip, reference L431)
+  starts `/*` opens; the next line whose TRIMMED text ends `*/` closes; a
+  `//`-comment line's `*/` never closes; unclosed `/*` swallows to EOF.
+- Tokenizer: quote chars stripped; `\"` = prev-char-backslash lookbehind with
+  the backslash KEPT in the value; `"` mid-bare-token is ordinary; EOL pushes
+  the open token silently (unterminated `"` loses its opener, no error);
+  `#`/`//` are ordinary tokens mid-line; `String.trim` (≤ U+0020) vs
+  `Character.isWhitespace` sets both ASCII here (compat.rs notes the Unicode
+  edge).
+- BOM (U+FEFF) is stripped per logical line (reference) — covered as a `Bom`
+  trivia leaf; `iso-8859.dsl` is the one non-UTF-8 fixture: M1 lexes `&str`,
+  byte-level decoding is the M5 loader (V-8), pinned by a test.
+
+D1 deviation (already locked): parser errors will carry LINE + COLUMN (the
+reference emits no column); M4 wires `Collector` into the statement parser.
+
+**Gates**: `cargo fmt --check` · `clippy -D warnings` clean · `cargo test
+--workspace` = 54 tests green (dsl 34 unit + 9 integration incl. six
+expect-test snapshots over multi-line/text-block/utf8/workspace-with-bom*/
+multi-line-with-error + two whole-corpus properties: every UTF-8 fixture's CST
+is byte-lossless, tokens deterministic & char-aligned).
+xtask/clippy note: workspace lints catch `push_str(&format!…)`
+(clippy::use_format) and `unused dependency` manifest warnings are NON-BLOCKING
+(they stay until M2–M4 use the deps; `-D warnings` does not fail on manifest
+warnings — verified).
+
+
 ### P1-M0 (2026-11-14, in progress)
 
 Scope (P1-D11 M0): workspace + 7 crates, `rust-toolchain.toml`+`NIGHTLY.md`, LICENSE
@@ -126,3 +200,18 @@ fixture) + `vendor`, testdata vendored with attribution. flake.nix: DONE (9d0498
   exercised for real: they DO sort last here) + `cargo xtask oracle verify` → ok.
 - M0 gates: fmt / clippy(-D warnings) / test all green on the pinned toolchain; bench
   baseline committed under `bench-baseline/M0/`.
+
+### P1-M1 design notes — SUPERSEDED
+
+The pre-implementation notes written from `ad34036` before coding contained four
+errors (indentation-stripping, first-line numbering, text-block value bounds, and
+`#`-comment scope), all corrected in the **P1-M1 milestone log above**, which is
+authoritative for the implemented semantics. The verified facts are encoded and
+tested in `crates/oxidizr-dsl/src/{preprocess,lexer,cst}.rs`; see also
+`plan/DSL.md` §1 "M1-verified corrections".
+
+Kept (unverified, M4 must confirm against source before relying on them): the
+`${VAR}` pre-pass is a per-token, forward single pass over constants + variables +
+text blocks with regex `\$\{[a-zA-Z0-9-_.]+?}` (defs must precede uses; unknown
+names stay literal unless the env feature is on — V-3 `--env`); text-block values
+substitute recursively, constants/variables do not.
