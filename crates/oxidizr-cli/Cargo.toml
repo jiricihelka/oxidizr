@@ -1,0 +1,30 @@
+[package]
+name = "oxidizr-cli"
+description = "oxidizr CLI: dsl2json, json2json, validate, fmt, reconcile (P1-D8)"
+publish = false
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+reference = []
+
+[dependencies]
+oxidizr-core = { workspace = true }
+oxidizr-ast = { workspace = true }
+oxidizr-diag = { workspace = true }
+oxidizr-dsl = { workspace = true }
+oxidizr-json = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+miette = { workspace = true }
+
+[[bin]]
+name = "oxidizr"
+path = "src/main.rs"

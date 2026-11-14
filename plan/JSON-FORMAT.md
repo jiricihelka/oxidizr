@@ -7,9 +7,15 @@ Field names below are JSON keys (camelCase). `(verified)` = checked in source/go
 
 ## 1. Writer/reader rules (byte-level contract)
 
-- Writer: object keys **alphabetically sorted**; NON_NULL **and NON_EMPTY** inclusion
+- Writer: POJO keys in Jackson field order (happens-alphabetical at every level — the
+  Workspace/ViewSet POJOs are declared alphabetically); **free-form `properties` maps
+  are NOT sorted** — Java `HashMap` iteration (hash-bucket) order, proven from reference
+  output 2026-11-14 (PHASE_1 V-11; replicate or comparator-canonicalize at M3).
+  NON_NULL **and NON_EMPTY** inclusion
   (empty strings/arrays/objects/maps omitted); pretty print, 2-space indent, `\n`;
-  dates `yyyy-MM-dd'T'HH:mm:ss'Z'` (UTC).
+  empty object `{ }` / empty array `[ ]` (space inside); date fields
+  `yyyy-MM-dd'T'HH:mm:ss'Z'` (UTC). `lastModifiedDate`/`Agent`/`User` round-trip when
+  present in input; nothing is stamped on write (export is deterministic).
 - Reader: unknown properties ignored (`FAIL_ON_UNKNOWN_PROPERTIES=false`) → read
   tolerance for legacy keys is free; but legacy *shapes* need explicit handling:
   `enterpriseContextViews` alias (`@JsonSetter` on ViewSet), views without `order`,

@@ -1,0 +1,18 @@
+{
+  "configuration" : { },
+  "description" : "Description",
+  "documentation" : { },
+  "id" : 0,
+  "model" : { },
+  "name" : "Name",
+  "properties" : {
+    "structurizr.dsl" : "d29ya3NwYWNlIHsKCiAgICBwcm9wZXJ0aWVzIHsKICAgICAgICAic3RydWN0dXJpenIuZHNsRWRpdG9yIiAiZmFsc2UiCiAgICB9Cgp9",
+    "structurizr.dslEditor" : "false"
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+# Dev-only cargo alias so `cargo xtask …` invokes the workspace `xtask` member
+# (the matklad xtask pattern). This is build tooling, NOT oxidizr product config
+# (AGENTS.md "no config files" governs the product: flags + env only). CI uses it
+# too (`.github/workflows/ci.yml` reference job).
+[alias]
+xtask = "run --package xtask --"

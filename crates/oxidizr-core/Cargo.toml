@@ -1,0 +1,15 @@
+[package]
+name = "oxidizr-core"
+description = "oxidizr domain model + validation; dependency-free by design (P1-D4)"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# NO dependencies — not even serde (P1-D1).

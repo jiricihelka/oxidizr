@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Weekly run of the Category B reference job (it gates on `schedule`/dispatch).
+  schedule:
+    - cron: '0 4 * * 1'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo fmt --all --check
+
+  clippy:
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    # Category A only (AGENTS.md §Testing): pure Rust, no network/Java, 3-OS matrix.
+    needs: clippy
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --workspace
+
+  bench:
+    # Informational (AGENTS.md §Benchmarks): posts numbers, flags >~10% regressions for
+    # human review; no auto-fail. Baselines committed under bench-baseline/.
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo bench --workspace -- --report-dir target/criterion
+      - uses: actions/upload-artifact@v4
+        with:
+          name: criterion-report
+          path: target/criterion
+
+  coverage:
+    # Report only — no percentage gate.
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov --workspace --summary-only
+        continue-on-error: true
+      # Runner toolchain comes from rust-toolchain.toml (llvm-tools-preview included).
+
+  reference:
+    # Category B (AGENTS.md §Testing): the reference binary is slow, so this runs
+    # weekly / on demand only — never per PR. With the feature enabled a skipped
+    # Category B test must FAIL: OXIDZR_REFERENCE_STRICT=1 enforces it.
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install pinned structurizr (unified application binary)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/structurizr.war" \
+            https://download.structurizr.com/structurizr-2026.10.26.war
+          printf '#!/bin/sh\nexec java -jar "$RUNNER_TEMP/structurizr.war" "$@"\n' \
+            > /usr/local/bin/structurizr
+          chmod +x /usr/local/bin/structurizr
+      - run: cargo test --workspace --features reference
+        env:
+          OXIDZR_REFERENCE_STRICT: '1'
+      - run: cargo xtask oracle verify
+        env:
+          OXIDZR_REFERENCE_STRICT: '1'

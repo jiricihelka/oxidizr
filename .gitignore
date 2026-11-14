@@ -1,0 +1,5 @@
+/target
+/result*
+*.rs.bk
+# criterion scratch; committed baselines live in bench-baseline/
+/criterion-local

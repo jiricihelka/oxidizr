@@ -269,10 +269,28 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   in text fields and in the `structurizr.dsl` property bytes.
 - V-9 ~~decision-status/date parsing corners per ADR tool format~~ — **moved to P4-V7**
   (importers deferred 2026-11-14).
-- V-10 Does the reference **app layer generate default views during `export`/`validate`**
-  for view-less models (Locked list keeps generation out of parser/library, but the
-  oracle IS the app — goldens decide whether `dsl2json` must mirror app behavior;
-  verify at M0 with one view-less fixture).
+- V-10 ✅ (2026-11-14, oracle runs, plan/PROGRESS.md) The app layer DOES mutate the
+  workspace during `export`: `AbstractCommand.loadWorkspace` runs (a) scope validation
+  (hard error), (b) `new DefaultInspector(workspace)` which injects four
+  `structurizr.inspection.{error,warning,info,ignore}` count properties into
+  `workspace.properties`, and (c) `createDefaultViews()` **iff model non-empty AND no
+  views defined** (landscape + context/container per name-sorted system + component per
+  container + deployment views). `dsl2json` must mirror (c) (small, specced in
+  `ViewSet.createDefaultViews`); (b) is a harness artifact — goldens strip it
+  (`xtask::normalize_reference_output`). Parser default workspace name/description are
+  the literals `"Name"`/`"Description"` (`WorkspaceParser.java:28`), *not* empty.
+- V-11 (M3, before the writer) `properties`-style free-form maps are serialized in
+  **Java HashMap iteration order** (hash-bucket order of the string keys, capacity
+  power-of-2 ≥ n/0.75, chain = insertion order within a bucket), NOT sorted and NOT
+  input order — proven from reference output (PROGRESS.md 2026-11-14). POJO fields are
+  declaration-order (happens-alphabetical). Decide: replicate `String.hashCode`+HashMap
+  ordering in the writer (deterministic; needs reference insertion order per object —
+  WRITE-CATALOG), or canonicalize key order JSON-aware in the parity comparator.
+  Empty objects print `{ }`, empty arrays `[ ]`.
+- V-12 Date/volatility fields: export stamps NOTHING volatile — `lastModifiedDate`/
+  `lastModifiedAgent`/`lastModifiedUser` only round-trip from JSON inputs
+  (`lastModifiedUser: ""` omitted as empty; unknown `revision` dropped). Goldens are
+  committed raw minus V-10(b) keys.
 Each gets a checkbox + evidence link in the PR that implements it; results folded back
 into `plan/*.md` if notes were wrong (errata process).
 

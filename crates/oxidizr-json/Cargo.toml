@@ -1,0 +1,31 @@
+[package]
+name = "oxidizr-json"
+description = "oxidizr Structurizr-JSON reader/writer — serde derives, byte-parity writer (P1-D5/D6)"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Category B (reference-backed) tests: default OFF, skip loudly when the structurizr
+# binary is absent, and `OXIDZR_REFERENCE_STRICT=1` turns a skip into a failure so the
+# dedicated CI job cannot silently lose coverage (AGENTS.md §Testing).
+default = []
+reference = []
+
+[dependencies]
+oxidizr-core = { workspace = true }
+oxidizr-diag = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+expect-test = { workspace = true }
+proptest = "1"

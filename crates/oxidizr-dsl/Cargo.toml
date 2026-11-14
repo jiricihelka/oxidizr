@@ -1,0 +1,25 @@
+[package]
+name = "oxidizr-dsl"
+description = "oxidizr DSL frontend: preprocessor, lexer, lossless CST parser, builder, fmt (P1-D3/D7)"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+oxidizr-core = { workspace = true }
+oxidizr-ast = { workspace = true }
+oxidizr-diag = { workspace = true }
+
+[dev-dependencies]
+expect-test = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "parse"
+harness = false

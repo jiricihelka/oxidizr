@@ -1,0 +1,15 @@
+[package]
+name = "oxidizr-diag"
+description = "oxidizr diagnostics: Span, Severity, OXZ Code registry, collectors (P1-D2)"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# NO dependencies (P1-D1).
