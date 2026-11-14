@@ -91,7 +91,9 @@ Pinned v6.2.4 @ `ad34036`.
 | `image` | — `{ plantuml/mermaid/kroki/image … }` | content blocks: `plantuml { …raw… }`, `mermaid { … }`, `kroki "type" { … }`, `image "path|url"`; light/dark variants (`light`/`dark` tokens) |
 
 - `include *` adds everything in scope; include/exclude take identifiers, name paths,
-  finders (`!element`/`!elements`), filter/expression strings.
+  finders (`!element`/`!elements`), filter/expression strings. Singular forms only — the
+  `includes`/`excludes` of pre-v6 docs are rejected at the pinned revision (verified
+  against the 6.2.4 parser, 2026-11-14).
 
 ## 5. Styles & themes (in `views`)
 

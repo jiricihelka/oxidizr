@@ -132,11 +132,14 @@ vendoring, check the license of the specific version you touch.
   `structurizr-dsl/src/test/resources` and the golden workspaces in
   `structurizr-export`/`structurizr-client` tests, keeping source and Apache-2.0
   attribution noted in a README) and their golden `.json` files.
-- Goldens are generated with the official `structurizr export -format json` command
-  (unified application binary; the old `structurizr-cli` is archived; see
-  [docs.structurizr.com/commands](https://docs.structurizr.com/commands)). Record the
-  tool version used in `testdata/README.md`. Goldens are **committed**; regenerate
-  sparingly (fixture changes, milestones) — per-PR CI never calls the reference tool.
+- Goldens are generated with the official unified application binary:
+  `structurizr export --workspace <file> --format json --output <dir>` — GNU-style long
+  options (`-w`/`-f`/`-o`), since the unified binary rejects the old CLI's single-dash
+  `-format` form (verified against 2026.10.26, 2026-11-14; the old `structurizr-cli` is
+  archived; see [docs.structurizr.com/commands](https://docs.structurizr.com/commands)).
+  Record the tool version used in `testdata/README.md`. Goldens are **committed**;
+  regenerate sparingly (fixture changes, milestones) — per-PR CI never calls the
+  reference tool.
 - Category A/B split and the `$OXIDZR_STRUCTURIZR_BIN` discovery/skip rules are defined
   in §Testing — that section governs; this one defines the corpus.
 - Round-trip tests: JSON → model → JSON must be lossless for the fields Structurizr

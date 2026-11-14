@@ -153,7 +153,8 @@ scattered `properties.get("…")` calls.
 
 - **Semantic comparator — C4-PlantUML only in P2** (2026-11-14 rebalance):
   `xtask export-verify` (Category B, default-off `reference` feature, run sparingly)
-  runs reference `structurizr export -format plantuml/c4plantuml` (via
+  runs reference `structurizr export --format plantuml/c4plantuml` (GNU-style options;
+  see AGENTS.md §Test data & goldens) (via
   `$OXIDZR_STRUCTURIZR_BIN` discovery) and oxidizr over the fixture set; parses both
   outputs into a normalized fact model (macro calls + args, relationship tuples,
   style/skinparam directives, include lines; order-normalized per rules where the

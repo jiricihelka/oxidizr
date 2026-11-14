@@ -75,7 +75,9 @@ icons; PNGs are third-party copyright!).
 ```sh
 ./mvnw -B -DexcludedGroups=IntegrationTest package    # whole repo (what CI runs)
 java -jar structurizr-application/target/structurizr-1.0.0.war <command>   # or ./structurizr.sh
-# e.g. … local <dir> | export -w ws.dsl -format json | validate | mcp -dsl
+# e.g. … local <dir> | export -w ws.dsl -f json | validate | mcp -dsl
+# (GNU-style options only: -w/--workspace, -f/--format, -o/--output; single-dash long
+#  forms like -format are rejected — verified against the 2026.10.26 war, 2026-11-14)
 ```
 
 - Libraries publish to Maven Central (`com.structurizr:structurizr-{core,dsl,...}:6.2.4`);
