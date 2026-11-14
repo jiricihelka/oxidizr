@@ -88,6 +88,19 @@ as a tombstone so old references keep resolving.
 - Diagnostics-grade lexer/parser with a real CST feeding workspace construction, enabling
   D1, `fmt`, `diff` (vs Java's per-scope keyword dispatch over preprocessed strings).
 
+## D7 — Documentation/ADR import deferred (temporary, Phases 1–3)
+
+- Structurizr: `!docs`/`!adrs` import markdown docs and ADRs (4 tool formats) into the
+  workspace `documentation` tree **at load time**, so exported JSON carries them.
+- oxidizr (2026-11-14 rebalance): Phases 1–3 **parse the statement form** (valid args,
+  spans) but reject the import with OXZ-5003 "documentation import arrives in Phase 4"
+  instead of silently skipping. Workspaces using these directives are therefore
+  reference-compatible only **from Phase 4 on** (importers: `build/PHASE_4.md` P4-D13);
+  their fixtures are vendored but excluded from the P1–P3 parse/golden gates.
+- Nature: sequencing deviation with a retirement milestone, not a permanent difference.
+  Until then, never emit a workspace whose `documentation` silently lacks imported
+  content — the loud error is the point.
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact

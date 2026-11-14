@@ -14,9 +14,9 @@ Goal: `oxidizr` can losslessly read every Structurizr input and write byte-perfe
 
 - `oxidizr-core`: immutable domain model + canonical names, tag stacks, id counter
   (Locked behaviors).
-- `oxidizr-dsl`: CST-based parser for the full v6 grammar (DSL.md), incl. `!docs`/`!adrs`
-  markdown/ADR importers (needed for full DSL compat); JVM-only directives rejected
-  cleanly (D2); `${VAR}`
+- `oxidizr-dsl`: CST-based parser for the full v6 grammar (DSL.md); doc/ADR importers
+  for `!docs`/`!adrs` **deferred to Phase 4** (D7: statement parsed, import deferred
+  with OXZ-5003 until then); JVM-only directives rejected cleanly (D2); `${VAR}`
   pre-pass; portability/`structurizr.dsl` retention rules.
 - `oxidizr-json`: reader (lenient, unknowns ignored; optional capture for `--keep-unknown`
   = D3) and writer (alphabetical keys, NON_EMPTY, UTC-Z dates, 2-space indent).
@@ -25,7 +25,7 @@ Goal: `oxidizr` can losslessly read every Structurizr input and write byte-perfe
 - Harness from day one: F4 oracle xtask (golden generation/verification) + `testdata/`
   vendored from FIXTURES.md.
 - Early-pulled features: **F2 `fmt`** and **F1 `reconcile`** (both need only the P1 CST).
-- Exit: all fixture DSL parses; written
+- Exit: all fixture DSL parses (minus the deferred docs/ADR corpus — D7); written
   goldens byte-match; petclinic + `backwardsCompatibility/`
   read cleanly; fmt invariant and reconcile remap tests green.
 
@@ -41,7 +41,9 @@ Goal: workspace in → standard diagram text out.
   import is rarer than export; halves Phase 2).
 - Fidelity bar: **semantic parity + render checks** (oracle generates reference
   exports; structure-based diff + render smoke tests), not byte-parity — the JSON
-  contract is the byte-parity contract.
+  contract is the byte-parity contract. Comparator automation covers C4-PlantUML in
+  P2; the other dialects' comparators carry into P4-D13 (own goldens + render checks
+  gate them meanwhile).
 - Theme resolution stays offline-first (D5); this phase introduces `--allow-net`.
 - No layout engine yet: exported text formats self-layout.
 - Exit: `build/PHASE_2.md` gates (semantic oracle diff green, render checks, our own
@@ -55,8 +57,10 @@ Goal: single-binary desktop app to see and tune diagrams — no browser, no Dock
 - Renderer: all view types (landscape/context/container/component/dynamic/deployment/
   filtered + custom/image), styling incl. shapes, borders, icons (PNG + SVG/usvg),
   metadata, terminology, bundled font; light/dark follow-OS.
-- Auto-layout: own deterministic layered engine behind a `LayoutEngine` trait,
-  optional `dot-backend` cargo feature (subprocess, off by default) — O2 closed.
+- Auto-layout: own deterministic layered engine behind a `LayoutEngine` trait —
+  **MVP scope in P3** (longest-path layering, barycenter ordering, simple coordinates),
+  quality polish carried to P4-D13; optional `dot-backend` cargo feature (subprocess,
+  off by default) — O2 closed.
   Result is only final `{x,y}`/points written into standard JSON.
 - Layout editing: drag elements/waypoints with undo/redo, save into workspace JSON
   geometry; saves must stay readable by official tooling (compat gate applies); file
@@ -77,6 +81,11 @@ Goal: the ergonomic registry lands as polished commands; roadmap completes.
 - Importers (from P2): C4-PlantUML, Mermaid, image→CustomView; plus the deferred
   WebSequenceDiagrams exporter and the **`generate system-landscape`** port
   (reference-app command parity, adopted 2026-11-14).
+- **Carry-ins from the 2026-11-14 rebalance** (`build/PHASE_4.md` P4-D13):
+  `!docs`/`!adrs` markdown + ADR importers (retiring D7), Structurizr-PlantUML +
+  Mermaid semantic comparators, `Layered` layout quality polish.
+- Release engineering: cargo-dist 3-OS binaries, semver + hand-curated changelog from
+  v0.1.0; `completions`.
 - Exit: each command golden/property-tested; `--help` UX reviewed; first cargo-dist
   release. Details: `build/PHASE_4.md`.
 

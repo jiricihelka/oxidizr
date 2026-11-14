@@ -101,11 +101,17 @@ Workspace + resolved styles (core::styles, P2-D2)
   impls: `Layered` (own) and `Dot` (feature `dot-backend`, subprocess `dot -Tplain2`
   /`-Tplain-ext`-class output, `$OXIDZR_DOT_BIN` → PATH discovery, absent → diagnostic
   suggesting the plain build; never on by default — single-binary promise).
-- `Layered` = compact-priority Sugiyama: cycle removal by DFS reversal, layering
-  (longest-path + network-simplex-lite iteration cap), ordering (barycenter w/
-  deterministic tie-breaks), x-coordinates (priority method, separation constraints),
-  orthogonal edge routing along rank gaps; rankDirection maps `automaticLayout`
-  LeftRight/RightLeft/TopDown/BottomUp; separations from view `automaticLayout`.
+- `Layered` = Sugiyama pipeline in **MVP scope for P3** (2026-11-14 rebalance — the
+  polish half is P4-D13): cycle removal by DFS reversal; layering by **longest-path**
+  (fixed iteration cap, no simplex refinement); ordering by **barycenter sweeps with
+  deterministic tie-breaks**; coordinates by a **simple priority pass** honoring
+  separations; orthogonal edge routing along rank gaps; **boundaries contracted naively**
+  (treated as opaque super-nodes, unpacked after ordering — no interplay with ranking).
+  Quality bar: "usable, stable, deterministic C4 layouts", explicitly not Graphviz
+  parity. P4 upgrades: longest-path+tightening/simplex refinement, priority-method
+  coordinates, smarter boundary contraction, edge-channel routing.
+  `rankDirection` maps `automaticLayout` LeftRight/RightLeft/TopDown/BottomUp;
+  separations from view `automaticLayout`.
 - **Determinism is a hard contract:** no randomness, stable sorts, fixed iteration
   counts → property test "same input ⇒ byte-identical layout" + criterion benches on
   large synthetic views (1k nodes) — the mandated `reconcile`-class bench targets
@@ -159,8 +165,9 @@ Workspace + resolved styles (core::styles, P2-D2)
   scaffold; CI builds viewer on 3 OSes headless; core `filter::eval` if missing.
 - **M1** read-only viewer: open DSL/JSON, scene build, pan/zoom/select, all view
   kinds render with full styling, light/dark, bundled font, icons (PNG+SVG).
-- **M2** `Layered` engine: algorithm complete, determinism property, benches +
-  committed baseline (P3 joins the milestone baseline list), auto-layout buttons.
+- **M2** `Layered` engine **MVP scope** (P3-D5): pipeline complete, determinism
+  property, benches + committed baseline (P3 joins the milestone baseline list),
+  auto-layout buttons. Quality-polish items are logged for P4-D13, not blockers here.
 - **M3** editing: overlay + commands, undo/redo, snap, waypoint editing, save →
   byte-compatible JSON; oracle round-trip check green.
 - **M4** live reload + remap UX; DSL→sidecar-layout workflow; `dot-backend` feature
@@ -186,7 +193,9 @@ Workspace + resolved styles (core::styles, P2-D2)
 
 ## Risks
 
-- R-1 layout quality disappoints on big nested graphs (mitigation: editing is the escape hatch by design; `dot-backend` optional; shallow-graph focus).
+- R-1 layout quality disappoints on big nested graphs (mitigation: MVP scope shipped
+  first with the P4-D13 upgrade path pre-designed; editing is the escape hatch by
+  design; `dot-backend` optional; shallow-graph focus).
 - R-2 GUI logic leaking into the eframe shell, killing headless tests (mitigation:
   P3-D1 module boundary enforced by review + `oxidizr-viewer` lib/bin split lint).
 - R-3 reload-remap mis-assigning geometry (mitigation: shared core::reconcile,

@@ -2,11 +2,13 @@
 
 Scope per PLAN.md Phase 1. This file records every architectural decision needed so
 implementation can proceed without re-litigating design. Decisions are numbered
-`P1-Dn`; compatibility contract, deviations (D1–D6) and Locked list in `DEVIATIONS.md`
+`P1-Dn`; compatibility contract, deviations (D1–D7) and Locked list in `DEVIATIONS.md`
 override everything here.
 
-Exit gate (unchanged): every fixture in `testdata/` parses; written JSON byte-matches
-goldens from the pinned reference; read-corpus loads; `fmt` invariant +
+Exit gate: every fixture in `testdata/` parses **except the `!docs`/`!adrs` corpus**
+(2026-11-14 rebalance: doc/ADR importers moved to Phase 4 — D7; P1–P3 recognize those
+directives with a `deferred to Phase 4` diagnostic, OXZ-5003); written JSON
+byte-matches goldens from the pinned reference; read-corpus loads; `fmt` invariant +
 `reconcile` tests green; `--strict` off by default.
 
 ---
@@ -41,7 +43,8 @@ crates/
 - `oxidizr-diag` owns: `Span { file: FileId, start: (line, col), end }` (1-based, UTF-8
   char counts), `Severity::{Error,Warning,Info}`, `Code` newtype with registry ranges:
   OXZ-1xxx lexer, 2xxx parser/grammar, 3xxx model & validation, 4xxx JSON, 5xxx I/O &
-  CLI policy (e.g. OXZ-5001 network disabled, OXZ-5002 JVM-only directive), 9xxx internal.
+  CLI policy (e.g. OXZ-5001 network disabled, OXZ-5002 JVM-only directive, OXZ-5003
+  directive deferred to Phase 4 — `!docs`/`!adrs`), 9xxx internal.
 - Collectors: parser and validator return `Vec<Diagnostic>` (cap 100, then "too many
   errors" abort note). All codes stable, documented in `diag` rustdoc; no breaking code
   changes post-1.0 without DEVIATIONS.md entry.
@@ -82,6 +85,11 @@ Four stages, each independently testable:
 - JVM-only tokens (`!script`, `!plugin`, `!components`, `!impliedRelationships <fqcn>`):
   lex + recognize, emit OXZ-5002 with construct name + alternative advice; no partial
   build (D2).
+- `!docs` / `!adrs` (2026-11-14 rebalance): P1 **lexes and parses the statement form**
+  (valid args, spans — so P4 lands onto a finished grammar path) but the importers are
+  deferred: loading such a workspace emits OXZ-5003 "documentation import arrives in
+  Phase 4" and fails (no partial documentation). Interim behavior recorded as
+  DEVIATIONS.md D7; P4 replaces the diagnostic with the real importers.
 
 ## P1-D4 Core domain model (`oxidizr-core`)
 
@@ -183,7 +191,8 @@ explicitly (sort functions, not incidental order). Catalog items are the V-list 
 ## P1-D9 Dependencies (lean set, agreed)
 
 Prod: `serde`+`serde_json`, `thiserror` (libs), `anyhow`+`clap`+`miette` (cli), `chrono`
-(default-features off, `std`), `globset` (docs/ADR excludes).
+(default-features off, `std`). (`globset` was here for docs/ADR excludes — moves with the
+importers to P4.)
 Dev: `expect-test`, `criterion` (benches + M0 baseline), `proptest`+`arbitrary`,
 `cargo-fuzz` (nightly; lexer/parser targets, corpus = fixtures), `cargo-llvm-cov` (CI
 report only). None of: indexmap (Vec+explicit sorts; maps are BTreeMap), chumsky/nom/
@@ -195,7 +204,9 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
 
 - `testdata/` layout: `dsl/` (vendored reference fixtures, Apache-2.0 attribution
   README + upstream commit), `golden/` (generated `.json`), `read-corpus/` (v5-era +
-  back-compat workspaces), `validation/` (the 16 rule fixtures).
+  back-compat workspaces), `validation/` (the 16 rule fixtures). The `!docs`/`!adrs`
+  fixtures are vendored **but excluded from the P1 parse/golden gate** (deferred list
+  in `testdata/README.md`; P4 retires the exclusion).
 - Harness: `cargo xtask oracle gen` / `verify` invoke the official `structurizr`
   application **binary** via the AGENTS.md discovery rule (`$OXIDZR_STRUCTURIZR_BIN` →
   PATH; the nix dev flake pins it; version recorded in `testdata/README.md`). The tool
@@ -231,9 +242,10 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   implied relationships; archetypes; identifiers modes; portability matrix.
 - **M5** directives: `!include` (file/dir), `!const`/`!var`+`${}`, `scope shared`,
   `workspace extends` (file only), `!identifiers`, `!impliedRelationships` on/off,
-  `!docs`/`!adrs` (all 4 formats, asciidoc passthrough, globset excludes), finders,
-  `!element(s)`/`!relationship(s)`, URL/`!script`/`!plugin`/`!components` clean
-  rejects; **M5 complete = full-fixture parse gate**.
+  finders, `!element(s)`/`!relationship(s)`, `!docs`/`!adrs` statement-form parse +
+  OXZ-5003 deferred reject (importers → P4), URL/`!script`/`!plugin`/`!components`
+  clean rejects; **M5 complete = full-fixture parse gate (minus deferred docs/ADR
+  corpus)**.
 - **M6** `fmt` + invariants (incl. proptest), `reconcile`, `validate` polish, CLI
   flags/exit codes, miette rendering, suggestions; cargo-fuzz targets with fixture seed
   corpus running in CI (nightly, time-boxed runs).
@@ -249,14 +261,14 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
 - V-4 auto view-key generation exact rule (`Prefix-NNN` numbering incl. collisions)
   from `views-without-keys.dsl`.
 - V-5 `!include` of a directory: file set/order/extensions.
-- V-6 `!docs`/`!adrs` exclude pattern semantics (glob vs path prefix) — verify with
-  reference before trusting globset config.
+- V-6 ~~`!docs`/`!adrs` exclude pattern semantics~~ — **moved to P4-V8** (importers
+  deferred 2026-11-14).
 - V-7 canonical-name form for custom elements and instances (docs vs code drift).
 - V-8 ISO-8859 fixture: Java read encoding (default charset?) → choose identical
   behavior; else explicit error. Also pins newline handling: what CRLF input produces
   in text fields and in the `structurizr.dsl` property bytes.
-- V-9 decision-status/date parsing corners per ADR tool format (MADR v2/v3,
-  log4brains front matter).
+- V-9 ~~decision-status/date parsing corners per ADR tool format~~ — **moved to P4-V7**
+  (importers deferred 2026-11-14).
 - V-10 Does the reference **app layer generate default views during `export`/`validate`**
   for view-less models (Locked list keeps generation out of parser/library, but the
   oracle IS the app — goldens decide whether `dsl2json` must mirror app behavior;
@@ -269,8 +281,9 @@ into `plan/*.md` if notes were wrong (errata process).
 - R-1 write-order/omission surprises (mitigation: M3 order — catalog before code;
   goldens catch rest).
 - R-2 parser fidelity on weird-but-legal inputs (mitigation: fixture burn-down + fuzz).
-- R-3 ADR importer drift (mitigation: real-world fixture corpora vendored; V-9).
+- R-3 ADR importer drift — transferred to Phase 4 with the importers (mitigation stays:
+  real-world fixture corpora vendored in P4; P4-V7).
 - R-4 `${VAR}` pre-pass error-line mapping regressions (mitigation: mapping table +
   snapshots).
-- R-5 scope creep (docs/ADR importers are big; if M5 slips, split `!docs`/`!adrs` into
-  M5b — still Phase 1, order-safe because independent).
+- R-5 scope creep — resolved by the 2026-11-14 rebalance: `!docs`/`!adrs` importers
+  moved to Phase 4 (statement form still parsed in P1; OXZ-5003 in the interim, D7).

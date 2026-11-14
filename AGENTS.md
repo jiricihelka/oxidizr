@@ -121,6 +121,10 @@ vendoring, check the license of the specific version you touch.
   comments (`//`, `#`, `/* */`) and line continuations.
 - Parser errors must carry file, line and the offending source line (the reference
   emits no column; adding one is fine, omitting line info is not).
+- Scheduling note (2026-11-14): the `!docs`/`!adrs` **importers** are sequenced into
+  Phase 4 (`plan/DEVIATIONS.md` D7, `plan/build/PHASE_4.md` P4-D13); until they land,
+  the directives parse but load with an explicit deferred-import error — this is the
+  ONLY grammar item not delivered by Phase 1. Everything above remains required.
 
 ## Test data & goldens
 

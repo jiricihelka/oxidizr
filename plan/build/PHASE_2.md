@@ -151,22 +151,28 @@ scattered `properties.get("…")` calls.
 
 ## P2-D9 Fidelity harness (replaces byte-parity goldens)
 
-- **Semantic comparator** (`xtask export-verify`, Category B): run reference
-  `structurizr export -format F` (via `$OXIDZR_STRUCTURIZR_BIN` discovery) and oxidizr
-  over the same fixture set; parse both outputs into a normalized fact model per
-  dialect (declared entities + args, relationship tuples, style/skinparam/classDef
-  directives, include lines, macro counts; order-normalized per rules where target
-  syntax is order-insensitive) and diff. Normalization whitelist is minimal and
-  explicit (header comment lines only). Comparator per dialect ≈ 200–300 lines of
-  tolerant line-grammar parsing — lives in `xtask/src/exportcmp/`.
-- **Render checks** (Category B, skip loudly): when `$OXIDZR_PLANTUML_BIN` (or
-  `plantuml` on PATH) / `$OXIDZR_MERMAID_BIN` (or `mmdc`) exist, render the full export
-  corpus and assert exit 0 + non-empty output file (smoke, not pixel comparison).
-- **Category A**: own golden snapshot suite (`testdata/exports/`, per dialect × view-
-  kind matrix from fixtures) as regression goldens — byte-diff against OUR OWN stored
-  output (this catches unintended drift of our formatting even though the contract is
-  semantic); proptest that exporters never panic on valid random workspaces; the
-  key-invariant/bench suites extended.
+- **Semantic comparator — C4-PlantUML only in P2** (2026-11-14 rebalance):
+  `xtask export-verify` (Category B, default-off `reference` feature, run sparingly)
+  runs reference `structurizr export -format plantuml/c4plantuml` (via
+  `$OXIDZR_STRUCTURIZR_BIN` discovery) and oxidizr over the fixture set; parses both
+  outputs into a normalized fact model (macro calls + args, relationship tuples,
+  style/skinparam directives, include lines; order-normalized per rules where the
+  target syntax is order-insensitive) and diffs. Normalization whitelist is minimal and
+  explicit (header comment lines only). ≈ 250 lines of tolerant line-grammar parsing in
+  `xtask/src/exportcmp/` — its grammar table doubles as the C4 macro inventory that
+  P4's importer builds on. Comparators for Structurizr-PlantUML and Mermaid move to
+  **P4-D13**; until then those dialects rely on the two mechanisms below.
+- **Own goldens** (Category A, all dialects): `testdata/exports/`, per dialect ×
+  view-kind matrix from fixtures — byte-diff against OUR OWN stored output; catches
+  unintended drift of our formatting even though the contract is semantic.
+- **Render checks** (Category B, skip loudly; all dialects): when
+  `$OXIDZR_PLANTUML_BIN` (or `plantuml` on PATH) / `$OXIDZR_MERMAID_BIN` (or `mmdc`)
+  exist, render the full export corpus and assert exit 0 + non-empty output file
+  (smoke, not pixel comparison). For the non-C4 dialects this is the only
+  reference-facing check in P2, so it runs in the reference job, not just
+  opportunistically.
+- proptest: exporters never panic on valid random workspaces; key-invariant/bench
+  suites extended.
 
 ## P2-D10 Milestones (ordered, each ends green)
 
@@ -177,9 +183,10 @@ scattered `properties.get("…")` calls.
   `--allow-net`, error UX) with full unit suites. EXPORT-PROPERTIES.md catalog first
   (P2-D8), P2-V1/V2 verifications recorded.
 - **M2** Structurizr-PlantUML exporter complete (all supported view types, legend,
-  boundaries/groups, properties); Category A goldens; oracle semantic comparator v1.
-- **M3** C4-PlantUML exporter (light/dark, stdlib property, sequence path); comparator
-  extended; oracle run green.
+  boundaries/groups, properties); Category A goldens + render smoke (comparator comes
+  in P4 — P2-D9).
+- **M3** C4-PlantUML exporter (light/dark, stdlib property, sequence path); semantic
+  comparator built + oracle run green (the phase's reference-facing milestone).
 - **M4** Mermaid exporter + `theme` export; render checks wired in CI (skipping when
   tools absent); benches committed (export corpus baseline).
 - **M5** hardening: proptest panic suite, docs (`oxidizr export --help`, plan/errata
@@ -208,3 +215,6 @@ Each gets a checkbox + evidence in the implementing PR; surprises fold into `pla
 - R-3 C4-PlantUML stdlib drift upstream (raw-master URLs in reference output change)
   — we mirror the pinned commit; catalog records the pin date.
 - R-4 theme vendoring license/size (mitigation: default theme only; others user-fetched).
+- R-5 non-C4 dialect divergence until P4 comparators land (mitigation: own goldens +
+  mandatory reference-job render checks in P2; C4 — the flagship format — is fully
+  oracle-gated from day one).

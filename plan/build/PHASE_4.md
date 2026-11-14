@@ -203,13 +203,16 @@ crates/
 - **M0** `diff` (both formats + schema doc) — first, pure model logic, unblocks
   dogfooding everything after.
 - **M1** `inspect` port + severity config; snapshots.
-- **M2** `oxidizr-import`: C4-PlantUML → Mermaid → image; WSD exporter; oracle read
-  gate green; fixtures vendored with attribution.
+- **M2** `oxidizr-import`: C4-PlantUML → Mermaid → image; WSD exporter; `!docs`/`!adrs`
+  importers (P4-D13, retiring the P1 OXZ-5003 deferral); oracle read gate green;
+  fixtures vendored with attribution.
 - **M3** `query` (filter grammar public API + evaluator already exist from P1/P3) +
   `init` + `completions` + `generate system-landscape` (P4-D9).
 - **M4** `lsp` binary: diagnostics → completion → hover → formatting, transcript
   harness; editor smoke notes (vscode, helix, neovim) in docs.
-- **M5** `oracle` user command; cargo-dist wired + v0.4.0 as the first dist release; changelog catch-up through v0.3.0; docs pass; **roadmap complete**.
+- **M5** `oracle` user command; **P4-D13 carry-ins**: Structurizr-PlantUML + Mermaid
+  semantic comparators, `Layered` layout polish; cargo-dist wired + v0.4.0 as the first
+  dist release; changelog catch-up through v0.3.0; docs pass; **roadmap complete**.
 
 ## P4-D12 Verification list
 
@@ -223,6 +226,34 @@ crates/
 - P4-V5 `lsp-server` version + stdio framing behavior under fast edits.
 - P4-V6 cargo-dist musl/aarch64 feasibility with the pinned nightly; signing deferred
   (unsigned v1 — documented, not deviating from anything).
+- P4-V7 (ex-P1-V9) ADR status/date parsing corners per tool format (MADR v2/v3,
+  log4brains front matter) — before the importer code (P4-D13).
+- P4-V8 (ex-P1-V6) `!docs`/`!adrs` exclude-pattern semantics (glob vs path prefix) —
+  verify with reference before trusting globset config (P4-D13).
+
+## P4-D13 Scope carried in from the 2026-11-14 rebalance
+
+Three cost-trimming deferrals land here (decided via questions tool; the phase plans
+they leave are annotated in place):
+
+1. **`!docs` / `!adrs` importers** (from P1-M5): markdown documentation importer +
+   all 4 ADR tool formats (adr-tools, MADR, log4brains, structurizr-format) + asciidoc
+   passthrough + `globset` exclude patterns. The P1 parser already parses the statement
+   form, so this replaces the OXZ-5003 "deferred" diagnostic with real import — no
+   grammar work. Retires the deferred-corpus exclusion in `testdata/README.md`;
+   P1's full-grammar promise completes **here**. Vendored real-world fixture corpora +
+   reference importer as oracle (Category B). New deps: `globset` (returns).
+   Verification: P4-V7 (ex-P1-V9: ADR status/date parsing corners, MADR v2/v3,
+   log4brains front matter) and P4-V8 (ex-P1-V6: exclude-pattern semantics glob vs path
+   prefix — verify before trusting globset config).
+2. **Semantic comparators for Structurizr-PlantUML + Mermaid** (from P2-D9): same
+   `xtask/exportcmp` framework as the P2 C4-PlantUML comparator (whose grammar table is
+   the head start for PlantUML); closes the fidelity window for the two dialects that
+   P2 gated with own-goldens + render checks only.
+3. **`Layered` layout engine polish** (from P3-D5 MVP): simplex/tightening layering
+   refinement, priority-method coordinates, smarter boundary contraction, edge-channel
+   routing. Determinism property + benches already in place from P3; quality upgrades
+   must preserve both (regression-gated by existing suites).
 
 ## Risks
 
