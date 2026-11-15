@@ -275,9 +275,39 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
   OXZ-5003 deferred reject (importers → P4), URL/`!script`/`!plugin`/`!components`
   clean rejects; **M5 complete = full-fixture parse gate (minus deferred docs/ADR
   corpus)**.
+  **Reality 2026-11-16 (verified before implementing):** M4 already landed every
+  M5 item except `workspace extends` — `!include` file/dir (with the leading-pad
+  quirk), `!const`/`!var`, `!identifiers` + hierarchical scopes, finders,
+  `!impliedRelationships`, `!constant`/`!script`/`!plugin`/`!components` rejects,
+  `!docs`/`!adrs` parsed + OXZ-5003 (all in `engine/stmt_*.rs`, pinned by
+  `m4_fixtures.rs`). Remaining M5 = **`workspace extends` (file only)** + the
+  full-fixture gate, decomposed (size gate, ~5 modules):
+  - **M5-a** `core`: `WorkspaceBuilder::adopt(Workspace)` — replace the workspace
+    under construction and replay element+relationship ids through
+    `IdGenerator::found` (counter seeding). Unit-tested.
+  - **M5-b** `dsl` engine: replace the OXZ-5004 arm per `WorkspaceParser.java`
+    @`ad34036`: file must exist, not be a directory; `.json` base loads via an
+    injected JSON-workspace-loader hook (topology: `dsl` must NOT depend on
+    `json` — CLI injects `oxidizr-json`, dsl tests use it as a dev-dep; hook
+    absent ⇒ clean error); other extensions parse recursively in a child parser
+    whose result is adopted, with `configureFrom` (identifier scope, archetypes,
+    constants/variables) copied back; JSON bases re-register
+    `structurizr.dsl.identifier` identifiers; base ⇒ `clearDsl` + not-portable
+    (mirrors `!include`'s frame flag); subsequent statements (incl. the `{ }`
+    body) layer over the base.
+  - **M5-c** burn-in + oracle: retires the 11 OXZ-5004 `KNOWN_ERRORS` rows — 9
+    file-based fixtures parse CLEAN (or match reference-asserted messages), the 2
+    URL fixtures re-register as OXZ-5001 (D5); new `m5_extends.rs` Category A
+    tests mirroring `DslTests` assertions; Category B goldens for the file-based
+    extend fixtures (`cargo xtask oracle gen --fixture extend/…`); full-fixture
+    parse gate minus the D7/D11/D2/D5-registered remainder.
 - **M6** `fmt` + invariants (incl. proptest), `reconcile`, `validate` polish, CLI
   flags/exit codes, miette rendering, suggestions; cargo-fuzz targets with fixture seed
   corpus running in CI (nightly, time-boxed runs).
+  **Decomposition due before starting (size gate: >4 modules)** — first cut:
+  M6-a CLI surface (flags/exit codes/miette + json2json/`--keep-unknown` wiring),
+  M6-b formatter (`fmt` on the lossless CST + invariants/proptest), M6-c
+  reconcile + validate polish, M6-d fuzz targets + CI nightlies.
 - **M7** hardening: perf sanity (parse whole corpus < 100 ms in release — informational),
   docs (`--help`, README quickstart), tag v0.1.0.
 

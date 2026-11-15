@@ -63,6 +63,22 @@ impl Default for WorkspaceBuilder {
     }
 }
 
+/// Ids of a deployment-node subtree (node, infra nodes, instances, children)
+/// for [`WorkspaceBuilder::adopt`] counter seeding.
+fn collect_deployment_ids(n: &crate::model::DeploymentNode, out: &mut Vec<Id>) {
+    out.push(n.item.id.clone());
+    out.extend(n.infrastructure_nodes.iter().map(|i| i.item.id.clone()));
+    out.extend(
+        n.software_system_instances
+            .iter()
+            .map(|i| i.item.id.clone()),
+    );
+    out.extend(n.container_instances.iter().map(|i| i.item.id.clone()));
+    for child in &n.children {
+        collect_deployment_ids(child, out);
+    }
+}
+
 impl WorkspaceBuilder {
     /// A workspace with reference parser defaults (`name` "Name" / description
     /// "Description" are applied by the DSL layer, not here; JSON defaults the
@@ -109,6 +125,38 @@ impl WorkspaceBuilder {
     /// Register an externally assigned id (JSON load / `!identifiers` import).
     pub fn found(&mut self, id: &Id) {
         self.id_gen.found(id);
+    }
+
+    /// Adopt a pre-built workspace as the one under construction
+    /// (`workspace extends` — `PHASE_1.md` §M5-a, mirrors reference
+    /// `WorkspaceParser.parse`, which REPLACES the workspace object; later
+    /// statements layer over the base). Every element and relationship id of
+    /// the base is replayed through [`Self::found`] — the reference seeds its
+    /// id counter inside `Model.add` on every add, JSON loads included
+    /// (`Model.java:274/286` @`ad34036`) — so subsequent [`Self::alloc_id`]
+    /// continues after the base's highest id. Implied-relationship strategy
+    /// and all other builder state stay as set; the DSL layer applies its
+    /// workspace default after adoption.
+    pub fn adopt(&mut self, workspace: Workspace) {
+        let mut ids: Vec<Id> = Vec::new();
+        let model = &workspace.model;
+        ids.extend(model.custom_elements.iter().map(|e| e.item.id.clone()));
+        ids.extend(model.people.iter().map(|e| e.item.id.clone()));
+        for s in &model.software_systems {
+            ids.push(s.item.id.clone());
+            for c in &s.containers {
+                ids.push(c.item.id.clone());
+                ids.extend(c.components.iter().map(|k| k.item.id.clone()));
+            }
+        }
+        for n in &model.deployment_nodes {
+            collect_deployment_ids(n, &mut ids);
+        }
+        ids.extend(model.relationships.iter().map(|r| r.id.clone()));
+        for id in &ids {
+            self.id_gen.found(id);
+        }
+        self.workspace = workspace;
     }
 
     /// Allocate the next shared id.
@@ -2891,5 +2939,30 @@ mod tests {
             b.create_context_view(&s, "L1"),
             Err(CoreError::DuplicateViewKey { key: "L1".into() })
         );
+    }
+
+    #[test]
+    fn adopt_replaces_workspace_and_seeds_id_counter() {
+        // M5-a (`workspace extends`): the base becomes the workspace under
+        // construction and its ids seed the counter (reference `Model.add`
+        // calls found() on every add, JSON loads included).
+        let mut base = WorkspaceBuilder::new();
+        base.set_workspace_name("Base");
+        let user = base.add_person("User", None, None).unwrap();
+        let system = base.add_software_system("System", None, None).unwrap();
+        let rel = base
+            .add_relationship(&user, &system, Some("Uses".into()), None, None)
+            .unwrap();
+        assert_eq!(rel, Id::from_num(3)); // base consumed ids 1..=3
+        let ws = base.build();
+
+        let mut b = WorkspaceBuilder::new();
+        b.set_workspace_name("Standalone");
+        b.adopt(ws);
+        assert_eq!(b.workspace().name.as_deref(), Some("Base"));
+        assert_eq!(b.workspace().model.people.len(), 1);
+        assert_eq!(b.workspace().model.relationships.len(), 1);
+        assert_eq!(b.alloc_id(), Id::from_num(4));
+        assert_eq!(b.add_person("Later", None, None).unwrap(), Id::from_num(5));
     }
 }
