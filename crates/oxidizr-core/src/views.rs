@@ -2,7 +2,7 @@
 //! per-view element/relationship entry views, automatic layout, and the view
 //! configuration (styles / themes / terminology).
 //!
-//! v6 shape notes (verified @ `ad34036`; several `plan/JSON-FORMAT.md` "verify"
+//! v6 shape notes (verified @ `ad34036`; several `agents/plan/JSON-FORMAT.md` "verify"
 //! items resolved here): views have NO `background`; `ElementView` is exactly
 //! `{id,x,y}` with `x`/`y` primitive ints — ALWAYS serialized (V-2,
 //! WRITE-CATALOG §3); included/excluded lists are GONE (the entry arrays ARE

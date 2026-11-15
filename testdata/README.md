@@ -7,12 +7,12 @@ licensed Apache-2.0 — attribution for all vendored files stays with the Struct
 * Goldens: generated with the unified application binary **structurizr 2026.10.26**
 (library 6.2.4) via `cargo xtask oracle gen`; the four `structurizr.inspection.*` violation
 counters the reference app injects on load are stripped at generation time (see
-`xtask::normalize_reference_output` and `plan/PROGRESS.md`). Requires Java 21.
+`xtask::normalize_reference_output` and `agents/plan/PROGRESS.md`). Requires Java 21.
 Goldens are byte-faithful otherwise — including the ABSENT trailing newline the
 reference pretty-printer emits.
 * `dsl/` — 107 DSL fixtures (reference test resources; P1 parse corpus).
 * `probes/` — hand-written oracle-probe fixtures (WRITE-CATALOG witnesses; see
-  `plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.
+  `agents/plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.
   `m3-order.dsl` (P1-M3a: key tables, sorts, computed names, HashMap properties);
   `m3b-defaults.json` (P1-M3b: JSON→JSON reader defaults — healthCheck header
   bucket order, healthChecks/automaticLayout bean initializers, nullable enum

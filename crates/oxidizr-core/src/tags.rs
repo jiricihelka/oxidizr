@@ -1,5 +1,5 @@
 //! Tags: an insertion-ordered unique set with DERIVED default tags (Locked stack
-//! table, `plan/FEATURES.md` §3).
+//! table, `agents/plan/FEATURES.md` §3).
 //!
 //! Reference model (`model/ModelItem.java`, verified @ `ad34036`):
 //!

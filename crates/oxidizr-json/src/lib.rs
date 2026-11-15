@@ -1,14 +1,14 @@
 //! `oxidizr-json` — the JSON contract (P1-D5 amended, P1-D6).
 //!
 //! The serde-derive route turned out to be unable to reproduce the reference's
-//! byte order (see the P1-D5 amendment in `plan/build/PHASE_1.md`): Jackson
+//! byte order (see the P1-D5 amendment in `agents/plan/build/PHASE_1.md`): Jackson
 //! writes POJO keys alphabetically at every level, applies per-field
 //! `NON_EMPTY`/`NON_NULL` inclusion, sorts `TreeSet`-backed arrays, orders
 //! free-form `properties` maps in Java `HashMap` bucket order, and computes
 //! view `name` values on the fly. So this crate hand-rolls the two directions:
 //!
 //! - [`to_vec`] builds a `printer::Json` tree with FINAL key order and
-//!   omissions already decided per `plan/build/WRITE-CATALOG.md` (the §-cites
+//!   omissions already decided per `agents/plan/build/WRITE-CATALOG.md` (the §-cites
 //!   in `writer.rs`), then renders it with the Jackson pretty-printer
 //!   emulation (`printer.rs`, `"key" : value`, 2-space indent, no trailing
 //!   newline).

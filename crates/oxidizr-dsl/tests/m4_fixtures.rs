@@ -1,4 +1,4 @@
-//! P1-M4 fixture burn-in harness (Category A, `plan/build/PHASE_1.md` M4).
+//! P1-M4 fixture burn-in harness (Category A, `agents/plan/build/PHASE_1.md` M4).
 //!
 //! Every `.dsl` file under `testdata/dsl` is parsed as an entry with
 //! file-based [`ParseOptions`] (so relative `!include`/`!docs` paths resolve

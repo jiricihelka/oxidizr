@@ -1,6 +1,6 @@
 //! `Workspace` → the reference's exact JSON bytes (P1-D5 amended, P1-D6).
 //!
-//! Every rule here cites `plan/build/WRITE-CATALOG.md` (sections §-quoted
+//! Every rule here cites `agents/plan/build/WRITE-CATALOG.md` (sections §-quoted
 //! below); the byte witness is `testdata/golden/m3-order.json`. The writer
 //! builds a `printer::Json` tree with FINAL key order and omissions already
 //! decided (Jackson `SORT_PROPERTIES_ALPHABETICALLY` + `NON_EMPTY`-family

@@ -1,6 +1,6 @@
 [package]
 name = "oxidizr-json"
-description = "oxidizr Structurizr-JSON reader/writer — byte-parity writer per plan/build/WRITE-CATALOG.md (P1-D5 amended, P1-D6)"
+description = "oxidizr Structurizr-JSON reader/writer — byte-parity writer per agents/plan/build/WRITE-CATALOG.md (P1-D5 amended, P1-D6)"
 publish = true
 edition.workspace = true
 version.workspace = true

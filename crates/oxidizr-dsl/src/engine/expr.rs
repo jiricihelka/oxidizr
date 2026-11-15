@@ -3,7 +3,7 @@
 //! custom views (evaluated @ `ad34036`).
 //!
 //! The reference collects results into `HashSet`/`LinkedHashSet`s. As
-//! agreed in `plan/PROGRESS.md`, Java `HashSet` iteration order cannot be
+//! agreed in `agents/plan/PROGRESS.md`, Java `HashSet` iteration order cannot be
 //! ported deterministically; every set here is an insertion-ordered
 //! deduping `Vec` fed from TreeSet-ordered model traversals (ascending
 //! numeric id), which is the closest portable equivalent.

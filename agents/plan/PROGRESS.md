@@ -47,6 +47,15 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
 
 ## Working notes / errata found while implementing
 
+- **Repo reorganization (2026-11-15, post-M4)**: all permanent agent files moved under
+  `agents/` — `plan/` → `agents/plan/` (git mv, every `plan/` cross-ref in 30+ files
+  rewritten), plus a new `agents/notes/` tree of short operational-recall notes
+  (env / pitfalls / testing / process, README index per directory) to survive context
+  compressions during long milestones. `agents/plan/reports/` (user-dropped CI/OS
+  reports) stayed untracked; it was briefly lost when `git mv` removed the emptied
+  `plan/` dir and was restored byte-identical from `~/.local/share/Trash` — lesson
+  recorded in `agents/notes/pitfalls/git-mv-deletes-untracked.md`. No code, JSON-contract,
+  or Locked-list impact.
 - (M0) Fixture path correction: `…/test/resources/dsl/…` (notes-*.md listed bare
   filenames) — vendor script must use the `dsl/` root.
 - **V-10 RESOLVED (2026-11-14)** — reference app pipeline around every `export`:
@@ -92,7 +101,7 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
 - `loadWorkspace` also `installThemes`(local `themes/` dir or `$STRUCTURIZR_THEMES`) —
   theme URLs are fetched during PNG/SVG export only, not `--format json`.
 - **Windows CI failures — checkout EOL conversion RESOLVED (2026-11-15)**. Symptom
-  (`plan/reports/windows_test_error.txt`): the 6 byte-exact `expect!` CST snapshots in
+  (`agents/plan/reports/windows_test_error.txt`): the 6 byte-exact `expect!` CST snapshots in
   `crates/oxidizr-dsl/tests/m1_lossless.rs` failed on Windows with LF-vs-CRLF diffs and
   shifted byte offsets. Root cause is NOT the lexer (lossless corpus tests passed):
   stored blobs are LF, but the Windows checkout had `core.autocrlf=true`, which rewrites
@@ -227,7 +236,7 @@ per class, computed view names, instance name suppression); `Workspace → bytes
 
 ### P1-M3a — write catalog (P1-D6) + core model alignment ✅ (2026-11-14)
 
-`plan/build/WRITE-CATALOG.md` is the authoritative JSON write contract (resolves V-1,
+`agents/plan/build/WRITE-CATALOG.md` is the authoritative JSON write contract (resolves V-1,
 V-2, V-11). Built by (a) reading `structurizr-client` `io/json/JsonWriter`/`AbstractJson*`
 and every `structurizr-core` POJO getter (Jackson `SORT_PROPERTIES_ALPHABETICALLY` +
 `NON_EMPTY`), and (b) a single oracle probe `testdata/probes/m3-order.dsl` exported
@@ -266,7 +275,7 @@ missing trailing newline (M0 goldens had an artifact `\n` — the reference emit
 
 ### P1-M2 design notes (2026-11-14, from reference source `ad34036`)
 
-Core-model facts verified before coding (`plan/FEATURES.md` corrections inline
+Core-model facts verified before coding (`agents/plan/FEATURES.md` corrections inline
 in its tables where noted):
 
 - **Ids are strings in the model**, not ints: `ModelItem implements Comparable`
@@ -384,7 +393,7 @@ Pipeline shape (P1-D3 realized):
 
 **Reference-semantics corrections found during M1** (verified against
 `ad34036` `StructurizrDslParser.preProcessLines` + `Tokenizer.java`; the
-earlier notes in this file were wrong on all four — `plan/DSL.md` must be
+earlier notes in this file were wrong on all four — `agents/plan/DSL.md` must be
 re-checked against these when M4 documents statements):
 1. **Continuation joins keep indentation**: only the FINAL completing line is
    `stripLeading`ed; middle lines append verbatim (join of
@@ -402,7 +411,7 @@ re-checked against these when M4 documents statements):
    StringIndexOutOfBoundsException — DEVIATIONS candidate).
 4. **Text-block checks precede blank/comment checks** in the reference loop,
    and the whole-line-comment pattern is `^\s*(//|#).*$` (`#` included, like
-   scripts — `plan/DSL.md` "no `#` comments" is WRONG; recorded below).
+   scripts — `agents/plan/DSL.md` "no `#` comments" is WRONG; recorded below).
 
 Other verified facts encoded in the code:
 - Block-comment machine check ORDER is load-bearing: whole-line `/* … */`
@@ -478,7 +487,7 @@ errors (indentation-stripping, first-line numbering, text-block value bounds, an
 `#`-comment scope), all corrected in the **P1-M1 milestone log above**, which is
 authoritative for the implemented semantics. The verified facts are encoded and
 tested in `crates/oxidizr-dsl/src/{preprocess,lexer,cst}.rs`; see also
-`plan/DSL.md` §1 "M1-verified corrections".
+`agents/plan/DSL.md` §1 "M1-verified corrections".
 
 Kept (unverified, M4 must confirm against source before relying on them): the
 `${VAR}` pre-pass is a per-token, forward single pass over constants + variables +

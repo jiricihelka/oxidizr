@@ -1,7 +1,7 @@
 //! Ports of `ExplicitRelationshipParser`, `ImplicitRelationshipParser` and
 //! `NoRelationshipParser` (`ad34036`). Sets are insertion-ordered `Vec`s —
 //! the portable stand-in for the reference `HashSet`/`LinkedHashSet`
-//! (see `plan/PROGRESS.md`); the creation loops keep the Java
+//! (see `agents/plan/PROGRESS.md`); the creation loops keep the Java
 //! source×destination nesting order.
 
 use oxidizr_core::{Id, validate::ElementKind};
@@ -410,7 +410,7 @@ impl Parser<'_> {
     /// spins forever when the first found match is NOT linked
     /// (`linkedRelationshipId == null`); this port removes every linked
     /// match and stops — the closest terminating behavior (recorded in
-    /// `plan/DSL-ERRATA.md`).
+    /// `agents/plan/DSL-ERRATA.md`).
     pub(crate) fn no_relationship(&mut self, tokens: &Tokens) -> Result<Vec<Id>, DslError> {
         const GRAMMAR: &str = "<identifier> -/> <identifier> [description]";
         if tokens.has_more_than(3) {

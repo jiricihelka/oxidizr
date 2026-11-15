@@ -5,7 +5,7 @@
 //! The VALUES are volatile — elements registered without a DSL identifier get
 //! `structurizr.dsl.identifier: <uuid>` properties whose exact bytes can never
 //! be golden-compared against the reference (that is why `--strip-volatile`
-//! exists, `plan/ADDITIONAL_FEATURES.md` F-). Only the FORMAT is pinned:
+//! exists, `agents/plan/ADDITIONAL_FEATURES.md` F-). Only the FORMAT is pinned:
 //! lowercase hex, `xxxxxxxx-xxxx-4xxx-y[89ab]xxx-xxxxxxxxxxxx`.
 //!
 //! Non-cryptographic (xorshift64* over a nanos+counter seed): std-only per the

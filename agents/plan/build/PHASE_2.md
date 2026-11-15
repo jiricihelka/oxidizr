@@ -4,7 +4,7 @@ Scope per PLAN.md Phase 2, as decided: **exporters only** — Structurizr-PlantU
 C4-PlantUML (light/dark), Mermaid, theme JSON. The three diagram importers
 (C4-PlantUML, Mermaid, image→CustomView) moved to Phase 4; WebSequenceDiagrams too
 (kept out of P2 despite the reference CLI wiring it — dynamic views are already covered
-by the PlantUML sequence path; see DEVIATIONS errata note in `plan/README.md`).
+by the PlantUML sequence path; see DEVIATIONS errata note in `agents/plan/README.md`).
 
 **Fidelity bar (agreed): semantic parity + render checks — NOT byte-parity.** Exported
 text must declare the same entities/relationships/styles/includes as the reference
@@ -143,7 +143,7 @@ Port `C4PlantUMLExporter`; behaviors verified at the pinned commit, replicate ex
 
 Java `getViewOrViewSetProperty` equivalents are read by all exporters
 (`c4plantuml.stdlib`, enterprise name, `useAlphanumericShortIds`-style toggles, …).
-Deliverable **`plan/build/EXPORT-PROPERTIES.md`** (same pattern as WRITE-CATALOG):
+Deliverable **`agents/plan/build/EXPORT-PROPERTIES.md`** (same pattern as WRITE-CATALOG):
 exhaustive grep of property-name string literals in the four exporters → table
 property → read site → default → cascade order (verify order in Java) → observable
 effect. Implemented as one typed function `export_property(ws, view, name)` — no
@@ -190,7 +190,7 @@ scattered `properties.get("…")` calls.
   comparator built + oracle run green (the phase's reference-facing milestone).
 - **M4** Mermaid exporter + `theme` export; render checks wired in CI (skipping when
   tools absent); benches committed (export corpus baseline).
-- **M5** hardening: proptest panic suite, docs (`oxidizr export --help`, plan/errata
+- **M5** hardening: proptest panic suite, docs (`oxidizr export --help`, agents/plan/errata
   fold-back), tag v0.2.0.
 
 ## P2-D11 Verification list (empirical, before dependent code)
@@ -204,7 +204,7 @@ scattered `properties.get("…")` calls.
   (`static.structurizr.com/themes/<name>/`) — mirror lookup semantics.
 - P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
 - P2-V6 legend diagram generation rules (when emitted, content per dialect).
-Each gets a checkbox + evidence in the implementing PR; surprises fold into `plan/`
+Each gets a checkbox + evidence in the implementing PR; surprises fold into `agents/plan/`
 (errata process), per AGENTS.md working style.
 
 ## Risks

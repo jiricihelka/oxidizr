@@ -13,7 +13,7 @@ The compatibility contract is absolute:
 > ONLY where the contract is silent: diagnostics/stderr/exit codes, CLI ergonomics, new
 > commands, and behavior behind explicit opt-in flags. Anything else is a bug.
 
-Reference pinned: monorepo `ad34036` (v6.2.4). Details in `plan/`.
+Reference pinned: monorepo `ad34036` (v6.2.4). Details in `agents/plan/`.
 Ground rule for future changes: a new deviation needs (a) an entry below, (b) proof the
 default output still matches the reference goldens.
 
@@ -66,7 +66,7 @@ as a tombstone so old references keep resolving.
   referenced theme URL needed for diagram export) resolves from a local cache /
   `--themes-dir` (same layout as `STRUCTURIZR_THEMES`); `!include <url>` requires
   `--allow-net`. **Phase 1 is stricter: ALL network input is rejected (OXZ-5001);
-  `--allow-net` ships in Phase 2** (`plan/build/PHASE_1.md` P1-D8). JSON output is
+  `--allow-net` ships in Phase 2** (`agents/plan/build/PHASE_1.md` P1-D8). JSON output is
   unaffected in all cases (theme URLs are stored verbatim; resolution only ever matters
   for diagram rendering/export).
 - `--allow-net` is **one global flag** gating all URL input (theme URLs, `!include
@@ -78,9 +78,9 @@ as a tombstone so old references keep resolving.
 - Immutable domain model; no exceptions mid-construction; validation aggregated at
   defined checkpoints (vs Java setters throwing `IllegalArgumentException`, producing
   partially built workspaces). Validation semantics themselves match the reference
-  (rule catalogue: `plan/FIXTURES.md` §C validation fixtures).
+  (rule catalogue: `agents/plan/FIXTURES.md` §C validation fixtures).
 - Contract-first JSON: one source of truth for the JSON contract — the `oxidizr-json`
-  serde mapping, pinned field-by-field by the write catalog (`plan/build/PHASE_1.md`
+  serde mapping, pinned field-by-field by the write catalog (`agents/plan/build/PHASE_1.md`
   P1-D6) and drift-checked against goldens in CI — preventing Structurizr's chronic
   schema-lags-code failures (schema 6.1.0 vs code 6.2.4 at time of writing). (An earlier
   wording said "generated from one machine-readable definition"; PHASE_1.md P1-D5 chose

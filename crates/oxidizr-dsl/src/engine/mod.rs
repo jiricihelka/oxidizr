@@ -305,7 +305,7 @@ pub(crate) struct Parser<'a> {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GroupRecord {
     /// Members, first-insertion order (the portable stand-in for the
-    /// reference `HashSet` iteration — see `plan/PROGRESS.md`).
+    /// reference `HashSet` iteration — see `agents/plan/PROGRESS.md`).
     pub members: Vec<Id>,
     /// The enclosing group's `uid` (nested `group` blocks).
     pub parent_uid: Option<u64>,
@@ -676,7 +676,7 @@ impl<'a> Parser<'a> {
     /// the Java `equals`), and anything still unresolved is SILENTLY dropped
     /// ("backwards compatibility — deployment environment name rather than
     /// identifier"). Java's `HashSet` order is not portable; insertion order
-    /// stands in (D8 family, plan/PROGRESS.md).
+    /// stands in (D8 family, agents/plan/PROGRESS.md).
     pub(crate) fn deployment_groups(&self, node: &Id, token: &str) -> Vec<String> {
         let env = self.builder.node_ref(node).map(|n| n.environment.clone());
         let mut groups: Vec<String> = Vec::new();
@@ -852,7 +852,7 @@ impl<'a> Parser<'a> {
     /// Java `isRelationshipKeywordOrArchetype`. Known corner: the token
     /// `-->` satisfies both prefix and suffix, and Java's
     /// `substring(2, len-2)` THROWS (`String index out of range`) — here it
-    /// evaluates as no-match (recorded in plan/PROGRESS.md; no corpus file
+    /// evaluates as no-match (recorded in agents/plan/PROGRESS.md; no corpus file
     /// uses `-->`).
     fn is_relationship_keyword_or_archetype(&self, token: &str) -> bool {
         if eqi(token, tok::RELATIONSHIP) {

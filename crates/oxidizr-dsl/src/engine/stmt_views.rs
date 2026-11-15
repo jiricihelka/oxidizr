@@ -9,7 +9,7 @@
 //! dynamic-view relationship catch-all and `url`, `theme`/`themes`, and
 //! `terminology` with its seven term arms plus `metadata`.
 //!
-//! Faithful-port quirks recorded in `plan/PROGRESS.md`: view definitions and
+//! Faithful-port quirks recorded in `agents/plan/PROGRESS.md`: view definitions and
 //! `animation`/`terminology` push their context UNCONDITIONALLY (the Java
 //! chain has no `shouldStartContext` guard there — a view statement without
 //! `{` still swallows following lines until the next `}`), only `filtered`,
@@ -470,7 +470,7 @@ fn eqi_exclude(s: &str) -> bool {
 
 /// `ImageViewParser`. A pseudo-element (e.g. a `deploymentEnvironment`
 /// identifier) never resolves as an image-view scope in the reference
-/// (oracle-verified): the `does not exist` text (erratum, plan/PROGRESS.md).
+/// (oracle-verified): the `does not exist` text (erratum, agents/plan/PROGRESS.md).
 fn image_view_def(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "image <*|element identifier> [key] {";
     if t.has_more_than(2) {
@@ -1386,7 +1386,7 @@ fn dynamic_element(p: &Parser, identifier: &str, source: bool) -> Result<Id, Dsl
 const DEFAULT_THEME_URL: &str = "https://static.structurizr.com/themes/default/theme.json";
 
 /// `ThemeParser.addTheme`. `InstalledThemes` is empty in oxidizr
-/// (plan/PROGRESS.md), so only the URL and file branches exist; the file
+/// (agents/plan/PROGRESS.md), so only the URL and file branches exist; the file
 /// branch inlines styles via `ThemeUtils` — Phase 4 (D11).
 fn add_theme(p: &mut Parser, theme_token: String) -> Result<(), DslError> {
     let mut theme = theme_token;

@@ -14,19 +14,24 @@ The core promise is **full compatibility** with the two Structurizr file formats
 Workspaces produced by oxidizr must be consumable by the official Structurizr tooling and
 vice versa, byte-comparable at the JSON level where the format defines it.
 
-**Current status:** greenfield. The repo contains only this file, `plan/`, and git.
-Scaffolding the Cargo workspace (below) and writing design docs into `plan/` is the first task.
+**Current status:** Phase 1 in progress — see `agents/plan/PROGRESS.md` for the milestone
+log; the crate layout below is authoritative, `agents/plan/build/PHASE_1.md` for current scope.
 
 ## Repository layout
 
-- `plan/` — research notes, design documents and architecture decisions (start with
-  `plan/README.md` — it indexes the distilled structurizr reference: `FEATURES.md`,
-  `DSL.md`, `JSON-FORMAT.md`, `FIXTURES.md`, `STRUCTURIZR.md`) plus the decision
-  registers `DEVIATIONS.md` and `ADDITIONAL_FEATURES.md` and the phase roadmap
-  `PLAN.md`. Per-phase implementation plans with all architectural decisions live in
-  `plan/build/PHASE_N.md`. Read everything here before making significant design
-  decisions; write a short plan doc there when introducing or changing an architectural
-  decision.
+- `agents/` — all permanent agent working files:
+  - `agents/notes/` — short operational memory (env setup, paid-for pitfalls, testing
+    rules, process); start at `agents/notes/README.md`, whose subdirectory tables let you
+    locate a note without reading the rest. **Write a note after every non-obvious fix**
+    (≤ 25 lines; policy in `agents/notes/process/notes-policy.md`).
+  - `agents/plan/` — research notes, design documents and architecture decisions (start with
+    `agents/plan/README.md` — it indexes the distilled structurizr reference: `FEATURES.md`,
+    `DSL.md`, `JSON-FORMAT.md`, `FIXTURES.md`, `STRUCTURIZR.md`) plus the decision
+    registers `DEVIATIONS.md` and `ADDITIONAL_FEATURES.md` and the phase roadmap
+    `PLAN.md`. Per-phase implementation plans with all architectural decisions live in
+    `agents/plan/build/PHASE_N.md`. Read everything here before making significant design
+    decisions; write a short plan doc there when introducing or changing an architectural
+    decision. `agents/plan/reports/` holds user-dropped CI/OS failure reports (untracked).
 - `crates/` — Cargo workspace members (to be created):
   - `oxidizr-core` — the domain model: workspace, people, software systems, containers,
     components, relationships, deployment nodes/instances, views, styles, configuration.
@@ -38,7 +43,7 @@ Scaffolding the Cargo workspace (below) and writing design docs into `plan/` is 
   - `oxidizr-cli` — binary crate: `dsl → json`, `json → json`, validation, diffing.
   The list above is the seed; later phases add `oxidizr-ast`, `oxidizr-diag`, `xtask`
   (P1), `oxidizr-layout`, `oxidizr-viewer` (P3), `oxidizr-import`, `oxidizr-lsp`,
-  `oxidizr-inspect` (P4) — `plan/build/PHASE_N.md` is authoritative for crate topology.
+  `oxidizr-inspect` (P4) — `agents/plan/build/PHASE_N.md` is authoritative for crate topology.
 
 ## Commands
 
@@ -79,7 +84,7 @@ cargo run -p oxidizr-cli -- dsl2json workspace.dsl -o workspace.json
 
 When behavior is ambiguous, the official tooling defines it — do not guess:
 
-- Distilled quick reference: everything in `plan/` (notes below are summarized there).
+- Distilled quick reference: everything in `agents/plan/` (notes below are summarized there).
 - Docs: [docs.structurizr.com/dsl](https://docs.structurizr.com/dsl) (language guide,
   keywords, semantics — `dsl/71-language.md` in the docs repo is the authoritative
   grammar page), [docs.structurizr.com/workspaces/file-types](https://docs.structurizr.com/workspaces/file-types),
@@ -109,7 +114,7 @@ vendoring, check the license of the specific version you touch.
   sequential integer counter in definition order, serialized as strings in JSON
   (`workspace.id` is the only numeric ID); implicit tag stacks (`Element`,
   `Relationship`, `Person`, `Software System`, `Container`, ...) — details in
-  `plan/FEATURES.md`; DSL source retention rules (`structurizr.dsl` property);
+  `agents/plan/FEATURES.md`; DSL source retention rules (`structurizr.dsl` property);
   verify each of these against the reference implementation, not against memory.
   Note the v6 model REMOVED things still seen in older docs/schema (`location`,
   `enterprise`, `branding`, `env()`, `uses`, `deploy {}` scope) — support them only as
@@ -126,7 +131,7 @@ vendoring, check the license of the specific version you touch.
 - Parser errors must carry file, line and the offending source line (the reference
   emits no column; adding one is fine, omitting line info is not).
 - Scheduling note (2026-11-14): the `!docs`/`!adrs` **importers** are sequenced into
-  Phase 4 (`plan/DEVIATIONS.md` D7, `plan/build/PHASE_4.md` P4-D13); until they land,
+  Phase 4 (`agents/plan/DEVIATIONS.md` D7, `agents/plan/build/PHASE_4.md` P4-D13); until they land,
   the directives parse but load with an explicit deferred-import error — this is the
   ONLY grammar item not delivered by Phase 1. Everything above remains required.
 
@@ -172,7 +177,7 @@ expense of the compatibility contract.
 ## Working style: when to ask
 
 - Planning phase: ask lots of questions — every decision gets recorded with rationale
-  in `plan/` (this file's registers are the output of that process).
+  in `agents/plan/` (this file's registers are the output of that process).
 - Development phase: implement per the plan without stopping to ask; break the silence
   ONLY when reality contradicts a plan assumption — a V-n verification item comes out
   differently, the reference behaves surprisingly, or a compat gate fails in a way
@@ -226,16 +231,19 @@ committed baseline is flagged by the CI bench job for human review (no auto-fail
 
 ## Notes for agents
 
-- `plan/DEVIATIONS.md` lists the agreed, compatibility-safe ways oxidizr differs from
+- `agents/plan/DEVIATIONS.md` lists the agreed, compatibility-safe ways oxidizr differs from
   the reference (diagnostics, rejected JVM-only directives, opt-in flags) and a
   "Locked" list that must never deviate. Check it before implementing any behavior, and
   record any newly proposed deviation there first.
 - Purely additive features (F1–F8: reconcile, fmt, diff, oracle, lsp, query, init,
   `--strip-volatile`; plus ideas awaiting sign-off) are registered in
-  `plan/ADDITIONAL_FEATURES.md` — check it before building anything that Structurizr
+  `agents/plan/ADDITIONAL_FEATURES.md` — check it before building anything that Structurizr
   doesn't have, and get sign-off for 💡 ideas before implementing them.
 - First PR in an empty area: scaffold exactly the layout above; don't add exporter or
   server functionality that wasn't asked for.
 - Never "fix" a compatibility mismatch by changing the expected Structurizr behavior —
   change oxidizr to match the reference. If the reference itself looks wrong, capture
-  the divergence in a `plan/` doc before deviating.
+  the divergence in an `agents/plan/` doc before deviating.
+- When a fix was non-obvious (cost debugging time, or a plausible-but-wrong assumption
+  was involved), add a short note under `agents/notes/` and index it there — the next
+  session must not have to rediscover it.

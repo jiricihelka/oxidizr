@@ -1,6 +1,6 @@
 # DSL reference errata (found during M4 implementation)
 
-Corrections to `plan/DSL.md` / `plan/FEATURES.md` found by reading the pinned
+Corrections to `agents/plan/DSL.md` / `agents/plan/FEATURES.md` found by reading the pinned
 reference source (`structurizr` monorepo @ `ad34036`) while implementing P1-M4.
 The Java code remains the contract; these notes fix the distilled reference so it
 doesn't mislead later milestones. Each entry cites the class that settles it.

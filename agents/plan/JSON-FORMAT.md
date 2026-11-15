@@ -5,7 +5,7 @@ Truth = Jackson serialization of core objects by `structurizr-client` (`io/json/
 **lags the code** — drift marked below. Verified against goldens @ v6.2.4 `ad34036`.
 Field names below are JSON keys (camelCase). `(verified)` = checked in source/goldens.
 
-> **2026-11-14 errata — `plan/build/WRITE-CATALOG.md` is now authoritative** for every
+> **2026-11-14 errata — `agents/plan/build/WRITE-CATALOG.md` is now authoritative** for every
 > byte-level write rule (P1-M3a). Corrections to the notes below, all probe-verified:
 > - Inclusion is `NON_EMPTY` only (`NON_NULL` is dead — `setSerializationInclusion` is
 >   called twice, the last wins). **Primitive `int`/`boolean` and their boxed `Integer 0`

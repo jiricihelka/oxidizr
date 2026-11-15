@@ -9,7 +9,7 @@
 //! RFC 2396: ASCII only, the unreserved/reserved character sets, and
 //! percent-escapes with two hex digits. This module reproduces that decision
 //! with std string checks (the reference NEVER fetches anything); the
-//! approximation is recorded in `plan/PROGRESS.md`.
+//! approximation is recorded in `agents/plan/PROGRESS.md`.
 
 /// The protocols `java.net.URL` ships handlers for.
 const JAVA_URL_PROTOCOLS: [&str; 5] = ["http", "https", "ftp", "file", "jar"];

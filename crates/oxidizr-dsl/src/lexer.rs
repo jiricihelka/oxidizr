@@ -11,7 +11,7 @@
 //! across segment boundaries because those trivia bytes do not exist in the joined
 //! text the reference folds.
 //!
-//! Replicated quirks (verified @ `ad34036`, plan/PROGRESS.md M1 notes):
+//! Replicated quirks (verified @ `ad34036`, agents/plan/PROGRESS.md M1 notes):
 //!
 //! * Quote characters are STRIPPED from quoted token values; a `"` is "escaped" iff
 //!   the PREVIOUS character of the joined text is `\` (raw lookbehind — the backslash

@@ -7,7 +7,7 @@
 //! `structurizr` on `PATH`. The binary is slow — run this sparingly; goldens are
 //! committed.
 //!
-//! Invocation contract (verified against 2026.10.26, see plan/PROGRESS.md):
+//! Invocation contract (verified against 2026.10.26, see agents/plan/PROGRESS.md):
 //! `structurizr export --workspace F --format json --output DIR` — GNU-style options
 //! only; `DIR` is a directory and receives `<input-basename>.json`.
 
@@ -339,7 +339,7 @@ fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Resu
 /// `structurizr-inspection/DefaultInspector.java`). They are harness artifacts, not
 /// workspace content — oxidizr models them as ordinary (round-tripped) properties but
 /// never computes counts (that would mean reimplementing `structurizr-inspection`).
-/// Verified against 2026.10.26 (2026-11-14, `plan/PROGRESS.md`).
+/// Verified against 2026.10.26 (2026-11-14, `agents/plan/PROGRESS.md`).
 ///
 /// Line deletion must fix up the preceding comma when a removed entry was the object's
 /// LAST member (the reference pretty-prints one entry per line, so a comma-less removed
@@ -439,10 +439,10 @@ fn cmd_vendor(src: &Path) -> Result<()> {
              * Goldens: generated with the unified application binary **structurizr {REFERENCE_APP_VERSION}**\n\
                (library 6.2.4) via `cargo xtask oracle gen`; the four `structurizr.inspection.*` violation\n\
                counters the reference app injects on load are stripped at generation time (see\n\
-               `xtask::normalize_reference_output` and `plan/PROGRESS.md`). Requires Java 21.\n\
+               `xtask::normalize_reference_output` and `agents/plan/PROGRESS.md`). Requires Java 21.\n\
              * `dsl/` — {dsl_count} DSL fixtures (reference test resources; P1 parse corpus).\n\
              * `probes/` — hand-written oracle-probe fixtures (WRITE-CATALOG witnesses; see\n\
-               `plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.\n\
+               `agents/plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.\n\
              * `read-corpus/` + `validation/` — {json_count} JSON workspaces (back-compat read + validation rules).\n\
              * `golden/` — committed reference goldens (byte-parity gate; regenerate sparingly).\n\n\
              ## Deferred fixtures (D7 — `!docs`/`!adrs`, excluded from P1–P3 parse/golden gates)\n\n\

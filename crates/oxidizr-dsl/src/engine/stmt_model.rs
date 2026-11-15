@@ -44,7 +44,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         return (|| {
             let removed = p.no_relationship(&t)?;
             // HashSet order is not portable; first-removal order stands in
-            // (plan/PROGRESS.md). Removed relationships are always linked,
+            // (agents/plan/PROGRESS.md). Removed relationships are always linked,
             // so the static (linked) relationship resolves.
             let Some(first_removed) = removed.first() else {
                 return Err(DslError::stmt(

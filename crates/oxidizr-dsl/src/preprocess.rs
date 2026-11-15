@@ -3,7 +3,7 @@
 //! pinned revision, keeping byte spans into the ORIGINAL source so tokens can carry
 //! faithful spans and diagnostics can quote original lines (D1).
 //!
-//! Reference facts this mirrors verbatim (verified @ `ad34036`, see plan/PROGRESS.md):
+//! Reference facts this mirrors verbatim (verified @ `ad34036`, see agents/plan/PROGRESS.md):
 //!
 //! * BOM: the parse loop strips a leading `\u{FEFF}` from each logical line's start
 //!   (reachable on the first line of a file / of an included file — M5 reuses this).
@@ -88,7 +88,7 @@ pub struct TextBlock {
 ///
 /// Inputs where the reference would throw (`StringIndexOutOfBoundsException` /
 /// `IndexOutOfBoundsException`) return `None` so callers emit a diagnostic instead
-/// of crashing (divergence recorded in plan/PROGRESS.md).
+/// of crashing (divergence recorded in agents/plan/PROGRESS.md).
 #[must_use]
 pub fn text_block_value(source: &str, block: &TextBlock) -> Option<String> {
     let mut body = source[block.after_opener.0..block.after_opener.1].to_string();

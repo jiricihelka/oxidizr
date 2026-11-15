@@ -22,7 +22,7 @@
 //!   resize preserves exactly this), and entries of one bucket keep their
 //!   insertion order.
 //!
-//! Accepted deviations (`plan/DEVIATIONS.md` D8): treeified buckets
+//! Accepted deviations (`agents/plan/DEVIATIONS.md` D8): treeified buckets
 //! (≥ 8 same-bucket keys at cap ≥ 64) iterate in tree order in Java,
 //! insertion order here; capacity inputs containing stripped
 //! `structurizr.inspection.*` keys follow the M0 golden-stripping rule.

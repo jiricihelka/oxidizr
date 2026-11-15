@@ -1,4 +1,5 @@
-# Line-endings policy (see plan/PROGRESS.md errata, 2026-11-15).
+# Line-endings policy (see agents/plan/PROGRESS.md errata, 2026-11-15;
+# agents/notes/pitfalls/expect-test-eol.md).
 #
 # The repo stores text as LF. A `core.autocrlf=true` checkout (the default on
 # many Windows setups) rewrote fixture files to CRLF, which broke the

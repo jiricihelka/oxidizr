@@ -1,4 +1,4 @@
-# plan/ — research & design notes
+# agents/plan/ — research & design notes
 
 Quick-reference knowledge base for building oxidizr. Dense bullets/tables only; verify
 claims against source before relying on them. When notes and the structurizr source

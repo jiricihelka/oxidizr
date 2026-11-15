@@ -1,4 +1,4 @@
-//! Identity newtypes and the shared id counter (Locked behavior, `plan/FEATURES.md` §2/§8.1).
+//! Identity newtypes and the shared id counter (Locked behavior, `agents/plan/FEATURES.md` §2/§8.1).
 //!
 //! ONE sequential integer counter is shared by elements and relationships in
 //! definition order, starting at 1 (`SequentialIntegerIdGeneratorStrategy`); JSON

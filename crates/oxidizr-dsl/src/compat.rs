@@ -4,7 +4,7 @@
 /// `Character.isWhitespace` for the tokenizer's purposes: ASCII `\t\n\x0B\f\r` and
 /// space. Divergence: Java's Unicode whitespace beyond ASCII (e.g. U+2028) also
 /// splits tokens there but not here; NBSP is NOT whitespace in Java either, so the
-/// common cases match. Recorded in plan/PROGRESS.md.
+/// common cases match. Recorded in agents/plan/PROGRESS.md.
 #[must_use]
 pub fn is_java_whitespace(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r')
@@ -51,7 +51,7 @@ pub fn strip_prefix_chars(s: &str, n: usize) -> Option<&str> {
 /// Java `Integer.parseInt`: optional `+`/`-` sign, ASCII digits only, `i32`
 /// range; `None` is the `NumberFormatException` case.
 ///
-/// Divergence (recorded in `plan/PROGRESS.md` errata list): Java's
+/// Divergence (recorded in `agents/plan/PROGRESS.md` errata list): Java's
 /// `Character.digit` also accepts non-ASCII decimal digits (e.g. Arabic-Indic
 /// `٣`); those throw here. Style values in real workspaces are ASCII.
 #[must_use]

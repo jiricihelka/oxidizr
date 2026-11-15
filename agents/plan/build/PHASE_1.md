@@ -67,7 +67,7 @@ Four stages, each independently testable:
    `//`/`#` and whitespace preserved as trivia for the CST (formatter needs them).
 3. **CST builder** (`dsl::parser`): recursive descent driven by a **scope-context
    state machine** mirroring the reference: each context = enum with a
-   `permitted_tokens()` set (verbatim from `plan/DSL.md` §10 + parser sources).
+   `permitted_tokens()` set (verbatim from `agents/plan/DSL.md` §10 + parser sources).
    Unknown token → error `OXZ-2001 "X is not valid here"` **plus** "did you mean" from
    the permitted set; recovery: skip to next statement line, continue (multi-error, D1).
    Every statement becomes a CST node in `oxidizr-ast` (kind-tagged, children + trivia +
@@ -121,7 +121,7 @@ Ids: newtype String `ElementId`/`RelationshipId`, `ViewKey(String)`; env name `E
   Diagnostics (no exceptions), runs on load and `validate` (P1-D8).
 - Canonical names, default tags, implied-relationship strategy (only the default
   unless-any-exists strategy — matches D2 rejection of fqcn), id counter incl.
-  `found(id)` bump-on-load: all in `core`, each unit-tested against `plan/FEATURES.md`
+  `found(id)` bump-on-load: all in `core`, each unit-tested against `agents/plan/FEATURES.md`
   tables.
 
 ## P1-D5 JSON I/O (`oxidizr-json`) — serde derives, streaming, no Value pass
@@ -183,7 +183,7 @@ Before writer code freezes: derive from reference goldens + sources the exact it
 order of every JSON array (Java `TreeSet` comparators: people/systems/containers/
 components/deploymentNodes/relationships-per-element/views/elementViews/
 relationshipViews/animation steps/perspectives/healthChecks…) and per-field omission
-quirks. Deliverable: `plan/build/WRITE-CATALOG.md` (table: JSON path → order rule →
+quirks. Deliverable: `agents/plan/build/WRITE-CATALOG.md` (table: JSON path → order rule →
 omission rule → source evidence) + a `oxidizr-json` test module implementing each rule
 explicitly (sort functions, not incidental order). Catalog items are the V-list §V-1.
 
@@ -304,7 +304,7 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   in text fields and in the `structurizr.dsl` property bytes.
 - V-9 ~~decision-status/date parsing corners per ADR tool format~~ — **moved to P4-V7**
   (importers deferred 2026-11-14).
-- V-10 ✅ (2026-11-14, oracle runs, plan/PROGRESS.md) The app layer DOES mutate the
+- V-10 ✅ (2026-11-14, oracle runs, agents/plan/PROGRESS.md) The app layer DOES mutate the
   workspace during `export`: `AbstractCommand.loadWorkspace` runs (a) scope validation
   (hard error), (b) `new DefaultInspector(workspace)` which injects four
   `structurizr.inspection.{error,warning,info,ignore}` count properties into
@@ -327,7 +327,7 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   (`lastModifiedUser: ""` omitted as empty; unknown `revision` dropped). Goldens are
   committed raw minus V-10(b) keys.
 Each gets a checkbox + evidence link in the PR that implements it; results folded back
-into `plan/*.md` if notes were wrong (errata process).
+into `agents/plan/*.md` if notes were wrong (errata process).
 
 ## Risks
 

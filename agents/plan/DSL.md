@@ -16,7 +16,7 @@ Pinned v6.2.4 @ `ad34036`.
   `!const`/`!var` map first, then **env vars** (feature `structurizr.feature.dsl.environment`).
 - `${NAME}` name chars `[a-zA-Z0-9-_.]`. No `env()`/`$()` function (legacy, gone).
 - **M1-verified corrections** (from `preProcessLines` @ `ad34036`, implemented + tested in
-  `oxidizr-dsl/src/preprocess.rs`; plan/PROGRESS.md M1 has the details): middle lines of a
+  `oxidizr-dsl/src/preprocess.rs`; agents/plan/PROGRESS.md M1 has the details): middle lines of a
   `\`-continuation keep their indentation (only the final completing line is `stripLeading`ed);
   a joined logical line is reported under its LAST physical line's number; a text block's
   value = text after the FIRST `"""` (incl. opener-line tail) + dedented middle lines each
