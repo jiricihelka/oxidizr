@@ -48,6 +48,42 @@ pub fn strip_prefix_chars(s: &str, n: usize) -> Option<&str> {
     }
 }
 
+/// Java `Integer.parseInt`: optional `+`/`-` sign, ASCII digits only, `i32`
+/// range; `None` is the `NumberFormatException` case.
+///
+/// Divergence (recorded in `plan/PROGRESS.md` errata list): Java's
+/// `Character.digit` also accepts non-ASCII decimal digits (e.g. Arabic-Indic
+/// `٣`); those throw here. Style values in real workspaces are ASCII.
+#[must_use]
+pub fn java_parse_int(s: &str) -> Option<i32> {
+    s.parse::<i32>().ok()
+}
+
+/// `String.equalsIgnoreCase`: length in UTF-16 code units must match (Rust
+/// compares scalar values, so astral-vs-surrogate divergences are the only
+/// theoretical difference), then per-character
+/// `toUpperCase(a) == toUpperCase(b) || toLowerCase(a) == toLowerCase(b)`.
+#[must_use]
+pub fn java_eq_ignore_case(a: &str, b: &str) -> bool {
+    let mut ia = a.chars();
+    let mut ib = b.chars();
+    loop {
+        let (x, y) = match (ia.next(), ib.next()) {
+            (Some(x), Some(y)) => (x, y),
+            (None, None) => return true,
+            _ => return false,
+        };
+        if x == y {
+            continue;
+        }
+        let up = x.to_uppercase().eq(y.to_uppercase());
+        let low = x.to_lowercase().eq(y.to_lowercase());
+        if !(up || low) {
+            return false;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

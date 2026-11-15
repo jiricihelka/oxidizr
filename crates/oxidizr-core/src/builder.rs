@@ -14,7 +14,7 @@
 #![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
 use crate::Workspace;
-use crate::configuration::WorkspaceScope;
+use crate::configuration::{Role, User, Visibility, WorkspaceScope};
 use crate::error::CoreError;
 use crate::ids::{Id, IdGenerator};
 use crate::model::{
@@ -121,6 +121,17 @@ impl WorkspaceBuilder {
         self.workspace.id = id;
     }
 
+    /// DSL `workspace [name] …` / `name <name>` — `Workspace.setName`.
+    pub fn set_workspace_name(&mut self, name: impl Into<String>) {
+        self.workspace.name = Some(name.into());
+    }
+
+    /// DSL `description <description>` at the workspace scope —
+    /// `Workspace.setDescription`.
+    pub fn set_workspace_description(&mut self, description: impl Into<String>) {
+        self.workspace.description = Some(description.into());
+    }
+
     /// Set name/description/version metadata.
     pub fn set_metadata(
         &mut self,
@@ -136,6 +147,34 @@ impl WorkspaceBuilder {
     /// Set the workspace scope (`workspaceScope` / DSL `!scope`-ish loaders).
     pub fn set_scope(&mut self, scope: WorkspaceScope) {
         self.workspace.configuration.scope = Some(scope);
+    }
+
+    /// `scope none` — reference `setScope(null)` (`ConfigurationParser`).
+    pub fn clear_scope(&mut self) {
+        self.workspace.configuration.scope = None;
+    }
+
+    /// `visibility <private|public>` (`ConfigurationParser`).
+    pub fn set_visibility(&mut self, visibility: Visibility) {
+        self.workspace.configuration.visibility = Some(visibility);
+    }
+
+    /// `users { … }` role statements — `WorkspaceConfiguration.addUser`:
+    /// the reference `TreeSet<User>` is ordered by username and silently
+    /// KEEPS THE FIRST user for a repeated (exact-string) username.
+    pub fn add_user(&mut self, username: &str, role: Role) {
+        if !self
+            .workspace
+            .configuration
+            .users
+            .iter()
+            .any(|u| u.username == username)
+        {
+            self.workspace.configuration.users.push(User {
+                username: username.to_string(),
+                role: Some(role),
+            });
+        }
     }
 
     /// Add a top-level property.
@@ -155,7 +194,7 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        self.check_top_level_name(name)?;
+        self.check_top_level_name(name, ElementKind::Person)?;
         let item = self.new_item(name, description, tags_csv);
         self.workspace.model.people.push(Person {
             item: item.clone(),
@@ -173,7 +212,7 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        self.check_top_level_name(name)?;
+        self.check_top_level_name(name, ElementKind::SoftwareSystem)?;
         let item = self.new_item(name, description, tags_csv);
         self.workspace.model.software_systems.push(SoftwareSystem {
             item: item.clone(),
@@ -193,7 +232,7 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        self.check_top_level_name(name)?;
+        self.check_top_level_name(name, ElementKind::CustomElement)?;
         let item = self.new_item(name, description, tags_csv);
         self.workspace.model.custom_elements.push(CustomElement {
             item: item.clone(),
@@ -214,9 +253,7 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        let system_name = self
-            .system_ref(system)
-            .map(|s| s.item.name.clone())
+        self.system_ref(system)
             .ok_or_else(|| CoreError::WrongElementKind {
                 id: system.clone(),
                 expected: "software system",
@@ -227,7 +264,6 @@ impl WorkspaceBuilder {
         {
             return Err(CoreError::DuplicateContainerName {
                 name: name.to_string(),
-                system: system_name,
             });
         }
         let item = self.new_item(name, description, tags_csv);
@@ -255,9 +291,7 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        let container_name = self
-            .container_ref(container)
-            .map(|c| c.item.name.clone())
+        self.container_ref(container)
             .ok_or_else(|| CoreError::WrongElementKind {
                 id: container.clone(),
                 expected: "container",
@@ -268,7 +302,6 @@ impl WorkspaceBuilder {
         {
             return Err(CoreError::DuplicateComponentName {
                 name: name.to_string(),
-                container: container_name,
             });
         }
         let item = self.new_item(name, description, tags_csv);
@@ -485,6 +518,97 @@ impl WorkspaceBuilder {
         Ok(id)
     }
 
+    /// `deploymentGroup <deploymentGroups>` inside a node — Java
+    /// `DeploymentNode.addDeploymentGroup`: blank names rejected, the name is
+    /// added to the node's (deduplicated) set.
+    pub fn add_deployment_group(&mut self, node: &Id, name: &str) -> Result<(), CoreError> {
+        let node = self
+            .node_mut(node)
+            .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?;
+        if name.trim().is_empty() {
+            // `StringUtils.isNullOrEmpty` trims.
+            return Err(CoreError::DeploymentGroupNameRequired);
+        }
+        if !node.deployment_groups.iter().any(|g| g == name) {
+            node.deployment_groups.push(name.to_string());
+        }
+        Ok(())
+    }
+
+    /// `healthCheck <name> <url> [interval] [timeout]` — Java
+    /// `StaticStructureElementInstance.addHealthCheck`: validation and its
+    /// messages mirror the reference; the check lands on the instance's list
+    /// verbatim (`HttpHealthCheck`'s ctor stores name/url untrimmed).
+    pub fn add_health_check(
+        &mut self,
+        instance: &Id,
+        name: &str,
+        url: &str,
+        interval: i32,
+        timeout: i64,
+    ) -> Result<(), CoreError> {
+        if name.trim().is_empty() {
+            return Err(CoreError::HealthCheckInvalid(
+                "The name must not be null or empty.".to_string(),
+            ));
+        }
+        if url.trim().is_empty() {
+            return Err(CoreError::HealthCheckInvalid(
+                "The URL must not be null or empty.".to_string(),
+            ));
+        }
+        if !crate::url::is_url(url) {
+            return Err(CoreError::HealthCheckInvalid(format!(
+                "{url} is not a valid URL."
+            )));
+        }
+        if interval < 0 {
+            return Err(CoreError::HealthCheckInvalid(
+                "The polling interval must be zero or a positive integer.".to_string(),
+            ));
+        }
+        if timeout < 0 {
+            return Err(CoreError::HealthCheckInvalid(
+                "The timeout must be zero or a positive integer.".to_string(),
+            ));
+        }
+        let checks = Self::health_checks_mut(&mut self.workspace.model.deployment_nodes, instance)
+            .ok_or_else(|| CoreError::InstanceNotFound {
+                id: instance.clone(),
+            })?;
+        checks.push(crate::model::HttpHealthCheck {
+            name: name.to_string(),
+            url: url.to_string(),
+            headers: std::collections::BTreeMap::new(),
+            interval,
+            timeout,
+        });
+        Ok(())
+    }
+
+    /// Mutable health-check list of a software-system / container instance.
+    fn health_checks_mut<'a>(
+        nodes: &'a mut [crate::model::DeploymentNode],
+        id: &Id,
+    ) -> Option<&'a mut Vec<crate::model::HttpHealthCheck>> {
+        for n in nodes {
+            for i in &mut n.software_system_instances {
+                if &i.item.id == id {
+                    return Some(&mut i.health_checks);
+                }
+            }
+            for i in &mut n.container_instances {
+                if &i.item.id == id {
+                    return Some(&mut i.health_checks);
+                }
+            }
+            if let Some(checks) = Self::health_checks_mut(&mut n.children, id) {
+                return Some(checks);
+            }
+        }
+        None
+    }
+
     // ------------------------------------------------------------------
     // relationships
     // ------------------------------------------------------------------
@@ -528,7 +652,7 @@ impl WorkspaceBuilder {
         if let Some(csv) = tags_csv {
             // reference DSL: `addTags(tags.split(","))` — TRIMMED adds (unlike
             // JSON's setTags).
-            for t in csv.split(',') {
+            for t in java_split_csv(csv) {
                 tags.add(t);
             }
         }
@@ -872,17 +996,784 @@ impl WorkspaceBuilder {
             .collect()
     }
 
-    /// Attach a perspective to an element or relationship by id.
-    pub fn add_perspective(&mut self, id: &Id, perspective: Perspective) -> Result<(), CoreError> {
+    /// Every model element id in `Model.getElements()` iteration order
+    /// (people, software systems with their containers/components, custom
+    /// elements, then the deployment tree). Used by the DSL canonical-name
+    /// lookups and the `include *` / expression finders.
+    #[must_use]
+    pub fn all_element_ids(&self) -> Vec<Id> {
+        let mut ids: Vec<Id> = crate::validate::flattened(&self.workspace.model)
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect();
+        ids.sort_by_key(|id| id_sort_key(id.as_str()));
+        ids
+    }
+
+    /// `Model.getElementWithCanonicalName(canonicalName)`.
+    #[must_use]
+    pub fn element_with_canonical_name(&self, canonical_name: &str) -> Option<Id> {
+        self.all_element_ids()
+            .into_iter()
+            .find(|id| self.canonical_name_full(id).as_deref() == Some(canonical_name))
+    }
+
+    /// `Model.getRelationshipWithCanonicalName(canonicalName)`.
+    #[must_use]
+    pub fn relationship_with_canonical_name(&self, canonical_name: &str) -> Option<Id> {
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| self.relationship_canonical_name(&r.id).as_deref() == Some(canonical_name))
+            .map(|r| r.id.clone())
+    }
+
+    /// The full `Element.getCanonicalName()` for any element (deployment
+    /// nodes, infrastructure nodes and instances included), via
+    /// `CanonicalNameGenerator`. `None` for a non-element id.
+    #[must_use]
+    pub fn canonical_name_full(&self, id: &Id) -> Option<String> {
+        use crate::canonical as cn;
+
+        let kind = self.element_kind(id)?;
+        let name = || self.item(id).map(|i| i.name.clone()).unwrap_or_default();
+        match kind {
+            ElementKind::CustomElement => Some(cn::custom_element(&name())),
+            ElementKind::Person => Some(cn::person(&name())),
+            ElementKind::SoftwareSystem => Some(cn::software_system(&name())),
+            ElementKind::Container => {
+                let system = self.system_of_container(id)?.item.name.clone();
+                Some(cn::container(&system, &name()))
+            }
+            ElementKind::Component => {
+                let (sys, container) = self.system_and_container_of_component(id)?;
+                Some(cn::component(&sys.item.name, &container.item.name, &name()))
+            }
+            ElementKind::DeploymentNode => {
+                let (env, ancestors, own) = self.node_context(id)?;
+                let chain: Vec<&str> = ancestors.iter().map(String::as_str).collect();
+                Some(cn::deployment_node(&env, &chain, &own))
+            }
+            ElementKind::InfrastructureNode => {
+                let (node_chain, own) = self.infra_parent_chain(id)?;
+                Some(cn::infrastructure_node(&node_chain, &own))
+            }
+            ElementKind::SoftwareSystemInstance => {
+                let (node_chain, system_name, instance_id) = self.ssi_context(id)?;
+                Some(cn::software_system_instance(
+                    &node_chain,
+                    &system_name,
+                    instance_id,
+                ))
+            }
+            ElementKind::ContainerInstance => {
+                let (node_chain, system_name, container_name, instance_id) = self.ci_context(id)?;
+                Some(cn::container_instance(
+                    &node_chain,
+                    &system_name,
+                    &container_name,
+                    instance_id,
+                ))
+            }
+        }
+    }
+
+    /// `Relationship.getCanonicalName()` (`CanonicalNameGenerator`).
+    #[must_use]
+    pub fn relationship_canonical_name(&self, id: &Id) -> Option<String> {
+        let r = self
+            .workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)?;
+        let source = self.canonical_name_full(&r.source)?;
+        let dest = self.canonical_name_full(&r.destination)?;
+        Some(crate::canonical::relationship(
+            &source,
+            &dest,
+            r.description.as_deref(),
+        ))
+    }
+
+    /// `Element.getTechnology()` for containers, components, deployment
+    /// nodes, infrastructure nodes and container instances (which report
+    /// their STATIC container's technology); `""` when unset or the kind has
+    /// no technology.
+    #[must_use]
+    pub fn element_technology(&self, id: &Id) -> String {
+        let model = &self.workspace.model;
+        for s in &model.software_systems {
+            for c in &s.containers {
+                if &c.item.id == id {
+                    return c.technology.clone().unwrap_or_default();
+                }
+                for k in &c.components {
+                    if &k.item.id == id {
+                        return k.technology.clone().unwrap_or_default();
+                    }
+                }
+            }
+        }
+        let mut out: Option<String> = None;
+        self.walk_nodes_search(&mut |node, _ancestors| {
+            if &node.item.id == id {
+                out = Some(node.technology.clone().unwrap_or_default());
+                return Some(());
+            }
+            for i in &node.infrastructure_nodes {
+                if &i.item.id == id {
+                    out = Some(i.technology.clone().unwrap_or_default());
+                    return Some(());
+                }
+            }
+            for c in &node.container_instances {
+                if &c.item.id == id {
+                    out = Some(
+                        self.container_ref(&c.container_id)
+                            .and_then(|c| c.technology.clone())
+                            .unwrap_or_default(),
+                    );
+                    return Some(());
+                }
+            }
+            None
+        });
+        out.unwrap_or_default()
+    }
+
+    /// `Relationship.getTechnology()` (empty string when unset).
+    #[must_use]
+    pub fn relationship_technology(&self, id: &Id) -> String {
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)
+            .and_then(|r| r.technology.clone())
+            .unwrap_or_default()
+    }
+
+    /// `Relationship.getLinkedRelationshipId()`.
+    #[must_use]
+    pub fn linked_relationship_id(&self, id: &Id) -> Option<Id> {
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)
+            .and_then(|r| r.linked_relationship_id.clone())
+    }
+
+    /// `Element.getGroup()` — the group name for any groupable element.
+    #[must_use]
+    pub fn element_group(&self, id: &Id) -> Option<String> {
+        let model = &self.workspace.model;
+        for p in &model.people {
+            if &p.item.id == id {
+                return p.group.clone();
+            }
+        }
+        for c in &model.custom_elements {
+            if &c.item.id == id {
+                return c.group.clone();
+            }
+        }
+        for s in &model.software_systems {
+            if &s.item.id == id {
+                return s.group.clone();
+            }
+            for c in &s.containers {
+                if &c.item.id == id {
+                    return c.group.clone();
+                }
+                for k in &c.components {
+                    if &k.item.id == id {
+                        return k.group.clone();
+                    }
+                }
+            }
+        }
+        Self::group_in_tree(&model.deployment_nodes, id)
+    }
+
+    /// The software system an id "belongs" to for `getElement(id, SoftwareSystem.class)`;
+    /// only a real software system qualifies (exact kind — see `checkElementType`).
+    #[must_use]
+    pub fn as_software_system(&self, id: &Id) -> Option<Id> {
+        (self.element_kind(id) == Some(ElementKind::SoftwareSystem)).then(|| id.clone())
+    }
+
+    /// The container an id names (exact kind).
+    #[must_use]
+    pub fn as_container(&self, id: &Id) -> Option<Id> {
+        (self.element_kind(id) == Some(ElementKind::Container)).then(|| id.clone())
+    }
+
+    /// `Model.getRelationships()` iteration order: the reference stores
+    /// relationships in a `TreeSet` ordered by `ModelItem.compareTo` —
+    /// ascending numeric id (see [`id_sort_key`]).
+    #[must_use]
+    pub fn all_relationship_ids(&self) -> Vec<Id> {
+        let mut ids: Vec<Id> = self
+            .workspace
+            .model
+            .relationships
+            .iter()
+            .map(|r| r.id.clone())
+            .collect();
+        ids.sort_by_key(|id| id_sort_key(id.as_str()));
+        ids
+    }
+
+    /// `ModelItem.hasTag(tag)` — `getTagsAsSet().contains(tag)`: derived
+    /// defaults for the item's kind, then the stored tags.
+    #[must_use]
+    pub fn item_has_tag(&self, id: &Id, tag: &str) -> bool {
+        if let Some(item) = self.item(id) {
+            let kind = self
+                .element_kind(id)
+                .map_or(crate::tags::TagKind::CustomElement, |k| {
+                    crate::tags::TagKind::from_element_kind(k)
+                });
+            return item.tags.has(kind, tag);
+        }
+        if let Some(r) = self
+            .workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)
+        {
+            let defaults = crate::tags::relationship_defaults(
+                r.linked_relationship_id.is_some(),
+                r.interaction_style,
+            );
+            return r.tags.has_against(&defaults, tag);
+        }
+        false
+    }
+
+    /// `ModelItem.hasProperty(name, value)` for an element or relationship.
+    #[must_use]
+    pub fn item_has_property(&self, id: &Id, name: &str, value: &str) -> bool {
+        if let Some(item) = self.item(id) {
+            return item.properties.get(name) == Some(value);
+        }
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)
+            .is_some_and(|r| r.properties.get(name) == Some(value))
+    }
+
+    /// The default tags of an element id's kind (`ModelItem.getDefaultTags()`);
+    /// empty for a relationship or unknown id.
+    #[must_use]
+    pub fn element_tag_defaults(&self, id: &Id) -> &'static [&'static str] {
+        self.element_kind(id).map_or(&[], |k| {
+            crate::tags::TagKind::from_element_kind(k).default_tags()
+        })
+    }
+
+    /// `Relationship.getInteractionStyle()` (never set from the DSL).
+    #[must_use]
+    pub fn relationship_style(&self, id: &Id) -> Option<crate::tags::InteractionStyle> {
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)
+            .and_then(|r| r.interaction_style)
+    }
+
+    /// `AbstractRelationshipParser.createRelationship` — the DSL relationship
+    /// entry point, in EXACT reference order: kind dispatch (`uses(...)`
+    /// overload selection), then the `Model.addRelationship` parent/child
+    /// guard, then the null-result duplicate check (`Element.has`, i.e.
+    /// destination + description).  The returned id carries
+    /// `linkedRelationshipId = None` — explicit DSL relationships are never
+    /// linked (only implied / replicated ones are).
+    pub fn dsl_uses(
+        &mut self,
+        source: &Id,
+        destination: &Id,
+        description: Option<String>,
+        technology: Option<String>,
+    ) -> Result<Id, CoreError> {
+        if !self.permitted_dsl_pair(source, destination) {
+            return Err(CoreError::RelationshipPairNotPermitted {
+                source: self.canonical_name_full(source).unwrap_or_default(),
+                destination: self.canonical_name_full(destination).unwrap_or_default(),
+            });
+        }
+        if self.is_child_of(source, destination) || self.is_child_of(destination, source) {
+            return Err(CoreError::ParentChildRelationship);
+        }
+        // Core `Element.has`: the add returns null only when destination AND
+        // description match. The reference parser's any-description
+        // `hasEfferentRelationshipWith` check only adorns the message inside
+        // the `relationship == null` branch — same pair, different
+        // description ADDS fine.
+        if self.has_efferent(source, destination, description.as_deref().unwrap_or("")) {
+            return Err(CoreError::DuplicateRelationship {
+                source: self.canonical_name_full(source).unwrap_or_default(),
+                destination: self.canonical_name_full(destination).unwrap_or_default(),
+            });
+        }
+        let id = self.insert_relationship(
+            source,
+            destination,
+            description,
+            technology,
+            Tags::new(),
+            None,
+        );
+        self.maybe_create_implied(&id);
+        Ok(id)
+    }
+
+    /// The `createRelationship` instanceof dispatch (class hierarchy @
+    /// `ad34036`): `CustomElement` on either side, a static-structure pair,
+    /// or the deployment chain node→node, node→infra, infra→deployment-
+    /// element, instance→infra.
+    #[must_use]
+    fn permitted_dsl_pair(&self, source: &Id, destination: &Id) -> bool {
+        use ElementKind as K;
+
+        let (Some(s), Some(d)) = (self.element_kind(source), self.element_kind(destination)) else {
+            return false;
+        };
+        let static_struct = |k: K| {
+            matches!(
+                k,
+                K::Person | K::SoftwareSystem | K::Container | K::Component
+            )
+        };
+        if s == K::CustomElement || d == K::CustomElement {
+            return true;
+        }
+        if static_struct(s) && static_struct(d) {
+            return true;
+        }
+        matches!(
+            (s, d),
+            (K::DeploymentNode, K::DeploymentNode | K::InfrastructureNode)
+                | (K::InfrastructureNode, _)
+                | (
+                    K::SoftwareSystemInstance | K::ContainerInstance,
+                    K::InfrastructureNode
+                )
+        )
+    }
+
+    /// The implied-relationships hook (`Model.addRelationship`), shared by
+    /// [`WorkspaceBuilder::add_relationship`] and
+    /// [`WorkspaceBuilder::dsl_uses`].
+    fn maybe_create_implied(&mut self, id: &Id) {
+        let (source, destination) = self
+            .workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)
+            .map(|r| (r.source.clone(), r.destination.clone()))
+            .expect("just inserted");
+        if self.implied_strategy != ImpliedRelationshipsStrategy::Default
+            && is_implied_kind(self.element_kind(&source))
+            && is_implied_kind(self.element_kind(&destination))
+        {
+            self.create_implied_relationships(&id.clone());
+        }
+    }
+
+    /// `Element.getEfferentRelationshipWith(destination)` — the first
+    /// outgoing relationship to `destination` (any description).
+    #[must_use]
+    pub fn efferent_to(&self, source: &Id, destination: &Id) -> Option<Id> {
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.source == source && &r.destination == destination)
+            .map(|r| r.id.clone())
+    }
+
+    /// Add already-split tag parts to an element or relationship with the
+    /// reference `addTags(String[])` semantics (trim, first position kept).
+    pub fn add_tag_parts(&mut self, id: &Id, parts: &[String]) {
         if let Some(item) = self.item_mut(id) {
-            item.perspectives.push(perspective);
-            return Ok(());
+            for t in parts {
+                item.tags.add(t);
+            }
+            return;
         }
         if let Some(rel) = self.relationship_mut(id) {
-            rel.perspectives.push(perspective);
-            return Ok(());
+            for t in parts {
+                rel.tags.add(t);
+            }
         }
-        Err(CoreError::ElementNotFound { id: id.clone() })
+    }
+
+    /// `Element.getEfferentRelationshipWith(destination, description)`.
+    #[must_use]
+    pub fn efferent_to_with_description(
+        &self,
+        source: &Id,
+        destination: &Id,
+        description: &str,
+    ) -> Option<Id> {
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| {
+                &r.source == source
+                    && &r.destination == destination
+                    && r.description.as_deref().unwrap_or("") == description
+            })
+            .map(|r| r.id.clone())
+    }
+
+    /// The `(description, technology, linkedRelationshipId)` of a
+    /// relationship (for `-/>` and the `NoRelationship` context hand-off).
+    #[must_use]
+    pub fn relationship_parts(&self, id: &Id) -> Option<(String, String, Option<Id>)> {
+        let r = self
+            .workspace
+            .model
+            .relationships
+            .iter()
+            .find(|r| &r.id == id)?;
+        Some((
+            r.description.clone().unwrap_or_default(),
+            r.technology.clone().unwrap_or_default(),
+            r.linked_relationship_id.clone(),
+        ))
+    }
+
+    /// `Model.getRelationship(id)` — the relationship's own id (existence check).
+    #[must_use]
+    pub fn has_relationship(&self, id: &Id) -> bool {
+        self.workspace
+            .model
+            .relationships
+            .iter()
+            .any(|r| &r.id == id)
+    }
+
+    /// `Workspace.remove(Relationship)`: drop the relationship from the model
+    /// and from its source's efferent list.
+    pub fn remove_relationship(&mut self, id: &Id) {
+        if let Some(pos) = self
+            .workspace
+            .model
+            .relationships
+            .iter()
+            .position(|r| &r.id == id)
+        {
+            let rel = self.workspace.model.relationships.remove(pos);
+            if let Some(rels) = self.source_relationships_mut(&rel.source) {
+                rels.retain(|r| r != id);
+            }
+        }
+    }
+
+    /// `AbstractRelationshipParser.findSoftwareSystemInstances(system, env)`:
+    /// all software-system instances of `system` in `env`, in element order.
+    #[must_use]
+    pub fn find_software_system_instances(&self, system: &Id, env: &str) -> Vec<Id> {
+        let mut out = Vec::new();
+        self.walk_instances(&mut |id, static_id, instance_env, kind| {
+            if kind == ElementKind::SoftwareSystemInstance
+                && static_id == system
+                && instance_env == env
+            {
+                out.push(id.clone());
+            }
+        });
+        out.sort_by_key(|id| id_sort_key(id.as_str()));
+        out
+    }
+
+    /// `AbstractRelationshipParser.findContainerInstances(container, env)`.
+    #[must_use]
+    pub fn find_container_instances(&self, container: &Id, env: &str) -> Vec<Id> {
+        let mut out = Vec::new();
+        self.walk_instances(&mut |id, static_id, instance_env, kind| {
+            if kind == ElementKind::ContainerInstance
+                && static_id == container
+                && instance_env == env
+            {
+                out.push(id.clone());
+            }
+        });
+        out.sort_by_key(|id| id_sort_key(id.as_str()));
+        out
+    }
+
+    /// `DeploymentEnvironmentDslContext.findInstancesOf(element)`: instances of
+    /// a static structure element in `env` (either instance kind), element order.
+    #[must_use]
+    pub fn find_instances_of(&self, element: &Id, env: &str) -> Vec<Id> {
+        let mut out = Vec::new();
+        self.walk_instances(&mut |id, static_id, instance_env, kind| {
+            if static_id == element && instance_env == env && kind != ElementKind::Person {
+                out.push(id.clone());
+            }
+        });
+        out.sort_by_key(|id| id_sort_key(id.as_str()));
+        out
+    }
+
+    /// Every instance of a static element in ANY environment (reference
+    /// `DeploymentViewExpressionParser.getElements`, which streams ALL
+    /// model elements through `instanceof` + `equals` without consulting
+    /// the deployment environment).
+    #[must_use]
+    pub fn all_instances_of(&self, element: &Id) -> Vec<Id> {
+        let mut out = Vec::new();
+        self.walk_instances(&mut |id, static_id, _env, kind| {
+            if static_id == element && kind != ElementKind::Person {
+                out.push(id.clone());
+            }
+        });
+        out.sort_by_key(|id| id_sort_key(id.as_str()));
+        out
+    }
+
+    /// `Element.getParent()` for a static-structure-element instance (its
+    /// deployment node). Used by `!element`'s group assignment (which only
+    /// fires for `StaticStructureElement`, so never for instances).
+    #[must_use]
+    pub fn instance_static(&self, id: &Id) -> Option<(Id, String, Vec<String>)> {
+        self.instance_profile(id)
+    }
+
+    // --- deployment canonical-name context helpers -----------------------
+
+    /// `(environment, ancestor node names root-first, own name)` of a
+    /// deployment node id.
+    fn node_context(&self, id: &Id) -> Option<(String, Vec<String>, String)> {
+        self.walk_nodes_search(&mut |node, ancestors| {
+            (&node.item.id == id).then(|| {
+                (
+                    node.environment.clone(),
+                    ancestors.to_vec(),
+                    node.item.name.clone(),
+                )
+            })
+        })
+    }
+
+    /// `(node chain WITHOUT scheme, own name)` for an infrastructure node —
+    /// the chain is the parent deployment node's full canonical chain
+    /// (env + ancestor node names + parent node name).
+    fn infra_parent_chain(&self, id: &Id) -> Option<(String, String)> {
+        self.walk_nodes_search(&mut |node, ancestors| {
+            node.infrastructure_nodes
+                .iter()
+                .find(|i| &i.item.id == id)
+                .map(|infra| {
+                    (
+                        Self::node_chain_of(node, ancestors),
+                        infra.item.name.clone(),
+                    )
+                })
+        })
+    }
+
+    /// `(node chain WITHOUT scheme, system name, instanceId)`.
+    fn ssi_context(&self, id: &Id) -> Option<(String, String, i32)> {
+        self.walk_nodes_search(&mut |node, ancestors| {
+            node.software_system_instances
+                .iter()
+                .find(|i| &i.item.id == id)
+                .map(|inst| {
+                    let system = self
+                        .system_ref(&inst.software_system_id)
+                        .map(|s| s.item.name.clone())
+                        .unwrap_or_default();
+                    (
+                        Self::node_chain_of(node, ancestors),
+                        system,
+                        inst.instance_id,
+                    )
+                })
+        })
+    }
+
+    /// `(node chain WITHOUT scheme, system name, container name, instanceId)`.
+    fn ci_context(&self, id: &Id) -> Option<(String, String, String, i32)> {
+        self.walk_nodes_search(&mut |node, ancestors| {
+            node.container_instances
+                .iter()
+                .find(|i| &i.item.id == id)
+                .map(|inst| {
+                    let container = self
+                        .container_ref(&inst.container_id)
+                        .map(|c| c.item.name.clone())
+                        .unwrap_or_default();
+                    let system = self
+                        .system_of_container(&inst.container_id)
+                        .map(|s| s.item.name.clone())
+                        .unwrap_or_default();
+                    (
+                        Self::node_chain_of(node, ancestors),
+                        system,
+                        container,
+                        inst.instance_id,
+                    )
+                })
+        })
+    }
+
+    /// The reference `generate(DeploymentNode).substring("DeploymentNode://")`
+    /// for a node: `ENV/A/…/nodeName` (env + ancestors + own name).
+    fn node_chain_of(node: &DeploymentNode, ancestors: &[String]) -> String {
+        let chain: Vec<&str> = ancestors
+            .iter()
+            .map(String::as_str)
+            .chain(std::iter::once(node.item.name.as_str()))
+            .collect();
+        crate::canonical::deployment_node_chain(&node.environment, &chain)
+    }
+
+    // --- private tree walkers --------------------------------------------
+
+    /// Find the software system containing a container id.
+    fn system_of_container(&self, id: &Id) -> Option<&SoftwareSystem> {
+        self.workspace
+            .model
+            .software_systems
+            .iter()
+            .find(|s| s.containers.iter().any(|c| &c.item.id == id))
+    }
+
+    /// `(system, container)` for a component id.
+    fn system_and_container_of_component(&self, id: &Id) -> Option<(&SoftwareSystem, &Container)> {
+        for s in &self.workspace.model.software_systems {
+            for c in &s.containers {
+                if c.components.iter().any(|k| &k.item.id == id) {
+                    return Some((s, c));
+                }
+            }
+        }
+        None
+    }
+
+    /// The `group` of a deployment-tree element (node, infra, or instance).
+    fn group_in_tree(nodes: &[DeploymentNode], id: &Id) -> Option<String> {
+        for node in nodes {
+            if &node.item.id == id {
+                return node.group.clone();
+            }
+            for i in &node.infrastructure_nodes {
+                if &i.item.id == id {
+                    return i.group.clone();
+                }
+            }
+            for s in &node.software_system_instances {
+                if &s.item.id == id {
+                    return s.group.clone();
+                }
+            }
+            for c in &node.container_instances {
+                if &c.item.id == id {
+                    return c.group.clone();
+                }
+            }
+            if let Some(g) = Self::group_in_tree(&node.children, id) {
+                return Some(g);
+            }
+        }
+        None
+    }
+
+    /// Walk every deployment node in DFS (model) order, passing the node and
+    /// its ancestor names (root-first) to `f`; return the first `Some`.
+    fn walk_nodes_search<T>(
+        &self,
+        f: &mut dyn FnMut(&DeploymentNode, &[String]) -> Option<T>,
+    ) -> Option<T> {
+        fn go<T>(
+            nodes: &[DeploymentNode],
+            ancestors: &mut Vec<String>,
+            f: &mut dyn FnMut(&DeploymentNode, &[String]) -> Option<T>,
+        ) -> Option<T> {
+            for node in nodes {
+                if let Some(r) = f(node, ancestors) {
+                    return Some(r);
+                }
+                ancestors.push(node.item.name.clone());
+                let r = go(&node.children, ancestors, f);
+                ancestors.pop();
+                if r.is_some() {
+                    return r;
+                }
+            }
+            None
+        }
+        go(&self.workspace.model.deployment_nodes, &mut Vec::new(), f)
+    }
+
+    /// Visit every instance in element order (SSIs then CIs per node,
+    /// depth-first) with `(id, static element id, environment, kind)`.
+    fn walk_instances(&self, f: &mut dyn FnMut(&Id, &Id, &str, ElementKind)) {
+        fn go(nodes: &[DeploymentNode], f: &mut dyn FnMut(&Id, &Id, &str, ElementKind)) {
+            for node in nodes {
+                for s in &node.software_system_instances {
+                    f(
+                        &s.item.id,
+                        &s.software_system_id,
+                        &s.environment,
+                        ElementKind::SoftwareSystemInstance,
+                    );
+                }
+                for c in &node.container_instances {
+                    f(
+                        &c.item.id,
+                        &c.container_id,
+                        &c.environment,
+                        ElementKind::ContainerInstance,
+                    );
+                }
+                go(&node.children, f);
+            }
+        }
+        go(&self.workspace.model.deployment_nodes, f);
+    }
+
+    /// Attach a perspective to an element or relationship by id.
+    pub fn add_perspective(&mut self, id: &Id, perspective: Perspective) -> Result<(), CoreError> {
+        // `ModelItem.addPerspective(Perspective)` / the relationship and
+        // instance equivalents — the OBJECT path: duplicate-name guard only
+        // (the empty-name guard lives in the 3-arg `addPerspective`, which
+        // the DSL inline/archetype-application paths run before calling
+        // this).
+        let duplicate = if let Some(item) = self.item_mut(id) {
+            let dup = item.perspectives.iter().any(|p| p.name == perspective.name);
+            if !dup {
+                item.perspectives.push(perspective.clone());
+            }
+            dup
+        } else if let Some(rel) = self.relationship_mut(id) {
+            let dup = rel.perspectives.iter().any(|p| p.name == perspective.name);
+            if !dup {
+                rel.perspectives.push(perspective.clone());
+            }
+            dup
+        } else {
+            return Err(CoreError::ElementNotFound { id: id.clone() });
+        };
+        if duplicate {
+            return Err(CoreError::DuplicatePerspective {
+                name: perspective.name,
+            });
+        }
+        Ok(())
     }
 
     /// Set the optional URL of an element or relationship.
@@ -934,16 +1825,43 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
+    /// `technology <technology>` for relationships — the
+    /// `RelationshipsParser` fan-out arm (reference `Relationship.setTechnology`).
+    pub fn set_relationship_technology(
+        &mut self,
+        id: &Id,
+        technology: &str,
+    ) -> Result<(), CoreError> {
+        if let Some(rel) = self.relationship_mut(id) {
+            rel.technology = Some(technology.to_string());
+            return Ok(());
+        }
+        Err(CoreError::ElementNotFound { id: id.clone() })
+    }
+
+    /// `instances <number|range>` — `DeploymentNode.setInstances`: the
+    /// reference stores the RAW string (numbers and ranges alike), no
+    /// validation.
+    pub fn set_instances(&mut self, id: &Id, instances: &str) -> Result<(), CoreError> {
+        match self.element_mut(id) {
+            Some(ElementMut::Node(n)) => {
+                n.instances = instances.to_string();
+                Ok(())
+            }
+            _ => Err(CoreError::ElementNotFound { id: id.clone() }),
+        }
+    }
+
     /// `tags "a,b"` — ADD tags (reference `addTags`, trimmed, first position).
     pub fn add_tags(&mut self, id: &Id, csv: &str) -> Result<(), CoreError> {
         if let Some(item) = self.item_mut(id) {
-            for t in csv.split(',') {
+            for t in java_split_csv(csv) {
                 item.tags.add(t);
             }
             return Ok(());
         }
         if let Some(rel) = self.relationship_mut(id) {
-            for t in csv.split(',') {
+            for t in java_split_csv(csv) {
                 rel.tags.add(t);
             }
             return Ok(());
@@ -1240,35 +2158,30 @@ impl WorkspaceBuilder {
         item.description = filter_default(description);
         if let Some(csv) = tags_csv {
             // DSL path: `addTags(tags.split(","))` — trimmed adds.
-            for t in csv.split(',') {
+            for t in java_split_csv(csv) {
                 item.tags.add(t);
             }
         }
         item
     }
 
-    fn check_top_level_name(&self, name: &str) -> Result<(), CoreError> {
-        let taken = self
-            .workspace
-            .model
-            .people
-            .iter()
-            .map(|p| p.item.name.as_str())
-            .chain(
-                self.workspace
-                    .model
-                    .software_systems
-                    .iter()
-                    .map(|s| s.item.name.as_str()),
-            )
-            .chain(
-                self.workspace
-                    .model
-                    .custom_elements
-                    .iter()
-                    .map(|c| c.item.name.as_str()),
-            )
-            .any(|n| n == name);
+    /// `Model.addPerson`/`addSoftwareSystem`/`addCustomElement` duplicate
+    /// guard — verified @ `ad34036`: the lookup (`getPersonWithName`, …)
+    /// covers ONLY the same kind, so a person and a software system MAY
+    /// share a name (all three methods throw the same text).
+    fn check_top_level_name(
+        &self,
+        name: &str,
+        kind: crate::validate::ElementKind,
+    ) -> Result<(), CoreError> {
+        use crate::validate::ElementKind as K;
+        let model = &self.workspace.model;
+        let taken = match kind {
+            K::Person => model.people.iter().any(|p| p.item.name == name),
+            K::SoftwareSystem => model.software_systems.iter().any(|s| s.item.name == name),
+            K::CustomElement => model.custom_elements.iter().any(|c| c.item.name == name),
+            _ => false,
+        };
         if taken {
             return Err(CoreError::DuplicateTopLevelName {
                 name: name.to_string(),
@@ -1562,6 +2475,22 @@ impl ElementMut<'_> {
         }
     }
 
+    /// `GroupableElement.getGroup()` — the stored group name.
+    #[must_use]
+    pub fn group(&self) -> Option<&str> {
+        match self {
+            ElementMut::Person(p) => p.group.as_deref(),
+            ElementMut::System(s) => s.group.as_deref(),
+            ElementMut::Container(c) => c.group.as_deref(),
+            ElementMut::Component(c) => c.group.as_deref(),
+            ElementMut::Custom(c) => c.group.as_deref(),
+            ElementMut::Node(n) => n.group.as_deref(),
+            ElementMut::Infra(i) => i.group.as_deref(),
+            ElementMut::Ssi(s) => s.group.as_deref(),
+            ElementMut::Ci(c) => c.group.as_deref(),
+        }
+    }
+
     /// Set the technology (no-op on kinds without one).
     pub fn set_technology(&mut self, technology: Option<String>) {
         match self {
@@ -1572,12 +2501,47 @@ impl ElementMut<'_> {
             _ => {}
         }
     }
+
+    /// Set the custom-element `metadata` string (`CustomElementParser`).
+    pub fn set_metadata(&mut self, metadata: Option<String>) {
+        if let ElementMut::Custom(c) = self {
+            c.metadata = metadata;
+        }
+    }
 }
 
 /// DSL convention: the reference passes `""` for omitted positional args, and
 /// empty descriptions are stored as null (`NON_EMPTY` on write).
 fn filter_default(value: Option<String>) -> Option<String> {
     value.filter(|v| !v.is_empty())
+}
+
+/// Java `String.split(",")` (limit 0): an EMPTY input yields `[""]`;
+/// otherwise all TRAILING empty parts are dropped (leading/middle empties
+/// survive, and `","` splits to the empty array). Tag parts are then added
+/// via [`crate::tags::Tags::add`] which trims — so `tags "a, ,"` stores
+/// `["a", ""]` exactly like the reference.
+pub(crate) fn java_split_csv(s: &str) -> Vec<&str> {
+    if s.is_empty() {
+        return vec![""];
+    }
+    let parts: Vec<&str> = s.split(',').collect();
+    let end = parts
+        .iter()
+        .rposition(|p| !p.is_empty())
+        .map_or(0, |i| i + 1);
+    parts[..end].to_vec()
+}
+
+/// Model id ordering matching Java's `Model.getElements()` /
+/// `getRelationships()` iteration: ids come from one sequential counter, so
+/// creation order is ascending numeric id order. Non-numeric ids (JSON
+/// loads) sort last, lexicographically.
+pub(crate) fn id_sort_key(s: &str) -> (u64, String) {
+    match s.parse::<u64>() {
+        Ok(n) => (n, String::new()),
+        Err(_) => (u64::MAX, s.to_string()),
+    }
 }
 
 /// Kinds eligible for implied relationships (`Model.addRelationship`'s
@@ -1833,9 +2797,45 @@ mod tests {
     }
 
     #[test]
-    fn top_level_names_are_one_namespace() {
+    fn dsl_uses_gates_duplicates_on_destination_plus_description() {
+        // `AbstractRelationshipParser.createRelationship` + `Element.has`:
+        // the duplicate throw fires only when the core add returns null —
+        // same destination AND same description. Same pair with a different
+        // description ADDS (`filteredviews.dsl`,
+        // `dynamic-view-with-explicit-relationships.dsl`).
+        let mut b = WorkspaceBuilder::new();
+        let a = b.add_software_system("A", None, None).unwrap();
+        let c = b.add_software_system("B", None, None).unwrap();
+        b.dsl_uses(&a, &c, Some("Sync".into()), None).unwrap();
+        b.dsl_uses(&a, &c, Some("Async".into()), None).unwrap();
+        assert_eq!(b.build().model.relationships.len(), 2);
+
+        let mut b = WorkspaceBuilder::new();
+        let a = b.add_software_system("A", None, None).unwrap();
+        let c = b.add_software_system("B", None, None).unwrap();
+        b.dsl_uses(&a, &c, Some("Sync".into()), None).unwrap();
+        assert_eq!(
+            b.dsl_uses(&a, &c, Some("Sync".into()), None),
+            Err(CoreError::DuplicateRelationship {
+                source: "SoftwareSystem://A".into(),
+                destination: "SoftwareSystem://B".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn top_level_names_are_per_kind_namespaces() {
+        // Verified @ ad34036: `Model.addPerson`/`addSoftwareSystem`/
+        // `addCustomElement` each guard ONLY against a same-kind collision
+        // (getPersonWithName, …), all throwing the same text.
         let mut b = WorkspaceBuilder::new();
         b.add_software_system("Dup", None, None).unwrap();
+        assert_eq!(
+            b.add_software_system("Dup", None, None),
+            Err(CoreError::DuplicateTopLevelName { name: "Dup".into() })
+        );
+        b.add_person("Dup", None, None).unwrap();
+        b.add_custom_element("Dup", None, None).unwrap();
         assert_eq!(
             b.add_person("Dup", None, None),
             Err(CoreError::DuplicateTopLevelName { name: "Dup".into() })

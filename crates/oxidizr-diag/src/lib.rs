@@ -161,6 +161,10 @@ pub mod codes {
 
     /// `"<X>" is not valid here` — unknown token in this scope (+ did-you-mean).
     pub const UNEXPECTED_TOKEN: Code = Code::new(2001);
+    /// Statement rejected — the reference message travels verbatim (M4).
+    pub const STATEMENT: Code = Code::new(2002);
+    /// Unterminated block: `Unexpected end of DSL content …` (M4).
+    pub const UNEXPECTED_EOF: Code = Code::new(2003);
     /// Unterminated quoted token at end of line (bug-compat: the reference does not
     /// error here; reserved for `--strict`-style linting, unused by default).
     pub const LEXER_UNTERMINATED_QUOTED: Code = Code::new(1001);
@@ -171,6 +175,12 @@ pub mod codes {
     pub const JVM_ONLY: Code = Code::new(5002);
     /// `!docs`/`!adrs` parsed; importers arrive in Phase 4 (D7, retired by P4-D13).
     pub const DOCS_DEFERRED: Code = Code::new(5003);
+    /// `workspace extends` parsed; the base-workspace loader arrives in M5 (D9).
+    pub const EXTENDS_DEFERRED: Code = Code::new(5004);
+    /// Server-side import deferred: file-based theme inlining and the
+    /// raster/plantuml/mermaid/kroki image-view importers need the
+    /// `structurizr-import` stack (D11).
+    pub const IMPORT_DEFERRED: Code = Code::new(5005);
     /// Too many errors: collection aborted at the cap (9xxx internal).
     pub const TOO_MANY_ERRORS: Code = Code::new(9001);
 }

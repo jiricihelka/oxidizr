@@ -12,8 +12,9 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M1 ast+lexer | **done 2026-11-14** |
 | P1 | M2 core model + validation | **done 2026-11-14** |
 | P1 | M3a write catalog (P1-D6) | **done 2026-11-14** (commit 7848c5e) |
-| P1 | M3b json writer + reader | **done 2026-11-14** (this commit) |
-| P1 | M4 … M7 | M4 (`dsl` parser+builder) next, rest pending |
+| P1 | M3b json writer + reader | **done 2026-11-14** (commit 0e77dc2) |
+| P1 | M4 dsl parser + builder | **done 2026-11-15** (this commit) |
+| P1 | M5 … M7 | M5 (directives) next, rest pending |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -92,6 +93,67 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   theme URLs are fetched during PNG/SVG export only, not `--format json`.
 
 ## Milestone log
+
+### P1-M4 — `oxidizr-dsl` engine: model + views + styles + deployment + dynamic ✅ (2026-11-15)
+
+- The engine (`crates/oxidizr-dsl/src/engine/`) is a faithful port of the
+  reference single-pass parser: per logical line → tokenize → `${}`-substitute
+  → `id =` strip → the ordered `else if` chain over the context stack. The arm
+  ORDER is the compatibility contract — every arm carries its
+  `StructurizrDslParser.java` line number (@ `ad34036`); D1 per-line error
+  recovery truncates the failing line's token tail and keeps parsing.
+- Lint policy for the port: mechanical lints get real fixes (`strip_prefix`,
+  let-else, `clamp`, merged arms, …); faithful-port shapes get justified
+  `#[allow]`s (`too_many_lines` on the chain sections and the per-context
+  permitted-token tables, `match_same_arms` where distinct reference classes
+  collapse, the `tok.rs` keyword table kept whole for M5+). Workspace-wide
+  `cargo clippy --workspace --all-targets -- -D warnings` is clean.
+- **Burn-in harness**: `crates/oxidizr-dsl/tests/m4_fixtures.rs` walks every
+  `.dsl` under `testdata/dsl` (107 files); each must parse CLEAN or match the
+  `KNOWN_ERRORS` register (first-error OXZ code + message prefix), checked in
+  BOTH directions so retired deferrals must be pruned here. 58 clean +
+  48 registered: 11×OXZ-5004 `workspace extends` (retires at M5), 4×OXZ-5003
+  D7 docs/ADRs (P4), 3×OXZ-5005 D11 plantuml imports (P4), 2×OXZ-5001 D5 URLs,
+  8×OXZ-5002 D2/D10 JVM rejections, 12 reference-asserted failures with pinned
+  messages (`DslTests.java`), 7 include/extends component files, and
+  `image-view.dsl` (corpus vendors no `image.png`). `iso-8859.dsl` has its own
+  Latin-1 test mirroring `test_ISO8859Encoding` (`Namé` loads).
+- Bugs the burn-in caught (fixed + unit-pinned):
+  1. `WorkspaceBuilder::dsl_uses` rejected ANY second relationship between the
+     same pair. Reference: `uses()` returns null (→ the "already exists"
+     throw) only on same destination AND same description — different
+     descriptions add fine (`filteredviews`, `bulk-operations`,
+     `dynamic-view-with-explicit-relationships`).
+  2. `!element <deploymentEnvironment> {` opened no context. The DSL-package
+     `DeploymentEnvironment extends Element` shim registers under the `de =`
+     identifier and the finder ladder pushes a fresh
+     `DeploymentEnvironmentDslContext(name)` (`deployment-environment-empty`).
+- Reference-quirk errata, each verified against Java @ `ad34036` and pinned by
+  engine tests (all byte-compatible with the reference; NOT deviations):
+  - view-definition / `animation` / `terminology` arms push their context
+    UNCONDITIONALLY (a no-`{` definition still swallows following lines).
+  - `endParallelSequence(!relationships)` (`DynamicViewParallelSequenceDslContext
+    .end()`): a NON-empty parallel block DISCARDS the child counter — the next
+    top-level step reuses the number (orders `["1","2","2"]`); an empty block
+    burns one number instead.
+  - a `dynamic <system>` view can NOT add the scope system itself
+    ("`X is already the scope of this view and cannot be added to it.`");
+    unscoped `dynamic *` steps accept only Person/SoftwareSystem; pair steps
+    require an EXISTING model relationship.
+  - explicit `N:` step orders burn one sequence number (the next implicit step
+    continues from the counter, not from `N`).
+  - `a -> b {` inside a dynamic view consumes `{` as the description
+    (JSON: `"description": "{"`).
+  - svg content inside `light { }`/`dark { }` blocks stores PLAIN `content`
+    (the reference never fills `contentLight`/`contentDark` from the DSL).
+  - `theme <file>` and `image <file>` file branches need a file-based parse
+    (`ParseOptions::file*`); against a fragment the reference NPEs and we emit
+    the same failure path.
+  - `terminology relationship Connects to` stores `tokens.get(1)` verbatim —
+    the unquoted second word is dropped (`Connects to` → `Connects`).
+  - `InstalledThemes` is app-layer: `theme <name>` stores the name verbatim;
+    the file-branch existence check is reference-exact (`Theme X does not
+    exist at <dir>/X`).
 
 ### P1-M3b — `oxidizr-json`: byte-parity writer + lenient reader ✅ (2026-11-14)
 

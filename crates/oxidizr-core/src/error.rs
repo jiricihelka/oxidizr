@@ -28,15 +28,11 @@ pub enum CoreError {
     DuplicateContainerName {
         /// The colliding name.
         name: String,
-        /// Parent software system name.
-        system: String,
     },
     /// Component name collision within its container.
     DuplicateComponentName {
         /// The colliding name.
         name: String,
-        /// Parent container name.
-        container: String,
     },
     /// Top-level deployment node name collision within one environment.
     DuplicateDeploymentNodeName {
@@ -88,6 +84,22 @@ pub enum CoreError {
         /// The unknown id.
         id: Id,
     },
+    /// A deployment element (software-system / container instance) id did
+    /// not resolve.
+    InstanceNotFound {
+        /// The unknown id.
+        id: Id,
+    },
+    /// Reference `IllegalArgumentException("A deployment group name must be
+    /// specified.")` — `DeploymentNode.addDeploymentGroup`.
+    DeploymentGroupNameRequired,
+    /// `StaticStructureElementInstance.addHealthCheck` rejections — the
+    /// variant payload is the reference `IllegalArgumentException` message
+    /// verbatim (`The name must not be null or empty.`, `The URL must not be
+    /// null or empty.`, `X is not a valid URL.`, `The polling interval must
+    /// be zero or a positive integer.`, `The timeout must be zero or a
+    /// positive integer.`).
+    HealthCheckInvalid(String),
     /// `Model.addRelationship` returned null (reference `Element.has` matches
     /// source+destination+description) — the DSL layer turns this into
     /// `A relationship between "A" and "B" already exists` (canonical names).
@@ -100,6 +112,24 @@ pub enum CoreError {
     /// Reference `IllegalArgumentException("Relationships cannot be added
     /// between parents and children.")` in `Model.addRelationship`.
     ParentChildRelationship,
+    /// Reference `IllegalArgumentException("Perspective name must be
+    /// specified")` — `Perspective.setName` (the 3-arg `addPerspective` path).
+    PerspectiveNameRequired,
+    /// Reference `IllegalArgumentException("A perspective named \"X\"
+    /// already exists.")` — `ModelItem.addPerspective` duplicate guard.
+    DuplicatePerspective {
+        /// Perspective name.
+        name: String,
+    },
+    /// `AbstractRelationshipParser.createRelationship` fell through its
+    /// instanceof ladder — reference
+    /// `A relationship between "A" and "B" is not permitted`.
+    RelationshipPairNotPermitted {
+        /// Canonical name of the source element.
+        source: String,
+        /// Canonical name of the destination element.
+        destination: String,
+    },
     /// Reference `ElementNotPermittedInViewException` — message texts are the
     /// reference strings verbatim (the DSL content parsers CATCH this one).
     ElementNotPermittedInView(String),
@@ -133,13 +163,13 @@ impl fmt::Display for CoreError {
             CoreError::DuplicateTopLevelName { name } => {
                 write!(f, "A top-level element named '{name}' already exists.")
             }
-            CoreError::DuplicateContainerName { name, system } => write!(
+            CoreError::DuplicateContainerName { name, .. } => write!(
                 f,
-                "A container named '{name}' already exists for this software system (in '{system}')."
+                "A container named '{name}' already exists for this software system."
             ),
-            CoreError::DuplicateComponentName { name, container } => write!(
+            CoreError::DuplicateComponentName { name, .. } => write!(
                 f,
-                "A component named '{name}' already exists for this container (in '{container}')."
+                "A component named '{name}' already exists for this container."
             ),
             CoreError::DuplicateDeploymentNodeName { name, environment } => write!(
                 f,
@@ -170,6 +200,13 @@ impl fmt::Display for CoreError {
             CoreError::DeploymentNodeNotFound { id } => {
                 write!(f, "There is no deployment node with the ID \"{id}\".")
             }
+            CoreError::InstanceNotFound { id } => {
+                write!(f, "There is no element instance with the ID \"{id}\".")
+            }
+            CoreError::DeploymentGroupNameRequired => {
+                write!(f, "A deployment group name must be specified.")
+            }
+            CoreError::HealthCheckInvalid(message) => write!(f, "{message}"),
             CoreError::DuplicateRelationship {
                 source,
                 destination,
@@ -180,6 +217,17 @@ impl fmt::Display for CoreError {
             CoreError::ParentChildRelationship => {
                 f.write_str("Relationships cannot be added between parents and children.")
             }
+            CoreError::PerspectiveNameRequired => f.write_str("Perspective name must be specified"),
+            CoreError::DuplicatePerspective { name } => {
+                write!(f, "A perspective named \"{name}\" already exists.")
+            }
+            CoreError::RelationshipPairNotPermitted {
+                source,
+                destination,
+            } => write!(
+                f,
+                "A relationship between \"{source}\" and \"{destination}\" is not permitted"
+            ),
             CoreError::ElementNotPermittedInView(msg) => f.write_str(msg),
             CoreError::ElementCannotBeRemoved { name } => write!(
                 f,

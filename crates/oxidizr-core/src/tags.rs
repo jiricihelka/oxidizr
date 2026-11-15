@@ -53,6 +53,23 @@ pub enum TagKind {
 }
 
 impl TagKind {
+    /// The default-tag stack for a model element kind.
+    #[must_use]
+    pub const fn from_element_kind(kind: crate::validate::ElementKind) -> Self {
+        use crate::validate::ElementKind as K;
+        match kind {
+            K::CustomElement => TagKind::CustomElement,
+            K::Person => TagKind::Person,
+            K::SoftwareSystem => TagKind::SoftwareSystem,
+            K::Container => TagKind::Container,
+            K::Component => TagKind::Component,
+            K::DeploymentNode => TagKind::DeploymentNode,
+            K::InfrastructureNode => TagKind::InfrastructureNode,
+            K::SoftwareSystemInstance => TagKind::SoftwareSystemInstance,
+            K::ContainerInstance => TagKind::ContainerInstance,
+        }
+    }
+
     /// The reference `getDefaultTags()` stack, in serialization order.
     #[must_use]
     pub const fn default_tags(self) -> &'static [&'static str] {

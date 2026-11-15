@@ -18,7 +18,11 @@ after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxi
 
 | Code | Severity | Message shape | Notes |
 |---|---|---|---|
-| `OXZ-2001` | Error | `"<X>" is not valid here` | unknown token in scope context + "did you mean" from permitted set (reserved, lands with M4) |
+| `OXZ-2001` | Error | `Unexpected tokens (expected: …)` | token rejected by the context's permitted set / unexpected identifier, inside the statement engine |
+| `OXZ-2002` | Error | reference statement message | any statement rejected by the faithful reference port (grammar, unknown identifier, duplicate name, …) — the reference text travels verbatim |
+| `OXZ-2003` | Error | `Unexpected end of DSL content - are one or more closing curly braces missing?` | unclosed context at EOF |
 | `OXZ-5001` | Error | network disabled | `!include <url>` / `workspace extends <url>` / theme URL fetch without `--allow-net` (D5; flag ships P2) |
 | `OXZ-5002` | Error | JVM-only directive not supported | `!script`, `!plugin`, `!components`, `!impliedRelationships <fqcn>` (D2) |
 | `OXZ-5003` | Error | documentation import arrives in Phase 4 | `!docs`/`!adrs` statement parsed, importer deferred (D7, retired by P4-D13) |
+| `OXZ-5004` | Error | `workspace extends` arrives in M5 | extends statement parsed with reference guards; base-workspace loader deferred (D9, retired at M5) |
+| `OXZ-5005` | Error | import arrives in Phase 4 | `plantuml`/`mermaid`/`kroki` render branches and `theme <file>` content load parsed, importer deferred (D11, retired by P4); raster `image <file>` stays OXZ-5002 (D10) |

@@ -30,7 +30,10 @@ reference pretty-printer emits.
 ## Deferred fixtures (D7 — `!docs`/`!adrs`, excluded from P1–P3 parse/golden gates)
 
 These fixtures parse-statement-form only until the importers land in Phase 4 (P4-D13);
-loading them yields OXZ-5003. P4 retires this list.
+loading them yields OXZ-5003. P4 retires this list. The machine-readable corpus
+classification (every corpus file: clean or registered first-error + code) is the
+`KNOWN_ERRORS` register in `crates/oxidizr-dsl/tests/m4_fixtures.rs` — entries are
+retired there as the milestones land (M5 extends, P4 importers/renderers).
 
 - `dsl/big-bank-plc/model/internet-banking-system/details.dsl`
 - `dsl/decisions/workspace.dsl`

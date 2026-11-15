@@ -58,7 +58,10 @@ impl WorkspaceBuilder {
     // accessors
     // ------------------------------------------------------------------
 
-    pub(crate) fn content_ref(&self, view: ViewRef) -> Option<&crate::views::ViewContent> {
+    /// The content of any model-view kind (`Filtered`/`Image` have none —
+    /// the reference has no `ModelView` object for them).
+    #[must_use]
+    pub fn content_ref(&self, view: ViewRef) -> Option<&crate::views::ViewContent> {
         let views = &self.workspace().views;
         match view {
             ViewRef::Landscape(i) => views.system_landscape_views.get(i).map(|v| &v.content),
@@ -72,7 +75,10 @@ impl WorkspaceBuilder {
         }
     }
 
-    fn content_mut(&mut self, view: ViewRef) -> Option<&mut crate::views::ViewContent> {
+    /// Mutable content; public for the DSL engine's relationship-view
+    /// property/url statements (everything else goes through the
+    /// content-operations below).
+    pub fn content_mut(&mut self, view: ViewRef) -> Option<&mut crate::views::ViewContent> {
         let views = &mut self.workspace_mut().views;
         match view {
             ViewRef::Landscape(i) => views
@@ -491,7 +497,8 @@ impl WorkspaceBuilder {
     }
 
     /// The `environment` of a deployment element.
-    fn element_environment(&self, id: &Id) -> Option<String> {
+    #[must_use]
+    pub fn element_environment(&self, id: &Id) -> Option<String> {
         let nodes = crate::builder::flatten_nodes(&self.workspace().model.deployment_nodes);
         for (node, _) in &nodes {
             if &node.item.id == id {
@@ -1048,16 +1055,19 @@ impl WorkspaceBuilder {
     /// `<relationshipIdentifier> [description]` step form. The step number
     /// (`order`) comes from the DSL engine's `SequenceNumber` mirror.
     ///
-    /// Reference quirk preserved: re-adding a relationship already in the
-    /// view keeps the FIRST step's description/order/response (the new
-    /// `RelationshipView` loses the `TreeSet.add`).
+    /// Every successful add INSERTS: the reference `TreeSet` is keyed by
+    /// `getId() + "/" + getOrder()` (`RelationshipView.compareTo`), so a
+    /// re-add with a fresh sequence order is a NEW entry — duplicate
+    /// relationship ids inside one dynamic view are the whole point of the
+    /// step form. The `description` is stored verbatim (the DSL parser
+    /// passes `""` when absent; the JSON writer omits empties).
     pub fn dynamic_add_relationship(
         &mut self,
         view: ViewRef,
         relationship: &Id,
         description: &str,
         order: &str,
-    ) -> Result<(), CoreError> {
+    ) -> Result<Id, CoreError> {
         let (source, destination) = self
             .workspace()
             .model
@@ -1073,12 +1083,9 @@ impl WorkspaceBuilder {
         self.view_add_element(view, &source, false)?;
         self.view_add_element(view, &destination, false)?;
         let content = expect_content(self.content_mut(view));
-        if content.relationships.iter().any(|r| &r.id == relationship) {
-            return Ok(());
-        }
         content.relationships.push(RelationshipView {
             id: relationship.clone(),
-            description: (!description.is_empty()).then(|| description.to_string()),
+            description: Some(description.to_string()),
             url: None,
             order: Some(order.to_string()),
             response: Some(false),
@@ -1088,7 +1095,7 @@ impl WorkspaceBuilder {
             jump: None,
             position: None,
         });
-        Ok(())
+        Ok(relationship.clone())
     }
 
     /// `DynamicView.addRelationshipViaElements` — the
@@ -1098,6 +1105,9 @@ impl WorkspaceBuilder {
     /// any source→destination relationship; with a technology it's an exact
     /// technology match. A reverse relationship ALREADY IN THE VIEW is added
     /// as `response: true`; otherwise [`CoreError::DynamicRelationshipMissing`].
+    /// Like [`Self::dynamic_add_relationship`] every successful add INSERTS
+    /// (the reference `TreeSet` is keyed by id AND order), and the resolved
+    /// relationship id is returned.
     pub fn dynamic_add_element_pair(
         &mut self,
         view: ViewRef,
@@ -1106,7 +1116,7 @@ impl WorkspaceBuilder {
         technology: &str,
         destination: &Id,
         order: &str,
-    ) -> Result<(), CoreError> {
+    ) -> Result<Id, CoreError> {
         self.check_element_can_be_added(view, source)?;
         self.check_element_can_be_added(view, destination)?;
         let rels: Vec<RelInfo> = self
@@ -1163,21 +1173,19 @@ impl WorkspaceBuilder {
         self.view_add_element(view, source, false)?;
         self.view_add_element(view, destination, false)?;
         let content = expect_content(self.content_mut(view));
-        if !content.relationships.iter().any(|r| r.id == rel_id) {
-            content.relationships.push(RelationshipView {
-                id: rel_id,
-                description: (!description.is_empty()).then(|| description.to_string()),
-                url: None,
-                order: Some(order.to_string()),
-                response: Some(response),
-                properties: crate::properties::Properties::new(),
-                vertices: Vec::new(),
-                routing: None,
-                jump: None,
-                position: None,
-            });
-        }
-        Ok(())
+        content.relationships.push(RelationshipView {
+            id: rel_id.clone(),
+            description: Some(description.to_string()),
+            url: None,
+            order: Some(order.to_string()),
+            response: Some(response),
+            properties: crate::properties::Properties::new(),
+            vertices: Vec::new(),
+            routing: None,
+            jump: None,
+            position: None,
+        });
+        Ok(rel_id)
     }
 
     /// The key of a view slot (for diagnostics and `filtered` bases).
@@ -1208,6 +1216,37 @@ impl WorkspaceBuilder {
             | ViewRef::Filtered(i)
             | ViewRef::Image(i)
             | ViewRef::Custom(i) => base(i).unwrap_or_default(),
+        }
+    }
+
+    /// `ImageView.hasContent()` — any of the three content fields is
+    /// non-blank (`StringUtils.isNullOrEmpty` TRIMS, so `" "` is empty).
+    #[must_use]
+    pub fn image_has_content(&self, view: ViewRef) -> bool {
+        let ViewRef::Image(i) = view else {
+            return true;
+        };
+        let Some(v) = self.workspace().views.image_views.get(i) else {
+            return true;
+        };
+        let filled = |s: &Option<String>| s.as_deref().is_some_and(|s| !s.trim().is_empty());
+        filled(&v.content) || filled(&v.content_light) || filled(&v.content_dark)
+    }
+
+    /// The mutable [`ViewBase`](crate::views::ViewBase) of a view (title /
+    /// description / auto-layout / properties statements).
+    pub fn view_base_mut(&mut self, view: ViewRef) -> Option<&mut crate::views::ViewBase> {
+        let views = &mut self.workspace_mut().views;
+        match view {
+            ViewRef::Landscape(i) => views.system_landscape_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Context(i) => views.system_context_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Container(i) => views.container_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Component(i) => views.component_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Dynamic(i) => views.dynamic_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Deployment(i) => views.deployment_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Filtered(i) => views.filtered_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Image(i) => views.image_views.get_mut(i).map(|v| &mut v.base),
+            ViewRef::Custom(i) => views.custom_views.get_mut(i).map(|v| &mut v.base),
         }
     }
 
@@ -1292,12 +1331,14 @@ fn find_rel(
 /// Technology-filtered lookup with the reference's no-break loop: the LAST
 /// source→destination relationship with exactly this technology wins.
 fn find_rel_last(rels: &[RelInfo], from: &Id, to: &Id, technology: &str) -> Option<Id> {
-    rels.iter().rev().find(|r| {
-        &r.source == from
-            && &r.destination == to
-            && r.technology.as_deref().unwrap_or("") == technology
-    })
-    .map(|r| r.id.clone())
+    rels.iter()
+        .rev()
+        .find(|r| {
+            &r.source == from
+                && &r.destination == to
+                && r.technology.as_deref().unwrap_or("") == technology
+        })
+        .map(|r| r.id.clone())
 }
 
 /// `View.addRelationship` insertion without the in-view check (callers
@@ -1753,15 +1794,18 @@ mod tests {
             err.to_string(),
             "A relationship between S and P does not exist in model."
         );
-        // once "Uses" itself is in the view the reverse step resolves to it,
-        // but the existing RelationshipView keeps its first order (TreeSet).
+        // once "Uses" itself is in the view the reverse step resolves to it;
+        // every successful add INSERTS (the reference TreeSet is keyed by
+        // id AND order, so the response step becomes its own entry).
         b.dynamic_add_relationship(v, &uses, "", "3").unwrap();
         b.dynamic_add_element_pair(v, &s, "", "", &p, "4").unwrap();
         {
             let rvs = &b.workspace().views.dynamic_views[0].content.relationships;
-            assert_eq!(rvs.len(), 2, "Sees + Uses");
-            let uses_rv = rvs.iter().find(|r| r.id == uses).unwrap();
-            assert_eq!(uses_rv.order.as_deref(), Some("3"), "first order wins");
+            assert_eq!(rvs.len(), 3, "Sees + Uses + Uses response");
+            let response = rvs.last().unwrap();
+            assert_eq!(response.id, uses);
+            assert_eq!(response.order.as_deref(), Some("4"));
+            assert_eq!(response.response, Some(true));
         }
         // missing relationships (both message variants)
         let s2 = b.add_software_system("S2", None, None).unwrap();

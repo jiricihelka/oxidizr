@@ -119,6 +119,65 @@ as a tombstone so old references keep resolving.
 - Nature: bounded unreachable-in-practice divergence, discovered while writing the M3
   write catalog (2026-11-14); a property test pins the emulator for all normal maps.
 
+## D9 — `workspace extends` deferred to M5 (temporary, lands mid-M4)
+
+- Structurizr: `workspace extends <file|url>` loads the BASE workspace (DSL or JSON)
+  and the extending file then ADDS to it (`WorkspaceParser.parse` → nested parser +
+  `configureFrom`; for file bases the base's `structurizr.dsl` source is cleared —
+  `DslUtils.clearDsl` — and the workspace becomes non-portable).
+- oxidizr (2026-11-14, mid-M4 engine port): the statement parses through the
+  reference's exact guards and grammar texts (`Too many tokens, expected: workspace
+  [name] [description] or workspace extends <file|url>`, `Expected: workspace extends
+  <file|url>`), but loading the base reports OXZ-5004 "workspace extends arrives in
+  M5" instead of silently ignoring it. The loader (file-only DSL+JSON base,
+  identifier re-registration, `clearDsl` + portable=false) is the `PHASE_1.md` M5
+  line item; extends-using fixtures stay out of the parse gates until then.
+- Nature: sequencing deviation fully retired at M5 — `workspace` arms otherwise
+  (name/description/`model`) are delivered in M4; nothing silently diverges, the
+  error is loud by design.
+
+## D10 — `icon <file>`: SVG files portable, raster files rejected (permanent, JVM codec)
+
+- Structurizr: element-style `icon <file>` embeds the image as a data URI via
+  `ImageUtils.getImageAsDataUri`: SVG files are base64 of the raw bytes, but
+  PNG/JPG/JPEG/GIF go through **`javax.imageio` decode + re-encode** — the
+  embedded base64 is Java's PNG/JPEG encoder output, byte-for-byte, not the
+  original file. Reproducing that byte-exactly from pure Rust std is out of
+  scope (JPEG re-encode is lossy and encoder-specific).
+- oxidizr (2026-11-14, M4 styles port): `icon` accepts data URIs and
+  http(s) URLs (stored verbatim — the reference only *validates* URL icons, it
+  never fetches them), and **SVG files** (raw-bytes base64 + `dslPortable=false`,
+  byte-identical). PNG/JPG/GIF files are rejected with OXZ-5002 naming the
+  `data:` URI fallback — never embedded as raw bytes, which would silently
+  change the golden JSON. Reference fixtures using raster `icon <file>`
+  (`dsl/test.dsl`) stay excluded from the parse/golden gates until the error is
+  tolerated there.
+- Nature: permanent portability deviation (std-only, §Code quality); the
+  workarounds (paste the data URI, or use SVG) are byte-compatible with the
+  reference for everything except Java's re-encoded raster bytes, which we
+  refuse to fake.
+
+## D11 — Diagram/theme file imports deferred; raster `image <file>` rejected
+
+- Structurizr: inside an image view, `plantuml`/`mermaid`/`kroki` render the
+  diagram **at load time** (source text, file, URL, or the PlantUML export of a
+  referenced `viewKey`) and embed the result as a data URI; `theme <file|url>`
+  loads theme content from disk/network; raster `image <file>` goes through the
+  JVM image codecs (D10 rationale).
+- oxidizr (2026-11-15, M4 views port): all statement forms parse with the
+  reference's exact grammar/error texts (`Expected: plantuml <source|file|url|viewKey>`,
+  `Expected: kroki <format> <source|file|url>`, …); URL branches emit OXZ-5001
+  (D5). The render/load branches (source, file, viewKey, theme file/url) report
+  OXZ-5005 "… arrives in Phase 4 (D11)" — never a silent no-op. Raster
+  `image <file>` is rejected OXZ-5002 (byte-exact Java re-encode is impossible
+  std-only; D10 analog). **SVG** content files are byte-identical (raw-bytes
+  base64 data URI) and fully delivered.
+- Nature: the deferrals retire with the Phase 4 importers (same batch as D7,
+  P4-D13); the raster rejection is permanent for the D10 reason. Bundled-theme
+  name resolution stays out of scope (app-layer `InstalledThemes` feature; the
+  name branch stores the name verbatim and the file-branch existence check is
+  reference-exact).
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact
