@@ -52,7 +52,7 @@ crates/
   with one Info diagnostic per theme; JSON output never changes (fontUrl is stored
   verbatim). Verification item P3-V2 checks reference behavior for parity intent.
 - Window geometry, zoom and theme override persist via **eframe's built-in storage**
-  only — no custom settings file (AGENTS.md CLI/config policy: no config files).
+  only — no custom settings file (agents/plan/WORKFLOW.md §CLI/config policy: no config files).
 
 ## P3-D3 Scene architecture (build once, paint cheap)
 

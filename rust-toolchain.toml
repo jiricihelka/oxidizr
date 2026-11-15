@@ -1,4 +1,4 @@
-# Authoritative nightly pin (AGENTS.md §Toolchain). The flake dev shell provides the
+# Authoritative nightly pin (agents/plan/WORKFLOW.md §Dev environment). The flake dev shell provides the
 # same toolchain (flaked via flake.lock); bump both together at a milestone and
 # re-check NIGHTLY.md stabilization status. rustup channel dates are build dates; the
 # rustc version string shows the previous day's commit (2026-11-13 => 8eb778d04

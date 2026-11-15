@@ -111,7 +111,7 @@ crates/
 - `oxidizr oracle gen|verify [--bin PATH] [paths…]` — golden generation/verification
   for users (CI pipelines of fixture authors), sharing the xtask implementation via a
   lib (`oxidizr-cli/src/oracle/` module; xtask stays a dev shim). Binary discovery
-  reuses AGENTS.md §Testing (`$OXIDZR_STRUCTURIZR_BIN` → PATH); the official binary is
+  reuses agents/plan/TESTING.md (`$OXIDZR_STRUCTURIZR_BIN` → PATH); the official binary is
   an external prerequisite — slow, goldens stay committed, and oxidizr never downloads
   anything (D5).
 - `xtask oracle verify` (CI, Category B job) unchanged; user command adds `--json`
@@ -184,7 +184,7 @@ crates/
   x86_64 windows (msvc; `aarch64-pc-windows-msvc` if cheap) → `.tar.gz`/`.zip` +
   `sha256` + install script on GitHub Releases; **binaries**: `oxidizr`,
   `oxidizr-viewer`, `oxidizr-lsp`.
-- Metadata & publishing: MIT OR Apache-2.0 everywhere (AGENTS.md policy); library
+- Metadata & publishing: MIT OR Apache-2.0 everywhere (agents/plan/WORKFLOW.md license policy); library
   crates published to crates.io alongside the dist binaries (metadata complete since
   P1-M0).
 - Semver from v0.1.0 (P1-M7): compat contract fixes = patch; CLI/JSON-schema additions

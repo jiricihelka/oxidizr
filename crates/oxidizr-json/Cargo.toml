@@ -12,7 +12,7 @@ workspace = true
 [features]
 # Category B (reference-backed) tests: default OFF, skip loudly when the structurizr
 # binary is absent, and `OXIDZR_REFERENCE_STRICT=1` turns a skip into a failure so the
-# dedicated CI job cannot silently lose coverage (AGENTS.md §Testing).
+# dedicated CI job cannot silently lose coverage (agents/plan/TESTING.md).
 default = []
 reference = []
 

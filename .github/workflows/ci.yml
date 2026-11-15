@@ -30,7 +30,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
-    # Category A only (AGENTS.md §Testing): pure Rust, no network/Java, 3-OS matrix.
+    # Category A only (agents/plan/TESTING.md): pure Rust, no network/Java, 3-OS matrix.
     needs: clippy
     strategy:
       fail-fast: false
@@ -44,7 +44,7 @@ jobs:
       - run: cargo test --workspace
 
   bench:
-    # Informational (AGENTS.md §Benchmarks): posts numbers, flags >~10% regressions for
+    # Informational (agents/plan/TESTING.md §Benchmarks): posts numbers, flags >~10% regressions for
     # human review; no auto-fail. Baselines committed under bench-baseline/.
     needs: test
     if: github.event_name != 'pull_request'
@@ -78,7 +78,7 @@ jobs:
       # Runner toolchain comes from rust-toolchain.toml (llvm-tools-preview included).
 
   reference:
-    # Category B (AGENTS.md §Testing): the reference binary is slow, so this runs
+    # Category B (agents/plan/TESTING.md): the reference binary is slow, so this runs
     # weekly / on demand only — never per PR. With the feature enabled a skipped
     # Category B test must FAIL: OXIDZR_REFERENCE_STRICT=1 enforces it.
     needs: test

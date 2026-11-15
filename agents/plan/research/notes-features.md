@@ -257,7 +257,7 @@ Paths below are relative to those repo roots unless stated.
   `fqcn` = custom exporter by fully-qualified class name (`findExporter` reflection fallback `loadClass(format, workspacePath)` — any class implementing `Exporter` on classpath/`-l` lib dir? loadClass resolves FQCN).
   Output naming: `structurizr-<workspaceId>-<viewKey>.<ext>` (`prefix(workspaceId)` → "structurizr-N" or "structurizr" when id≤0); json/theme exports: `<input-basename>.json` / `<basename>-theme.json`.
   Diagram exports call `ThemeUtils.loadThemes(workspace, httpClient)` first (resolves theme URLs incl. relative icon paths → absolute URLs).
-- Docs pages: `structurizr-docs/commands/04-export.md` (format table), `docs/export/` legacy pages (CLI-era) — `docs.structurizr.com/export/cli` referenced by AGENTS.md.
+- Docs pages: `structurizr-docs/commands/04-export.md` (format table), `docs/export/` legacy pages (CLI-era) — `docs.structurizr.com/export/cli` referenced by agents/plan/COMPAT.md.
 
 ## 5. Import (`structurizr-import/src/main/java/com/structurizr/importer/`)
 

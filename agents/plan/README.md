@@ -9,6 +9,9 @@ disagree, the source wins — update the notes.
 | File                          | Contents                                                              | Read when                          |
 | ----------------------------- | --------------------------------------------------------------------- | ---------------------------------- |
 | `README.md` (this file)       | Index, conventions, errata, where the reference sources live           | First, every time                  |
+| `COMPAT.md`                   | The compatibility contract (hard rules) + source-of-truth map          | Before touching behavior/JSON/grammar |
+| `WORKFLOW.md`                 | Commands, dev shell, CLI/config policy, code quality & style           | Working in the repo                |
+| `TESTING.md`                  | Test categories A/B, golden corpus rules, benchmarks                   | Writing tests / regenerating goldens |
 | `FEATURES.md`                 | Structurizr feature inventory: model, DSL, JSON contract, compat traps | Before implementing any feature    |
 | `DSL.md`                      | DSL grammar quick ref: tokens, statement forms, scopes, directives     | Writing/extending the DSL parser   |
 | `JSON-FORMAT.md`              | Field-level JSON reference: keys, writer rules, schema-vs-code drift   | Writing/reading workspace JSON     |

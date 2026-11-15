@@ -1,7 +1,7 @@
 {
   description = "oxidizr — a Rust alternative to Structurizr with full DSL/JSON compatibility";
 
-  # Development environment only (AGENTS.md §Dev environment): CI and end users build
+  # Development environment only (agents/plan/WORKFLOW.md §Dev environment): CI and end users build
   # with plain cargo and must not need nix. This flake pins what P1+ development needs:
   # the nightly Rust toolchain, the pinned `structurizr` reference binary (Category B
   # oracle), and the optional helper binaries the plan discovers on PATH (graphviz for
@@ -10,7 +10,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
-    # Nightly Rust (AGENTS.md §Toolchain), pinned through flake.lock. `rust-toolchain.toml`
+    # Nightly Rust (agents/plan/WORKFLOW.md §Dev environment), pinned through flake.lock. `rust-toolchain.toml`
     # (M0) is the authoritative pin for plain-cargo users; update both in step and
     # re-check for stabilization per NIGHTLY.md at each milestone.
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -23,13 +23,13 @@
       # The reference oracle: the official unified application binary (Spring Boot war,
       # `java -jar structurizr.war export -format json ...`, see
       # https://docs.structurizr.com/binaries). Application release 2026.10.26 bundles
-      # library 6.2.4 = the pinned monorepo commit `ad34036` (AGENTS.md §Source of
+      # library 6.2.4 = the pinned monorepo commit `ad34036` (agents/plan/COMPAT.md §Source of
       # truth). Goldens are generated only via `cargo xtask oracle`; record this version
       # in testdata/README.md when it is created (M0). Requires Java 21 (docs + pom
       # `maven.compiler.release`).
       structurizrVersion = "2026.10.26";
 
-      # Windows CI remains the authority (AGENTS.md §Portability, native runners), but
+      # Windows CI remains the authority (agents/plan/WORKFLOW.md §Code quality, native runners), but
       # on Linux the flake also provides an approximating local leg: windows-gnu
       # cross-compile + Wine test execution (see the dev shell). macOS only ever runs
       # in CI (no darwin cross from Linux).
@@ -132,7 +132,7 @@
               nightly
 
               # The pinned reference oracle on PATH ($OXIDZR_STRUCTURIZR_BIN → PATH
-              # discovery, AGENTS.md §Testing) — plus a JDK to poke at wars by hand.
+              # discovery, agents/plan/TESTING.md) — plus a JDK to poke at wars by hand.
               self.packages.${system}.structurizr
               pkgs.jdk21
 

@@ -1,6 +1,6 @@
 # NIGHTLY.md — nightly toolchain policy & feature register
 
-Policy (AGENTS.md §Code quality guidelines): the toolchain is pinned in
+Policy (agents/plan/WORKFLOW.md §Dev environment / §Code quality): the toolchain is pinned in
 `rust-toolchain.toml`; only reasonably stable nightly features may be used (long
 incubation or an active stabilization path — no specialization-class megafeatures).
 Every usage gets a row below with a one-line rationale, and this file is re-checked

@@ -71,7 +71,7 @@ as a tombstone so old references keep resolving.
   for diagram rendering/export).
 - `--allow-net` is **one global flag** gating all URL input (theme URLs, `!include
   <url>`, `workspace extends <url>`); deliberately **no env var** can enable network
-  (agreed 2026-11-14; policy bundle in AGENTS.md §Dev environment & CLI/config policy).
+  (agreed 2026-11-14; policy bundle in agents/plan/WORKFLOW.md §Dev environment / §CLI/config policy).
 
 ## D6 — Internal quality decisions (no behavioral surface)
 
@@ -152,7 +152,7 @@ as a tombstone so old references keep resolving.
   change the golden JSON. Reference fixtures using raster `icon <file>`
   (`dsl/test.dsl`) stay excluded from the parse/golden gates until the error is
   tolerated there.
-- Nature: permanent portability deviation (std-only, §Code quality); the
+- Nature: permanent portability deviation (std-only, WORKFLOW.md §Code quality); the
   workarounds (paste the data URI, or use SVG) are byte-compatible with the
   reference for everything except Java's re-encoded raster bytes, which we
   refuse to fake.
@@ -189,4 +189,4 @@ NON_EMPTY omission, `color` key, comma-string tags, string ids / numeric workspa
 UTC-Z dates, 2-space indent · lenient JSON reading (unknowns ignored) · default views
 generation only where the reference does it (app layer), never in parser/library.
 
-Anything contradicting this list is fixed by changing oxidizr, per AGENTS.md.
+Anything contradicting this list is fixed by changing oxidizr, per agents/plan/COMPAT.md.

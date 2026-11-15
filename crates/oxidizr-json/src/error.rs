@@ -1,5 +1,5 @@
-//! `thiserror` error type for the JSON boundary (library crate, AGENTS.md
-//! code style; the CLI wraps these in `anyhow`).
+//! `thiserror` error type for the JSON boundary (library crate,
+//! agents/plan/WORKFLOW.md §Code style; the CLI wraps these in `anyhow`).
 
 /// A JSON read/write failure.
 #[derive(Debug, thiserror::Error)]

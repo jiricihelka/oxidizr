@@ -3,7 +3,7 @@
 //!
 //! Exit codes: `0` ok · `1` diagnostics errors (or warnings with `--strict`) ·
 //! `2` usage (clap default) · `3` I/O. `-` means stdin/stdout where a command takes a
-//! file argument. No config files: flags + the documented env family only (AGENTS.md).
+//! file argument. No config files: flags + the documented env family only (agents/plan/WORKFLOW.md §CLI/config policy).
 // P1-M0 skeleton: the full command surface (P1-D8) parses, but the pipeline deps are
 // declared before use (json M3+, dsl M4/M5, miette rendering M6). Remove as they land.
 #![allow(unused_crate_dependencies)]
@@ -15,7 +15,7 @@ use clap::{Parser, Subcommand};
 /// Structurizr-compatible C4 workspace tooling.
 #[derive(Parser, Debug)]
 #[command(name = "oxidizr", version, about, propagate_version = true)]
-// Global flags are the stable P1-D8 CLI surface (AGENTS.md: flags + env only, no
+// Global flags are the stable P1-D8 CLI surface (agents/plan/WORKFLOW.md: flags + env only, no
 // config files) — a bool per flag is the clap idiom, not state to model as enums.
 #[allow(clippy::struct_excessive_bools)]
 pub struct Cli {

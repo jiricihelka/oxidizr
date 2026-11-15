@@ -8,5 +8,5 @@
   `docs(plan):`) with a body that states WHY + verification performed.
 - **Never push** — local commits only unless the user says otherwise.
 - Compatibility failures are fixed in oxidizr, never by editing expectations/goldens
-  (AGENTS.md §Compatibility rules). Goldens regenerate only via `cargo xtask oracle`.
+  (agents/plan/COMPAT.md). Goldens regenerate only via `cargo xtask oracle`.
 - Windows report files land in `agents/plan/reports/` (untracked) — read, fix, leave.

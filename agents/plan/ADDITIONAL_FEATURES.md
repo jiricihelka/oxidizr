@@ -52,7 +52,7 @@ output (Phase 1 flag).
 - Harness commands that run the official `structurizr` application **binary**
   (`$OXIDZR_STRUCTURIZR_BIN` → PATH; pinned version; the nix dev flake provides it) to
   (re)generate golden JSON from fixtures and verify oxidizr output against them; records
-  the tool version used (AGENTS.md testing strategy). The reference tool is slow: runs
+  the tool version used (agents/plan/TESTING.md). The reference tool is slow: runs
   are sparing (goldens committed) and every such test sits behind the default-off
   `reference` feature.
 - Compatibility: development-time only; never a runtime dependency — the default test
@@ -94,7 +94,7 @@ output (Phase 1 flag).
 (Former I1–I4 were agreed on 2026-11-14 and promoted to F5–F8 above; I5 keeps its number
 so old references resolve.)
 
-## Explicitly out of scope (for now, from AGENTS.md)
+## Explicitly out of scope (for now, per PLAN.md §Out of scope)
 
 Diagram exporters (PlantUML/Mermaid/…), server/lite/UI functionality, MCP — these are
 PARITY features deferred by milestones, not additional features; they belong in a future

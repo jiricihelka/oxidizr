@@ -1,7 +1,7 @@
 # Reference test fixtures index (future golden corpus)
 
 All paths relative to the pinned monorepo clone (`ad34036`, v6.2.4). These are the raw
-material for oxidizr's DSL→JSON golden harness (AGENTS.md §Testing strategy). License:
+material for oxidizr's DSL→JSON golden harness (agents/plan/TESTING.md). License:
 Apache-2.0 — keep attribution when vendoring. Note: DSL tests assert in-memory state;
 **DSL+JSON pairs** exist only where listed in §B. `spring-petclinic/workspace.json` and
 the `backwardsCompatibility/` files are pre-v6 outputs → read-compat corpus, not

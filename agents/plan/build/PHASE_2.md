@@ -39,7 +39,7 @@ pub trait WorkspaceExporter { fn export(&self, ws: &Workspace) -> Result<String,
 ```
 
 - `IndentingWriter` equivalent: writes `write!` into a reusable `String` buffer
-  (AGENTS.md perf rule — no per-line `String` allocations); exported once in `export`
+  (agents/plan/WORKFLOW.md perf rule — no per-line `String` allocations); exported once in `export`
   crate, used by all dialects (mirrors Java `com.structurizr.export.IndentingWriter`).
 - `oxidizr-import` (P4) will be a sibling crate; nothing in P2 depends on it.
 
@@ -154,7 +154,7 @@ scattered `properties.get("…")` calls.
 - **Semantic comparator — C4-PlantUML only in P2** (2026-11-14 rebalance):
   `xtask export-verify` (Category B, default-off `reference` feature, run sparingly)
   runs reference `structurizr export --format plantuml/c4plantuml` (GNU-style options;
-  see AGENTS.md §Test data & goldens) (via
+  see agents/plan/TESTING.md §Test data & goldens) (via
   `$OXIDZR_STRUCTURIZR_BIN` discovery) and oxidizr over the fixture set; parses both
   outputs into a normalized fact model (macro calls + args, relationship tuples,
   style/skinparam directives, include lines; order-normalized per rules where the

@@ -159,7 +159,7 @@ Total: 986 java files, ~102.8k LOC. Stack: Java 21, Maven; app = Spring Boot 4.1
 - Monorepo: **Apache-2.0** (root LICENSE; pom `<licenses>`; no per-module `<licenses>` overrides in any module pom).
 - structurizr-themes: theme.json Apache-2.0; **PNG icons remain copyright their owners** (AWS/Azure/GCP/OCI assets) — relevant if vendoring icons.
 - Old repos: java Apache-2.0, cli Apache-2.0, lite **MIT**, ui **MIT**, onpremises MIT (from GitHub org page). Docs repo (structurizr-docs) has own LICENSE.
-- AGENTS.md caveat: Maven Central artifacts under `com.structurizr` — current monorepo artifacts are Apache-2.0; very old (pre-2.x) artifacts historically GPL per AGENTS.md note.
+- COMPAT.md caveat: Maven Central artifacts under `com.structurizr` — current monorepo artifacts are Apache-2.0; very old (pre-2.x) artifacts historically GPL per COMPAT.md note.
 
 ## 7. Misc facts relevant to oxidizr compat
 - DSL parse → in-memory `Workspace`; JSON write path = Jackson bean serialization of core model with alphabetical property sort + NON_EMPTY (empty arrays/objects/strings omitted!) — critical byte-level compat detail.

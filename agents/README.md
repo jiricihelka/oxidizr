@@ -8,9 +8,11 @@ needed (they are small on purpose — minimize context pollution).
   process). Start at `notes/README.md`. **Write a note after every non-obvious
   fix** — that is the whole point.
 - `plan/` — the authoritative design corpus (moved here from top-level `plan/`
-  on 2026-11-15): distilled Structurizr reference, decision registers
-  (`DEVIATIONS.md` locked list!), per-phase build plans, `PROGRESS.md`
-  milestone log/errata. AGENTS.md §Repository layout governs how to consume it.
+  on 2026-11-15): the compatibility contract (`COMPAT.md`), distilled Structurizr
+  reference, decision registers (`DEVIATIONS.md` locked list!), workflow/testing
+  policy (`WORKFLOW.md`, `TESTING.md`), per-phase build plans, `PROGRESS.md`
+  milestone log/errata. `agents/plan/README.md` gives the index and reading order;
+  AGENTS.md §Where things are is the charter pointer.
 - `plan/reports/` — user-dropped CI/OS failure reports (untracked scratch).
 
 Fast search: `grep -ri <term> agents/notes` (notes are one screen each).

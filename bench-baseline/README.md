@@ -1,4 +1,4 @@
-# bench-baseline — committed criterion baselines (AGENTS.md §Benchmarks)
+# bench-baseline — committed criterion baselines (agents/plan/TESTING.md §Benchmarks)
 
 One directory per milestone (`M0`, `M3`, `M4`, `M7`). Contents: criterion's `new/`
 output per benchmark (`estimates.json`, `sample.json`, `tukey.json`, `benchmark.json`).

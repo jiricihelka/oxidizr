@@ -223,7 +223,7 @@ Dev: `expect-test`, `criterion` (benches + M0 baseline), `proptest`+`arbitrary`,
 report only). None of: indexmap (Vec+explicit sorts; maps are BTreeMap), chumsky/nom/
 winnow/pest, miette-in-libs, serde_yaml (ADR front matter hand-parsed: status/date
 only), rayon. Toolchain: pinned nightly in `rust-toolchain.toml` (date set at M0) with
-the `NIGHTLY.md` feature register (AGENTS.md policy).
+the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
 
 ## P1-D10 Test & golden strategy
 
@@ -233,11 +233,11 @@ the `NIGHTLY.md` feature register (AGENTS.md policy).
   fixtures are vendored **but excluded from the P1 parse/golden gate** (deferred list
   in `testdata/README.md`; P4 retires the exclusion).
 - Harness: `cargo xtask oracle gen` / `verify` invoke the official `structurizr`
-  application **binary** via the AGENTS.md discovery rule (`$OXIDZR_STRUCTURIZR_BIN` →
+  application **binary** via the agents/plan/TESTING.md discovery rule (`$OXIDZR_STRUCTURIZR_BIN` →
   PATH; the nix dev flake pins it; version recorded in `testdata/README.md`). The tool
   is slow: goldens are **committed** and regenerated sparingly; oracle verification is
   the Category B job (`--features reference`, skip=fail there), never per-PR default.
-  Pure-Rust `cargo test` never touches it (AGENTS.md §Testing).
+  Pure-Rust `cargo test` never touches it (agents/plan/TESTING.md).
 - Per-module: `expect-test` snapshots for tokens/CST/parse errors; hand-rolled
   round-trip property for fmt; writer key-sorted CI invariant (scan output for object
   keys out of order); portability-matrix test (each trigger → property present/absent);

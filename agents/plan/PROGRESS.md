@@ -54,8 +54,12 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   compressions during long milestones. `agents/plan/reports/` (user-dropped CI/OS
   reports) stayed untracked; it was briefly lost when `git mv` removed the emptied
   `plan/` dir and was restored byte-identical from `~/.local/share/Trash` — lesson
-  recorded in `agents/notes/pitfalls/git-mv-deletes-untracked.md`. No code, JSON-contract,
-  or Locked-list impact.
+  recorded in `agents/notes/pitfalls/git-mv-deletes-untracked.md`. Same day,
+  follow-up: AGENTS.md slimmed to a per-task charter; permanent detail moved to
+  `agents/plan/COMPAT.md` (contract + sources of truth), `agents/plan/WORKFLOW.md`
+  (env, commands, CLI policy, quality/style) and `agents/plan/TESTING.md`
+  (categories, goldens, benches); all `AGENTS.md §…` references across the repo
+  repointed. No code, JSON-contract, or Locked-list impact.
 - (M0) Fixture path correction: `…/test/resources/dsl/…` (notes-*.md listed bare
   filenames) — vendor script must use the `dsl/` root.
 - **V-10 RESOLVED (2026-11-14)** — reference app pipeline around every `export`:

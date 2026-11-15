@@ -3,7 +3,7 @@
 //! `structurizr` application binary (the oracle), and run the CI gates locally
 //! (`ci` / `bench` / `cov`, mirroring `.github/workflows/ci.yml`).
 //!
-//! Oracle discovery follows AGENTS.md §Testing: `$OXIDZR_STRUCTURIZR_BIN` first, then
+//! Oracle discovery follows agents/plan/TESTING.md: `$OXIDZR_STRUCTURIZR_BIN` first, then
 //! `structurizr` on `PATH`. The binary is slow — run this sparingly; goldens are
 //! committed.
 //!
@@ -20,7 +20,7 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 
-/// Pinned upstream monorepo commit (AGENTS.md §Source of truth).
+/// Pinned upstream monorepo commit (agents/plan/COMPAT.md).
 const REFERENCE_COMMIT: &str = "ad34036";
 /// Pinned unified application release used for goldens (bundles library 6.2.4);
 /// mirrors `packages.structurizr` in flake.nix.
@@ -255,7 +255,7 @@ fn cmd_bench() -> Result<()> {
     Ok(())
 }
 
-/// Coverage job mirror: report only, never a gate (AGENTS.md §Testing).
+/// Coverage job mirror: report only, never a gate (agents/plan/TESTING.md).
 fn cmd_cov() -> Result<()> {
     let probe = cargo_cmd()
         .args(["llvm-cov", "--version"])
@@ -263,7 +263,7 @@ fn cmd_cov() -> Result<()> {
         .stderr(std::process::Stdio::null())
         .status();
     if !probe.is_ok_and(|s| s.success()) {
-        bail!("cargo-llvm-cov not found — the nix dev shell provides it (AGENTS.md §Commands)");
+        bail!("cargo-llvm-cov not found — the nix dev shell provides it (agents/plan/WORKFLOW.md)");
     }
     let status = cargo_cmd()
         .args(["llvm-cov", "--workspace", "--summary-only"])
@@ -296,7 +296,7 @@ fn find_oracle() -> Result<PathBuf> {
     }
     bail!(
         "structurizr reference binary not found ($OXIDZR_STRUCTURIZR_BIN → PATH); \
-         the nix dev flake provides it (AGENTS.md §Testing)"
+         the nix dev flake provides it (agents/plan/TESTING.md)"
     );
 }
 
