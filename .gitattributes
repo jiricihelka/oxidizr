@@ -1,0 +1,25 @@
+# Line-endings policy (see plan/PROGRESS.md errata, 2026-11-15).
+#
+# The repo stores text as LF. A `core.autocrlf=true` checkout (the default on
+# many Windows setups) rewrote fixture files to CRLF, which broke the
+# byte-exact `expect!` CST snapshots in crates/oxidizr-dsl/tests/m1_lossless.rs.
+# `.gitattributes` has priority over core.autocrlf, so these rules make every
+# checkout byte-stable on all three CI OSes.
+
+# Text files: normalize to LF in the repo, check out as LF everywhere.
+* text=auto eol=lf
+
+# The test corpus is a byte contract: vendored .dsl fixtures, golden .json
+# workspaces, docs and assets must survive checkout verbatim (no EOL
+# conversion in either direction — re-vendoring must keep reference bytes).
+testdata/** -text
+
+# Binaries (belt-and-braces beyond heuristic detection).
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.ico -text
+*.jar -text
+*.pdf -text
+*.zip -text

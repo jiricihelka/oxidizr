@@ -91,6 +91,17 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   So read-corpus goldens need no normalization.
 - `loadWorkspace` also `installThemes`(local `themes/` dir or `$STRUCTURIZR_THEMES`) —
   theme URLs are fetched during PNG/SVG export only, not `--format json`.
+- **Windows CI failures — checkout EOL conversion RESOLVED (2026-11-15)**. Symptom
+  (`plan/reports/windows_test_error.txt`): the 6 byte-exact `expect!` CST snapshots in
+  `crates/oxidizr-dsl/tests/m1_lossless.rs` failed on Windows with LF-vs-CRLF diffs and
+  shifted byte offsets. Root cause is NOT the lexer (lossless corpus tests passed):
+  stored blobs are LF, but the Windows checkout had `core.autocrlf=true`, which rewrites
+  LF→CRLF at checkout. Fix: root `.gitattributes` — `* text=auto eol=lf` for sources,
+  `testdata/** -text` (byte-exact in BOTH directions: fixtures/goldens/assets must never
+  be EOL-converted, re-vendoring keeps reference bytes). `.gitattributes` outranks
+  `core.autocrlf`, so checkouts are byte-stable on all 3 OSes. Verified by cloning with
+  `-c core.autocrlf=true`: fixtures/goldens materialize CR-free, jar byte-identical,
+  `m1_lossless` 9/9 green in that clone; `git add --renormalize` was a content no-op.
 
 ## Milestone log
 
