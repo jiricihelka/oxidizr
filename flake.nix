@@ -29,7 +29,10 @@
       # `maven.compiler.release`).
       structurizrVersion = "2026.10.26";
 
-      # Windows CI runs natively (AGENTS.md §Portability), so no Windows system here.
+      # Windows CI remains the authority (AGENTS.md §Portability, native runners), but
+      # on Linux the flake also provides an approximating local leg: windows-gnu
+      # cross-compile + Wine test execution (see the dev shell). macOS only ever runs
+      # in CI (no darwin cross from Linux).
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -82,6 +85,7 @@
           # entry). The override rides INSIDE selectLatestNightlyWith so the
           # selection skips nights missing any of our components. Components:
           # rust-src (clippy), llvm-tools (cargo-llvm-cov), rust-analyzer (agents).
+          # Target: x86_64-pc-windows-gnu for the local Wine leg (see `windowsCross`).
           rust-bin = rust-overlay.lib.mkRustBin { } pkgs;
           nightly = rust-bin.selectLatestNightlyWith (
             toolchain:
@@ -93,8 +97,32 @@
                 "llvm-tools"
                 "rust-analyzer"
               ];
+              targets = [ "x86_64-pc-windows-gnu" ];
+              # Target-scoped component (host-scoped `extensions` rejects it): ships
+              # the mingw import libs (-l:libpthread.a etc.) the windows-gnu link needs.
+              targetExtensions = [ "rust-mingw" ];
             }
           );
+
+          # Local Windows test loop (Linux hosts only): mingw-w64 linker + Wine
+          # runtime. Usage: `cargo test --workspace --target x86_64-pc-windows-gnu`
+          # — cargo runs the test binaries through $CARGO_TARGET_..._RUNNER.
+          # Approximates the windows-latest CI leg (real PE, Wine paths), NOT the
+          # Windows checkout (EOL/autocrlf: reproduce via `git -c core.autocrlf=true
+          # clone` instead) and not CI's authority.
+          windowsCross = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+            pkgs.pkgsCross.mingwW64.stdenv.cc # x86_64-w64-mingw32-gcc
+            pkgs.wine64
+          ];
+
+          # nixpkgs' win32-threads mingw omits winpthreads (libpthread.a), which the
+          # windows-gnu link of std still references; Rust's own `rust-mingw`
+          # component ships the stub, so expose just that archive on the link path
+          # (a whole-dir -L would shadow the nixpkgs mingw libs).
+          windowsGnuPthreadStub = pkgs.runCommand "windows-gnu-pthread-stub" { } ''
+            mkdir -p "$out"
+            ln -s "${nightly}"/lib/rustlib/x86_64-pc-windows-gnu/lib/self-contained/libpthread.a "$out/libpthread.a"
+          '';
         in
         {
           default = pkgs.mkShell {
@@ -118,13 +146,30 @@
 
               pkgs.git
               pkgs.pkg-config
-            ];
+            ]
+            # local windows-gnu test leg — mingw-w64 + wine64 (Linux only; nested
+            # lists in `packages` are deprecated nixpkgs 26.05, so splice with ++)
+            ++ windowsCross;
 
             # Explicit oracle pin; users may override, tests fall back to PATH without it.
             OXIDZR_STRUCTURIZR_BIN = "${self.packages.${system}.structurizr}/bin/structurizr";
 
+            # Windows leg under Wine (Linux host): cargo executes windows-gnu test
+            # binaries via Wine (the `wine64` package's loader is named `wine`);
+            # keep its console quiet; satisfy -l:libpthread.a via the stub -L.
+            CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = "wine";
+            CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${windowsGnuPthreadStub}";
+            WINEDEBUG = "-all";
+
             shellHook = ''
               echo "oxidizr dev shell: $(rustc --version) · oracle: structurizr ${structurizrVersion} (\$OXIDZR_STRUCTURIZR_BIN)"
+              # Wine needs a writable prefix + runtime dir; first use self-initializes.
+              export WINEPREFIX="''${XDG_CACHE_HOME:-''${HOME:-/tmp}/.cache}/oxidizr/wine64"
+              mkdir -p "$WINEPREFIX"
+              if [ -z "''${XDG_RUNTIME_DIR:-}" ]; then
+                export XDG_RUNTIME_DIR="/tmp/oxidizr-wine-runtime-$(id -u)"
+                mkdir -pm 0700 "$XDG_RUNTIME_DIR"
+              fi
             '';
           };
         });

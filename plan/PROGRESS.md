@@ -102,6 +102,20 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   `core.autocrlf`, so checkouts are byte-stable on all 3 OSes. Verified by cloning with
   `-c core.autocrlf=true`: fixtures/goldens materialize CR-free, jar byte-identical,
   `m1_lossless` 9/9 green in that clone; `git add --renormalize` was a content no-op.
+- **Local Windows leg via Wine (2026-11-15, dev-env decision)**. The dev flake now
+  approximates the windows-latest CI leg on Linux: `cargo test --workspace --target
+  x86_64-pc-windows-gnu` inside `nix develop` (shell sets the per-target `_RUNNER=wine`
+  and a `_RUSTFLAGS=-L native=<libpthread stub>`). Verified: **259/259 green under
+  Wine** at P1-M4. Three non-obvious pins, each commented in `flake.nix`:
+  (1) `rust-mingw` must ride the rust-overlay `targetExtensions` override — host
+  `extensions` rejects it (rustup installs it implicitly with the target);
+  (2) nixpkgs' win32-threads mingw omits winpthreads, so std's `-l:libpthread.a` is
+  satisfied by symlinking rust-mingw's own stub from `self-contained/` onto the link
+  path (a whole-dir `-L` there would shadow the nixpkgs mingw libs);
+  (3) the `pkgs.wine64` loader binary is named `wine`, not `wine64`.
+  CI stays the authority; Wine does NOT simulate the Windows *checkout* (EOL/autocrlf —
+  use the `core.autocrlf=true` clone above), NTFS semantics, or MSVC. macOS remains
+  CI-only (no darwin cross from Linux).
 
 ## Milestone log
 
