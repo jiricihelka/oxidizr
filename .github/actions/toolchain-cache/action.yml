@@ -1,0 +1,29 @@
+name: toolchain-cache
+description: >-
+  Cache the pinned nightly toolchain named by rust-toolchain.toml. Without this,
+  rustup auto-installs the pinned channel (~1 min of downloads) in every job.
+  Place AFTER checkout and BEFORE anything that runs cargo; the first run on a
+  new pin saves the toolchain at job end, later runs restore it and rustup's
+  auto-install finds the directory already present and downloads nothing.
+
+runs:
+  using: composite
+  steps:
+    - name: Read pinned channel
+      id: channel
+      shell: bash
+      run: |
+        ch=$(sed -n 's/^channel *= *"\([^"]*\)"/\1/p' rust-toolchain.toml | head -1)
+        if [ -z "$ch" ]; then echo "::error::no channel in rust-toolchain.toml"; exit 1; fi
+        echo "channel=$ch" >> "$GITHUB_OUTPUT"
+        echo "pinned channel: $ch"
+    - name: Cache toolchain directory
+      uses: actions/cache@v4
+      with:
+        # Glob (not a literal dir) because the host-triple suffix differs per OS;
+        # the date-pinned channel prefix never matches the runner image's own
+        # preinstalled toolchains, so the entry stays ~single-toolchain sized.
+        path: ~/.rustup/toolchains/${{ steps.channel.outputs.channel }}-*
+        # Re-keys on any change to the pin (channel or components); per OS+arch
+        # because the toolchain directory is host-specific.
+        key: rustup-${{ runner.os }}-${{ runner.arch }}-${{ steps.channel.outputs.channel }}-${{ hashFiles('rust-toolchain.toml') }}

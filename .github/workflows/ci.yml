@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
       - run: cargo fmt --all --check
 
   clippy:
@@ -24,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -37,6 +39,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
@@ -48,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
       - uses: Swatinem/rust-cache@v2
       # No `-- --report-dir`: trailing args go to EVERY bench harness, and the
       # libtest-generated `--lib` bench binaries abort on unknown options.
@@ -65,6 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -81,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-java@v4
         with:
