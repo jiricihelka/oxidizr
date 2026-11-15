@@ -39,3 +39,4 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [resume-ritual.md](process/resume-ritual.md) | rewrite `RESUME.md` at each green commit; resume from it |
 | [faithful-port.md](process/faithful-port.md) | engine = port of pinned Java, lint allows need rationale |
 | [notes-policy.md](process/notes-policy.md) | when and how to write notes |
+| [parallelism.md](process/parallelism.md) | one-LLM box: background jobs, no subagents |

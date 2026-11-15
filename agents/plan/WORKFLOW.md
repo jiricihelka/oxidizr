@@ -52,11 +52,27 @@ cargo run -p oxidizr-cli -- dsl2json workspace.dsl -o workspace.json
 - **Size gate:** a milestone touching more than ~4 modules is decomposed into
   sub-milestones in its `build/PHASE_N.md` entry BEFORE implementation starts
   (M4's single ~15-subsystem commit cost ~10x an average milestone).
-- **Commit every green sub-piece** (gate trio green = commit); the milestone ends
+- **Commit every green sub-piece** (gate quartet green = commit); the milestone ends
   with a wrap-up commit (PROGRESS.md milestone log + status board update).
 - **Keep `agents/notes/RESUME.md` current** — rewritten at every green commit;
   sessions/compactions resume from it instead of re-deriving state
   (`agents/notes/process/resume-ritual.md`).
+
+## Execution model (harness facts, adopted 2026-11-15)
+
+The harness machine is powerful and effectively single-tenant (many parallel
+background jobs are cheap); the LLM server serves **at most one agent at a
+time**. Consequences for how work is run — detail in
+`agents/notes/process/parallelism.md`:
+
+- Offload to local tools whatever is deterministic (gates, `refs`, `lint`,
+  ast-grep audits) — LLM turns are the scarce resource, harness cycles are not.
+- **Subagents are near-useless here**: they serialise on the single LLM slot,
+  so they add overhead without parallelism.
+- Launch long independent harness jobs (nix builds, oracle/bench/cov runs,
+  file analysis) in the background early; never serialise them behind turns.
+- Two `cargo` jobs do NOT parallelise (shared target-dir lock) — chain cargo
+  work in one command; reserve parallelism for non-cargo resources.
 
 ## Code quality
 
