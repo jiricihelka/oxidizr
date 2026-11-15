@@ -37,7 +37,10 @@ cargo bench --workspace                    # criterion benches (no arg forwardin
 cargo xtask ci                             # the commit gates locally: fmt + clippy + test + refs
 cargo xtask ci windows                     # + the Wine windows-gnu leg (nix dev shell)
 cargo xtask refs                           # doc path & §section reference integrity only
+cargo xtask ci lint                        # actionlint on .github/ (CI's lint job is authoritative)
 cargo xtask bench                          # bench job mirror (reports: target/criterion)
+cargo xtask bench save <LABEL>             # snapshot criterion JSONs into bench-baseline/<LABEL>/
+cargo xtask bench cmp <LABEL>              # critcmp baseline vs target/criterion
 cargo xtask cov                            # coverage job mirror (summary, report only)
 cargo xtask oracle verify                  # Category B (needs $OXIDZR_STRUCTURIZR_BIN)
 cargo llvm-cov --workspace                 # coverage report (CI, report only)

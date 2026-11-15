@@ -317,43 +317,104 @@ fn cmd_bench_save(label: &str) -> Result<()> {
     let dst = root.join("bench-baseline").join(label);
     let mut n = 0usize;
     for bench in fs::read_dir(&src)? {
-        let bench = bench?.path();
-        if !bench.is_dir() {
-            continue;
+        let group = bench?.path();
+        // criterion layout: target/criterion/<group>/new/{estimates,sample,tukey,
+        // benchmark}.json — the committed baseline is the same, minus `new/`
+        // (M0 layout, bench-baseline/README.md).
+        let new_dir = group.join("new");
+        if !new_dir.is_dir() {
+            continue; // stray files at criterion root (top-level report/)
         }
-        let name = bench.file_name().unwrap_or_default().to_os_string();
-        let mut written = false;
-        for entry in fs::read_dir(&bench)? {
+        let name = group.file_name().unwrap_or_default().to_os_string();
+        for entry in fs::read_dir(&new_dir)? {
             let p = entry?.path();
             if p.extension().is_some_and(|e| e == "json") {
                 fs::create_dir_all(dst.join(&name))?;
                 fs::copy(&p, dst.join(&name).join(p.file_name().unwrap()))?;
-                written = true;
                 n += 1;
             }
         }
-        if written {
-            println!("saved {}", dst.join(&name).display());
-        }
+        println!("saved {}", dst.join(&name).display());
     }
     ensure!(n > 0, "no criterion result JSONs under {}", src.display());
     println!("baseline `{label}`: {n} file(s) — commit them (TESTING.md §Benchmarks)");
     Ok(())
 }
 
-/// `critcmp bench-baseline/<LABEL> target/criterion` (dev shell provides critcmp).
+/// Compare the committed baseline with the latest run. critcmp's canonical
+/// input is two baseline dirs under ONE criterion root (`critcmp OLD NEW` run
+/// from the repo root — verified against critcmp 0.1.8; bare directory args
+/// and `<dir>/<group>/new` staging match nothing). So the flat committed
+/// baseline (bench-baseline/README.md: `<LABEL>/<group>/*.json`) is staged
+/// into `target/criterion/<group>/<LABEL>/`, compared against criterion's
+/// automatic `new`, then un-staged.
 fn cmd_bench_cmp(label: &str) -> Result<()> {
     let root = repo_root()?;
     let base = root.join("bench-baseline").join(label);
     ensure!(base.is_dir(), "no baseline `{label}` ({})", base.display());
-    let status = Command::new("critcmp")
-        .arg(base.join("."))
-        .arg(root.join("target/criterion"))
-        .status();
+    let criterion = root.join("target/criterion");
+    ensure!(
+        criterion.is_dir(),
+        "no {} — run `cargo xtask bench` first",
+        criterion.display()
+    );
+    std::env::set_current_dir(&root)?;
+    let staged = stage_baseline(&criterion, &base, label);
+    let staged = match staged {
+        Ok(n) => n,
+        Err(e) => {
+            let _ = unstage_baseline(&criterion, label);
+            return Err(e);
+        }
+    };
+    ensure!(
+        staged > 0,
+        "baseline `{label}` has no criterion JSONs ({})",
+        base.display()
+    );
+    let status = Command::new("critcmp").args([label, "new"]).status();
+    unstage_baseline(&criterion, label)?;
     match status {
         Ok(s) => ensure!(s.success(), "critcmp failed ({s})"),
         Err(_) => {
             bail!("critcmp not found — the nix dev shell provides it (agents/plan/WORKFLOW.md)")
+        }
+    }
+    Ok(())
+}
+
+/// Copy flat baseline groups into `target/criterion/<group>/<label>/`; return
+/// the number of JSONs copied (0 ⇒ no overlapping groups with the current run).
+fn stage_baseline(criterion: &Path, base: &Path, label: &str) -> Result<usize> {
+    let mut n = 0usize;
+    for group in fs::read_dir(base)? {
+        let group = group?.path();
+        if !group.is_dir() {
+            continue; // bench-baseline/README.md sits next to the labels
+        }
+        let dest = criterion
+            .join(group.file_name().unwrap_or_default())
+            .join(label);
+        for entry in fs::read_dir(&group)? {
+            let p = entry?.path();
+            if p.extension().is_some_and(|e| e == "json") {
+                fs::create_dir_all(&dest)?;
+                fs::copy(&p, dest.join(p.file_name().unwrap()))?;
+                n += 1;
+            }
+        }
+    }
+    Ok(n)
+}
+
+/// Remove the staged `<label>` dirs again (target/ stays as if nothing happened).
+fn unstage_baseline(criterion: &Path, label: &str) -> Result<()> {
+    if criterion.is_dir() {
+        for group in fs::read_dir(criterion)? {
+            let staged = group?.path().join(label);
+            if staged.is_dir() {
+                fs::remove_dir_all(&staged)?;
+            }
         }
     }
     Ok(())

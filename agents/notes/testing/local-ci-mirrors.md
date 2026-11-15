@@ -6,6 +6,9 @@ can't drift (commit efba278).
 - `cargo xtask ci [STEP…]` — default `fmt clippy test refs` (the commit gate); no
   fail-fast, prints per-step banner + final summary of failed steps. `refs` is a
   local-only extra gate (doc-reference integrity, `crates/xtask/src/refs.rs`).
+  `lint` (actionlint) is opt-in here and a CI job; `ci windows` ends with
+  `wineserver -k` so no ~100 wine processes survive the leg. Bench baselines:
+  `cargo xtask bench save <LABEL>` / `bench cmp <LABEL>` (critcmp, dev shell).
 - `cargo xtask ci windows` — the windows-gnu+Wine leg; bails with a pointer to
   `nix develop` when `CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER` is unset
   (env check = honest precondition). macOS stays CI-only.

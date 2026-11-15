@@ -20,6 +20,22 @@ jobs:
       - uses: ./.github/actions/toolchain-cache
       - run: cargo fmt --all --check
 
+  lint:
+    # Workflow self-check: catches ci.yml mistakes here instead of at run time
+    # (the local mirror is `cargo xtask ci lint`, skips without actionlint).
+    # Pinned actionlint + checksum: the release asset is linux_amd64, not x86_64.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned actionlint
+        run: |
+          set -o pipefail
+          curl -fsSLO https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint_1.7.12_linux_amd64.tar.gz' | sha256sum -c -
+          tar xzf actionlint_1.7.12_linux_amd64.tar.gz
+          sudo install -m 0755 actionlint /usr/local/bin/actionlint
+      - run: actionlint
+
   clippy:
     needs: fmt
     runs-on: ubuntu-latest
