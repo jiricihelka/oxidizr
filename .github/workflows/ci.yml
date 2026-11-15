@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
@@ -36,6 +37,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
   bench:
@@ -46,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - run: cargo bench --workspace -- --report-dir target/criterion
       - uses: actions/upload-artifact@v4
         with:
@@ -59,6 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - run: cargo llvm-cov --workspace --summary-only
@@ -74,16 +78,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+      - name: Cache pinned structurizr war
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/structurizr.war
+          key: structurizr-war-2026.10.26
       - name: Install pinned structurizr (unified application binary)
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/structurizr.war" \
-            https://download.structurizr.com/structurizr-2026.10.26.war
-          printf '#!/bin/sh\nexec java -jar "$RUNNER_TEMP/structurizr.war" "$@"\n' \
-            > /usr/local/bin/structurizr
+          [ -f "$RUNNER_TEMP/structurizr.war" ] || \
+            curl -fsSL -o "$RUNNER_TEMP/structurizr.war" \
+              https://download.structurizr.com/structurizr-2026.10.26.war
+          # Quoted heredoc: $RUNNER_TEMP/"$@" stay literal, expand when the wrapper runs.
+          cat > /usr/local/bin/structurizr <<'EOF'
+          #!/bin/sh
+          exec java -jar "$RUNNER_TEMP/structurizr.war" "$@"
+          EOF
           chmod +x /usr/local/bin/structurizr
       - run: cargo test --workspace --features reference
         env:
