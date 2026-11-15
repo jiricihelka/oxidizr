@@ -50,6 +50,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                     # Category A only (no structurizr bin needed)
 cargo test --workspace --features reference  # + Category B (slow — run sparingly)
 cargo bench --workspace                    # criterion benches
+cargo xtask ci                             # the PR gates locally: fmt + clippy + test
+cargo xtask ci windows                     # + the Wine windows-gnu leg (nix dev shell)
+cargo xtask bench                          # bench job mirror (reports: target/criterion)
+cargo xtask cov                            # coverage job mirror (summary, report only)
 cargo xtask oracle verify                  # Category B (needs $OXIDZR_STRUCTURIZR_BIN)
 cargo llvm-cov --workspace                 # coverage report (CI, report only)
 cargo run -p oxidizr-cli -- dsl2json workspace.dsl -o workspace.json

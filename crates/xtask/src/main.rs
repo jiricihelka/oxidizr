@@ -1,6 +1,7 @@
 //! `xtask` — dev-only tooling (P1-D10): vendor the reference fixture corpus into
-//! `testdata/` with attribution, and generate/verify goldens with the pinned official
-//! `structurizr` application binary (the oracle).
+//! `testdata/` with attribution, generate/verify goldens with the pinned official
+//! `structurizr` application binary (the oracle), and run the CI gates locally
+//! (`ci` / `bench` / `cov`, mirroring `.github/workflows/ci.yml`).
 //!
 //! Oracle discovery follows AGENTS.md §Testing: `$OXIDZR_STRUCTURIZR_BIN` first, then
 //! `structurizr` on `PATH`. The binary is slow — run this sparingly; goldens are
@@ -46,6 +47,15 @@ fn real_main(args: Vec<String>) -> Result<()> {
             };
             cmd_vendor(&src)
         }
+        Some("ci") => cmd_ci(resolve_ci_steps(&args.collect::<Vec<_>>())?),
+        Some("bench") => {
+            ensure!(args.next().is_none(), "bench takes no arguments");
+            cmd_bench()
+        }
+        Some("cov") => {
+            ensure!(args.next().is_none(), "cov takes no arguments");
+            cmd_cov()
+        }
         Some("oracle") => {
             let oracle = find_oracle()?;
             match args.next().as_deref() {
@@ -81,7 +91,20 @@ fn real_main(args: Vec<String>) -> Result<()> {
 
 fn print_help() {
     println!(
-        "cargo xtask vendor --src <clone>     vendor reference fixtures into testdata/\n\
+        "cargo xtask ci [STEP…]               run CI gates locally (default: fmt clippy test)\n\
+         \n\
+         \x20   local CI mirror (see .github/workflows/ci.yml); STEPS, run in the given\n\
+         \x20   order without fail-fast, each reported in a final summary:\n\
+         \x20     fmt      cargo fmt --all --check\n\
+         \x20     clippy   cargo clippy --workspace --all-targets -- -D warnings\n\
+         \x20     test     cargo test --workspace            (host, Category A)\n\
+         \x20     windows  cargo test --workspace --target x86_64-pc-windows-gnu\n\
+         \x20              (Wine leg; needs the nix dev shell — it provides the runner,\n\
+         \x20              linker and libpthread stub; the macOS leg stays CI-only)\n\
+         cargo xtask bench                    cargo bench --workspace (reports: target/criterion)\n\
+         cargo xtask cov                      cargo llvm-cov --workspace --summary-only (report only)\n\
+         \n\
+         cargo xtask vendor --src <clone>     vendor reference fixtures into testdata/\n\
          cargo xtask oracle gen [--fixture N]…  generate goldens via the reference binary\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
          \n\
@@ -105,6 +128,149 @@ fn repo_root() -> Result<PathBuf> {
         .and_then(Path::parent)
         .map(PathBuf::from)
         .context("xtask must live in <root>/crates/xtask")
+}
+
+// ---------------------------------------------------------------- local CI mirror
+
+/// One CI gate, mirroring a job in `.github/workflows/ci.yml`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Step {
+    Fmt,
+    Clippy,
+    Test,
+    /// windows-latest matrix leg approximated via the windows-gnu + Wine dev leg.
+    Windows,
+}
+
+impl Step {
+    fn parse(name: &str) -> Option<Self> {
+        match name {
+            "fmt" => Some(Self::Fmt),
+            "clippy" => Some(Self::Clippy),
+            "test" => Some(Self::Test),
+            "windows" => Some(Self::Windows),
+            _ => None,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Fmt => "fmt",
+            Self::Clippy => "clippy",
+            Self::Test => "test",
+            Self::Windows => "windows",
+        }
+    }
+
+    /// Cargo argv for this gate (identical to the CI job's `run:` line).
+    fn cargo_args(self) -> &'static [&'static str] {
+        match self {
+            Self::Fmt => &["fmt", "--all", "--check"],
+            Self::Clippy => &[
+                "clippy",
+                "--workspace",
+                "--all-targets",
+                "--",
+                "-D",
+                "warnings",
+            ],
+            Self::Test => &["test", "--workspace"],
+            Self::Windows => &["test", "--workspace", "--target", "x86_64-pc-windows-gnu"],
+        }
+    }
+}
+
+/// Default = the PR gate trio; otherwise the given names in the given order,
+/// de-duplicated. Pure, so the parsing rules are unit-tested.
+fn resolve_ci_steps(args: &[String]) -> Result<Vec<Step>> {
+    if args.is_empty() {
+        return Ok(vec![Step::Fmt, Step::Clippy, Step::Test]);
+    }
+    let mut out = Vec::new();
+    for arg in args {
+        let step = Step::parse(arg)
+            .with_context(|| format!("unknown CI step `{arg}` (fmt|clippy|test|windows)"))?;
+        if !out.contains(&step) {
+            out.push(step);
+        }
+    }
+    Ok(out)
+}
+
+/// cargo honoring the `cargo` wrapper cargo sets for subcommands when available.
+fn cargo_cmd() -> Command {
+    let program = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let mut cmd = Command::new(program);
+    cmd.current_dir(repo_root().expect("repo root"));
+    cmd
+}
+
+/// Stream a gate to the terminal; `Ok(false)` on nonzero exit (no fail-fast —
+/// `ci` runs every selected step and reports them all at the end).
+fn run_step(step: Step) -> Result<bool> {
+    let args = step.cargo_args();
+    println!("\n==> {} `$ cargo {}`", step.label(), args.join(" "));
+    let status = cargo_cmd()
+        .args(args)
+        .status()
+        .context("failed to run cargo")?;
+    if !status.success() {
+        println!("<== {} FAILED ({status})", step.label());
+    }
+    Ok(status.success())
+}
+
+fn cmd_ci(steps: Vec<Step>) -> Result<()> {
+    if steps.contains(&Step::Windows)
+        && env::var_os("CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER").is_none()
+    {
+        bail!(
+            "windows step needs the Wine dev shell (nix develop): it provides \
+             CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER/-RUSTFLAGS and the mingw linker"
+        );
+    }
+    let mut failed = Vec::new();
+    for step in steps {
+        if !run_step(step)? {
+            failed.push(step.label());
+        }
+    }
+    if failed.is_empty() {
+        println!("\nci: all steps green");
+        Ok(())
+    } else {
+        bail!("ci: FAILED step(s): {}", failed.join(", "));
+    }
+}
+
+/// Bench job mirror: no trailing args (they would hit the libtest harnesses —
+/// see ci.yml note), criterion defaults to `target/criterion` anyway.
+fn cmd_bench() -> Result<()> {
+    let status = cargo_cmd()
+        .args(["bench", "--workspace"])
+        .status()
+        .context("failed to run cargo bench")?;
+    ensure!(status.success(), "cargo bench failed ({status})");
+    println!("\nreports: target/criterion/ — compare baselines with `critcmp`");
+    Ok(())
+}
+
+/// Coverage job mirror: report only, never a gate (AGENTS.md §Testing).
+fn cmd_cov() -> Result<()> {
+    let probe = cargo_cmd()
+        .args(["llvm-cov", "--version"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    if !probe.is_ok_and(|s| s.success()) {
+        bail!("cargo-llvm-cov not found — the nix dev shell provides it (AGENTS.md §Commands)");
+    }
+    let status = cargo_cmd()
+        .args(["llvm-cov", "--workspace", "--summary-only"])
+        .status()
+        .context("failed to run cargo llvm-cov")?;
+    ensure!(status.success(), "cargo llvm-cov failed ({status})");
+    Ok(())
 }
 
 // ---------------------------------------------------------------- oracle plumbing
@@ -431,7 +597,32 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_reference_output;
+    use super::{Step, normalize_reference_output, resolve_ci_steps};
+
+    #[test]
+    fn ci_steps_default_to_the_pr_gate_trio() {
+        assert_eq!(
+            resolve_ci_steps(&[]).unwrap(),
+            vec![Step::Fmt, Step::Clippy, Step::Test]
+        );
+    }
+
+    #[test]
+    fn ci_steps_keep_order_and_dedup() {
+        let args: Vec<String> = ["test", "windows", "test"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert_eq!(
+            resolve_ci_steps(&args).unwrap(),
+            vec![Step::Test, Step::Windows]
+        );
+    }
+
+    #[test]
+    fn ci_steps_reject_unknown_names() {
+        assert!(resolve_ci_steps(&["macos".into()]).is_err());
+    }
 
     fn norm(s: &str) -> String {
         String::from_utf8(normalize_reference_output(s.as_bytes())).unwrap()
