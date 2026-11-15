@@ -8,7 +8,8 @@ Updated: 2026-11-15 · HEAD `6bb10e8` · gates green · nothing pushed.
 - **Done:** P1-M4 (engine + burn-in, green on host AND Wine `ci windows`);
   post-M4 infra (Wine leg, CI caches, bench-job fix, `cargo xtask ci|bench|cov`,
   `agents/` reorg, charter slimming); workflow tooling: dev-shell triage tools
-  (jq/sqlite/python3/actionlint/critcmp), `cargo xtask refs` = 4th default gate
+  (jq/sqlite/python3/actionlint/critcmp + ast-grep w/ search recipes note),
+  `cargo xtask refs` = 4th default gate
   (quartet fmt+clippy+test+refs), `ci lint` step + CI `lint` job (actionlint
   1.7.12 pinned+sha256), `bench save <LABEL>` / `bench cmp <LABEL>` (critcmp
   staging verified vs M0), `wineserver -k` after the windows leg.

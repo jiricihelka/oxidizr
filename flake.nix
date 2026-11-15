@@ -147,12 +147,14 @@
               # Triage toolkit (dev convenience, never a build/product dependency):
               # jq + sqlite for golden/DB spelunking, python3 for throwaway scripts,
               # actionlint for `cargo xtask ci lint`, critcmp for TESTING.md's
-              # baseline comparisons (`cargo xtask bench cmp`).
+              # baseline comparisons (`cargo xtask bench cmp`), ast-grep for
+              # structural code search (agents/notes/testing/ast-grep-search.md).
               pkgs.jq
               pkgs.sqlite
               pkgs.python3
               pkgs.actionlint
               pkgs.critcmp
+              pkgs.ast-grep
 
               pkgs.git
               pkgs.pkg-config

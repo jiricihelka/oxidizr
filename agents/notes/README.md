@@ -29,6 +29,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [byte-exact-corpus.md](testing/byte-exact-corpus.md) | testdata/ is a byte contract; .gitattributes EOL pinning |
 | [burn-in-register.md](testing/burn-in-register.md) | m4_fixtures KNOWN_ERRORS pattern (both-directions check) |
 | [local-ci-mirrors.md](testing/local-ci-mirrors.md) | `cargo xtask ci\|bench\|cov` mirrors ci.yml argv |
+| [ast-grep-search.md](testing/ast-grep-search.md) | `ast-grep` structural search recipes, vs grep counts |
 
 ## process/ — how work is done ([index](process/README.md))
 
