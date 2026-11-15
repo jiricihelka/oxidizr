@@ -13,13 +13,16 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M2 core model + validation | **done 2026-11-14** |
 | P1 | M3a write catalog (P1-D6) | **done 2026-11-14** (commit 7848c5e) |
 | P1 | M3b json writer + reader | **done 2026-11-14** (commit 0e77dc2) |
-| P1 | M4 dsl parser + builder | **done 2026-11-15** (this commit) |
+| P1 | M4 dsl parser + builder | **done 2026-11-15** (commit 41b70ca) |
 | P1 | M5 … M7 | M5 (directives) next, rest pending |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
-Commit cadence (user decision 2026-11-14): **one commit per green milestone**, nothing
-in between. Questions only on plan-contradicting reality (AGENTS.md working style).
+Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
+sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
+`agents/notes/RESUME.md` current at each commit; milestones touching >4 modules are
+decomposed in the PHASE doc first. Questions only on plan-contradicting reality
+(AGENTS.md working style).
 
 ## Environment facts (verified 2026-11-14)
 
@@ -59,7 +62,10 @@ in between. Questions only on plan-contradicting reality (AGENTS.md working styl
   `agents/plan/COMPAT.md` (contract + sources of truth), `agents/plan/WORKFLOW.md`
   (env, commands, CLI policy, quality/style) and `agents/plan/TESTING.md`
   (categories, goldens, benches); all `AGENTS.md §…` references across the repo
-  repointed. No code, JSON-contract, or Locked-list impact.
+  repointed. Same day: M4 retrospective adopted three process rules — commit every
+  green sub-piece (not one commit per milestone), the `agents/notes/RESUME.md`
+  checkpoint ritual, and a milestone size gate (>~4 modules ⇒ decompose first).
+  No code, JSON-contract, or Locked-list impact.
 - (M0) Fixture path correction: `…/test/resources/dsl/…` (notes-*.md listed bare
   filenames) — vendor script must use the `dsl/` root.
 - **V-10 RESOLVED (2026-11-14)** — reference app pipeline around every `export`:

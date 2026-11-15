@@ -63,5 +63,9 @@ Test categories A/B, golden corpus rules, benchmarks: `agents/plan/TESTING.md`.
 - Development: implement per the plan without stopping; break the silence ONLY when
   reality contradicts a plan assumption (a V-n item comes out differently, the
   reference behaves surprisingly, a compat gate fails unanticipatedly).
+- Commit every green sub-piece (`cargo xtask ci` green = commit) and rewrite
+  `agents/notes/RESUME.md` with it — never hold a day of work uncommitted.
+- A milestone touching more than ~4 modules gets decomposed in its
+  `agents/plan/build/PHASE_N.md` entry before implementation starts.
 - After a non-obvious fix: add a ≤ 25-line note under `agents/notes/` and index it —
   the next session must not have to rediscover it.

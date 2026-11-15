@@ -34,6 +34,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 
 | note | one-liner |
 |---|---|
-| [commit-discipline.md](process/commit-discipline.md) | gate trio, one commit per green milestone, never push |
+| [commit-discipline.md](process/commit-discipline.md) | gate trio; commit EVERY green sub-piece; never push |
+| [resume-ritual.md](process/resume-ritual.md) | rewrite `RESUME.md` at each green commit; resume from it |
 | [faithful-port.md](process/faithful-port.md) | engine = port of pinned Java, lint allows need rationale |
 | [notes-policy.md](process/notes-policy.md) | when and how to write notes |

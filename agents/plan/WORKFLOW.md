@@ -43,6 +43,17 @@ cargo llvm-cov --workspace                 # coverage report (CI, report only)
 cargo run -p oxidizr-cli -- dsl2json workspace.dsl -o workspace.json
 ```
 
+## Milestone discipline (adopted 2026-11-15, after M4)
+
+- **Size gate:** a milestone touching more than ~4 modules is decomposed into
+  sub-milestones in its `build/PHASE_N.md` entry BEFORE implementation starts
+  (M4's single ~15-subsystem commit cost ~10x an average milestone).
+- **Commit every green sub-piece** (gate trio green = commit); the milestone ends
+  with a wrap-up commit (PROGRESS.md milestone log + status board update).
+- **Keep `agents/notes/RESUME.md` current** — rewritten at every green commit;
+  sessions/compactions resume from it instead of re-deriving state
+  (`agents/notes/process/resume-ritual.md`).
+
 ## Code quality
 
 Priorities: **portability, reliability, performance** — and never any of them at the
