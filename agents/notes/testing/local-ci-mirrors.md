@@ -3,8 +3,9 @@
 Step argv is literally the `run:` lines of `.github/workflows/ci.yml` — dev and CI
 can't drift (commit efba278).
 
-- `cargo xtask ci [STEP…]` — default `fmt clippy test` (the PR gate); no fail-fast,
-  prints per-step banner + final summary of failed steps.
+- `cargo xtask ci [STEP…]` — default `fmt clippy test refs` (the commit gate); no
+  fail-fast, prints per-step banner + final summary of failed steps. `refs` is a
+  local-only extra gate (doc-reference integrity, `crates/xtask/src/refs.rs`).
 - `cargo xtask ci windows` — the windows-gnu+Wine leg; bails with a pointer to
   `nix develop` when `CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER` is unset
   (env check = honest precondition). macOS stays CI-only.

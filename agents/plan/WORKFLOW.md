@@ -34,8 +34,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                     # Category A only (no structurizr bin needed)
 cargo test --workspace --features reference  # + Category B (slow — run sparingly)
 cargo bench --workspace                    # criterion benches (no arg forwarding!)
-cargo xtask ci                             # the PR gates locally: fmt + clippy + test
+cargo xtask ci                             # the commit gates locally: fmt + clippy + test + refs
 cargo xtask ci windows                     # + the Wine windows-gnu leg (nix dev shell)
+cargo xtask refs                           # doc path & §section reference integrity only
 cargo xtask bench                          # bench job mirror (reports: target/criterion)
 cargo xtask cov                            # coverage job mirror (summary, report only)
 cargo xtask oracle verify                  # Category B (needs $OXIDZR_STRUCTURIZR_BIN)

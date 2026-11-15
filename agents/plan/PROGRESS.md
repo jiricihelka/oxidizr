@@ -111,7 +111,7 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
 - `loadWorkspace` also `installThemes`(local `themes/` dir or `$STRUCTURIZR_THEMES`) —
   theme URLs are fetched during PNG/SVG export only, not `--format json`.
 - **Windows CI failures — checkout EOL conversion RESOLVED (2026-11-15)**. Symptom
-  (`agents/plan/reports/windows_test_error.txt`): the 6 byte-exact `expect!` CST snapshots in
+  (`plan/reports/windows_test_error.txt`, scratch file since deleted): the 6 byte-exact `expect!` CST snapshots in
   `crates/oxidizr-dsl/tests/m1_lossless.rs` failed on Windows with LF-vs-CRLF diffs and
   shifted byte offsets. Root cause is NOT the lexer (lossless corpus tests passed):
   stored blobs are LF, but the Windows checkout had `core.autocrlf=true`, which rewrites

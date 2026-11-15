@@ -20,6 +20,8 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 
+mod refs;
+
 /// Pinned upstream monorepo commit (agents/plan/COMPAT.md).
 const REFERENCE_COMMIT: &str = "ad34036";
 /// Pinned unified application release used for goldens (bundles library 6.2.4);
@@ -48,9 +50,23 @@ fn real_main(args: Vec<String>) -> Result<()> {
             cmd_vendor(&src)
         }
         Some("ci") => cmd_ci(resolve_ci_steps(&args.collect::<Vec<_>>())?),
+        Some("refs") => refs::cmd_refs(),
+        Some("lint") => cmd_lint(),
         Some("bench") => {
-            ensure!(args.next().is_none(), "bench takes no arguments");
-            cmd_bench()
+            match args.next().as_deref() {
+                None => cmd_bench(),
+                Some("save") => cmd_bench_save(
+                    &args
+                        .next()
+                        .context("bench save needs a label, e.g. `cargo xtask bench save M5`")?,
+                ),
+                Some("cmp") => cmd_bench_cmp(&args.next().context(
+                    "bench cmp needs a baseline label, e.g. `cargo xtask bench cmp M4`",
+                )?),
+                Some(other) => {
+                    bail!("bench subcommands: save <LABEL> | cmp <LABEL> | (none), got `{other}`")
+                }
+            }
         }
         Some("cov") => {
             ensure!(args.next().is_none(), "cov takes no arguments");
@@ -91,17 +107,23 @@ fn real_main(args: Vec<String>) -> Result<()> {
 
 fn print_help() {
     println!(
-        "cargo xtask ci [STEP…]               run CI gates locally (default: fmt clippy test)\n\
+        "cargo xtask ci [STEP…]               run CI gates locally (default: fmt clippy test refs)\n\
          \n\
          \x20   local CI mirror (see .github/workflows/ci.yml); STEPS, run in the given\n\
          \x20   order without fail-fast, each reported in a final summary:\n\
          \x20     fmt      cargo fmt --all --check\n\
          \x20     clippy   cargo clippy --workspace --all-targets -- -D warnings\n\
          \x20     test     cargo test --workspace            (host, Category A)\n\
+         \x20     refs     doc-reference integrity          (local-only extra gate)\n\
+         \x20     lint     actionlint on .github/           (skips when actionlint absent)\n\
          \x20     windows  cargo test --workspace --target x86_64-pc-windows-gnu\n\
          \x20              (Wine leg; needs the nix dev shell — it provides the runner,\n\
          \x20              linker and libpthread stub; the macOS leg stays CI-only)\n\
+         cargo xtask refs                     check doc path & §section references only\n\
+         cargo xtask lint                     actionlint only (skips if not installed)\n\
          cargo xtask bench                    cargo bench --workspace (reports: target/criterion)\n\
+         cargo xtask bench save <LABEL>       snapshot criterion results into bench-baseline/<LABEL>/\n\
+         cargo xtask bench cmp <LABEL>        critcmp bench-baseline/<LABEL> vs target/criterion\n\
          cargo xtask cov                      cargo llvm-cov --workspace --summary-only (report only)\n\
          \n\
          cargo xtask vendor --src <clone>     vendor reference fixtures into testdata/\n\
@@ -132,12 +154,17 @@ fn repo_root() -> Result<PathBuf> {
 
 // ---------------------------------------------------------------- local CI mirror
 
-/// One CI gate, mirroring a job in `.github/workflows/ci.yml`.
+/// One CI gate. Cargo steps mirror a job's `run:` line in
+/// `.github/workflows/ci.yml`; `Refs` is a local-only extra gate
+/// (doc-reference integrity; user decision 2026-11-15: every commit gate,
+/// not CI).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Step {
     Fmt,
     Clippy,
     Test,
+    Refs,
+    Lint,
     /// windows-latest matrix leg approximated via the windows-gnu + Wine dev leg.
     Windows,
 }
@@ -148,6 +175,8 @@ impl Step {
             "fmt" => Some(Self::Fmt),
             "clippy" => Some(Self::Clippy),
             "test" => Some(Self::Test),
+            "refs" => Some(Self::Refs),
+            "lint" => Some(Self::Lint),
             "windows" => Some(Self::Windows),
             _ => None,
         }
@@ -158,6 +187,8 @@ impl Step {
             Self::Fmt => "fmt",
             Self::Clippy => "clippy",
             Self::Test => "test",
+            Self::Refs => "refs",
+            Self::Lint => "lint",
             Self::Windows => "windows",
         }
     }
@@ -175,21 +206,25 @@ impl Step {
                 "warnings",
             ],
             Self::Test => &["test", "--workspace"],
+            Self::Refs => &["xtask", "refs"],
+            Self::Lint => &["xtask", "lint"],
             Self::Windows => &["test", "--workspace", "--target", "x86_64-pc-windows-gnu"],
         }
     }
 }
 
-/// Default = the PR gate trio; otherwise the given names in the given order,
-/// de-duplicated. Pure, so the parsing rules are unit-tested.
+/// Default = the commit gate (fmt + clippy + test + refs); otherwise the given
+/// names in the given order, de-duplicated. Pure, so the parsing rules are
+/// unit-tested.
 fn resolve_ci_steps(args: &[String]) -> Result<Vec<Step>> {
     if args.is_empty() {
-        return Ok(vec![Step::Fmt, Step::Clippy, Step::Test]);
+        return Ok(vec![Step::Fmt, Step::Clippy, Step::Test, Step::Refs]);
     }
     let mut out = Vec::new();
     for arg in args {
-        let step = Step::parse(arg)
-            .with_context(|| format!("unknown CI step `{arg}` (fmt|clippy|test|windows)"))?;
+        let step = Step::parse(arg).with_context(|| {
+            format!("unknown CI step `{arg}` (fmt|clippy|test|refs|lint|windows)")
+        })?;
         if !out.contains(&step) {
             out.push(step);
         }
@@ -221,9 +256,8 @@ fn run_step(step: Step) -> Result<bool> {
 }
 
 fn cmd_ci(steps: Vec<Step>) -> Result<()> {
-    if steps.contains(&Step::Windows)
-        && env::var_os("CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER").is_none()
-    {
+    let had_windows = steps.contains(&Step::Windows);
+    if had_windows && env::var_os("CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER").is_none() {
         bail!(
             "windows step needs the Wine dev shell (nix develop): it provides \
              CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER/-RUSTFLAGS and the mingw linker"
@@ -234,6 +268,9 @@ fn cmd_ci(steps: Vec<Step>) -> Result<()> {
         if !run_step(step)? {
             failed.push(step.label());
         }
+    }
+    if had_windows {
+        reap_wine();
     }
     if failed.is_empty() {
         println!("\nci: all steps green");
@@ -251,8 +288,119 @@ fn cmd_bench() -> Result<()> {
         .status()
         .context("failed to run cargo bench")?;
     ensure!(status.success(), "cargo bench failed ({status})");
-    println!("\nreports: target/criterion/ — compare baselines with `critcmp`");
+    println!(
+        "\nreports: target/criterion/ — snapshot with `cargo xtask bench save <LABEL>`, \
+         compare with `cargo xtask bench cmp <LABEL>`"
+    );
     Ok(())
+}
+
+/// TESTING.md milestone ritual: copy criterion's per-benchmark result JSONs from
+/// `target/criterion/` into `bench-baseline/<LABEL>/` (same layout as M0: one dir
+/// per benchmark, `estimates/sample/tukey/benchmark.json`; the html `report/`
+/// dirs are not committed).
+fn cmd_bench_save(label: &str) -> Result<()> {
+    ensure!(
+        !label.is_empty()
+            && label
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+        "label must be [A-Za-z0-9_-]+ (e.g. M5)"
+    );
+    let root = repo_root()?;
+    let src = root.join("target/criterion");
+    ensure!(
+        src.is_dir(),
+        "no {} — run `cargo xtask bench` first",
+        src.display()
+    );
+    let dst = root.join("bench-baseline").join(label);
+    let mut n = 0usize;
+    for bench in fs::read_dir(&src)? {
+        let bench = bench?.path();
+        if !bench.is_dir() {
+            continue;
+        }
+        let name = bench.file_name().unwrap_or_default().to_os_string();
+        let mut written = false;
+        for entry in fs::read_dir(&bench)? {
+            let p = entry?.path();
+            if p.extension().is_some_and(|e| e == "json") {
+                fs::create_dir_all(dst.join(&name))?;
+                fs::copy(&p, dst.join(&name).join(p.file_name().unwrap()))?;
+                written = true;
+                n += 1;
+            }
+        }
+        if written {
+            println!("saved {}", dst.join(&name).display());
+        }
+    }
+    ensure!(n > 0, "no criterion result JSONs under {}", src.display());
+    println!("baseline `{label}`: {n} file(s) — commit them (TESTING.md §Benchmarks)");
+    Ok(())
+}
+
+/// `critcmp bench-baseline/<LABEL> target/criterion` (dev shell provides critcmp).
+fn cmd_bench_cmp(label: &str) -> Result<()> {
+    let root = repo_root()?;
+    let base = root.join("bench-baseline").join(label);
+    ensure!(base.is_dir(), "no baseline `{label}` ({})", base.display());
+    let status = Command::new("critcmp")
+        .arg(base.join("."))
+        .arg(root.join("target/criterion"))
+        .status();
+    match status {
+        Ok(s) => ensure!(s.success(), "critcmp failed ({s})"),
+        Err(_) => {
+            bail!("critcmp not found — the nix dev shell provides it (agents/plan/WORKFLOW.md)")
+        }
+    }
+    Ok(())
+}
+
+/// Workflow lint via actionlint (dev shell tool); CI's `lint` job is the authority.
+fn cmd_lint() -> Result<()> {
+    let probe = Command::new("actionlint")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    if !probe.is_ok_and(|s| s.success()) {
+        println!(
+            "lint: actionlint not on PATH — skipping locally (the nix dev shell provides it; \
+             CI's lint job is authoritative)"
+        );
+        return Ok(());
+    }
+    let status = Command::new("actionlint")
+        .current_dir(repo_root()?)
+        .status()
+        .context("failed to run actionlint")?;
+    ensure!(status.success(), "actionlint failed ({status})");
+    Ok(())
+}
+
+/// Best-effort Wine teardown after the windows leg — without this each
+/// `ci windows` run leaves ~100 wine server processes (agents/notes/env/wine-windows-leg.md).
+fn reap_wine() {
+    let quiet = |cmd: &mut Command| {
+        let _ = cmd
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    };
+    let mut probe = Command::new("wineserver");
+    probe.arg("-V");
+    if probe
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        quiet(Command::new("wineserver").args(["-k", "-q"]));
+        println!("reaped wine server (wineserver -k)");
+    }
 }
 
 /// Coverage job mirror: report only, never a gate (agents/plan/TESTING.md).
@@ -600,10 +748,10 @@ mod tests {
     use super::{Step, normalize_reference_output, resolve_ci_steps};
 
     #[test]
-    fn ci_steps_default_to_the_pr_gate_trio() {
+    fn ci_steps_default_to_the_commit_gate_quartet() {
         assert_eq!(
             resolve_ci_steps(&[]).unwrap(),
-            vec![Step::Fmt, Step::Clippy, Step::Test]
+            vec![Step::Fmt, Step::Clippy, Step::Test, Step::Refs]
         );
     }
 

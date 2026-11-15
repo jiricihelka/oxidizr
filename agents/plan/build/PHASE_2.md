@@ -143,7 +143,7 @@ Port `C4PlantUMLExporter`; behaviors verified at the pinned commit, replicate ex
 
 Java `getViewOrViewSetProperty` equivalents are read by all exporters
 (`c4plantuml.stdlib`, enterprise name, `useAlphanumericShortIds`-style toggles, …).
-Deliverable **`agents/plan/build/EXPORT-PROPERTIES.md`** (same pattern as WRITE-CATALOG):
+Deliverable **`agents/plan/build/EXPORT-PROPERTIES.md`** (same pattern as WRITE-CATALOG): <!-- refs:ignore forward reference, created by P2 -->
 exhaustive grep of property-name string literals in the four exporters → table
 property → read site → default → cascade order (verify order in Java) → observable
 effect. Implemented as one typed function `export_property(ws, view, name)` — no
@@ -163,7 +163,7 @@ scattered `properties.get("…")` calls.
   `xtask/src/exportcmp/` — its grammar table doubles as the C4 macro inventory that
   P4's importer builds on. Comparators for Structurizr-PlantUML and Mermaid move to
   **P4-D13**; until then those dialects rely on the two mechanisms below.
-- **Own goldens** (Category A, all dialects): `testdata/exports/`, per dialect ×
+- **Own goldens** (Category A, all dialects): `testdata/exports/`, per dialect × <!-- refs:ignore forward reference, created by P2 -->
   view-kind matrix from fixtures — byte-diff against OUR OWN stored output; catches
   unintended drift of our formatting even though the contract is semantic.
 - **Render checks** (Category B, skip loudly; all dialects): when

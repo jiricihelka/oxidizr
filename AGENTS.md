@@ -47,7 +47,7 @@ JSON level where the format defines it. Status: Phase 1 — milestone log in
 ## Commands (quick reference)
 
 ```sh
-cargo xtask ci              # the gate trio before every commit: fmt + clippy + test
+cargo xtask ci              # the gate quartet before every commit: fmt + clippy + test + refs
 cargo xtask ci windows      # + Wine windows-gnu leg (needs `nix develop`)
 cargo xtask bench | cov     # bench / coverage job mirrors
 cargo xtask oracle verify   # Category B (needs $OXIDZR_STRUCTURIZR_BIN, slow)
