@@ -32,9 +32,14 @@ use crate::printer::{self, Json};
 
 /// Serialize to the reference's exact bytes (no trailing newline, §0).
 pub fn to_vec(workspace: &Workspace) -> Result<Vec<u8>, JsonError> {
+    Ok(printer::to_bytes(&to_tree(workspace)?))
+}
+
+/// The writable `Json` tree behind [`to_vec`], exposed for the
+/// `--keep-unknown` overlay (`keep.rs`, D3). Parity output is unaffected.
+pub(crate) fn to_tree(workspace: &Workspace) -> Result<Json, JsonError> {
     let ctx = Ctx::new(workspace);
-    let root = ctx.workspace(workspace)?;
-    Ok(printer::to_bytes(&root))
+    ctx.workspace(workspace)
 }
 
 // ---------------------------------------------------------------------------

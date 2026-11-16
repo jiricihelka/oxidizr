@@ -4,13 +4,31 @@
 //! Exit codes: `0` ok · `1` diagnostics errors (or warnings with `--strict`) ·
 //! `2` usage (clap default) · `3` I/O. `-` means stdin/stdout where a command takes a
 //! file argument. No config files: flags + the documented env family only (agents/plan/WORKFLOW.md §CLI/config policy).
+//!
+//! M6-a lands `dsl2json` / `json2json` / `validate` (miette-rendered
+//! diagnostics, JSON-base loader injected for `workspace extends <*.json>`,
+//! D3 `--keep-unknown` capture through `oxidizr_json::roundtrip_keep_unknown`);
+//! `fmt` arrives with M6-b, `reconcile` with M6-c. Input decoding is
+//! UTF-8-only at v0.1 (V-8 resolved: no `--encoding` flag; non-UTF-8 input is
+//! an OXZ-5006 exit-3 failure like any other I/O problem).
 // P1-M0 skeleton: the full command surface (P1-D8) parses, but the pipeline deps are
 // declared before use (json M3+, dsl M4/M5, miette rendering M6). Remove as they land.
+// `oxidizr-ast` stays pre-declared until the M6-b formatter consumes the CST.
 #![allow(unused_crate_dependencies)]
 
+pub mod report;
+
+use std::io::Read as _;
+use std::io::Write as _;
+use std::path::Path;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use oxidizr_core::Workspace;
+use oxidizr_diag::codes;
+use oxidizr_dsl::engine::{ParseOptions, ParseResult, parse_dsl};
+
+use report::{Issue, Renderer};
 
 /// Structurizr-compatible C4 workspace tooling.
 #[derive(Parser, Debug)]
@@ -22,12 +40,13 @@ pub struct Cli {
     /// Treat warnings as errors (exit 1 on any warning diagnostic).
     #[arg(long, global = true)]
     pub strict: bool,
-    /// Keep non-schema JSON keys on read (round-trip them on write; output is then
-    /// intentionally not reference-parity — D3).
+    /// Keep non-schema / writer-omitted JSON keys on read and re-write them
+    /// (`json2json` only; superset round-trip, intentionally non-parity — D3).
     #[arg(long, global = true)]
     pub keep_unknown: bool,
-    /// Enable `${VAR}` environment-variable fallback (default off; parity default
-    /// pinned by V-3).
+    /// Request `${VAR}` environment-variable fallback. The reference parser
+    /// enables env substitution by default (V-3), so it is ON here too; the
+    /// flag is accepted for explicitness and future feature gates.
     #[arg(long, global = true)]
     pub env: bool,
     /// Disable color output (also honored via `NO_COLOR`).
@@ -63,6 +82,7 @@ pub enum Command {
     /// Validate workspace file(s); format auto-detected by extension.
     Validate {
         /// Workspace files to validate.
+        #[arg(required = true)]
         files: Vec<PathBuf>,
     },
     /// Reformat DSL source (canonical style, P1-D7 invariants).
@@ -91,35 +111,304 @@ pub enum Command {
 
 /// Run the CLI. Returns the process exit code (usage errors exit via clap with `2`).
 ///
-/// M0 scaffold: the full surface parses; commands report `not implemented yet`
-/// (exit `1`) until their milestones land (json: M3+; dsl: M4/M5; fmt/reconcile: M6).
+/// `Ok(0)` success · `Ok(1)` diagnostics with an error (or a warning under
+/// `--strict`) · `Ok(3)` I/O failure; diagnostics are rendered by miette on
+/// stderr before returning ([`report`]). `Err` is reserved for the
+/// milestones not yet landed (`fmt` M6-b, `reconcile` M6-c) and internal
+/// faults; main maps it to exit `1`. Usage errors never reach `Err`: clap
+/// exits `2` directly.
 ///
 /// # Errors
 ///
-/// [`anyhow::Error`] on command failure (diagnostics with errors, I/O problems, or —
-/// until the milestones land — invoking an unimplemented subcommand). Usage errors
-/// never reach `Err`: clap exits `2` directly.
+/// [`anyhow::Error`] only for unimplemented milestones / internal faults.
 pub fn run() -> anyhow::Result<i32> {
     let cli = Cli::parse();
-    anyhow::bail!(
-        "`oxidizr` scaffold (P1-M0): subcommand `{}` lands in a later milestone",
-        command_name(&cli.command)
-    );
+    let renderer = Renderer::new(cli.no_color, cli.quiet);
+    let code = match &cli.command {
+        Command::Dsl2Json { dsl, output } => dsl2json(&renderer, dsl.as_deref(), output.as_deref()),
+        Command::Json2Json { json, output } => {
+            json2json(&cli, &renderer, json.as_deref(), output.as_deref())
+        }
+        Command::Validate { files } => validate(&cli, &renderer, files),
+        Command::Fmt { .. } => {
+            anyhow::bail!("`fmt` lands with M6-b (formatter over the lossless CST)")
+        }
+        Command::Reconcile { .. } => {
+            anyhow::bail!("`reconcile` lands with M6-c (identifier-keyed layout remap)")
+        }
+    };
+    Ok(code)
 }
 
-fn command_name(command: &Command) -> &'static str {
-    match command {
-        Command::Dsl2Json { .. } => "dsl2json",
-        Command::Json2Json { .. } => "json2json",
-        Command::Validate { .. } => "validate",
-        Command::Fmt { .. } => "fmt",
-        Command::Reconcile { .. } => "reconcile",
+/// `oxidizr-json` as the engine's `.json` base loader for
+/// `workspace extends <file.json>` (topology P1-D1: the dsl crate must not
+/// depend on json — the CLI injects it here).
+fn json_loader(path: &str) -> Result<Workspace, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Error reading file at {path}: {e}"))?;
+    oxidizr_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
+/// One decoded input: engine-visible file path (canonical, `None` for stdin
+/// so the reference `parse(String)` quirks hold) + UTF-8 text + display name.
+struct Input {
+    file: Option<String>,
+    text: String,
+    display: String,
+}
+
+/// Read `-`/stdin or a file; strict UTF-8 (V-8). Errors are OXZ-5006 issues
+/// (exit 3 family).
+fn read_input(path: Option<&Path>) -> Result<Input, Issue> {
+    if path.is_none_or(|p| p == Path::new("-")) {
+        let mut buf = Vec::new();
+        std::io::stdin()
+            .read_to_end(&mut buf)
+            .map_err(|e| Issue::io("failed to read stdin", &e))?;
+        let text = decode(&buf, "-")?;
+        return Ok(Input {
+            file: None,
+            text,
+            display: "-".to_string(),
+        });
+    }
+    let path = path.unwrap_or_else(|| Path::new("-"));
+    let bytes = std::fs::read(path)
+        .map_err(|e| Issue::io(&format!("failed to read `{}`", path.display()), &e))?;
+    let text = decode(&bytes, &path.display().to_string())?;
+    let file = std::fs::canonicalize(path)
+        .ok()
+        .map(|p| p.display().to_string())
+        .or_else(|| Some(path.display().to_string()));
+    Ok(Input {
+        file,
+        text,
+        display: path.display().to_string(),
+    })
+}
+
+/// V-8 (resolved): UTF-8 only at v0.1 — no `--encoding` flag; the reference
+/// `parse(File)` reads the platform charset, oxidizr pins UTF-8 and fails
+/// loudly instead of garbling.
+fn decode(bytes: &[u8], name: &str) -> Result<String, Issue> {
+    String::from_utf8(bytes.to_vec()).map_err(|_| {
+        Issue::error(
+            codes::CLI_IO,
+            format!("`{name}` is not valid UTF-8 (oxidizr reads UTF-8 only)"),
+        )
+    })
+}
+
+/// Write exact bytes to `-o`/file or stdout (no trailing newline added —
+/// stdout carries the same bytes as the file).
+fn write_output(bytes: &[u8], output: Option<&Path>) -> Result<(), Issue> {
+    match output {
+        None => {
+            let mut stdout = std::io::stdout().lock();
+            stdout
+                .write_all(bytes)
+                .and_then(|()| stdout.flush())
+                .map_err(|e| Issue::io("failed to write stdout", &e))
+        }
+        Some(p) => std::fs::write(p, bytes)
+            .map_err(|e| Issue::io(&format!("failed to write `{}`", p.display()), &e)),
+    }
+}
+
+/// Parse a DSL input with production options (JSON-base loader injected).
+/// The `Err` arm is the fatal statement-level failure (empty source) — exit 1.
+fn parse_dsl_input(input: &Input) -> Result<ParseResult, Issue> {
+    let opts = match &input.file {
+        Some(f) => ParseOptions {
+            json_loader: Some(json_loader),
+            ..ParseOptions::file(f)
+        },
+        None => ParseOptions {
+            file: None,
+            base_dir: None,
+            json_loader: Some(json_loader),
+        },
+    };
+    parse_dsl(&input.text, opts).map_err(|e| Issue::from_dsl(&e))
+}
+
+/// Render a batch and report whether any issue blocks exit 1 (severity vs
+/// `--strict`).
+fn emit(renderer: &Renderer, issues: &[Issue], strict: bool) -> bool {
+    renderer.issues(issues);
+    issues.iter().any(|i| i.blocks(strict))
+}
+
+fn dsl2json(renderer: &Renderer, input: Option<&Path>, output: Option<&Path>) -> i32 {
+    let source = match read_input(input) {
+        Ok(s) => s,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&e));
+            return 3;
+        }
+    };
+    let result = match parse_dsl_input(&source) {
+        Ok(r) => r,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&e));
+            return 1;
+        }
+    };
+    if !result.errors.is_empty() {
+        // D1 recovery: all recorded statement errors render; the reference
+        // export would have aborted on the first one — no partial output.
+        let issues: Vec<Issue> = result.errors.iter().map(Issue::from_dsl).collect();
+        renderer.issues(&issues);
+        return 1;
+    }
+    let bytes = match oxidizr_json::to_vec(&result.workspace) {
+        Ok(b) => b,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&Issue::from_json(
+                &e,
+                &source.text,
+                &source.display,
+            )));
+            return 1;
+        }
+    };
+    match write_output(&bytes, output) {
+        Ok(()) => 0,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&e));
+            3
+        }
+    }
+}
+
+fn json2json(cli: &Cli, renderer: &Renderer, input: Option<&Path>, output: Option<&Path>) -> i32 {
+    let source = match read_input(input) {
+        Ok(s) => s,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&e));
+            return 3;
+        }
+    };
+    let bytes = source.text.as_bytes();
+    let produced = if cli.keep_unknown {
+        // D3 superset mode: unknown / legacy / writer-omitted members ride
+        // through verbatim (output intentionally non-parity).
+        oxidizr_json::roundtrip_keep_unknown(bytes)
+    } else {
+        oxidizr_json::from_slice(bytes).and_then(|ws| oxidizr_json::to_vec(&ws))
+    };
+    match produced {
+        Ok(b) => match write_output(&b, output) {
+            Ok(()) => 0,
+            Err(e) => {
+                renderer.issues(std::slice::from_ref(&e));
+                3
+            }
+        },
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&Issue::from_json(
+                &e,
+                &source.text,
+                &source.display,
+            )));
+            1
+        }
+    }
+}
+
+/// `validate`: format by extension (P1-D8), DSL parse or JSON read + hydrate,
+/// then the M2 validation catalog on the loaded workspace. Exit: 1 when any
+/// issue blocks (severity vs `--strict`), else 3 on I/O trouble, else 0.
+fn validate(cli: &Cli, renderer: &Renderer, files: &[PathBuf]) -> i32 {
+    let strict = cli.strict;
+    let mut blocked = false;
+    let mut io_error = false;
+    for path in files {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase);
+        let source = if let Some("dsl" | "json") = ext.as_deref() {
+            match read_input(Some(path)) {
+                Ok(s) => s,
+                Err(e) => {
+                    renderer.issues(std::slice::from_ref(&e));
+                    io_error = true;
+                    continue;
+                }
+            }
+        } else {
+            blocked |= emit(
+                renderer,
+                std::slice::from_ref(&Issue::error(
+                    codes::CLI_IO,
+                    format!(
+                        "cannot determine the workspace format of `{}` (expected `.dsl` or `.json`)",
+                        path.display()
+                    ),
+                )),
+                strict,
+            );
+            continue;
+        };
+        let workspace = if ext.as_deref() == Some("dsl") {
+            match parse_dsl_input(&source) {
+                Ok(r) if r.errors.is_empty() => r.workspace,
+                Ok(r) => {
+                    let issues: Vec<Issue> = r.errors.iter().map(Issue::from_dsl).collect();
+                    blocked |= emit(renderer, &issues, strict);
+                    continue;
+                }
+                Err(e) => {
+                    blocked |= emit(renderer, std::slice::from_ref(&e), strict);
+                    continue;
+                }
+            }
+        } else {
+            match oxidizr_json::from_slice(source.text.as_bytes()) {
+                Ok(ws) => ws,
+                Err(e) => {
+                    blocked |= emit(
+                        renderer,
+                        std::slice::from_ref(&Issue::from_json(&e, &source.text, &source.display)),
+                        strict,
+                    );
+                    continue;
+                }
+            }
+        };
+        let violations = oxidizr_core::validate(&workspace.model, &workspace.views);
+        if violations.is_empty() {
+            renderer.ok(&format!("{}: ok", source.display));
+        } else {
+            let issues: Vec<Issue> = violations
+                .iter()
+                .map(|v| Issue::validation(&v.message))
+                .collect();
+            blocked |= emit(renderer, &issues, strict);
+        }
+    }
+    if blocked {
+        1
+    } else if io_error {
+        3
+    } else {
+        0
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn command_name(command: &Command) -> &'static str {
+        match command {
+            Command::Dsl2Json { .. } => "dsl2json",
+            Command::Json2Json { .. } => "json2json",
+            Command::Validate { .. } => "validate",
+            Command::Fmt { .. } => "fmt",
+            Command::Reconcile { .. } => "reconcile",
+        }
+    }
 
     #[test]
     fn surface_parses() {
@@ -138,11 +427,21 @@ mod tests {
         ])
         .unwrap();
         assert!(Cli::try_parse_from(["oxidizr", "merge"]).is_err());
+        // `validate` needs at least one file (clap usage error, exit 2).
+        assert!(Cli::try_parse_from(["oxidizr", "validate"]).is_err());
     }
 
     #[test]
     fn command_names_stable() {
         let cli = Cli::try_parse_from(["oxidizr", "dsl2json"]).unwrap();
         assert_eq!(command_name(&cli.command), "dsl2json");
+    }
+
+    #[test]
+    fn line_offsets_match_split_inclusive() {
+        let text = "one\ntwo\nthree\n";
+        assert_eq!(report::offset_of_line(text, 1), 0);
+        assert_eq!(report::offset_of_line(text, 2), 4);
+        assert_eq!(report::offset_of_line(text, 3), 8);
     }
 }

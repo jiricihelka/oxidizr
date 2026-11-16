@@ -23,11 +23,13 @@
 mod colors;
 pub mod error;
 mod javahash;
+pub mod keep;
 mod printer;
 mod reader;
 mod writer;
 
 pub use error::JsonError;
+pub use keep::roundtrip_keep_unknown;
 
 use oxidizr_core::Workspace;
 

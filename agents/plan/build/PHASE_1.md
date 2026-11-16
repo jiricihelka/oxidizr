@@ -318,6 +318,14 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
   M6-a CLI surface (flags/exit codes/miette + json2json/`--keep-unknown` wiring),
   M6-b formatter (`fmt` on the lossless CST + invariants/proptest), M6-c
   reconcile + validate polish, M6-d fuzz targets + CI nightlies.
+  **M6-a DONE 2026-11-16** (quartet green): `dsl2json`/`json2json`/`validate` wired
+  (engine `json_loader` injected here — P1-D1 topology holds); miette `report.rs`
+  (`Issue`/`Renderer`, reference exception text re-assembled, `NO_COLOR` honored);
+  exit codes 0/1/2/3 per P1-D8; D3 `--keep-unknown` via new `oxidizr_json::
+  roundtrip_keep_unknown` (input↔tree pairing overlay, `Raw` printer literals,
+  idempotent superset); new codes `OXZ-3001/4001/4002/5006` registered; V-3/V-8
+  closed below; `tests/cli.rs` 15 Category A end-to-end tests (byte-exact golden,
+  stdin/stdout, exit codes).
 - **M7** hardening: perf sanity (parse whole corpus < 100 ms in release — informational),
   docs (`--help`, README quickstart), tag v0.1.0.
 
@@ -331,17 +339,20 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
   `NON_EMPTY`; primitive ints/bools are NEVER empty (`x:0`/`y:0`/`instanceId`/boundary
   booleans ALWAYS written), `Integer`/`Boolean` with `NON_NULL` write their zero/false
   (`response:false`), `generatedKey` `NON_DEFAULT` (true only).
-- V-3 actual default of `structurizr.feature.dsl.environment` (env fallback on/off) →
-  match it with `--env` default.
+- V-3 ✅ (2026-11-15, `Features.java` + `DslParser` ctor) env fallback is **ON** by
+  default in the reference; oxidizr substitutes env vars by default too
+  (`engine/mod.rs` `substitute_strings`), `--env` is accepted as the explicit form.
 - V-4 auto view-key generation exact rule (`Prefix-NNN` numbering incl. collisions)
   from `views-without-keys.dsl`.
 - V-5 `!include` of a directory: file set/order/extensions.
 - V-6 ~~`!docs`/`!adrs` exclude pattern semantics~~ — **moved to P4-V8** (importers
   deferred 2026-11-14).
 - V-7 canonical-name form for custom elements and instances (docs vs code drift).
-- V-8 ISO-8859 fixture: Java read encoding (default charset?) → choose identical
-  behavior; else explicit error. Also pins newline handling: what CRLF input produces
-  in text fields and in the `structurizr.dsl` property bytes.
+- V-8 ✅ (2026-11-16, M6-a decision) oxidizr reads **UTF-8 only** — no `--encoding`
+  flag; non-UTF-8 input is an OXZ-5006 exit-3 CLI failure (the reference `parse(File)`
+  reads the platform charset and silently garbles; explicit error chosen). Newline
+  handling verified at M1 (CRLF kept in text fields, `structurizr.dsl` property bytes
+  are the exact source text).
 - V-9 ~~decision-status/date parsing corners per ADR tool format~~ — **moved to P4-V7**
   (importers deferred 2026-11-14).
 - V-10 ✅ (2026-11-14, oracle runs, agents/plan/PROGRESS.md) The app layer DOES mutate the

@@ -181,6 +181,17 @@ pub mod codes {
     /// raster/plantuml/mermaid/kroki image-view importers need the
     /// `structurizr-import` stack (D11).
     pub const IMPORT_DEFERRED: Code = Code::new(5005);
+    /// Model/view validation failure — reference `hydrate()`/validate message
+    /// verbatim (M6 CLI `validate`).
+    pub const VALIDATION: Code = Code::new(3001);
+    /// JSON input rejected: syntax, structural read or `hydrate()` validation
+    /// (M6 CLI; the `JsonError` variant decides the message shape).
+    pub const JSON_READ: Code = Code::new(4001);
+    /// The workspace cannot be written byte-faithfully (M6 CLI).
+    pub const JSON_WRITE: Code = Code::new(4002);
+    /// CLI I/O and input-policy failure: unreadable/unwritable file, stdin/
+    /// stdout error, non-UTF-8 input (V-8), undetectable workspace format (M6).
+    pub const CLI_IO: Code = Code::new(5006);
     /// Too many errors: collection aborted at the cap (9xxx internal).
     pub const TOO_MANY_ERRORS: Code = Code::new(9001);
 }

@@ -30,6 +30,8 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [burn-in-register.md](testing/burn-in-register.md) | m4_fixtures KNOWN_ERRORS pattern (both-directions check) |
 | [local-ci-mirrors.md](testing/local-ci-mirrors.md) | `cargo xtask ci\|bench\|cov` mirrors ci.yml argv |
 | [ast-grep-search.md](testing/ast-grep-search.md) | `ast-grep` structural search recipes, vs grep counts |
+| [oracle-app-harness.md](testing/oracle-app-harness.md) | export injects inspection props + default views; goldening limits |
+| [cli-e2e-pitfalls.md](testing/cli-e2e-pitfalls.md) | subprocess tests: pipe stdio, random UUIDs, known-vs-legacy JSON fields |
 
 ## process/ — how work is done ([index](process/README.md))
 

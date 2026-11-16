@@ -22,6 +22,10 @@ pub enum Json {
     Obj(Vec<(String, Json)>),
     /// Array; empty `[ ]`, all-scalar inline, object elements expanded.
     Arr(Vec<Json>),
+    /// Verbatim scalar literal (`null`, non-`i64` numbers) — produced only
+    /// by the `--keep-unknown` overlay (`keep.rs`, D3); the parity writer
+    /// never builds one.
+    Raw(String),
 }
 
 impl Json {
@@ -95,6 +99,7 @@ fn emit(value: &Json, depth: usize, out: &mut Vec<u8>) {
         Json::Str(s) => escape_into(s, out),
         Json::Num(n) => out.extend_from_slice(n.to_string().as_bytes()),
         Json::Bool(b) => out.extend_from_slice(if *b { b"true" } else { b"false" }),
+        Json::Raw(literal) => out.extend_from_slice(literal.as_bytes()),
         Json::Obj(entries) => {
             if entries.is_empty() {
                 out.extend_from_slice(b"{ }");

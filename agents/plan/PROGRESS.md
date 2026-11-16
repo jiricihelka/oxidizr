@@ -14,8 +14,9 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M3a write catalog (P1-D6) | **done 2026-11-14** (commit 7848c5e) |
 | P1 | M3b json writer + reader | **done 2026-11-14** (commit 0e77dc2) |
 | P1 | M4 dsl parser + builder | **done 2026-11-15** (commit 41b70ca) |
-| P1 | M5 workspace extends | **done 2026-11-16** (commit TBD, log below) |
-| P1 | M6 … M7 | M6 (CLI/fmt/reconcile/fuzz) next |
+| P1 | M5 workspace extends | **done 2026-11-16** (commits 9f174e6, c468854) |
+| P1 | M6-a CLI surface | **done 2026-11-16** (log below) |
+| P1 | M6-b … M7 | M6-b `fmt` (formatter on the lossless CST) next |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -138,6 +139,43 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P1-M6a — CLI surface: dsl2json / json2json / validate ✅ (2026-11-16)
+
+P1-D8 contract implemented end-to-end; `fmt`/`reconcile` keep their plan-ref
+bails (M6-b/c).
+
+- `oxidizr-cli`: commands wired to `parse_dsl` + `oxidizr_json` (engine
+  `ParseOptions::json_loader` injected with `oxidizr_json::from_slice` —
+  P1-D1 topology intact, `workspace extends <*.json>` works through the CLI);
+  `-` stdin/stdout; strict UTF-8 (V-8 closed: no `--encoding`); canonicalized
+  file path handed to the engine so reference `parse(File)` semantics hold.
+- `report.rs`: `Issue` (+boxed `Snippet`) / `Renderer` over miette 7
+  `GraphicalReportHandler`; `DslError` → reference exception text re-assembled
+  (`<msg> at line N of <file>`) + `source_line` snippet; `JsonError::Parse`
+  maps serde line/col to a byte offset; `NO_COLOR`/`--no-color` → ascii theme.
+- Exit codes: 0 ok · 1 diagnostics (errors; `--strict` adds warnings) ·
+  2 usage (clap) · 3 I/O (`OXZ-5006` incl. non-UTF-8, undetectable format).
+- D3 `--keep-unknown`: new `oxidizr_json::roundtrip_keep_unknown` (`keep.rs`)
+  overlays the input `Value` onto the writable `Json` tree — unknown,
+  legacy (`revision`, `enterprise`, …) and `NON_EMPTY`-omitted members are
+  re-appended verbatim after the known keys (sorted); arrays pair by
+  `id`/`key`/`selector` identity, then compatibility (the writer re-sorts).
+  `printer::Json::Raw` carries non-`i64`/null literals byte-verbatim. Idempotent;
+  no-extras input reproduces the parity bytes exactly.
+- New codes registered (`docs/diagnostics.md`): `OXZ-3001` validation,
+  `OXZ-4001/4002` JSON read/write, `OXZ-5006` CLI I/O/policy.
+- Gates: `tests/cli.rs` 15 e2e tests — golden byte-exact stdout, JSON-base
+  loader injection, keep-unknown against read-corpus legacy keys, exit codes
+  0/1/2/3, miette text checks (`OXZ-…`, reference text, snippet line); quartet
+  green; `oracle verify` 4/4 (printer/writer untouched in parity output).
+- Test-writing pitfalls worth remembering (→ `agents/notes/testing/
+  cli-e2e-pitfalls.md`): `wait_with_output` needs explicit `Stdio::piped()`;
+  `structurizr.dsl.identifier` is a fresh random UUID per parse (normalize it
+  in stdin↔file comparisons); `lastModified*` are KNOWN round-tripping fields
+  (`revision` is the legacy one); relative `workspace extends`/`!include`
+  must not appear in stdin-vs-file fixtures (no file context — reference-
+  faithful skip).
 
 ### P1-M5 — `workspace extends` (file + JSON bases) ✅ (2026-11-16)
 
