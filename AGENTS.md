@@ -19,6 +19,10 @@ JSON level where the format defines it. Status: Phase 1 — milestone log in
 - `agents/notes/` — short operational notes (env setup, paid-for pitfalls, testing,
   process). **Search here before debugging or re-deriving tool behavior**; index in
   `agents/notes/README.md`. Write a note after every non-obvious fix.
+- Tool inventory — **check before reaching for any tool**:
+  `agents/notes/env/toolbox.md` (gates/verification loop: xtask, oracle, wine, bench)
+  and `agents/notes/env/triage-toolkit.md` (inspection/search: jq, ast-grep, …);
+  both list what is absent on this machine too.
 - `agents/plan/` — permanent design corpus, decision registers, phase plans; index
   and reading order in `agents/plan/README.md`. `agents/plan/reports/` = untracked
   scratch for user-dropped CI/OS reports.

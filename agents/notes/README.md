@@ -11,6 +11,8 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [wine-windows-leg.md](env/wine-windows-leg.md) | run Windows CI tests locally via windows-gnu + Wine |
 | [reference-oracle.md](env/reference-oracle.md) | structurizr oracle: pins, invocation, speed |
 | [nix-flake.md](env/nix-flake.md) | what the dev shell provides; nightly double-pin |
+| [toolbox.md](env/toolbox.md) | gates + verification tools on PATH, when/how; what's absent |
+| [triage-toolkit.md](env/triage-toolkit.md) | inspection/search tools + env knobs |
 
 ## pitfalls/ — traps already paid for ([index](pitfalls/README.md))
 

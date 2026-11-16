@@ -3,8 +3,8 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-16 · HEAD = M6-b formatter commit (tip of `master`) · gates green ·
-nothing pushed.
+Updated: 2026-11-16 · HEAD = env tool-inventory notes commit (tip of `master`) ·
+gates green · nothing pushed.
 
 - **Done:** P1-M6b `fmt` COMPLETE (`oxidizr_dsl::fmt` printer over the lossless CST,
   P1-D7 invariants + line-end guards — `agents/notes/pitfalls/fmt-line-end-guards.md`;
@@ -13,7 +13,8 @@ nothing pushed.
   committed; two latent M1 `lex_comment` tiling bugs fixed + regression; CLI `fmt`
   wired stdout/`--write`/`--check`, e2e 15→20; `oxidizr-ast` pruned from CLI deps);
   P1-M6a CLI surface; P1-M5 extends (9f174e6, c468854); P1-M4; infra through 2576a25.
-  V-3/V-8 closed (PHASE_1 §P1-D12).
+  V-3/V-8 closed (PHASE_1 §P1-D12). Env tool inventory notes `env/toolbox.md` +
+  `env/triage-toolkit.md` indexed + referenced from AGENTS.md (user ask).
 - **Next:** GOAL = finish Phase 1 → **M6-c** (PHASE_1 §P1-D11): `reconcile`
   (identifier-keyed layout remap — P1-D8 contract: `--dsl X --layout Y [-o]`,
   `structurizr.dsl.identifier` exact-match first, canonical-name fallback,
