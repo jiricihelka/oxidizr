@@ -225,12 +225,14 @@ fn parse_dsl_input(input: &Input) -> Result<ParseResult, Issue> {
     let opts = match &input.file {
         Some(f) => ParseOptions {
             json_loader: Some(json_loader),
+            env_lookup: None,
             ..ParseOptions::file(f)
         },
         None => ParseOptions {
             file: None,
             base_dir: None,
             json_loader: Some(json_loader),
+            env_lookup: None,
         },
     };
     parse_dsl(&input.text, opts).map_err(|e| suggest::decorate(Issue::from_dsl(&e), None))

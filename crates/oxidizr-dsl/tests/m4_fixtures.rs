@@ -46,6 +46,7 @@ fn file_opts(path: &str) -> ParseOptions<'_> {
         file: Some(path),
         base_dir: None,
         json_loader: Some(json_loader),
+        env_lookup: None,
     }
 }
 

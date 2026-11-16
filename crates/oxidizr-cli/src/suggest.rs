@@ -180,6 +180,7 @@ mod tests {
                 file: None,
                 base_dir: None,
                 json_loader: None,
+                env_lookup: None,
             },
         )
         .unwrap()

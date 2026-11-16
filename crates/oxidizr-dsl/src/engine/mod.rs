@@ -194,6 +194,12 @@ pub(crate) struct SeqFrame {
 /// reference-shaped failure message.
 pub type JsonWorkspaceLoader = fn(&str) -> Result<Workspace, String>;
 
+/// `${VAR}` environment lookup override (Phase 1T, P1T-D1): lets the
+/// headless API run parses hermetically (test-provided map instead of the
+/// process environment). `None` — the production default — keeps the V-3
+/// reference behavior (`System.getenv` equivalent, `std::env::var`).
+pub type EnvLookup = fn(&str) -> Option<String>;
+
 /// `(identifier, item id)` pairs from a JSON base
 /// ([`json_dsl_identifiers`]).
 type DslIdentifiers = Vec<(String, Id)>;
@@ -215,6 +221,11 @@ pub struct ParseOptions<'a> {
     /// `None` (default, e.g. fragment parsing) rejects `.json` bases with a
     /// clean error.
     pub json_loader: Option<JsonWorkspaceLoader>,
+    /// `${VAR}` fallback lookup ([`EnvLookup`]); `None` (production, CLI)
+    /// reads the process environment exactly as the reference parser does
+    /// (V-3). Set by the headless API for hermetic in-process runs
+    /// (`agents/plan/build/PHASE_1T.md` P1T-D1).
+    pub env_lookup: Option<EnvLookup>,
 }
 
 impl<'a> ParseOptions<'a> {
@@ -225,6 +236,7 @@ impl<'a> ParseOptions<'a> {
             file: Some(path),
             base_dir: None,
             json_loader: None,
+            env_lookup: None,
         }
     }
 
@@ -236,6 +248,7 @@ impl<'a> ParseOptions<'a> {
             file: Some(path),
             base_dir: Some(base_dir),
             json_loader: None,
+            env_lookup: None,
         }
     }
 
@@ -247,6 +260,7 @@ impl<'a> ParseOptions<'a> {
             file: None,
             base_dir: None,
             json_loader: None,
+            env_lookup: None,
         }
     }
 }
@@ -847,7 +861,11 @@ impl<'a> Parser<'a> {
                 })
             } else {
                 // V-3: env substitution is ON (reference parser ctor default)
-                std::env::var(name).ok()
+                // unless a hermetic lookup is injected (Phase 1T P1T-D1).
+                match self.opts.env_lookup {
+                    Some(lookup) => lookup(name),
+                    None => std::env::var(name).ok(),
+                }
             };
             if let Some(after) = after {
                 token = token.replace(&before, &after);
@@ -1378,6 +1396,7 @@ impl<'a> Parser<'a> {
                 file: Some(std::path::Path::new(&path).to_str().unwrap_or(source)),
                 base_dir: self.opts.base_dir,
                 json_loader: self.opts.json_loader,
+                env_lookup: self.opts.env_lookup,
             };
             let mut child = Parser::new(child_opts);
             child.parse(&text);
@@ -1957,6 +1976,26 @@ mod tests {
         // the (unmatched) `${nope_…}` text:
         assert_eq!(p.substitute_strings("${nope_${name}}"), "${nope_X}");
         assert_eq!(p.substitute_strings("plain"), "plain");
+    }
+
+    #[test]
+    fn env_lookup_override_is_hermetic() {
+        // Phase 1T P1T-D1: with an injected lookup, `${VAR}` resolution must
+        // never touch the process environment (hermetic in-process runs).
+        fn fake_env(name: &str) -> Option<String> {
+            (name == "OXZ_SEAM").then(|| "injected".to_string())
+        }
+        let opts = ParseOptions {
+            file: None,
+            base_dir: None,
+            json_loader: None,
+            env_lookup: Some(fake_env),
+        };
+        let p = Parser::new(opts);
+        assert_eq!(p.substitute_strings("${OXZ_SEAM}"), "injected");
+        // Absent from the map ⇒ not substituted — even though `PATH` IS set
+        // in the process env: the lookup replaces it, never layers on it.
+        assert_eq!(p.substitute_strings("${PATH}"), "${PATH}");
     }
 
     #[test]

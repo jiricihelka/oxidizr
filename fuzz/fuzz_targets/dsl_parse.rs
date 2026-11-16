@@ -19,6 +19,7 @@ fuzz_target!(|data: &[u8]| {
             file: None,
             base_dir: None,
             json_loader: None,
+            env_lookup: None,
         },
     );
 });

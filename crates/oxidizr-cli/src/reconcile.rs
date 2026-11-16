@@ -458,6 +458,7 @@ mod tests {
                 file: None,
                 base_dir: None,
                 json_loader: None,
+                env_lookup: None,
             },
         )
         .unwrap_or_else(|e| panic!("parse: {e}"));
