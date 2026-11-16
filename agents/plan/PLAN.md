@@ -29,6 +29,15 @@ Goal: `oxidizr` can losslessly read every Structurizr input and write byte-perfe
   goldens byte-match; petclinic + `backwardsCompatibility/`
   read cleanly; fmt invariant and reconcile remap tests green.
 
+## Phase 1T — E2E regression & benchmark suite (interlude, added 2026-11-17)
+
+Goal: the safety net for the post-replica era — hundreds of close-to-real-world
+workspaces asserted as use-cases (valid compiles to the expected shape; invalid
+errors with the expected OXZ code set), in-process via a new stable `oxidizr-api`
+seam, blessable manifests (no bytes, no messages), shared corpus feeding the
+benches too. Runs between v0.1.0 and Phase 2; no shipped-behavior change, no tag.
+Details: `build/PHASE_1T.md`.
+
 ## Phase 2 — Converters (diagram export)
 
 Goal: workspace in → standard diagram text out.

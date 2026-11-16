@@ -19,6 +19,7 @@ disagree, the source wins — update the notes.
 | `STRUCTURIZR.md`              | Reference repo map: modules, deps, key classes, build                  | Hunting for a class/behavior       |
 | `PLAN.md`                     | Phase roadmap (parsers → converters → GUI → CLI tools)                 | Starting any work / scoping scope  |
 | `build/PHASE_1.md`            | Detailed Phase 1 implementation plan (all architectural decisions)    | Implementing Phase 1               |
+| `build/PHASE_1T.md`           | Phase 1T interlude plan: e2e regression corpus + `oxidizr-api` + benches | Implementing the e2e suite        |
 | `build/PHASE_2.md`            | Phase 2 plan: exporters (PlantUML ×2, Mermaid, theme); semantic parity | Implementing Phase 2               |
 | `build/PHASE_3.md`            | Phase 3 plan: egui viewer + layout editing, own layout engine          | Implementing Phase 3               |
 | `build/PHASE_4.md`            | Phase 4 plan: diff/query/init/lsp/inspect/importers, release           | Implementing Phase 4               |

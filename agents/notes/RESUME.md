@@ -3,29 +3,31 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-16 · HEAD = **M7 commit + tag `v0.1.0` (Phase 1 COMPLETE)**,
-tip of `master` · gates green · nothing pushed (tag stays LOCAL until the user
-says otherwise).
+Updated: 2026-11-17 · HEAD = Phase-1T planning commit (tip of `main`, tag
+`v0.1.0` one commit down) · gates green · nothing pushed.
 
-- **Done:** **PHASE 1 COMPLETE** — M0 infra, M1 lexer/CST, M2 core+validation,
-  M3a write catalog, M3b JSON writer/reader, M4 DSL engine, M5 extends,
-  M6-a CLI surface, M6-b fmt, M6-c reconcile+suggestions, M6-d fuzz nightlies,
-  M7 (this commit): mandated benches (`m7_dsl_parse_corpus` ≈ 11.5 ms ≪ 100 ms
-  sanity bar; fmt/read/write/reconcile targets), first real baseline
-  `bench-baseline/M7/`, root `README.md` quickstart, close-out entries in
-  PHASE_1 §P1-D11 + PROGRESS board/log. Tag `v0.1.0` local.
-- **Next:** Phase 2 planning is the USER's call — do NOT start P2 unprompted
-  (AGENTS.md: report Phase 1 complete first). If asked: read
-  `agents/plan/README.md` reading order, then the P2 exporter plan (create
-  `agents/plan/build/PHASE_2.md` per the charter — questions welcome in
-  planning). Pushing `master` + the tag is also user-only.
-- **Open questions:** none.
-- **Don't re-derive (trust + spot-check against `ad34036`):** bench corpus
-  conventions + timings (PROGRESS P1-M7 log); fuzz design + mingw CC strip
-  (P1-M6d log + `env/fuzz-host-toolchain.md`); reconcile/suggestions contracts
-  (P1-M6c log + module headers); fmt line-ends
-  `pitfalls/fmt-line-end-guards.md`; M4 findings PROGRESS errata +
-  `agents/plan/DSL-ERRATA.md`; M5 `testing/oracle-app-harness.md`; M6a
-  `testing/cli-e2e-pitfalls.md` (EPIPE #6); JSON byte rules
-  `agents/plan/build/WRITE-CATALOG.md`; env `agents/notes/env/`.
+- **Done:** **PHASE 1 COMPLETE** (M0–M7, tag `v0.1.0` local — see PROGRESS log).
+  **PHASE 1T PLANNED** (this commit): `build/PHASE_1T.md` — e2e regression +
+  bench interlude. User decisions (2026-11-17, questions tool) recorded there:
+  in-process stable API in a NEW `oxidizr-api` crate (CLI becomes argv/render
+  shim — F9 registered), shared corpus `e2e/corpus/` (originals + committed
+  mutations first, licensed public DSLs later), blessable manifests asserting
+  exit class + OXZ code sets + structural counts (NEVER bytes/messages),
+  ≥150 valid + ≥120 invalid floor, quick per-PR (rides `cargo test`) + full
+  nightly `e2e.yml` env-gated (`OXIDZR_E2E_FULL=1`), benches local-only
+  (`e2e-bench` cargo feature keeps CI's bench job light), no tag. PLAN.md +
+  plan README + ADDITIONAL_FEATURES F9 + PROGRESS board updated.
+- **Next:** Phase 1T **T0** on the user's go: V-T1 (engine purity for parallel
+  in-process use) then extract `oxidizr-api` from `oxidizr-cli/src/lib.rs`
+  (command bodies + `decode` + `json_loader`; suggestions stay CLI-side, D2).
+  Gate: all existing tests unmodified (byte-proof). Then T1 harness crate +
+  `xtask e2e bless`.
+- **Open questions:** none (all settled via questions 2026-11-17).
+- **Don't re-derive (trust + spot-check against `ad34036`):** the whole
+  P1T-D1..D9 decision set in `build/PHASE_1T.md` (esp. why e2e is NOT in
+  `testdata/`, why env-gate not `#[ignore]`, why `e2e-bench` feature); bench
+  conventions + timings (PROGRESS P1-M7 log); fuzz + mingw CC strip (P1-M6d +
+  `env/fuzz-host-toolchain.md`); reconcile/suggestions contracts (P1-M6c);
+  `testing/cli-e2e-pitfalls.md` (UUID filter, EPIPE #6); JSON byte rules
+  `WRITE-CATALOG.md`; env `agents/notes/env/`.
 - **Cadence:** `cargo xtask ci` green → commit + rewrite this file; never push.

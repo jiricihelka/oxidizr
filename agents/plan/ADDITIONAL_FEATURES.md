@@ -18,7 +18,7 @@ Rules:
 
 Scheduling lives in `PLAN.md`: F1+F2 land with Phase 1, F4's harness from day one
 (xtask); F3/F5/F6/F7 and the `oracle` command are Phase 4; F8 rides along with JSON
-output (Phase 1 flag).
+output (Phase 1 flag); F9 is the Phase 1T interlude (test infra, `build/PHASE_1T.md`).
 
 ### F1 — `reconcile`: re-attach layout ids after DSL edits ✅
 
@@ -84,6 +84,18 @@ output (Phase 1 flag).
 - Drops `lastModifiedDate`/`lastModifiedUser`/`lastModifiedAgent` from written JSON so
   committed workspaces diff cleanly. Opt-in only; default stays byte-parity.
 - Compatibility: output remains valid Structurizr JSON; none.
+
+### F9 — embedded e2e API (`oxidizr-api`) ✅ (agreed 2026-11-17)
+
+- Problem: the e2e regression suite (Phase 1T) must run hundreds of workspaces ×
+  several commands in-process — launching tens of thousands of CLI processes is
+  not viable, and calling library internals would break on every refactor.
+- Feature: a stable, headless `Request → execute() → Outcome` seam (exit class,
+  diagnostics as codes, output bytes) extracted from the CLI; the CLI binary
+  becomes a thin argv/render shim over it, so tests and the shipped binary can
+  never drift. Pure + total + thread-safe by contract (no env/cwd/rendering).
+- Compatibility: dev-facing; the CLI lib stays `publish = false`; parity paths
+  unchanged (T0 is proven byte-neutral by the existing golden/e2e suite).
 
 ## Ideas (💡 not agreed — sign-off required before implementing)
 

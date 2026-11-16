@@ -20,7 +20,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
 | P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
 | P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
-| P2 | exporters | pending — next phase (plan per `agents/plan/README.md`) |
+| P1T | e2e suite (interlude) | **planned 2026-11-17** — `build/PHASE_1T.md`; awaiting user go for T0 |
+| P2 | exporters | pending — after P1T (plan per `agents/plan/README.md`) |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
