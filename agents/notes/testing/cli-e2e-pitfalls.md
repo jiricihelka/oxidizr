@@ -20,3 +20,5 @@ Hard-won facts for `crates/oxidizr-cli/tests/cli.rs`-style subprocess tests:
    stdin-vs-file equivalence tests; use a self-contained source instead.
 5. `NO_COLOR=1` in the test env + `GraphicalTheme::ascii()` keeps miette
    stderr deterministic (no ANSI in `contains` checks).
+
+Last useful: 2026-11-16

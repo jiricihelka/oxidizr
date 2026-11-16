@@ -19,3 +19,5 @@ Env knobs: `NO_COLOR=1` → deterministic ASCII diagnostics (tests set it);
 `PROPTEST_CASES=20000` for deep property runs (seeds land in
 `*.proptest-regressions` — commit them); `UPDATE_EXPECT=1` for expect-test
 snapshots (EOL caveat: pitfalls/expect-test-eol.md).
+
+Last useful: never

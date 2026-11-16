@@ -23,3 +23,5 @@ multi-line constructs excluded. Measured here (2026-11-15): `.unwrap()` → grep
 Not for §doc-refs or JSON goldens (lexical is right there); no grammar for
 `.dsl`. rust-analyzer/ctags deliberately NOT in the shell — one-shot queries
 don't amortise a cold index (decision 2026-11-15).
+
+Last useful: never

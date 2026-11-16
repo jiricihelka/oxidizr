@@ -13,3 +13,5 @@ Ritual:
   WRITE-CATALOG.md are spot-checked against the pinned reference, never re-derived
   from scratch.
 - The file is mutable scratch — overwrite, never append; git keeps the trail.
+
+Last useful: 2026-11-16

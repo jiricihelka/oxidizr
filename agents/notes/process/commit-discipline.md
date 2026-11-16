@@ -15,3 +15,5 @@
 - Compatibility failures are fixed in oxidizr, never by editing expectations/goldens
   (agents/plan/COMPAT.md). Goldens regenerate only via `cargo xtask oracle`.
 - Windows report files land in `agents/plan/reports/` (untracked) — read, fix, leave.
+
+Last useful: 2026-11-16

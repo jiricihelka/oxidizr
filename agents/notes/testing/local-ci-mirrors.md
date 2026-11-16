@@ -22,3 +22,5 @@ CI caching layers (for context when timings look odd): Swatinem/rust-cache for
 target/+$CARGO_HOME, local action `.github/actions/toolchain-cache` for the pinned
 toolchain dir, actions/cache for the structurizr war. First run after any pin or
 lockfile change is a cold (seeding) run.
+
+Last useful: never

@@ -16,3 +16,5 @@ notes — this is the map, don't re-derive here.
 
 Absent on this machine — do NOT chase: miri, cargo-nextest, cargo-edit,
 cargo-audit, sccache, mold, hyperfine, just, cargo-outdated.
+
+Last useful: never

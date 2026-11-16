@@ -14,3 +14,5 @@ ad34036) — behavior matches the REFERENCE, not idiomatic Rust. Consequences:
   values (`thiserror` in libs, `anyhow` in CLI/xtask).
 - Perf claims need criterion numbers; >~10% regression vs committed baseline is
   reviewed (`cargo xtask bench` + critcmp).
+
+Last useful: never

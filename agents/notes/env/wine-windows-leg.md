@@ -18,3 +18,5 @@ Notes: ~2-4 min cold; leaves ~100 wine server processes — `pkill -f 'wine.*ser
 WINEPREFIX is `$HOME/wine64-drives`. It does NOT simulate the Windows *checkout*
 (EOL/autocrlf, NTFS) — for EOL use `git -c core.autocrlf=true clone`; macOS stays CI-only.
 Windows-native arm64 is unsupported tier-2 → CI matrix uses windows-latest x86_64 only.
+
+Last useful: never

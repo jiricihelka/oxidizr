@@ -13,3 +13,5 @@ Rules:
   (`session_message.data` holds tool outputs — searchable via
   `nix run nixpkgs#sqlite -- ~/.local/share/opencode/opencode.db`).
 - `agents/plan/reports/` stays untracked (user-dropped CI reports, scratch).
+
+Last useful: never

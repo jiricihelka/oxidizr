@@ -15,3 +15,5 @@ Tags: `M5` = `workspace extends` (OXZ-5004); `D7/P4` = `!docs`/`!adrs` importers
 standalone with the reference "expected: workspace" error; covered via entries.
 
 When landing a deferred feature: delete its register rows in the same commit.
+
+Last useful: never

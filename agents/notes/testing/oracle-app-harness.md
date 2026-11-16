@@ -39,3 +39,5 @@ M3 — it is not part of the default gate).
 
 Probe recipe: `structurizr export --workspace X.dsl --format json --output D`
 by hand, compare against `testdata/golden/`.
+
+Last useful: 2026-11-16

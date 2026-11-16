@@ -8,3 +8,5 @@ with `error: Unrecognized option: 'report-dir'` and exit 1. Observed in CI on al
 Rule: don't pass criterion flags through `cargo bench --workspace --` in a
 mixed-workspace repo. Criterion's default report root is `target/criterion`
 anyway (CI uploads that path). Same trap class: `cargo test -- --<bench-flag>`.
+
+Last useful: never

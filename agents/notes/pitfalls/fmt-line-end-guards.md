@@ -27,3 +27,5 @@ Confirmed against the reference `StructurizrDslParser.preProcessLines` @ `ad3403
 - `structurizr.dsl` (base64 source) and `structurizr.dsl.identifier` UUIDs make
   parse↔fmt(x) JSON comparisons non-deterministic — drop the property line,
   redact UUID shapes (see tests/m6_fmt.rs).
+
+Last useful: 2026-11-16

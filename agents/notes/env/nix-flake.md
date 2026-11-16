@@ -14,3 +14,5 @@ milestone + re-check NIGHTLY.md.
 `nix flake check` builds every dev-shell leg incl. the windows cross leg (catches
 broken toolchain wiring without running a test). The flake is deliberately NOT
 nixfmt-styled (compact list literals) — don't "fix" its formatting.
+
+Last useful: never

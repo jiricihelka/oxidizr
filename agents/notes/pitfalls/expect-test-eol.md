@@ -14,3 +14,5 @@ Do NOT "fix" a red Windows snapshot by running `UPDATE_EXPECT=1` locally on Linu
 that rewrites the snapshot to your platform bytes and just moves the mismatch.
 `include_str!` fixtures always read the repo bytes — those tests are EOL-immune by
 design (m4_fixtures pattern).
+
+Last useful: never

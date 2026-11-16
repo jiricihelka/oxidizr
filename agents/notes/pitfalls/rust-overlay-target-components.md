@@ -17,3 +17,5 @@ toolchain.minimal.override {
 ```
 
 The flake's `pinMatch` guard exists precisely to catch this class of silent drift.
+
+Last useful: never

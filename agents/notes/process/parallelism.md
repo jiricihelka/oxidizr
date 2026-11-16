@@ -23,3 +23,5 @@ fuel. (Adopted 2026-11-15; permanent rule: `agents/plan/WORKFLOW.md`
 - Two concurrent `cargo` invocations — same target-dir lock, they just queue;
   chain them in one command instead.
 - Sleeping/polling on background shells (harness notifies on completion).
+
+Last useful: never

@@ -13,3 +13,5 @@ layers must both hold on every checkout:
 CI never regenerates goldens (committed; oracle is Category B, weekly). When
 vendoring new fixtures record the tool version in testdata/README.md.
 macOS-specific fs behavior is CI-only — Wine/Linux can't approximate it.
+
+Last useful: never

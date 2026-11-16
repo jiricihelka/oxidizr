@@ -19,3 +19,5 @@ Rules: the binary is SLOW (JVM start ~1 s) — Category B only, default-OFF
 summary (except the dedicated CI job, where skip = failure).
 Drivers: `cargo xtask oracle gen|verify` (normalizes the reference's 2-space
 pretty-print + scope-order quirks — see `xtask::normalize_reference_output`).
+
+Last useful: never

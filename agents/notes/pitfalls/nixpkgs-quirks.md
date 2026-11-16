@@ -13,3 +13,5 @@
   noise ≠ eval error; real failures end with `error: ...` and nonzero exit.
 - rustup channel dates are *build* dates; the rustc version string shows the
   previous day's commit (nightly-2026-11-13 ⇒ 8eb778d04 2026-11-12).
+
+Last useful: never
