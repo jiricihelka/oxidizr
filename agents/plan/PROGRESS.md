@@ -20,7 +20,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
 | P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
 | P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
-| P1T | e2e suite (interlude) | **planned 2026-11-17** — `build/PHASE_1T.md`; awaiting user go for T0 |
+| P1T | e2e suite (interlude) | **T0 done 2026-11-17** (`5eedf99`…`2d2e159`) — `oxidizr-api` seam landed, byte-proof held; T1 next (`build/PHASE_1T.md`) |
 | P2 | exporters | pending — after P1T (plan per `agents/plan/README.md`) |
 | P3 | viewer+layout | pending |
 

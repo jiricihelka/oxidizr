@@ -64,15 +64,41 @@ crates/
   the e2e suite never uses it — it uses in-memory text. Thread-safe: everything
   `Send + Sync`, per-call state only (id counter lives in the builder — verify
   V-T1).
-- Suggestions (`suggest.rs`) stay CLI-side: they decorate stderr only (P1-D2);
-  `Outcome` carries codes/severities, the CLI decorates. Message strings stay
-  accessible on `Diagnostic` for humans — the e2e layer is simply forbidden
+- Suggestions (`suggest.rs`) live in the API too (refinement below): they
+  decorate `Issue::help` only (P1-D2), and the command bodies that apply them
+  are API-side; miette stays the CLI's sole rendering concern.
+  `Outcome` carries codes/severities, the CLI renders. Message strings stay
+  accessible on `Issue` for humans — the e2e layer is simply forbidden
   from asserting them.
 - Registered as `ADDITIONAL_FEATURES.md` **F9** (dev-facing; the CLI lib stays
   `publish = false`; parity paths unchanged per that file's rule 1).
 - **T0 proof**: all existing tests (22 CLI e2e byte-goldens included) pass
   unmodified against the refactored code. Any golden drift = the refactor is
   wrong, never "re-bless the golden".
+- **T0 landed 2026-11-17** (`5eedf99`…`2d2e159`) — refinements vs the draft
+  sketch above, now authoritative for T1+:
+  - `ExitClass` gained **`Usage`** (code 2): `fmt --write` on a stdin-semantics
+    input is decided by the pipeline, not clap — the draft assumed usage(2)
+    never leaves clap.
+  - The `Outcome` shape is `exit + log: Vec<LogItem> + bytes: Option<Vec<u8>>`
+    with `LogItem = Issue | OkLine | NoteLine` (ordered replay), not a flat
+    `diagnostics` vec — commands interleave diagnostics, stdout chatter and
+    stderr reports (validate, reconcile, fmt), and the byte contract pins the
+    order. The CLI writes `bytes` to stdout first; a stdout write failure is
+    the old `write_output` exit 3 and **suppresses the log** (the extracted
+    reconcile code returned before its notes).
+  - `Input = File | Bytes | Stdin` with **lazy** stdin via an injected
+    `StdinReader` fn — eager reading in the argv shim would hang `fmt --write -`
+    on an open pipe; the usage exit must fire before stdin is touched.
+    `Bytes` carries stdin semantics (no engine-visible file context).
+  - `ApiOptions.env` is `Option<BTreeMap>` (`None` = V-3 process env, the
+    production CLI); the map rides into the engine as `EnvLookup`, since T0-d
+    an **Arc newtype** (`Send + Sync`, captured map) — which made
+    `ParseOptions` Clone-not-Copy.
+  - Suggestions moved **into the API** (module `oxidizr_api::suggest`, CLI
+    re-exports): help-line construction is diagnosis construction, and it
+    happens where the parse results are — the draft's "stay CLI-side" was
+    superseded by the T0-c extraction.
 
 ## P1T-D2 Corpus `e2e/corpus/` — one collection, tests + benches share it
 
@@ -186,7 +212,7 @@ own JSON export ⇒ zero ambiguity, zero element graft).
 
 | MS | Deliverable | Exit gate |
 |---|---|---|
-| **T0** | `oxidizr-api` extraction; `run()` shim; F9 registered; crate docs | quartet green; **all existing tests unmodified** (byte-proof); V-T1 closed |
+| **T0** | **DONE 2026-11-17** (`5eedf99`/`52a83c1`/`075cb90`/`2d2e159`) — `oxidizr-api` extraction; `run()` shim; F9 registered; crate docs; refinements recorded in D1 | quartet green; **all existing tests unmodified** (byte-proof); V-T1 closed |
 | **T1** | `oxidizr-e2e` crate; manifest reader/writer + compare; `xtask e2e bless`; 10 seed entries (valid+invalid, hand-authored); subprocess smoke; coverage test skeleton | bless round-trips byte-stably; quick tier green + measured runtime |
 | **T2** | valid corpus to ≥150 entries across the D2 axes (multi-file composites incl.) | all manifests green; V-T2 re-measured (< 60 s) |
 | **T3** | invalid corpus to ≥120 total + `xtask e2e mutate`; every emitted `Code` covered (allow-list registered with reasons) | coverage gate green; mutate determinism V-T3 closed |

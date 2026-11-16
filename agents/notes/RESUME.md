@@ -3,11 +3,11 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = `075cb90`+T0-d (tip of `main`, tag `v0.1.0` several
-commits down) · gates green · nothing pushed.
+Updated: 2026-11-17 · HEAD = T0 close-out docs commit (tip of `main`, tag
+`v0.1.0` several commits down) · gates green · nothing pushed.
 
 - **Done:** **PHASE 1 COMPLETE** (M0–M7, tag `v0.1.0` local). **PHASE 1T T0
-  nearly done**: T0-a `EnvLookup` seam `5eedf99`; T0-b `oxidizr-api` crate +
+  DONE**: T0-a `EnvLookup` seam `5eedf99`; T0-b `oxidizr-api` crate +
   `Issue`/`Snippet` move `52a83c1`; T0-c `suggest` move `075cb90`; T0-d
   (this commit): command bodies + `reconcile` extracted into
   `oxidizr-api::pipeline` (`Request → execute() → Outcome{exit, log, bytes}`);
@@ -18,9 +18,8 @@ commits down) · gates green · nothing pushed.
   with their modules). Stdin is lazy (`Input::Stdin` + injected
   `StdinReader`) — `fmt --write -` exits 2 without touching the pipe (verified
   against a live pipe). Manual exit-code battery 0/1/2/3 all match.
-- **Next:** T0 close-out (docs commit: PHASE_1T.md refinement notes — Usage
-  exit class, suggest INSIDE api, Outcome log replay, lazy Stdin, EnvLookup
-  Arc); then **T1**: `oxidizr-e2e` crate + manifest sidecar reader/writer +
+- **Next:** **T1** per `build/PHASE_1T.md` (T0 DONE — refinements recorded in
+  its D1 "T0 landed" block): `oxidizr-e2e` crate + manifest sidecar reader/writer +
   `cargo xtask e2e bless` + ~10 seed entries + coverage skeleton + subprocess
   smoke (`CARGO_BIN_EXE_oxidizr`); measure V-T2 quick-tier budget. Then T2
   (≥150 valid), T3 (≥120 invalid + `xtask e2e mutate`), T4 (invariants +
