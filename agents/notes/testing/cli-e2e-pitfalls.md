@@ -20,5 +20,9 @@ Hard-won facts for `crates/oxidizr-cli/tests/cli.rs`-style subprocess tests:
    stdin-vs-file equivalence tests; use a self-contained source instead.
 5. `NO_COLOR=1` in the test env + `GraphicalTheme::ascii()` keeps miette
    stderr deterministic (no ANSI in `contains` checks).
+6. Piping stdin to a child that **exits before reading it** (usage errors,
+   exit 2) races: `write_all` may hit **BrokenPipe** (EPIPE). The shared
+   `run()` helper tolerates exactly that error kind — do not "fix" it back
+   to a bare `.unwrap()` (it is a timing flake, green runs hide it).
 
 Last useful: 2026-11-16

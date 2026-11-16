@@ -17,7 +17,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M5 workspace extends | **done 2026-11-16** (commits 9f174e6, c468854) |
 | P1 | M6-a CLI surface | **done 2026-11-16** (log below) |
 | P1 | M6-b formatter | **done 2026-11-16** (log below) |
-| P1 | M6-c … M7 | M6-c `reconcile` + validate polish next |
+| P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
+| P1 | M6-d … M7 | M6-d fuzz targets + CI nightlies next |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -140,6 +141,43 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P1-M6c — `reconcile` + validate polish ✅ (2026-11-16)
+
+Two halves, two commits (reconcile 7351db1; suggestions with this log). No
+official reference `reconcile` exists (structurizr org repos 404, reference
+app has no such command) — the P1-D8/F1 text in PHASE_1 IS the contract.
+
+- **reconcile** (`oxidizr-cli/src/reconcile.rs`, pure composition, no core
+  changes): re-parsed DSL workspace is the model/membership authority; the
+  layout JSON supplies geometry. Matching: `structurizr.dsl.identifier`
+  exact → kind-prefixed canonical-name fallback (`WorkspaceBuilder::adopt`
+  clones for `canonical_name_full`). Contested claim (two old ids → one new
+  id): first claim REVOKED, new id poisoned — NEITHER remapped (OXZ-3002).
+  Graft: element x/y, relationship routing, view paper/dimensions/
+  automaticLayout, id-remapped animation steps (empty-after-remap dropped);
+  missing counterparts → informational dropped lines. JSON emitted FIRST,
+  even when ambiguous; report on stderr via new `Renderer::note`
+  (`--quiet`-aware); ambiguity exits 1.
+- Fixture trap: BOTH input paths reject duplicate element names (DSL parse
+  `CoreError::DuplicateTopLevelName`, JSON hydrate validation), so an
+  ambiguity fixture needs identifier-vs-canonical on one new id
+  (`x="Foo"`+`y="Bar"` → `x="Bar"`) — `pitfalls/reconcile-ambiguity-
+  fixtures.md`; kind prefixes (`Person://` ≠ `SoftwareSystem://`) keep
+  cross-kind drops unambiguous.
+- **validate polish**: `suggest.rs` decorates `Issue::help` with
+  `did you mean "X"?` at the CLI boundary (P1-D2 — engine `DslError` and its
+  message snapshots stay byte-identical, D1 freedom since help is stderr-
+  only). Keyword candidates: parsed back out of the reference
+  `Unexpected tokens (expected: …)` message (verbatim in it — no engine
+  plumbing); identifier candidates: parsed workspace's
+  `structurizr.dsl.identifier` values + space-free element names (anonymous
+  elements are name-referenceable; volatile uuids never are). Case-
+  insensitive Levenshtein, budget ≤4 chars → 1 edit, ≤8 → 2, else 3.
+- Gates: +8 reconcile unit, +6 suggest unit, e2e 20→22 (identifier remap
+  across id shift; contested contest; rendered suggestions in `validate`
+  stderr). `run()` helper now tolerates EPIPE when the child exits before
+  reading stdin (usage-error race — cli-e2e-pitfalls #6).
 
 ### P1-M6b — `fmt`: canonical formatter on the lossless CST ✅ (2026-11-16)
 

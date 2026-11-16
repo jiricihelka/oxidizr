@@ -31,7 +31,10 @@ fn run(args: &[&str], stdin: Option<&[u8]>) -> Output {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap();
-        child.stdin.as_mut().unwrap().write_all(bytes).unwrap();
+        // A child that exits BEFORE consuming stdin (usage errors) closes the
+        // pipe: EPIPE here is expected, the exit status is the assertion.
+        let wr = child.stdin.as_mut().unwrap().write_all(bytes);
+        assert!(wr.is_ok() || wr.unwrap_err().kind() == std::io::ErrorKind::BrokenPipe);
         child.wait_with_output().unwrap()
     } else {
         cmd.stdin(Stdio::null()).output().unwrap()
@@ -224,6 +227,26 @@ fn validate_detects_format_by_extension() {
         stderr.contains("cannot determine the workspace format"),
         "{stderr}"
     );
+}
+
+#[test]
+fn validate_renders_did_you_mean_suggestions() {
+    // D1 polish (P1-D2): OXZ-2001 suggests from the expected-token list,
+    // the identifier families from the parsed workspace's known names.
+    let dsl = recon_temp("suggest.dsl");
+    std::fs::write(
+        &dsl,
+        "workspace \"W\" {\n    model {\n        api = softwareSystem \"API\"\n        softwareSyste \"X\"\n        api -> ap \"Uses\"\n    }\n}\n",
+    )
+    .unwrap();
+    let out = run(&["validate", dsl.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("did you mean \"softwareSystem\"?"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("did you mean \"api\"?"), "{stderr}");
 }
 
 #[test]

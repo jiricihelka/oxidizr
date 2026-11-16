@@ -337,6 +337,23 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
   committed); two latent M1 `lex_comment` tiling bugs fixed with regression test;
   CLI `fmt` wired (stdout/`--write`/`--check`, stdin, usage exit 2), e2e 15→20;
   `oxidizr-ast` pruned from CLI deps.
+  **M6-c DONE 2026-11-16** (quartet green; reconcile half commit 7351db1):
+  `reconcile` (F1, `oxidizr-cli/src/reconcile.rs`) — NO official reference tool
+  exists (structurizr org has none), so this P1-D8 text is the contract:
+  identifier-exact → kind-prefixed canonical-name fallback over adopted builder
+  clones; a contested claim (two old ids → one new id) REVOKES both mappings and
+  poisons the new id (OXZ-3002, never guessed), JSON is still emitted, exit 1;
+  graft = element x/y + relationship routing + paper/dimensions/automaticLayout
+  + id-remapped animations (empty steps dropped); report via `Renderer::note`
+  (`--quiet`-aware). Ambiguity fixtures must dodge both duplicate-name gates
+  (pitfalls/reconcile-ambiguity-fixtures.md). Validate polish: `did you
+  mean …?` in `Issue::help` computed at the CLI BOUNDARY (`suggest.rs`, P1-D2
+  — engine messages stay byte-locked): keyword candidates parsed from the
+  reference `Unexpected tokens (expected: …)` list, identifier candidates from
+  the parsed workspace's `structurizr.dsl.identifier` + space-free names,
+  Levenshtein budget 1/2/3 by token length. e2e 20→22, +8 reconcile +6 suggest
+  unit tests; `run()` helper tolerates EPIPE on early-exit children
+  (testing/cli-e2e-pitfalls.md #6).
 - **M7** hardening: perf sanity (parse whole corpus < 100 ms in release — informational),
   docs (`--help`, README quickstart), tag v0.1.0.
 

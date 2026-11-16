@@ -17,6 +17,7 @@
 
 pub mod reconcile;
 pub mod report;
+pub mod suggest;
 
 use std::io::Read as _;
 use std::io::Write as _;
@@ -232,7 +233,7 @@ fn parse_dsl_input(input: &Input) -> Result<ParseResult, Issue> {
             json_loader: Some(json_loader),
         },
     };
-    parse_dsl(&input.text, opts).map_err(|e| Issue::from_dsl(&e))
+    parse_dsl(&input.text, opts).map_err(|e| suggest::decorate(Issue::from_dsl(&e), None))
 }
 
 /// Render a batch and report whether any issue blocks exit 1 (severity vs
@@ -260,7 +261,11 @@ fn dsl2json(renderer: &Renderer, input: Option<&Path>, output: Option<&Path>) ->
     if !result.errors.is_empty() {
         // D1 recovery: all recorded statement errors render; the reference
         // export would have aborted on the first one — no partial output.
-        let issues: Vec<Issue> = result.errors.iter().map(Issue::from_dsl).collect();
+        let issues: Vec<Issue> = result
+            .errors
+            .iter()
+            .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&result.workspace)))
+            .collect();
         renderer.issues(&issues);
         return 1;
     }
@@ -341,7 +346,11 @@ fn reconcile_cmd(renderer: &Renderer, dsl: &Path, layout: &Path, output: Option<
         }
     };
     if !result.errors.is_empty() {
-        let issues: Vec<Issue> = result.errors.iter().map(Issue::from_dsl).collect();
+        let issues: Vec<Issue> = result
+            .errors
+            .iter()
+            .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&result.workspace)))
+            .collect();
         renderer.issues(&issues);
         return 1;
     }
@@ -426,7 +435,11 @@ fn validate(cli: &Cli, renderer: &Renderer, files: &[PathBuf]) -> i32 {
             match parse_dsl_input(&source) {
                 Ok(r) if r.errors.is_empty() => r.workspace,
                 Ok(r) => {
-                    let issues: Vec<Issue> = r.errors.iter().map(Issue::from_dsl).collect();
+                    let issues: Vec<Issue> = r
+                        .errors
+                        .iter()
+                        .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&r.workspace)))
+                        .collect();
                     blocked |= emit(renderer, &issues, strict);
                     continue;
                 }
