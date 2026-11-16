@@ -19,8 +19,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-b formatter | **done 2026-11-16** (log below) |
 | P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
 | P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
-| P1 | M7 | hardening + release (next) |
-| P2 | exporters | pending |
+| P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
+| P2 | exporters | pending — next phase (plan per `agents/plan/README.md`) |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -142,6 +142,35 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P1-M7 — hardening, benches, docs, v0.1.0 ✅ (2026-11-16)
+
+**Phase 1 COMPLETE.** Last milestone: TESTING.md-mandated benches + first real
+baseline + perf sanity + README quickstart + tag.
+
+- Benches (criterion, all `harness = false`, corpus = vendored `testdata/`,
+  UTF-8-only files — the latin-1 probe can't reach `&str` APIs): `oxidizr-dsl`
+  `parse.rs` rewritten (`m7_dsl_parse_corpus` = every `.dsl`, plus
+  `m7_dsl_parse_test.dsl`/`m7_dsl_parse_big-bank-plc.dsl` worst-case proxies)
+  and new `fmt.rs` (`m7_dsl_fmt_corpus`); `oxidizr-json` `json.rs`
+  (`m7_json_read_corpus` over golden+read-corpus+validation+probes —
+  rejections count too; `m7_json_write_corpus` over the reader-accepted
+  workspaces); `oxidizr-cli` `reconcile.rs` (`m7_reconcile_matched_big_bank` =
+  same-workspace layout/full graft; `m7_reconcile_cross_corpus` = big official
+  export vs unrelated DSL ≈ zero matches, claim/drop machinery at scale).
+  Setup (read/parse) stays outside the timed loop.
+- Perf sanity (informational per PHASE_1): whole-corpus DSL parse **≈ 11.5 ms**
+  median release — the < 100 ms bar met with ~9x margin. JSON read corpus
+  ≈ 1.0 ms, write ≈ 1.8 ms, fmt corpus ≈ 1.5 ms, reconcile 0.37–0.60 ms per
+  match.
+- Baseline: `cargo xtask bench save M7` → `bench-baseline/M7/` (9 groups,
+  36 files; first real baseline — M0 kept as the cross-milestone anchor;
+  context lines in `bench-baseline/README.md`).
+- Root `README.md` written (repo had none): build, all five subcommands with
+  flags/exit codes, compat + dev pointers. (`--help` itself landed with M6-a.)
+- Trap (minor): criterion 0.5 keeps `estimates.json` beside `benchmark.json`
+  per group — the `cmd_bench_save` copy expects exactly that layout, no
+  change needed; medians for sanity checks come from `<group>/new/estimates.json`.
 
 ### P1-M6d — cargo-fuzz targets + CI nightlies ✅ (2026-11-16)
 

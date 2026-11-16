@@ -27,3 +27,10 @@ miette = { workspace = true }
 [[bin]]
 name = "oxidizr"
 path = "src/main.rs"
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "reconcile"
+harness = false

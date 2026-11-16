@@ -772,6 +772,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "criterion",
  "miette",
  "oxidizr-core",
  "oxidizr-diag",
@@ -808,6 +809,7 @@ name = "oxidizr-json"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "criterion",
  "oxidizr-core",
  "proptest",
  "serde_json",

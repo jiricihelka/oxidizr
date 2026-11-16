@@ -367,6 +367,19 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
   (env/fuzz-host-toolchain.md). Smoke: 107 dsl + 26 json seeds, all clean.
 - **M7** hardening: perf sanity (parse whole corpus < 100 ms in release — informational),
   docs (`--help`, README quickstart), tag v0.1.0.
+  **M7 DONE 2026-11-16** (quartet green): mandated benches land (TESTING.md
+  §Benchmarks) — `oxidizr-dsl/benches/parse.rs` (`m7_dsl_parse_corpus` + the
+  two biggest fixtures as worst-case proxies) and `benches/fmt.rs`
+  (`m7_dsl_fmt_corpus`); `oxidizr-json/benches/json.rs` (`m7_json_read_corpus`
+  over goldens + read-corpus + validation + probes, `m7_json_write_corpus`
+  over the accepted workspaces); `oxidizr-cli/benches/reconcile.rs`
+  (`m7_reconcile_matched_big_bank`, `m7_reconcile_cross_corpus`) — setup
+  (parse/read) excluded from the timed loop. Perf sanity: whole-corpus DSL
+  parse ≈ 11.5 ms median — < 100 ms bar met with ~9x margin (informational,
+  as planned). Baseline `bench-baseline/M7/` saved via `cargo xtask bench save
+  M7` (first real baseline; M0 kept as anchor). Root `README.md` quickstart
+  written (all five subcommands, exit codes, compat pointers; `--help` was
+  M6-a). Tag v0.1.0 (local — pushing stays the user's call).
 
 ## P1-D12 Verification list (empirical, before the code that depends on it)
 

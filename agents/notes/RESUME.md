@@ -3,27 +3,29 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-16 · HEAD = M6-d fuzz commit (tip of `master`) ·
-gates green · nothing pushed.
+Updated: 2026-11-16 · HEAD = **M7 commit + tag `v0.1.0` (Phase 1 COMPLETE)**,
+tip of `master` · gates green · nothing pushed (tag stays LOCAL until the user
+says otherwise).
 
-- **Done:** P1-M6 **COMPLETE** (a: CLI surface; b: fmt; c: reconcile 7351db1 +
-  suggestions 67af536; d: this commit — `fuzz/` cargo-fuzz workspace excluded
-  from the main workspace, targets dsl_parse/dsl_fmt/json_read, `cargo xtask
-  fuzz [SECONDS]` seeds from testdata into gitignored `fuzz/corpus/`, time-boxed
-  runs; nightly `.github/workflows/fuzz.yml`; mingw CC/CXX leak trap →
-  `env/fuzz-host-toolchain.md`). P1-M5 extends; P1-M4; infra through 2576a25.
-- **Next:** **M7** (last milestone of Phase 1): ① perf sanity — release build,
-  parse whole testdata corpus < 100 ms *informational* (check `crates/*/benches`
-  first — criterion bench job exists; measure parse-only, not process startup);
-  ② README quickstart (repo has NO README yet — root README.md, `--help` already
-  done M6-a); ③ close-out entries (PHASE_1 §P1-D11 M7 DONE + PROGRESS board row,
-  Phase-1 summary); ④ tag `v0.1.0` locally (NEVER push). Then Phase 1 is done —
-  report to user before starting P2.
+- **Done:** **PHASE 1 COMPLETE** — M0 infra, M1 lexer/CST, M2 core+validation,
+  M3a write catalog, M3b JSON writer/reader, M4 DSL engine, M5 extends,
+  M6-a CLI surface, M6-b fmt, M6-c reconcile+suggestions, M6-d fuzz nightlies,
+  M7 (this commit): mandated benches (`m7_dsl_parse_corpus` ≈ 11.5 ms ≪ 100 ms
+  sanity bar; fmt/read/write/reconcile targets), first real baseline
+  `bench-baseline/M7/`, root `README.md` quickstart, close-out entries in
+  PHASE_1 §P1-D11 + PROGRESS board/log. Tag `v0.1.0` local.
+- **Next:** Phase 2 planning is the USER's call — do NOT start P2 unprompted
+  (AGENTS.md: report Phase 1 complete first). If asked: read
+  `agents/plan/README.md` reading order, then the P2 exporter plan (create
+  `agents/plan/build/PHASE_2.md` per the charter — questions welcome in
+  planning). Pushing `master` + the tag is also user-only.
 - **Open questions:** none.
-- **Don't re-derive (trust + spot-check against `ad34036`):** fuzz design + CC
-  strip (PROGRESS M6d log + env note); reconcile/suggestions contracts (M6c
-  entries there + module headers); fmt line-ends `pitfalls/fmt-line-end-guards.md`;
-  M4 findings PROGRESS errata + `agents/plan/DSL-ERRATA.md`; M5
-  `testing/oracle-app-harness.md`; M6a `testing/cli-e2e-pitfalls.md` (EPIPE #6);
-  JSON byte rules `agents/plan/build/WRITE-CATALOG.md`; env `agents/notes/env/`.
+- **Don't re-derive (trust + spot-check against `ad34036`):** bench corpus
+  conventions + timings (PROGRESS P1-M7 log); fuzz design + mingw CC strip
+  (P1-M6d log + `env/fuzz-host-toolchain.md`); reconcile/suggestions contracts
+  (P1-M6c log + module headers); fmt line-ends
+  `pitfalls/fmt-line-end-guards.md`; M4 findings PROGRESS errata +
+  `agents/plan/DSL-ERRATA.md`; M5 `testing/oracle-app-harness.md`; M6a
+  `testing/cli-e2e-pitfalls.md` (EPIPE #6); JSON byte rules
+  `agents/plan/build/WRITE-CATALOG.md`; env `agents/notes/env/`.
 - **Cadence:** `cargo xtask ci` green → commit + rewrite this file; never push.
