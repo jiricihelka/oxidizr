@@ -49,6 +49,14 @@ impl Properties {
         self.get(name).is_some()
     }
 
+    /// Java `HashMap.remove` semantics: drops the entry and returns its
+    /// value; a later re-insert of the same key takes a NEW slot
+    /// (`DslUtils.clearDsl` + DSL retention re-adding `structurizr.dsl`).
+    pub fn remove(&mut self, name: &str) -> Option<String> {
+        let at = self.entries.iter().position(|(k, _)| k == name)?;
+        Some(self.entries.remove(at).1)
+    }
+
     /// Entries in insertion order (the sequence the write-side `HashMap`
     /// emulator replays).
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {

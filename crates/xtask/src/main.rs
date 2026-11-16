@@ -552,15 +552,29 @@ fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Resu
 ///
 /// Line deletion must fix up the preceding comma when a removed entry was the object's
 /// LAST member (the reference pretty-prints one entry per line, so a comma-less removed
-/// line means the previous line's trailing comma must go too). Note the export output
-/// has NO volatile members (`lastModifiedDate*` only round-trips from JSON inputs,
-/// deterministically) — nothing else is stripped.
+/// line means the previous line's trailing comma must go too); when the removed entries
+/// were the object's ONLY members, the emptied `"properties" : { }` shell goes too — the
+/// `NON_EMPTY` writer can never produce an empty properties object, so its braces are a
+/// deletion artifact (M5: `workspace extends` clears the retained source, leaving the
+/// inspection entries alone). Note the export output has NO volatile members
+/// (`lastModifiedDate*` only round-trips from JSON inputs, deterministically) — nothing
+/// else is stripped.
 fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
     let text = String::from_utf8_lossy(raw);
     // Byte parity includes EOF: the reference pretty-printer emits NO trailing
     // newline; `lines()` would invent one (M0 goldens carried that artifact).
     let raw_trailing_newline = text.ends_with('\n');
-    let mut out = String::new();
+    let drop_trailing_comma = |lines: &mut [String]| {
+        // removed entry was the last in its object: drop the previous comma
+        if let Some(last) = lines.last_mut()
+            && let Some(pos) = last.rfind(',')
+            && last[pos + 1..].chars().all(char::is_whitespace)
+        {
+            last.remove(pos);
+        }
+    };
+    // Pass 1: delete the inspection entry lines (comma fix-up included).
+    let mut kept: Vec<String> = Vec::new();
     for line in text.lines() {
         let t = line.trim_start();
         let removed = (t.starts_with("\"structurizr.inspection.error\"")
@@ -570,22 +584,38 @@ fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
             && t.contains("\" :");
         if removed {
             if !t.ends_with(',') {
-                // removed entry was the last in its object: drop the previous comma
-                if let Some(pos) = out.trim_end_matches('\n').rfind(',')
-                    && out.trim_end_matches('\n')[pos + 1..]
-                        .chars()
-                        .all(char::is_whitespace)
-                {
-                    out.remove(pos);
-                }
+                drop_trailing_comma(&mut kept);
             }
             continue;
         }
-        out.push_str(line);
-        out.push('\n');
+        kept.push(line.to_string());
     }
-    if !raw_trailing_newline {
-        out.pop();
+    // Pass 2: when the inspection entries were the ONLY members of the
+    // workspace-level `properties` object (`workspace extends` clears the
+    // retained source, M5), pass 1 emptied it — but the library writer uses
+    // NON_EMPTY inclusion, so an EMPTY `"properties" : { }` can only be a
+    // deletion artifact: drop the braces too (comma rules as in pass 1).
+    let mut out_lines: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < kept.len() {
+        let t = kept[i].trim_start();
+        if t.ends_with("\"properties\" : {")
+            && kept
+                .get(i + 1)
+                .is_some_and(|n| matches!(n.trim(), "}," | "}"))
+        {
+            if kept[i + 1].trim() == "}" {
+                drop_trailing_comma(&mut out_lines);
+            }
+            i += 2;
+            continue;
+        }
+        out_lines.push(std::mem::take(&mut kept[i]));
+        i += 1;
+    }
+    let mut out = out_lines.join("\n");
+    if raw_trailing_newline {
+        out.push('\n');
     }
     out.into_bytes()
 }
@@ -736,11 +766,17 @@ fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>> {
 fn find_fixture(root: &Path, name: &str) -> Result<PathBuf> {
     let mut candidates = walk_files(&root.join("testdata").join("dsl"), ".dsl")?;
     // Probe fixtures (testdata/probes) are first-class golden sources too
-    // (WRITE-CATALOG witnesses).
+    // (WRITE-CATALOG witnesses), including the JSON ones (`m3b-defaults` is a
+    // read→write byte witness), as are the read-corpus workspaces.
     candidates.extend(walk_files(&root.join("testdata").join("probes"), ".dsl")?);
+    candidates.extend(walk_files(&root.join("testdata").join("probes"), ".json")?);
+    candidates.extend(walk_files(
+        &root.join("testdata").join("read-corpus"),
+        ".json",
+    )?);
     candidates.retain(|p| p.file_stem().is_some_and(|s| s == name));
     match candidates.as_slice() {
-        [] => bail!("fixture `{name}` not found under testdata/dsl"),
+        [] => bail!("fixture `{name}` not found under testdata/dsl|probes|read-corpus"),
         [one] => Ok(one.clone()),
         [first, rest @ ..] => {
             eprintln!(

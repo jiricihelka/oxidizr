@@ -419,18 +419,21 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                     if !w.includes(2) {
                         return Err(DslError::stmt("Expected: workspace extends <file|url>"));
                     }
-                    // D9: the base-workspace loader is the M5 line item;
-                    // loud deferral, never a silent skip.
-                    return Err(DslError::coded(
-                        oxidizr_diag::codes::EXTENDS_DEFERRED,
-                        "workspace extends arrives in M5 (D9)",
-                    ));
-                }
-                p.builder.set_workspace_name(source);
-                if w.includes(2) {
-                    p.builder.set_workspace_description(w.get(2));
+                    let base = w.get(2);
+                    p.extend_from(&base)?;
+                } else {
+                    p.builder.set_workspace_name(source);
+                    if w.includes(2) {
+                        p.builder.set_workspace_description(w.get(2));
+                    }
                 }
             }
+            // `StructurizrDslParser` line 719: captured AFTER the workspace
+            // statement, read when contexts start (line 1493).
+            let model = &p.builder.workspace().model;
+            p.extending_workspace = !model.people.is_empty()
+                || !model.software_systems.is_empty()
+                || !model.deployment_nodes.is_empty();
             // `WorkspaceParser.parse` tail: DSL workspaces get the
             // UnlessAnyRelationshipExists strategy unconditionally.
             p.builder
@@ -1063,13 +1066,22 @@ workspace "My W" "My D" {
     }
 
     #[test]
-    fn workspace_extends_is_deferred() {
-        let r = full("workspace extends base.dsl\n");
-        assert_eq!(r.errors.len(), 1);
-        assert_eq!(r.errors[0].code, oxidizr_diag::codes::EXTENDS_DEFERRED);
+    fn workspace_extends_needs_a_source_and_skips_without_a_file() {
+        // `context.getFile() == null` (fragment parse) skips the file branch
+        // entirely — the reference keeps the fresh "Name"/"Description"
+        // workspace, no error, no portability change.
+        let r = full("workspace extends base.dsl {\n}\n");
+        assert_clean(&r);
+        assert_eq!(r.workspace.name.as_deref(), Some("Name"));
 
         let r = full("workspace extends\n");
         assert_eq!(errors(&r), vec!["Expected: workspace extends <file|url>"]);
+
+        // Network stays OXZ-5001 even without a file (the URL guard precedes
+        // the file guard).
+        let r = full("workspace extends https://example.invalid/x.dsl\n");
+        assert_eq!(r.errors[0].code, oxidizr_diag::codes::NET_DISABLED);
+        assert_eq!(r.errors[0].message, "Extends via HTTPS are not permitted");
     }
 
     #[test]

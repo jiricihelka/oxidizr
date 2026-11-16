@@ -19,6 +19,9 @@ oxidizr-diag = { workspace = true }
 [dev-dependencies]
 expect-test = { workspace = true }
 criterion = { workspace = true }
+# `workspace extends *.json` base loading in tests — topology keeps
+# oxidizr-json out of the SHIPPED dsl deps (P1-D1); the CLI injects it.
+oxidizr-json = { workspace = true }
 
 [[bench]]
 name = "parse"

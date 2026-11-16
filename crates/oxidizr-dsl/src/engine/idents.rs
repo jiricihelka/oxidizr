@@ -139,6 +139,21 @@ impl IdentifiersRegister {
         self.scope = scope;
     }
 
+    /// Merge another register's entries into this one (`workspace extends`:
+    /// reference `DslParserContext.copyFrom`, which replays the child's
+    /// entries through `register()`). A verbatim append is equivalent for
+    /// every REACHABLE extends case: the target register is always empty at
+    /// copy time (extends is the first statement, the register is created
+    /// with the parser), so no collision guard can fire; re-running
+    /// hierarchical prefix computation on already-composite keys would
+    /// double-prefix them, and the reference only avoids that by `HashMap`
+    /// iteration luck — so keys are kept verbatim (deterministic choice,
+    /// matches every reference test).
+    pub(crate) fn adopt_entries(&mut self, other: &mut IdentifiersRegister) {
+        self.elements.append(&mut other.elements);
+        self.relationships.append(&mut other.relationships);
+    }
+
     /// Case-insensitive element lookup (first registered key wins).
     #[must_use]
     pub fn element(&self, identifier: &str) -> Option<&RegItem> {

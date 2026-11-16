@@ -1,0 +1,57 @@
+{
+  "configuration" : { },
+  "description" : "Description",
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "id" : "1",
+      "name" : "User 1",
+      "properties" : {
+        "structurizr.dsl.identifier" : "user1"
+      },
+      "tags" : "Element,Person"
+    }, {
+      "id" : "2",
+      "name" : "User 2",
+      "properties" : {
+        "structurizr.dsl.identifier" : "user2"
+      },
+      "tags" : "Element,Person"
+    }, {
+      "id" : "3",
+      "name" : "User 3",
+      "properties" : {
+        "structurizr.dsl.identifier" : "user3"
+      },
+      "tags" : "Element,Person"
+    } ]
+  },
+  "name" : "Name",
+  "views" : {
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    },
+    "systemLandscapeViews" : [ {
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "generatedKey" : true,
+      "key" : "SystemLandscape-001",
+      "name" : "System Landscape View",
+      "order" : 1
+    } ]
+  }
+}

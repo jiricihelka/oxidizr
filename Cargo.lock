@@ -800,6 +800,7 @@ dependencies = [
  "oxidizr-ast",
  "oxidizr-core",
  "oxidizr-diag",
+ "oxidizr-json",
 ]
 
 [[package]]

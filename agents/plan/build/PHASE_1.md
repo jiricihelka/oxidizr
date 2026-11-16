@@ -301,6 +301,16 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
     tests mirroring `DslTests` assertions; Category B goldens for the file-based
     extend fixtures (`cargo xtask oracle gen --fixture extend/…`); full-fixture
     parse gate minus the D7/D11/D2/D5-registered remainder.
+  **M5 DONE 2026-11-16** (quartet green): `adopt` + `Properties::remove`
+  (M5-a); engine `extend_from` (file guards, `.json` via injected
+  `ParseOptions::json_loader`, DSL child-parse with `configureFrom` +
+  register merge, `clearDsl` + `dsl_portable=false`, `extending_workspace`
+  get-or-add element reuse) (M5-b); OXZ-5004 tombstoned, 11 burn-in rows
+  retired (2 URL rows re-registered under D5), `m5_extends.rs` (7 tests) +
+  golden `extend/4.dsl` byte-exact (M5-c). Golden scope cut to fixtures with
+  a views block: the CLI export injects default views into viewless
+  workspaces (app harness — `agents/notes/testing/oracle-app-harness.md`);
+  `oracle gen` normalization + JSON-fixture lookup fixed accordingly.
 - **M6** `fmt` + invariants (incl. proptest), `reconcile`, `validate` polish, CLI
   flags/exit codes, miette rendering, suggestions; cargo-fuzz targets with fixture seed
   corpus running in CI (nightly, time-boxed runs).

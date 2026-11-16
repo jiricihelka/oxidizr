@@ -10,10 +10,10 @@
 //! so retired deferrals must be pruned here, in lockstep with the milestone
 //! that retires them.
 //!
-//! Milestone tags: `M5` = `workspace extends` (OXZ-5004); `D7/P4` =
-//! `!docs`/`!adrs` importers (OXZ-5003); `D11/P4` = plantuml/mermaid/kroki
-//! image imports (OXZ-5005). `D2` (JVM-only directives), `D5` (no network)
-//! and `D10` (no JVM image codecs) are permanent by design. The
+//! Milestone tags: `D7/P4` = `!docs`/`!adrs` importers (OXZ-5003);
+//! `D11/P4` = plantuml/mermaid/kroki image imports (OXZ-5005). `D2`
+//! (JVM-only directives), `D5` (no network — includes, extends and image
+//! URLs) and `D10` (no JVM image codecs) are permanent by design. The
 //! `component:` tag marks `!include`/`extends` children — they are
 //! workspace-context fragments, so parsing one standalone fails with the
 //! reference "expected: workspace" error exactly as the reference parser
@@ -30,6 +30,23 @@ fn dsl_dir() -> PathBuf {
         .join("../../testdata/dsl")
         .canonicalize()
         .unwrap()
+}
+
+/// `workspace extends <*.json>` base loader: topology keeps `oxidizr-json`
+/// out of the shipped `dsl` deps (P1-D1) — the CLI injects it in production;
+/// the corpus harness injects the same wiring (dev-dependency).
+fn json_loader(path: &str) -> Result<oxidizr_core::Workspace, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Error reading file at {path}: {e}"))?;
+    oxidizr_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
+/// File entry options with the JSON-base loader (production wiring).
+fn file_opts(path: &str) -> ParseOptions<'_> {
+    ParseOptions {
+        file: Some(path),
+        base_dir: None,
+        json_loader: Some(json_loader),
+    }
 }
 
 /// Every `.dsl` file in the corpus, recursively, sorted by path.
@@ -52,62 +69,6 @@ fn corpus() -> Vec<PathBuf> {
 
 /// (relative path, expected first-error code, expected message prefix).
 const KNOWN_ERRORS: &[(&str, u16, &str)] = &[
-    // -- M5: `workspace extends` deferred (OXZ-5004) ----------------------
-    (
-        "archetypes-from-workspace-extension-child.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "constants-and-variables-from-workspace-extension-child.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "find-element.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "source-child.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "extend/2.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "extend/3.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "extend/4.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "extend/extend-workspace-from-dsl-file.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "extend/extend-workspace-from-dsl-url.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "extend/extend-workspace-from-json-file.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
-    (
-        "extend/extend-workspace-from-json-url.dsl",
-        codes::EXTENDS_DEFERRED.get(),
-        "workspace extends arrives in M5",
-    ),
     // -- D7/P4: `!docs`/`!adrs` importers deferred (OXZ-5003) --------------
     (
         "big-bank-plc/internet-banking-system.dsl",
@@ -155,6 +116,16 @@ const KNOWN_ERRORS: &[(&str, u16, &str)] = &[
         "include-url.dsl",
         codes::NET_DISABLED.get(),
         "Includes via HTTPS are not permitted",
+    ),
+    (
+        "extend/extend-workspace-from-dsl-url.dsl",
+        codes::NET_DISABLED.get(),
+        "Extends via HTTPS are not permitted",
+    ),
+    (
+        "extend/extend-workspace-from-json-url.dsl",
+        codes::NET_DISABLED.get(),
+        "Extends via HTTPS are not permitted",
     ),
     // -- D2/D10: JVM-only directives and codecs (OXZ-5002) -----------------
     (
@@ -325,7 +296,7 @@ fn corpus_matches_register() {
         }
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("{name} must be valid UTF-8 for the default read: {e}"));
-        let result = parse_dsl(&source, ParseOptions::file(&name_to_full(&path)))
+        let result = parse_dsl(&source, file_opts(&name_to_full(&path)))
             .unwrap_or_else(|e| panic!("{name}: fatal parse error: {}", e.message));
         if result.errors.is_empty() {
             clean += 1;
@@ -389,7 +360,7 @@ fn iso8859_fixture_decodes_as_latin1() {
     );
     let source: String = bytes.iter().map(|b| char::from(*b)).collect();
     let name = name_to_full(&path);
-    let result = parse_dsl(&source, ParseOptions::file(&name)).unwrap();
+    let result = parse_dsl(&source, file_opts(&name)).unwrap();
     assert!(
         result.errors.is_empty(),
         "{:?}",

@@ -14,7 +14,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M3a write catalog (P1-D6) | **done 2026-11-14** (commit 7848c5e) |
 | P1 | M3b json writer + reader | **done 2026-11-14** (commit 0e77dc2) |
 | P1 | M4 dsl parser + builder | **done 2026-11-15** (commit 41b70ca) |
-| P1 | M5 … M7 | M5 (directives) next, rest pending |
+| P1 | M5 workspace extends | **done 2026-11-16** (commit TBD, log below) |
+| P1 | M6 … M7 | M6 (CLI/fmt/reconcile/fuzz) next |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -137,6 +138,50 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P1-M5 — `workspace extends` (file + JSON bases) ✅ (2026-11-16)
+
+Reality note first (PHASE_1 §P1-D11): everything else in M5's original scope
+had already landed with M4, so M5 = `workspace extends` only; decomposed
+M5-a/b/c.
+
+- **M5-a** `core`: `WorkspaceBuilder::adopt` — replaces the workspace under
+  construction (reference `WorkspaceParser.parse` REPLACES the object) and
+  replays every element+relationship id through `IdGenerator::found`
+  (`Model.add` seeds the counter on every add, `Model.java:274/286`);
+  `Properties::remove` (Java `HashMap.remove` semantics — slot order is
+  part of the write contract, V-11) + `remove_property`. Commit 9f174e6.
+- **M5-b** `dsl` engine: `Parser::extend_from` per `WorkspaceParser.java`
+  @ad34036 — URL sources → OXZ-5001 with the reference feature texts;
+  non-file parse skips silently (`context.getFile() == null` quirk);
+  `… could not be found` / `… should be a single file` guards; `.json`
+  bases via injected `ParseOptions::json_loader` hook (topology kept: no
+  `json` dep in `dsl`; CLI wires it, tests use it as dev-dep) with
+  `registerIdentifiers` (elements AND relationships carrying
+  `structurizr.dsl.identifier`); DSL bases via a child `Parser` whose
+  register merges into ours (`DslParserContext.copyFrom` — verbatim-merge
+  rationale in `idents.rs`), `configureFrom` (identifier scope, archetypes,
+  constants/variables), then `adopt`; `clearDsl` + `dsl_portable = false`
+  (extending file keeps no source — `DslTests` `getDsl == ""`);
+  `extending_workspace = !model.isEmpty()` (people+systems+deploymentNodes)
+  drives get-or-add-by-name reuse in the four element parsers
+  (`isExtendingWorkspace` branch; the registration collision guards
+  inherited from M4 reproduce the reference throw-for-throw).
+- **M5-c** gates: OXZ-5004 → tombstone (`docs/diagnostics.md`, constant
+  removed); 11 `EXTENDS_DEFERRED` burn-in rows retired — 9 file fixtures
+  parse CLEAN, the 2 URL fixtures re-registered under D5 (OXZ-5001,
+  `Extends via HTTPS are not permitted`); `m5_extends.rs` 7 Category A
+  tests (layering, hierarchical `configureFrom` witness, JSON-base
+  identifiers, 3-level chain, no-retention + id continuation, loader-absent
+  guard, file guards, JSON-base element reuse); golden `extend/4.dsl`
+  byte-exact (`m5_goldens.rs`).
+- `xtask oracle`: normalization drops the empty `properties` shell left by
+  inspection-property deletion; `find_fixture` resolves JSON fixtures
+  (`oracle verify` worked on `m3b-defaults` for the first time since M3 —
+  all 4 goldens verify green); `agents/notes/testing/oracle-app-harness.md`
+  records why viewless fixtures cannot be goldens (V-10 `createDefaultViews`).
+
+Quartet green (`cargo xtask ci`); `oracle verify` 4/4; nothing pushed.
 
 ### P1-M4 — `oxidizr-dsl` engine: model + views + styles + deployment + dynamic ✅ (2026-11-15)
 

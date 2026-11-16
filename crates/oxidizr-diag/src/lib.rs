@@ -175,8 +175,8 @@ pub mod codes {
     pub const JVM_ONLY: Code = Code::new(5002);
     /// `!docs`/`!adrs` parsed; importers arrive in Phase 4 (D7, retired by P4-D13).
     pub const DOCS_DEFERRED: Code = Code::new(5003);
-    /// `workspace extends` parsed; the base-workspace loader arrives in M5 (D9).
-    pub const EXTENDS_DEFERRED: Code = Code::new(5004);
+    // 5004: TOMBSTONE — `workspace extends` landed in M5 (D9 retired); the
+    // code is never emitted again and must not be reused (`docs/diagnostics.md`).
     /// Server-side import deferred: file-based theme inlining and the
     /// raster/plantuml/mermaid/kroki image-view importers need the
     /// `structurizr-import` stack (D11).

@@ -189,6 +189,15 @@ pub(crate) struct SeqFrame {
     incremented: bool,
 }
 
+/// Base-workspace loader for `workspace extends <file.json>` (M5): receives
+/// the canonical path string, returns the loaded workspace or the
+/// reference-shaped failure message.
+pub type JsonWorkspaceLoader = fn(&str) -> Result<Workspace, String>;
+
+/// `(identifier, item id)` pairs from a JSON base
+/// ([`json_dsl_identifiers`]).
+type DslIdentifiers = Vec<(String, Id)>;
+
 /// Entry options (the reference `parse(String, File)` entry: main file,
 /// source tracked, not a fragment).
 #[derive(Debug, Clone, Copy)]
@@ -199,6 +208,13 @@ pub struct ParseOptions<'a> {
     /// Directory relative paths (includes) resolve against; `file`'s parent
     /// by default. `None` = the process CWD (`new File(".").getParent()`).
     pub base_dir: Option<&'a str>,
+    /// `.json` base loader for `workspace extends <file.json>` (M5,
+    /// `PHASE_1.md` §M5-b): receives the canonical path string, returns the
+    /// loaded workspace or the reference-shaped failure message. Topology
+    /// keeps `oxidizr-json` out of this crate (P1-D1) — the CLI injects it;
+    /// `None` (default, e.g. fragment parsing) rejects `.json` bases with a
+    /// clean error.
+    pub json_loader: Option<JsonWorkspaceLoader>,
 }
 
 impl<'a> ParseOptions<'a> {
@@ -208,6 +224,7 @@ impl<'a> ParseOptions<'a> {
         ParseOptions {
             file: Some(path),
             base_dir: None,
+            json_loader: None,
         }
     }
 
@@ -218,6 +235,7 @@ impl<'a> ParseOptions<'a> {
         ParseOptions {
             file: Some(path),
             base_dir: Some(base_dir),
+            json_loader: None,
         }
     }
 
@@ -228,6 +246,7 @@ impl<'a> ParseOptions<'a> {
         ParseOptions {
             file: None,
             base_dir: None,
+            json_loader: None,
         }
     }
 }
@@ -261,11 +280,11 @@ pub(crate) struct Parser<'a> {
     /// `parsedTokens` — the duplicate-scope-keyword guard set (`workspace`,
     /// `model`, `views`).
     pub parsed_tokens: Vec<String>,
-    /// `extendingWorkspace` — the reference sets it only from the
-    /// `workspace extends` arm (M5); element parsers read it through their
-    /// context (`isExtendingWorkspace`, captured at push time — captured
-    /// per-frame when `extends` lands).
-    #[allow(dead_code)] // written now, read when `workspace extends` lands (M5)
+    /// `extendingWorkspace` — set only by the `workspace extends` arm once
+    /// the workspace statement completes (`StructurizrDslParser` line 719);
+    /// the four element parsers read it (their contexts capture it at push
+    /// time — the flag never changes after, so the parser-level read is
+    /// equivalent) and switch to get-or-add by name on the base workspace.
     pub extending_workspace: bool,
     /// `dslPortable` (parser level — AND over CLOSED contexts; cleared per
     /// context by file-system `!include`).
@@ -1294,6 +1313,122 @@ impl<'a> Parser<'a> {
         self.last_include_path = None;
     }
 
+    /// `workspace extends <file|url>` (M5, `PHASE_1.md` §M5-b) — the file
+    /// branch of `WorkspaceParser.parse` @`ad34036`. The loaded base REPLACES
+    /// the workspace under construction; later statements layer over it.
+    /// The reference's non-file guard (`context.getFile() == null`) skips the
+    /// whole branch silently — same quirk as file `!include`s.
+    pub(crate) fn extend_from(&mut self, source: &str) -> Result<(), DslError> {
+        // D5 (mirrors the `!include` arm): ALL network input rejected, the
+        // reference feature-gate texts kept (`Features.HTTPS`/`HTTP` messages
+        // of `WorkspaceParser.parse`).
+        if source.starts_with("https://") {
+            return Err(DslError::coded(
+                oxidizr_diag::codes::NET_DISABLED,
+                "Extends via HTTPS are not permitted",
+            ));
+        }
+        if source.starts_with("http://") {
+            return Err(DslError::coded(
+                oxidizr_diag::codes::NET_DISABLED,
+                "Extends via HTTP are not permitted",
+            ));
+        }
+        let Some(dsl_file) = self.current_file_raw() else {
+            return Ok(());
+        };
+        let base = std::path::Path::new(&dsl_file)
+            .parent()
+            .map_or_else(std::path::PathBuf::new, std::path::PathBuf::from);
+        let path = base.join(source);
+        if !path.exists() {
+            return Err(DslError::stmt(format!(
+                "{} could not be found",
+                stmt_line::java_canonical(&path)
+            )));
+        }
+        if path.is_dir() {
+            return Err(DslError::stmt(format!(
+                "{} should be a single file",
+                stmt_line::java_canonical(&path)
+            )));
+        }
+
+        let loaded = if source.to_lowercase().ends_with(".json") {
+            // `WorkspaceUtils.loadWorkspaceFromJson(file)` — via the
+            // injected loader (topology: no `json` dep in this crate).
+            let Some(loader) = self.opts.json_loader else {
+                return Err(DslError::stmt(format!(
+                    "extending {source} requires a JSON workspace loader, none is configured"
+                )));
+            };
+            loader(&stmt_line::java_canonical(&path)).map_err(DslError::stmt)?
+        } else {
+            // child `StructurizrDslParser` (`createParser` + `parse(context,
+            // file)`): fresh parser state over the same file entry; its
+            // `configureFrom` handover happens below, before `finish()`.
+            let bytes = std::fs::read(&path).map_err(|_| {
+                DslError::stmt(format!(
+                    "Error reading file at {}: stream read failed",
+                    stmt_line::java_absolute(&path)
+                ))
+            })?;
+            let text = String::from_utf8_lossy(&bytes).into_owned();
+            let child_opts = ParseOptions {
+                file: Some(std::path::Path::new(&path).to_str().unwrap_or(source)),
+                base_dir: self.opts.base_dir,
+                json_loader: self.opts.json_loader,
+            };
+            let mut child = Parser::new(child_opts);
+            child.parse(&text);
+            // `context.getParser().configureFrom(structurizrDslParser)`:
+            // identifier scope, archetypes and constants/variables move into
+            // THIS parser; the identifier register is context-shared, so the
+            // child's registrations merge into ours.
+            self.ids.set_scope(child.ids.scope());
+            self.ids.adopt_entries(&mut child.ids);
+            self.archetypes = std::mem::take(&mut child.archetypes);
+            self.archetype_list = std::mem::take(&mut child.archetype_list);
+            self.constants = std::mem::take(&mut child.constants);
+            let child = child.finish();
+            self.errors.extend(child.errors);
+            child.workspace
+        };
+
+        self.builder.adopt(loaded);
+        // JSON bases: `WorkspaceParser.registerIdentifiers` — elements AND
+        // relationships carrying `structurizr.dsl.identifier` enter the
+        // (context-shared) register so `!element <identifier>` finds them.
+        if source.to_lowercase().ends_with(".json") {
+            let (elements, relationships) = json_dsl_identifiers(self.builder.workspace());
+            for (identifier, item) in elements {
+                self.ids
+                    .register_element(
+                        Some(&identifier),
+                        idents::RegItem::Element(item),
+                        None,
+                        &identifier,
+                    )
+                    .map_err(DslError::stmt)?;
+            }
+            for (identifier, item) in relationships {
+                self.ids
+                    .register_relationship(Some(&identifier), &item, &identifier)
+                    .map_err(DslError::stmt)?;
+            }
+        }
+        // `DslUtils.clearDsl(workspace)` (the base's own retention is
+        // discarded — the EXTENDING file is the source) and the reference's
+        // `context.setDslPortable(false)` on the WorkspaceParser context:
+        // the `WorkspaceDslContext` frame is seeded NOT-portable, so the
+        // extending file keeps no source either (`DslTests` asserts
+        // `DslUtils.getDsl` == "" for `source-child.dsl`). The statement
+        // runs on an empty stack, so this is the parser-level flag.
+        self.builder.remove_property("structurizr.dsl");
+        self.dsl_portable = false;
+        Ok(())
+    }
+
     // ------------------------------------------------------------------
     // finalization
     // ------------------------------------------------------------------
@@ -1669,6 +1804,59 @@ fn drop_trailing_empties<'a>(parts: &[&'a str]) -> Vec<&'a str> {
         .rposition(|p| !p.is_empty())
         .map_or(0, |i| i + 1);
     parts[..end].to_vec()
+}
+
+/// `WorkspaceParser.registerIdentifiers` (JSON bases of `workspace extends`):
+/// elements AND relationships carrying `structurizr.dsl.identifier` — the
+/// property stores the FINAL (hierarchical-composite) key, so identifiers are
+/// registered verbatim.
+fn json_dsl_identifiers(ws: &Workspace) -> (DslIdentifiers, DslIdentifiers) {
+    let mut items: Vec<&oxidizr_core::model::ModelItem> = Vec::new();
+    let m = &ws.model;
+    items.extend(m.custom_elements.iter().map(|e| &e.item));
+    items.extend(m.people.iter().map(|e| &e.item));
+    for s in &m.software_systems {
+        items.push(&s.item);
+        for c in &s.containers {
+            items.push(&c.item);
+            items.extend(c.components.iter().map(|k| &k.item));
+        }
+    }
+    for n in &m.deployment_nodes {
+        collect_json_item_refs(n, &mut items);
+    }
+    let elements = items
+        .iter()
+        .filter_map(|item| {
+            item.properties
+                .get("structurizr.dsl.identifier")
+                .map(|s| (s.to_string(), item.id.clone()))
+        })
+        .collect();
+    let relationships = m
+        .relationships
+        .iter()
+        .filter_map(|r| {
+            r.properties
+                .get("structurizr.dsl.identifier")
+                .map(|s| (s.to_string(), r.id.clone()))
+        })
+        .collect();
+    (elements, relationships)
+}
+
+/// Deployment-subtree `ModelItem` refs for [`json_dsl_identifiers`].
+fn collect_json_item_refs<'a>(
+    n: &'a oxidizr_core::model::DeploymentNode,
+    out: &mut Vec<&'a oxidizr_core::model::ModelItem>,
+) {
+    out.push(&n.item);
+    out.extend(n.infrastructure_nodes.iter().map(|i| &i.item));
+    out.extend(n.software_system_instances.iter().map(|i| &i.item));
+    out.extend(n.container_instances.iter().map(|i| &i.item));
+    for child in &n.children {
+        collect_json_item_refs(child, out);
+    }
 }
 
 /// Parse a DSL source (main-file entry, `parse(String, File)`).

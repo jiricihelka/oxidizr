@@ -230,6 +230,12 @@ impl WorkspaceBuilder {
         self.workspace.properties.insert(name.into(), value.into());
     }
 
+    /// Drop a top-level property (`DslUtils.clearDsl` — `workspace extends`
+    /// discards the base's retained `structurizr.dsl`).
+    pub fn remove_property(&mut self, name: &str) {
+        self.workspace.properties.remove(name);
+    }
+
     // ------------------------------------------------------------------
     // elements
     // ------------------------------------------------------------------

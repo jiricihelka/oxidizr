@@ -6,3 +6,4 @@
 | [burn-in-register.md](burn-in-register.md) | m4_fixtures.rs KNOWN_ERRORS pattern for deferred features |
 | [local-ci-mirrors.md](local-ci-mirrors.md) | `cargo xtask ci|bench|cov` — argv is literally ci.yml's |
 | [ast-grep-search.md](ast-grep-search.md) | structural code search recipes (`$X.unwrap()` etc.) |
+| [oracle-app-harness.md](oracle-app-harness.md) | export injects inspection props + default views; goldening limits |

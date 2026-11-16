@@ -490,14 +490,35 @@ fn def_person_system(p: &mut Parser<'_>, tokens: &Tokens, system: bool) -> Resul
         a.description.clone()
     };
     let tags = tags_from(&a, tokens.includes(3).then(|| tokens.get(3)));
-    let eid = if system {
-        p.builder
-            .add_software_system(&name, None, None)
-            .map_err(|e| DslError::core(&e))?
+    // `isExtendingWorkspace()` — on a base workspace, reuse the element with
+    // this EXACT name instead of adding (the add would hit the
+    // duplicate-name error); description/tags below then layer onto it.
+    let existing = if p.extending_workspace {
+        let m = &p.builder.workspace().model;
+        if system {
+            m.software_systems
+                .iter()
+                .find(|s| s.item.name == name)
+                .map(|s| s.item.id.clone())
+        } else {
+            m.people
+                .iter()
+                .find(|x| x.item.name == name)
+                .map(|x| x.item.id.clone())
+        }
     } else {
-        p.builder
+        None
+    };
+    let eid = match existing {
+        Some(id) => id,
+        None if system => p
+            .builder
+            .add_software_system(&name, None, None)
+            .map_err(|e| DslError::core(&e))?,
+        None => p
+            .builder
             .add_person(&name, None, None)
-            .map_err(|e| DslError::core(&e))?
+            .map_err(|e| DslError::core(&e))?,
     };
     p.define_element(&eid, &description, &tags, &a)?;
     Ok(eid)
@@ -520,10 +541,27 @@ fn def_container(p: &mut Parser<'_>, system: &Id, tokens: &Tokens) -> Result<Id,
         a.technology.clone()
     };
     let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4)));
-    let eid = p
-        .builder
-        .add_container(system, &name, None, None, None)
-        .map_err(|e| DslError::core(&e))?;
+    // ContainerParser reuse on extends (`getContainerWithName`).
+    let existing = p
+        .extending_workspace
+        .then(|| {
+            p.builder
+                .workspace()
+                .model
+                .software_systems
+                .iter()
+                .find(|s| s.item.id == *system)
+                .and_then(|s| s.containers.iter().find(|c| c.item.name == name))
+                .map(|c| c.item.id.clone())
+        })
+        .flatten();
+    let eid = match existing {
+        Some(id) => id,
+        None => p
+            .builder
+            .add_container(system, &name, None, None, None)
+            .map_err(|e| DslError::core(&e))?,
+    };
     if let Some(mut el) = p.builder.element_mut(&eid) {
         el.set_technology(Some(technology));
     }
@@ -548,10 +586,28 @@ fn def_component(p: &mut Parser<'_>, container: &Id, tokens: &Tokens) -> Result<
         a.technology.clone()
     };
     let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4)));
-    let eid = p
-        .builder
-        .add_component(container, &name, None, None, None)
-        .map_err(|e| DslError::core(&e))?;
+    // ComponentParser reuse on extends (`getComponentWithName`).
+    let existing = p
+        .extending_workspace
+        .then(|| {
+            p.builder
+                .workspace()
+                .model
+                .software_systems
+                .iter()
+                .flat_map(|s| s.containers.iter())
+                .find(|c| c.item.id == *container)
+                .and_then(|c| c.components.iter().find(|k| k.item.name == name))
+                .map(|k| k.item.id.clone())
+        })
+        .flatten();
+    let eid = match existing {
+        Some(id) => id,
+        None => p
+            .builder
+            .add_component(container, &name, None, None, None)
+            .map_err(|e| DslError::core(&e))?,
+    };
     if let Some(mut el) = p.builder.element_mut(&eid) {
         el.set_technology(Some(technology));
     }
