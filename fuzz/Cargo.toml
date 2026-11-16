@@ -1,0 +1,38 @@
+[package]
+name = "oxidizr-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+oxidizr-dsl = { path = "../crates/oxidizr-dsl" }
+oxidizr-json = { path = "../crates/oxidizr-json" }
+
+# M6-d targets (agents/plan/build/PHASE_1.md §P1-D11): the hand-rolled
+# lex/parse/fmt paths and the JSON reader. Seed corpus = the vendored fixture
+# corpus, staged by `cargo xtask fuzz` (fuzz/corpus/ stays gitignored).
+
+[[bin]]
+name = "dsl_parse"
+path = "fuzz_targets/dsl_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dsl_fmt"
+path = "fuzz_targets/dsl_fmt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "json_read"
+path = "fuzz_targets/json_read.rs"
+test = false
+doc = false
+bench = false

@@ -1,0 +1,31 @@
+name: Fuzz
+
+# M6-d (agents/plan/build/PHASE_1.md §P1-D11): cargo-fuzz targets over the
+# fixture seed corpus, nightly and time-boxed — mirrors `cargo xtask fuzz`.
+# Separate from ci.yml so its weekly Category B schedule stays weekly.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
+      # 60 s per target (build + staging included); a crash fails the job and
+      # lands the artifact under fuzz/artifacts/.
+      - run: cargo xtask fuzz 60
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts

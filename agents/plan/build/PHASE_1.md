@@ -354,6 +354,17 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
   Levenshtein budget 1/2/3 by token length. e2e 20→22, +8 reconcile +6 suggest
   unit tests; `run()` helper tolerates EPIPE on early-exit children
   (testing/cli-e2e-pitfalls.md #6).
+  **M6-d DONE 2026-11-16** (quartet green): `fuzz/` cargo-fuzz workspace
+  (excluded from the main workspace — quartet never sees it; own lockfile):
+  targets `dsl_parse` (whole pipeline, lossy UTF-8 in), `dsl_fmt` (format +
+  idempotence assert) and `json_read` (total reader + canonical-writer
+  fixpoint). Seed corpus = the vendored fixtures, staged by `cargo xtask fuzz
+  [SECONDS]` into gitignored `fuzz/corpus/<t>/`; runs time-boxed
+  (`-max_total_time`, `-timeout=10`, `-rss_max_mb=2048`). CI: separate nightly
+  `fuzz.yml` (60 s/target, artifacts uploaded on failure) so ci.yml's weekly
+  Category B schedule stays weekly. Trap: the dev shell's mingw
+  `CC/CXX/AR/RANLIB` poison cc-rs host builds — `cmd_fuzz` strips them
+  (env/fuzz-host-toolchain.md). Smoke: 107 dsl + 26 json seeds, all clean.
 - **M7** hardening: perf sanity (parse whole corpus < 100 ms in release — informational),
   docs (`--help`, README quickstart), tag v0.1.0.
 

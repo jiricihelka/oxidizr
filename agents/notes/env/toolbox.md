@@ -10,7 +10,7 @@ notes — this is the map, don't re-derive here.
 | `structurizr` oracle (app 2026.10.26 = lib 6.2.4 = monorepo `ad34036`; `$OXIDZR_STRUCTURIZR_BIN` set in the shell) + JDK 21 | Category B only — slow JVM, NEVER in the quartet | `cargo xtask oracle verify` / `gen [--fixture N]` — env/reference-oracle.md |
 | `wine` + mingw-w64 cross | reproduce Windows-only test failures locally | `cargo xtask ci windows` — env/wine-windows-leg.md |
 | `cargo xtask bench [save <L> \| cmp <L>]`, `cargo xtask cov` | perf regression checks / coverage (report-only) | critcmp takes only in-root baseline names (see bench help) |
-| `cargo-fuzz` | M6-d fuzz targets — installed, but NO `fuzz/` dir until M6-d | don't reach for it before then |
+| `cargo-fuzz` | M6-d fuzz job — `cargo xtask fuzz [s]` (targets in `fuzz/`, seeds from testdata; strip note: env/fuzz-host-toolchain.md) | CI nightly mirror; not a commit gate |
 | structurizr monorepo clone | the reference DECIDES ambiguous behavior — read the Java, don't guess | `git clone https://github.com/structurizr/structurizr <scratch> && git -C <scratch> checkout ad34036` (COMPAT.md §Source of truth) |
 | `cargo xtask vendor --src <clone>` | (re)vendoring reference fixtures into testdata/ | testdata/README.md contract |
 

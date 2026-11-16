@@ -9,6 +9,9 @@ members = [
     "crates/oxidizr-cli",
     "crates/xtask",
 ]
+# cargo-fuzz workspace (nightly + sanitizers) — driven by `cargo xtask fuzz`;
+# NOT a member so fmt/clippy/test --workspace never touch the fuzz targets.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.1.0"

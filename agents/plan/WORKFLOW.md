@@ -42,6 +42,7 @@ cargo xtask bench                          # bench job mirror (reports: target/c
 cargo xtask bench save <LABEL>             # snapshot criterion JSONs into bench-baseline/<LABEL>/
 cargo xtask bench cmp <LABEL>              # critcmp baseline vs target/criterion
 cargo xtask cov                            # coverage job mirror (summary, report only)
+cargo xtask fuzz [SECONDS]                 # fuzz job mirror (nightly CI): all targets, fixture seeds
 cargo xtask oracle verify                  # Category B (needs $OXIDZR_STRUCTURIZR_BIN)
 cargo llvm-cov --workspace                 # coverage report (CI, report only)
 cargo run -p oxidizr-cli -- dsl2json workspace.dsl -o workspace.json

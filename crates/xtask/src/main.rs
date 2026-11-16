@@ -72,6 +72,19 @@ fn real_main(args: Vec<String>) -> Result<()> {
             ensure!(args.next().is_none(), "cov takes no arguments");
             cmd_cov()
         }
+        Some("fuzz") => {
+            let secs = match args.next() {
+                None => 10,
+                Some(s) => s.parse::<u64>().with_context(|| {
+                    format!("fuzz: SECONDS-PER-TARGET must be a number, got `{s}`")
+                })?,
+            };
+            ensure!(
+                args.next().is_none(),
+                "usage: cargo xtask fuzz [SECONDS-PER-TARGET]"
+            );
+            cmd_fuzz(secs)
+        }
         Some("oracle") => {
             let oracle = find_oracle()?;
             match args.next().as_deref() {
@@ -125,6 +138,8 @@ fn print_help() {
          cargo xtask bench save <LABEL>       snapshot criterion results into bench-baseline/<LABEL>/\n\
          cargo xtask bench cmp <LABEL>        critcmp bench-baseline/<LABEL> vs target/criterion\n\
          cargo xtask cov                      cargo llvm-cov --workspace --summary-only (report only)\n\
+         cargo xtask fuzz [SECONDS]           cargo-fuzz job mirror (M6-d): build every target,\n\
+         \x20              seed from testdata/, run each SECONDS (default 10; CI nightly)\n\
          \n\
          cargo xtask vendor --src <clone>     vendor reference fixtures into testdata/\n\
          cargo xtask oracle gen [--fixture N]…  generate goldens via the reference binary\n\
@@ -479,6 +494,93 @@ fn cmd_cov() -> Result<()> {
         .status()
         .context("failed to run cargo llvm-cov")?;
     ensure!(status.success(), "cargo llvm-cov failed ({status})");
+    Ok(())
+}
+
+// ------------------------------------------------------------------------ fuzz (M6-d)
+
+/// cargo-fuzz targets and their seed roots (relative to the repo root):
+/// `(target, &[(testdata dir, extension)])`. Seed corpus = the vendored
+/// fixture corpus itself (`PHASE_1` §P1-D11: "fixture seed corpus").
+const FUZZ_TARGETS: &[(&str, &[(&str, &str)])] = &[
+    ("dsl_parse", &[("testdata/dsl", "dsl")]),
+    ("dsl_fmt", &[("testdata/dsl", "dsl")]),
+    (
+        "json_read",
+        &[
+            ("testdata/golden", "json"),
+            ("testdata/read-corpus", "json"),
+            ("testdata/validation", "json"),
+            ("testdata/probes", "json"),
+        ],
+    ),
+];
+
+/// Fuzz job mirror (nightly in CI): build all targets once, stage the fixture
+/// seeds, then run each target time-boxed. Crash artifacts land in
+/// `fuzz/artifacts/<target>/` and the nonzero exit fails the job.
+fn cmd_fuzz(secs: u64) -> Result<()> {
+    let root = repo_root()?;
+
+    // The nix dev shell exports CC/CXX/AR/RANLIB for the mingw-w64 cross
+    // toolchain (windows-gnu leg, flake.nix `windowsCross`). cc-rs obeys them
+    // even for HOST builds — libfuzzer-sys compiles its libFuzzer runtime
+    // with the mingw g++ and even picks libFuzzer's *Windows* sources for a
+    // Linux target. CI runners have a clean environment; stripping locally
+    // keeps this mirror equal to CI (agents/notes/env/fuzz-host-toolchain.md).
+    let mk_cmd = || {
+        let mut cmd = cargo_cmd();
+        for key in ["CC", "CXX", "AR", "RANLIB"] {
+            cmd.env_remove(key);
+        }
+        cmd
+    };
+
+    println!("\n==> fuzz build `$ cargo fuzz build`");
+    let status = mk_cmd().args(["fuzz", "build"]).status().context(
+        "cargo fuzz not found — the nix dev shell provides it (agents/plan/WORKFLOW.md)",
+    )?;
+    ensure!(status.success(), "cargo fuzz build failed");
+
+    for (target, seeds) in FUZZ_TARGETS {
+        // The corpus dir is writable scratch (gitignored): libFuzzer stores
+        // new interesting inputs right next to the staged fixtures.
+        let dir = root.join("fuzz/corpus").join(target);
+        fs::create_dir_all(&dir)?;
+        let mut staged = 0usize;
+        for (sub, ext) in *seeds {
+            let leaf = Path::new(sub)
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            for file in walk_files(&root.join(sub), ext)? {
+                let name = file
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                fs::copy(&file, dir.join(format!("{leaf}-{name}")))?;
+                staged += 1;
+            }
+        }
+        println!("\n==> fuzz `{target}` ({staged} seeds, {secs}s) `$ cargo fuzz run {target}`");
+        let status = mk_cmd()
+            .args([
+                "fuzz",
+                "run",
+                target,
+                "--",
+                &format!("-max_total_time={secs}"),
+                "-timeout=10",
+                "-rss_max_mb=2048",
+            ])
+            .status()
+            .context("failed to run cargo fuzz")?;
+        ensure!(
+            status.success(),
+            "fuzz target `{target}` FAILED (crashes: fuzz/artifacts/{target}/)"
+        );
+    }
+    println!("\nfuzz: all targets clean");
     Ok(())
 }
 

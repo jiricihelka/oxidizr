@@ -18,7 +18,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-a CLI surface | **done 2026-11-16** (log below) |
 | P1 | M6-b formatter | **done 2026-11-16** (log below) |
 | P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
-| P1 | M6-d … M7 | M6-d fuzz targets + CI nightlies next |
+| P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
+| P1 | M7 | hardening + release (next) |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -141,6 +142,35 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P1-M6d — cargo-fuzz targets + CI nightlies ✅ (2026-11-16)
+
+`fuzz/` is a SEPARATE cargo workspace (`exclude` in the root `Cargo.toml`):
+the fmt/clippy/test quartet never sees the sanitizer targets; the pinned
+nightly stays the toolchain for it (cargo-fuzz requires nightly — already
+NIGHTLY.md's stated reason for the pin).
+
+- Targets (fixture seed corpus per PHASE_1 §P1-D11): `dsl_parse` — the whole
+  pipeline over lossy-UTF-8 bytes (beyond the CLI's UTF-8 gate the engine
+  must still be panic-free); `dsl_fmt` — format any text + idempotence assert
+  (fuzz sibling of the M6-b proptest invariant); `json_read` — the reader is
+  total (rejects as values, never panics) and the writer's canonical form is
+  a fixpoint (re-read + re-write reproduce bytes).
+- `cargo xtask fuzz [SECONDS]` (default 10): builds all targets, stages the
+  testdata fixtures into gitignored `fuzz/corpus/<t>/` (libFuzzer deposits
+  discoveries beside the seeds), runs each target time-boxed
+  (`-max_total_time` · `-timeout=10` · `-rss_max_mb=2048`). Crash = nonzero
+  exit fails the job; artifacts under `fuzz/artifacts/`.
+- CI: `.github/workflows/fuzz.yml` — nightly schedule + dispatch (kept OUT of
+  ci.yml so the weekly Category B schedule stays weekly), 60 s/target,
+  artifacts uploaded on failure.
+- Trap (→ `env/fuzz-host-toolchain.md`): the dev shell exports the windows-gnu
+  leg's `CC/CXX/AR/RANLIB` (mingw-w64); cc-rs obeys them even for HOST builds
+  — libfuzzer-sys then compiles libFuzzer's *Windows* sources for Linux and
+  dies. `cmd_fuzz` strips the four vars (CI env is clean; the strip keeps
+  local == CI).
+- Smoke: 107 DSL + 26 JSON seeds staged, all three targets clean
+  (≈ 2.5–4k execs per 3 s target).
 
 ### P1-M6c — `reconcile` + validate polish ✅ (2026-11-16)
 
