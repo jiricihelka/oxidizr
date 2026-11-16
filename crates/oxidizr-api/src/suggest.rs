@@ -1,6 +1,8 @@
-//! "did you mean …?" decoration (P1-D2, D1 freedom).
+//! "did you mean …?" decoration (P1-D2, D1 freedom; home moved to
+//! `oxidizr-api` in T0-c because the command bodies that decorate with it
+//! live in the headless pipeline).
 //!
-//! Computed at the CLI boundary — the engine's `Issue` message stays the
+//! Computed at the API boundary — the engine's `Issue` message stays the
 //! reference text byte-for-byte; only [`Issue::help`] gains the suggestion.
 //! Both candidate sets come from what is already on hand here:
 //!
@@ -15,7 +17,7 @@ use oxidizr_core::Workspace;
 use oxidizr_core::builder::WorkspaceBuilder;
 use oxidizr_core::validate::flattened;
 
-use crate::report::Issue;
+use crate::Issue;
 
 /// The DSL-stamped identity property (Locked, `agents/plan/COMPAT.md`).
 const DSL_IDENTIFIER: &str = "structurizr.dsl.identifier";

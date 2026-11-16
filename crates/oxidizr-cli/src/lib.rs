@@ -17,7 +17,7 @@
 
 pub mod reconcile;
 pub mod report;
-pub mod suggest;
+pub use oxidizr_api::suggest;
 
 use std::io::Read as _;
 use std::io::Write as _;

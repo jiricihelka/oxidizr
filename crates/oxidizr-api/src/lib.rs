@@ -10,9 +10,10 @@
 //! drift.
 //!
 //! Landed: [`Issue`] — the pure diagnostic data type shared with the CLI
-//! renderer (T0-b). `execute`/`Request`/`Outcome` land with the command-body
-//! extraction (T0-d).
+//! renderer (T0-b); [`suggest`] — the `did you mean …?` decoration (T0-c).
+//! `execute`/`Request`/`Outcome` land with the command-body extraction (T0-d).
 
 pub mod diagnostic;
+pub mod suggest;
 
 pub use diagnostic::{Issue, Snippet};
