@@ -5,16 +5,14 @@
 //! `2` usage (clap default) · `3` I/O. `-` means stdin/stdout where a command takes a
 //! file argument. No config files: flags + the documented env family only (agents/plan/WORKFLOW.md §CLI/config policy).
 //!
-//! M6-a lands `dsl2json` / `json2json` / `validate` (miette-rendered
+//! M6-a landed `dsl2json` / `json2json` / `validate` (miette-rendered
 //! diagnostics, JSON-base loader injected for `workspace extends <*.json>`,
 //! D3 `--keep-unknown` capture through `oxidizr_json::roundtrip_keep_unknown`);
-//! `fmt` arrives with M6-b, `reconcile` with M6-c. Input decoding is
-//! UTF-8-only at v0.1 (V-8 resolved: no `--encoding` flag; non-UTF-8 input is
-//! an OXZ-5006 exit-3 failure like any other I/O problem).
-// P1-M0 skeleton: the full command surface (P1-D8) parses, but the pipeline deps are
-// declared before use (json M3+, dsl M4/M5, miette rendering M6). Remove as they land.
-// `oxidizr-ast` stays pre-declared until the M6-b formatter consumes the CST.
-#![allow(unused_crate_dependencies)]
+//! M6-b landed `fmt` (the P1-D7 printer lives in `oxidizr_dsl::fmt` — this
+//! crate only adds the file/stdin plumbing and the check/write modes).
+//! `reconcile` arrives with M6-c. Input decoding is UTF-8-only at v0.1
+//! (V-8 resolved: no `--encoding` flag; non-UTF-8 input is an OXZ-5006 exit-3
+//! failure like any other I/O problem).
 
 pub mod report;
 
@@ -87,13 +85,14 @@ pub enum Command {
     },
     /// Reformat DSL source (canonical style, P1-D7 invariants).
     Fmt {
-        /// DSL files to format.
+        /// DSL files to format (`-` or none = stdin; output goes to stdout
+        /// unless `--write`).
         files: Vec<PathBuf>,
-        /// Rewrite files in place.
+        /// Rewrite files in place (only files whose formatting changes).
         #[arg(short, long)]
         write: bool,
         /// Exit 1 if any file is not formatted (no output rewrite).
-        #[arg(long)]
+        #[arg(long, conflicts_with = "write")]
         check: bool,
     },
     /// Remap layout-JSON ids onto a re-parsed DSL (F1; geometry-preserving edit loop).
@@ -113,10 +112,9 @@ pub enum Command {
 ///
 /// `Ok(0)` success · `Ok(1)` diagnostics with an error (or a warning under
 /// `--strict`) · `Ok(3)` I/O failure; diagnostics are rendered by miette on
-/// stderr before returning ([`report`]). `Err` is reserved for the
-/// milestones not yet landed (`fmt` M6-b, `reconcile` M6-c) and internal
-/// faults; main maps it to exit `1`. Usage errors never reach `Err`: clap
-/// exits `2` directly.
+/// stderr before returning ([`report`]). `Err` is reserved for the milestone
+/// not yet landed (`reconcile` M6-c) and internal faults; main maps it to
+/// exit `1`. Usage errors never reach `Err`: clap exits `2` directly.
 ///
 /// # Errors
 ///
@@ -130,9 +128,11 @@ pub fn run() -> anyhow::Result<i32> {
             json2json(&cli, &renderer, json.as_deref(), output.as_deref())
         }
         Command::Validate { files } => validate(&cli, &renderer, files),
-        Command::Fmt { .. } => {
-            anyhow::bail!("`fmt` lands with M6-b (formatter over the lossless CST)")
-        }
+        Command::Fmt {
+            files,
+            write,
+            check,
+        } => fmt_cmd(&renderer, files, *write, *check),
         Command::Reconcile { .. } => {
             anyhow::bail!("`reconcile` lands with M6-c (identifier-keyed layout remap)")
         }
@@ -388,6 +388,70 @@ fn validate(cli: &Cli, renderer: &Renderer, files: &[PathBuf]) -> i32 {
         }
     }
     if blocked {
+        1
+    } else if io_error {
+        3
+    } else {
+        0
+    }
+}
+
+/// `fmt`: reformat DSL sources to the canonical P1-D7 style. The printer is
+/// `oxidizr_dsl::fmt::format` (it never validates — an invalid statement is
+/// re-printed token-identically and fails to parse exactly as before).
+/// Modes (P1-D8): default prints the formatted text of every input to stdout;
+/// `--write` rewrites files in place, only when they change; `--check` lists
+/// the unformatted files and exits `1`. Stdin has no in-place target:
+/// `--write` with `-` is a usage error (exit `2`). I/O and UTF-8 failures are
+/// OXZ-5006 → exit `3`.
+fn fmt_cmd(renderer: &Renderer, files: &[PathBuf], write: bool, check: bool) -> i32 {
+    // No file arguments = stdin (P1-D8: `-` stands for stdin/stdout).
+    let inputs: Vec<Option<&Path>> = if files.is_empty() {
+        vec![None]
+    } else {
+        files.iter().map(|p| Some(p.as_path())).collect()
+    };
+    let mut unformatted = false;
+    let mut io_error = false;
+    for path in inputs {
+        let stdin = path.is_none_or(|p| p == Path::new("-"));
+        if write && stdin {
+            renderer.issues(std::slice::from_ref(&Issue::error(
+                codes::CLI_IO,
+                "`fmt --write` needs a file to rewrite (stdin has no in-place target)",
+            )));
+            return 2; // usage error (P1-D8 code 2), not an I/O failure
+        }
+        let input = match read_input(path) {
+            Ok(i) => i,
+            Err(e) => {
+                renderer.issues(std::slice::from_ref(&e));
+                io_error = true;
+                continue;
+            }
+        };
+        let formatted = oxidizr_dsl::fmt::format(&input.text);
+        if check {
+            if formatted != input.text {
+                unformatted = true;
+                renderer.ok(&input.display);
+            }
+        } else if write {
+            if formatted != input.text {
+                // Only changed files are rewritten (mtime stability).
+                if let Err(e) = write_output(formatted.as_bytes(), path) {
+                    renderer.issues(std::slice::from_ref(&e));
+                    io_error = true;
+                } else {
+                    renderer.ok(&input.display);
+                }
+            }
+        } else if let Err(e) = write_output(formatted.as_bytes(), None) {
+            renderer.issues(std::slice::from_ref(&e));
+            io_error = true;
+        }
+    }
+    if unformatted {
         1
     } else if io_error {
         3

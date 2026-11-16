@@ -14,5 +14,6 @@
 pub mod compat;
 pub mod cst;
 pub mod engine;
+pub mod fmt;
 pub mod lexer;
 pub mod preprocess;

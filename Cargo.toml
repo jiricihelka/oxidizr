@@ -37,6 +37,7 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 expect-test = "1"
 criterion = "0.5"
+proptest = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -326,6 +326,17 @@ the `NIGHTLY.md` feature register (agents/plan/WORKFLOW.md toolchain policy).
   idempotent superset); new codes `OXZ-3001/4001/4002/5006` registered; V-3/V-8
   closed below; `tests/cli.rs` 15 Category A end-to-end tests (byte-exact golden,
   stdin/stdout, exit codes).
+  **M6-b DONE 2026-11-16** (quartet green): `oxidizr_dsl::fmt` printer over the
+  lossless CST (P1-D7: 4-space `INDENT`, token-value brace depth, blank compaction
+  max 1, conservative unquoting, verbatim zones: block-comment interior / text-block
+  raw / dropped tail); line-end guards per reference `preProcessLines` (protective
+  space for `"""`-end, verbatim for `\`-end, doubled CR before LF, joiner-only
+  `stripLeading` — notes/pitfalls/fmt-line-end-guards.md); gates = corpus
+  idempotence + invariant-1 workspace equality (`structurizr.dsl` line dropped,
+  UUIDs redacted) + proptest idempotence/logical-surface (20k cases, regressions
+  committed); two latent M1 `lex_comment` tiling bugs fixed with regression test;
+  CLI `fmt` wired (stdout/`--write`/`--check`, stdin, usage exit 2), e2e 15→20;
+  `oxidizr-ast` pruned from CLI deps.
 - **M7** hardening: perf sanity (parse whole corpus < 100 ms in release — informational),
   docs (`--help`, README quickstart), tag v0.1.0.
 

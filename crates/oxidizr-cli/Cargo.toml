@@ -17,7 +17,6 @@ reference = []
 
 [dependencies]
 oxidizr-core = { workspace = true }
-oxidizr-ast = { workspace = true }
 oxidizr-diag = { workspace = true }
 oxidizr-dsl = { workspace = true }
 oxidizr-json = { workspace = true }

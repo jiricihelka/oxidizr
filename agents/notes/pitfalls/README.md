@@ -10,3 +10,4 @@ tools, not guessed.
 | [nixpkgs-quirks.md](nixpkgs-quirks.md) | win32-threads mingw lacks winpthreads; nested lists deprecated; flake not nixfmt-styled |
 | [expect-test-eol.md](expect-test-eol.md) | snapshots are byte-compared incl. EOL; `UPDATE_EXPECT` regenerates against the *local* checkout's EOL |
 | [git-mv-deletes-untracked.md](git-mv-deletes-untracked.md) | `git mv dir/ …` removes untracked files inside `dir/` (they land in `~/.local/share/Trash`) |
+| [fmt-line-end-guards.md](fmt-line-end-guards.md) | `split("\\r?\\n")` contract; `\`/`"""` line-end guards; joiner-only `stripLeading` |

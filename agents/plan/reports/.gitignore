@@ -1,0 +1,5 @@
+# Untracked scratch for user-dropped CI/OS reports (AGENTS.md "Where things
+# are"). The directory itself must exist so the documented path references
+# resolve (`cargo xtask refs`); everything dropped into it stays untracked.
+*
+!.gitignore

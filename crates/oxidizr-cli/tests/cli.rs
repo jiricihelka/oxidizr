@@ -286,16 +286,115 @@ fn usage_errors_exit_2() {
 
 #[test]
 fn unreached_milestones_bail_with_plan_refs() {
-    let out = run(&["fmt", "x.dsl"], None);
-    assert_eq!(out.status.code(), Some(1));
-    assert!(
-        String::from_utf8_lossy(&out.stderr).contains("M6-b"),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
     let out = run(&["reconcile", "--dsl", "e.dsl", "--layout", "l.json"], None);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("M6-c"));
+}
+
+/// Temp-dir helper for the `fmt` end-to-end tests.
+fn fmt_temp(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("oxidizr-cli-fmt-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name)
+}
+
+#[test]
+fn fmt_stdin_writes_canonical_output_to_stdout() {
+    let source = b"workspace \"W\" {\n      model {\n  person p \"P\"   \n    }\n}\n";
+    let want = b"workspace W {\n    model {\n        person p P\n    }\n}\n";
+    let out = run(&["fmt", "-"], Some(source));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.stdout, want);
+    // Already canonical input is byte-stable (`fmt` output feeds `fmt`).
+    let again = run(&["fmt", "-"], Some(want));
+    assert_eq!(again.stdout, want);
+}
+
+#[test]
+fn fmt_check_flags_unformatted_then_write_fixes_in_place() {
+    let file = fmt_temp("check.dsl");
+    let source = "a {\n      b\n}\n";
+    std::fs::write(&file, source).unwrap();
+
+    let out = run(&["fmt", "--check", file.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1), "unformatted must exit 1");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim_end(),
+        file.display().to_string()
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        source,
+        "--check writes nothing"
+    );
+
+    let out = run(&["fmt", "--write", file.to_str().unwrap()], None);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "a {\n    b\n}\n");
+
+    let out = run(&["fmt", "--check", file.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(out.stdout.is_empty(), "quiet check: {:?}", out.stdout);
+
+    // `--write` on a formatted file leaves it alone (mtime-stable rewrite).
+    let before = std::fs::metadata(&file).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    let out = run(&["fmt", "--write", file.to_str().unwrap()], None);
+    assert!(out.status.success());
+    assert_eq!(
+        std::fs::metadata(&file).unwrap().modified().unwrap(),
+        before
+    );
+}
+
+#[test]
+fn fmt_default_prints_and_leaves_file_untouched() {
+    let file = fmt_temp("stdout.dsl");
+    std::fs::write(&file, "a {\n        b\n}\n").unwrap();
+    let out = run(&["fmt", file.to_str().unwrap()], None);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.stdout, b"a {\n    b\n}\n");
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "a {\n        b\n}\n"
+    );
+}
+
+#[test]
+fn fmt_write_needs_a_file_not_stdin() {
+    // Usage error (P1-D8 code 2): stdin has no in-place target.
+    let out = run(&["fmt", "--write", "-"], Some(b"a\n"));
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("in-place"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn fmt_never_validates_formats_any_input() {
+    // Invalid statements re-print token-identically; formatting still exits 0
+    // (the same text fails to PARSE — but that is not fmt's business).
+    let out = run(
+        &["fmt", "-"],
+        Some(b"this is not a workspace {{{{  &&&\n\t\n"),
+    );
+    assert_eq!(out.status.code(), Some(0));
+    let again = run(&["fmt", "-"], Some(&out.stdout));
+    assert_eq!(again.stdout, out.stdout, "fmt is idempotent");
 }
 
 #[test]

@@ -16,7 +16,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M4 dsl parser + builder | **done 2026-11-15** (commit 41b70ca) |
 | P1 | M5 workspace extends | **done 2026-11-16** (commits 9f174e6, c468854) |
 | P1 | M6-a CLI surface | **done 2026-11-16** (log below) |
-| P1 | M6-b … M7 | M6-b `fmt` (formatter on the lossless CST) next |
+| P1 | M6-b formatter | **done 2026-11-16** (log below) |
+| P1 | M6-c … M7 | M6-c `reconcile` + validate polish next |
 | P2 | exporters | pending |
 | P3 | viewer+layout | pending |
 
@@ -139,6 +140,41 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P1-M6b — `fmt`: canonical formatter on the lossless CST ✅ (2026-11-16)
+
+P1-D7 printer in `oxidizr_dsl::fmt` (NOT the CLI — P1-D1 topology; the CLI
+only adds stdin/file plumbing + `--write`/`--check`), formatter never validates.
+
+- Printer walks `cst::build` root children paired 1:1 (cursor) with the
+  `preprocess::preprocess` logical lines; 4-space `INDENT`; brace depth from
+  token VALUES (a quoted `"{"` opens a context in the reference too — quotes
+  are stripped before its scope checks); blank runs compact to 1; whole-line
+  comments re-indent, block-comment region interior + text-block raw +
+  dropped EOF tail byte-verbatim; conservative unquoting (`unquote_value`:
+  terminated, no `"`, no trailing `\`, no whitespace, not `#`/`//`/`/*`-
+  starting, not `*/`-ending); LF terminators.
+- Line-end guards (→ `agents/notes/pitfalls/fmt-line-end-guards.md`): `"""`-
+  ending body → protective space; `\`-ending body → original bytes verbatim
+  (unrepresentable — the reference always re-joins); content-final `\r`
+  doubled before the LF (`split("\\r?\\n")` is the contract, `parse(File)`
+  `readAllLines` is NOT); between-segment-after-terminator whitespace is the
+  joiner indent `stripLeading` drops — segment-membership test, not a
+  prev-leaf heuristic.
+- Gates (`tests/m6_fmt.rs`): corpus idempotence + invariant-1 workspace
+  equality (JSON bytes with the base64 `structurizr.dsl` line dropped — it
+  legitimately carries the formatted source, P1-D7 invariant 3 — and UUID-
+  shaped values redacted, `uuid_v4` is volatile) over ≥90 UTF-8 corpus
+  members; proptest idempotence + logical-surface preservation (20 000 cases
+  × 400-char DSL-flavoured input green; `.proptest-regressions` seeds kept).
+- Two latent M1 bugs fixed on the way (`lexer::lex_comment` mis-tiled a
+  comment joined onto an all-whitespace `\` segment; regression test
+  `comment_after_all_ws_continuation_segments`).
+- CLI `fmt`: default stdout · `--write` in place (only changed files,
+  mtime-stable) · `--check` lists unformatted + exit 1 · `--write` `-`
+  usage exit 2 · CLI test 15→20 e2e. `oxidizr-ast` dropped from CLI deps
+  (formatter consumes the CST inside `oxidizr-dsl`). Refs scratch dir
+  `agents/plan/reports/` pinned with a self-ignoring `.gitignore`.
 
 ### P1-M6a — CLI surface: dsl2json / json2json / validate ✅ (2026-11-16)
 

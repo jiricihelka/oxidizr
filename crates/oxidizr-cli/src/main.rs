@@ -1,8 +1,8 @@
 //! `oxidizr` binary entry point. Exit codes per P1-D8: 0 ok, 1 diagnostics/errors,
 //! 2 usage (clap), 3 I/O.
 // Diagnostics are rendered (miette) and mapped to exit codes inside the library;
-// this shim only converts the final code. `oxidizr-ast` remains pre-declared for
-// the M6-b formatter, hence the crate-level allow below.
+// this shim only converts the final code, so the linked workspace deps are all
+// used by `oxidizr-cli` itself — hence the crate-level allow below.
 #![allow(unused_crate_dependencies)]
 
 use std::process::ExitCode;

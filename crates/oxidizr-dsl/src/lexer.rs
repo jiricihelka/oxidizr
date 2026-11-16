@@ -286,15 +286,25 @@ pub fn lex_line(source: &str, logical: &Logical) -> LexedLine {
 #[must_use]
 pub fn lex_comment(source: &str, logical: &Logical) -> LexedLine {
     let mut sink = LeafSink { leaves: Vec::new() };
-    let seg = logical.segments.first();
-    let content_start = seg.map_or(logical.span.0, |s| {
-        let text = &source[s.start..s.end];
-        let first = text
-            .find(|c: char| !compat::is_java_regex_s(c))
-            .unwrap_or(0);
-        s.start + first
-    });
-    let content_end = seg.map_or(logical.span.1, |s| s.end);
+    // The comment opener is the first non-`\s` char of the JOINED text — a
+    // `\`-join can leave leading all-whitespace segments (e.g. `\` + `# c`,
+    // where the pending segment is empty and the joiner carries the comment).
+    // The content ends at the last non-empty segment (terminators excluded).
+    let mut content_start = None;
+    let mut content_end = None;
+    for s in &logical.segments {
+        if content_start.is_none() {
+            let text = &source[s.start..s.end];
+            if let Some(off) = text.find(|c: char| !compat::is_java_regex_s(c)) {
+                content_start = Some(s.start + off);
+            }
+        }
+        if s.end > s.start {
+            content_end = Some(s.end);
+        }
+    }
+    let content_start = content_start.unwrap_or(logical.span.0);
+    let content_end = content_end.unwrap_or(logical.span.0);
     trivia_leaves(source, logical.span.0, content_start, &mut sink);
     sink.push(NodeKind::Comment, content_start, content_end);
     trivia_leaves(source, content_end, logical.span.1, &mut sink);
@@ -319,6 +329,28 @@ pub fn lex_blank(source: &str, logical: &Logical) -> LexedLine {
 mod tests {
     use super::*;
     use crate::preprocess::preprocess;
+
+    #[test]
+    fn comment_after_all_ws_continuation_segments() {
+        // M6-b proptest regression: a `\`-join whose pending segments are
+        // whitespace-only — the comment opener lives in a LATER segment, and
+        // the leaf tiling must survive (used to start the Comment leaf at the
+        // empty first segment and feed `#` to trivia_leaves).
+        for src in ["\\\n# c", "   \\\n\t# c"] {
+            let ls = preprocess(src);
+            assert_eq!(ls.len(), 1, "{src:?}");
+            let ll = lex_comment(src, &ls[0]);
+            let kinds: Vec<NodeKind> = ll.leaves.iter().map(|l| l.kind).collect();
+            assert!(kinds.contains(&NodeKind::Comment), "{src:?}: {kinds:?}");
+            // Leaves tile the logical span contiguously in order.
+            let mut cursor = ls[0].span.0;
+            for leaf in &ll.leaves {
+                assert_eq!(leaf.range.start as usize, cursor, "{src:?}: {kinds:?}");
+                cursor = leaf.range.end as usize;
+            }
+            assert_eq!(cursor, ls[0].span.1, "{src:?}");
+        }
+    }
 
     /// Lex the single logical line of a fixture source (panics if not exactly one).
     fn one(src: &str) -> LexedLine {
