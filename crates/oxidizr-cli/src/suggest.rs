@@ -98,7 +98,7 @@ fn statement_tokens(issue: &Issue) -> Vec<String> {
     let Some(snip) = &issue.snippet else {
         return Vec::new();
     };
-    let line = snip.source.inner();
+    let line = &snip.text;
     let mut tokens: Vec<String> = line.split_whitespace().map(str::to_string).collect();
     // Reference `tokens.sublist(2)` on the `id =` prefix: the keyword is the
     // third token, the catch-all rejected the list starting AT the keyword.

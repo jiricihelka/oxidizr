@@ -16,6 +16,7 @@ default = []
 reference = []
 
 [dependencies]
+oxidizr-api = { workspace = true }
 oxidizr-core = { workspace = true }
 oxidizr-diag = { workspace = true }
 oxidizr-dsl = { workspace = true }

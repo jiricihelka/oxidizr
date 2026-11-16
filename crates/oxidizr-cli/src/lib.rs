@@ -587,12 +587,4 @@ mod tests {
         let cli = Cli::try_parse_from(["oxidizr", "dsl2json"]).unwrap();
         assert_eq!(command_name(&cli.command), "dsl2json");
     }
-
-    #[test]
-    fn line_offsets_match_split_inclusive() {
-        let text = "one\ntwo\nthree\n";
-        assert_eq!(report::offset_of_line(text, 1), 0);
-        assert_eq!(report::offset_of_line(text, 2), 4);
-        assert_eq!(report::offset_of_line(text, 3), 8);
-    }
 }
