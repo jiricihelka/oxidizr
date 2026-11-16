@@ -18,7 +18,7 @@ fn opts() -> ParseOptions<'static> {
         file: None,
         base_dir: None,
         json_loader: None,
-        env_lookup: Some(no_env as EnvLookup),
+        env_lookup: Some(EnvLookup::new(no_env)),
     }
 }
 

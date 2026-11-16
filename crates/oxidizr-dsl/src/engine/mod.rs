@@ -198,7 +198,35 @@ pub type JsonWorkspaceLoader = fn(&str) -> Result<Workspace, String>;
 /// headless API run parses hermetically (test-provided map instead of the
 /// process environment). `None` — the production default — keeps the V-3
 /// reference behavior (`System.getenv` equivalent, `std::env::var`).
-pub type EnvLookup = fn(&str) -> Option<String>;
+///
+/// `Arc<dyn Fn>` (not a fn pointer) so a captured map rides along;
+/// `Send + Sync` keeps [`ParseOptions`] usable from parallel in-process
+/// runs (the e2e fan-out).
+/// The boxed lookup behind [`EnvLookup`] (named to tame `type_complexity`).
+type EnvFn = dyn Fn(&str) -> Option<String> + Send + Sync;
+
+#[derive(Clone)]
+pub struct EnvLookup(std::sync::Arc<EnvFn>);
+
+impl EnvLookup {
+    /// Wrap any total, thread-safe lookup.
+    #[must_use]
+    pub fn new(lookup: impl Fn(&str) -> Option<String> + Send + Sync + 'static) -> Self {
+        EnvLookup(std::sync::Arc::new(lookup))
+    }
+
+    /// Resolve `name` (the substitute-sites' sole entry point).
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<String> {
+        (self.0)(name)
+    }
+}
+
+impl std::fmt::Debug for EnvLookup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("EnvLookup(..)")
+    }
+}
 
 /// `(identifier, item id)` pairs from a JSON base
 /// ([`json_dsl_identifiers`]).
@@ -206,7 +234,7 @@ type DslIdentifiers = Vec<(String, Id)>;
 
 /// Entry options (the reference `parse(String, File)` entry: main file,
 /// source tracked, not a fragment).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ParseOptions<'a> {
     /// Path reported in reference-style messages (`of <path>`); `None` for
     /// stdin/fragment input (the reference prints no `of …` for non-files).
@@ -360,6 +388,8 @@ impl<'a> Parser<'a> {
         ] {
             archetypes.insert(kind.to_string(), HashMap::new());
         }
+        // `opts` is moved into the struct below, so read `file` first.
+        let file_stack = vec![opts.file.map(str::to_string)];
         Parser {
             builder: WorkspaceBuilder::new(),
             ids: IdentifiersRegister::new(),
@@ -374,7 +404,7 @@ impl<'a> Parser<'a> {
             constants: HashMap::new(),
             archetypes,
             archetype_list: Vec::new(),
-            file_stack: vec![opts.file.map(str::to_string)],
+            file_stack,
             next_uid: 1,
             errors: Vec::new(),
             seq: HashMap::new(),
@@ -862,8 +892,8 @@ impl<'a> Parser<'a> {
             } else {
                 // V-3: env substitution is ON (reference parser ctor default)
                 // unless a hermetic lookup is injected (Phase 1T P1T-D1).
-                match self.opts.env_lookup {
-                    Some(lookup) => lookup(name),
+                match &self.opts.env_lookup {
+                    Some(lookup) => lookup.get(name),
                     None => std::env::var(name).ok(),
                 }
             };
@@ -1396,7 +1426,7 @@ impl<'a> Parser<'a> {
                 file: Some(std::path::Path::new(&path).to_str().unwrap_or(source)),
                 base_dir: self.opts.base_dir,
                 json_loader: self.opts.json_loader,
-                env_lookup: self.opts.env_lookup,
+                env_lookup: self.opts.env_lookup.clone(),
             };
             let mut child = Parser::new(child_opts);
             child.parse(&text);
@@ -1989,7 +2019,7 @@ mod tests {
             file: None,
             base_dir: None,
             json_loader: None,
-            env_lookup: Some(fake_env),
+            env_lookup: Some(EnvLookup::new(fake_env)),
         };
         let p = Parser::new(opts);
         assert_eq!(p.substitute_strings("${OXZ_SEAM}"), "injected");

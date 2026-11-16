@@ -36,7 +36,7 @@ use oxidizr_core::validate::flattened;
 use oxidizr_core::views::{Animation, View, ViewContent, ViewSet};
 use oxidizr_diag::codes;
 
-use crate::report::Issue;
+use crate::Issue;
 
 /// The DSL-stamped identity property (Locked, `agents/plan/COMPAT.md`).
 const DSL_IDENTIFIER: &str = "structurizr.dsl.identifier";

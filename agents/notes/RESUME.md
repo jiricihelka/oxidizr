@@ -3,31 +3,34 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = Phase-1T planning commit (tip of `main`, tag
-`v0.1.0` one commit down) · gates green · nothing pushed.
+Updated: 2026-11-17 · HEAD = `075cb90`+T0-d (tip of `main`, tag `v0.1.0` several
+commits down) · gates green · nothing pushed.
 
-- **Done:** **PHASE 1 COMPLETE** (M0–M7, tag `v0.1.0` local — see PROGRESS log).
-  **PHASE 1T PLANNED** (this commit): `build/PHASE_1T.md` — e2e regression +
-  bench interlude. User decisions (2026-11-17, questions tool) recorded there:
-  in-process stable API in a NEW `oxidizr-api` crate (CLI becomes argv/render
-  shim — F9 registered), shared corpus `e2e/corpus/` (originals + committed
-  mutations first, licensed public DSLs later), blessable manifests asserting
-  exit class + OXZ code sets + structural counts (NEVER bytes/messages),
-  ≥150 valid + ≥120 invalid floor, quick per-PR (rides `cargo test`) + full
-  nightly `e2e.yml` env-gated (`OXIDZR_E2E_FULL=1`), benches local-only
-  (`e2e-bench` cargo feature keeps CI's bench job light), no tag. PLAN.md +
-  plan README + ADDITIONAL_FEATURES F9 + PROGRESS board updated.
-- **Next:** Phase 1T **T0** on the user's go: V-T1 (engine purity for parallel
-  in-process use) then extract `oxidizr-api` from `oxidizr-cli/src/lib.rs`
-  (command bodies + `decode` + `json_loader`; suggestions stay CLI-side, D2).
-  Gate: all existing tests unmodified (byte-proof). Then T1 harness crate +
-  `xtask e2e bless`.
-- **Open questions:** none (all settled via questions 2026-11-17).
-- **Don't re-derive (trust + spot-check against `ad34036`):** the whole
-  P1T-D1..D9 decision set in `build/PHASE_1T.md` (esp. why e2e is NOT in
-  `testdata/`, why env-gate not `#[ignore]`, why `e2e-bench` feature); bench
-  conventions + timings (PROGRESS P1-M7 log); fuzz + mingw CC strip (P1-M6d +
-  `env/fuzz-host-toolchain.md`); reconcile/suggestions contracts (P1-M6c);
-  `testing/cli-e2e-pitfalls.md` (UUID filter, EPIPE #6); JSON byte rules
-  `WRITE-CATALOG.md`; env `agents/notes/env/`.
+- **Done:** **PHASE 1 COMPLETE** (M0–M7, tag `v0.1.0` local). **PHASE 1T T0
+  nearly done**: T0-a `EnvLookup` seam `5eedf99`; T0-b `oxidizr-api` crate +
+  `Issue`/`Snippet` move `52a83c1`; T0-c `suggest` move `075cb90`; T0-d
+  (this commit): command bodies + `reconcile` extracted into
+  `oxidizr-api::pipeline` (`Request → execute() → Outcome{exit, log, bytes}`);
+  CLI `run()` = argv→Request / Outcome→replay→i32 shim, zero logic. Engine
+  seam upgrades along the way: `EnvLookup` is an Arc newtype (captured
+  hermetic map), `ParseOptions` Clone-not-Copy. Byte-proof held: all 22 CLI
+  byte-e2e + goldens pass UNMODIFIED (reconcile/suggest unit tests relocated
+  with their modules). Stdin is lazy (`Input::Stdin` + injected
+  `StdinReader`) — `fmt --write -` exits 2 without touching the pipe (verified
+  against a live pipe). Manual exit-code battery 0/1/2/3 all match.
+- **Next:** T0 close-out (docs commit: PHASE_1T.md refinement notes — Usage
+  exit class, suggest INSIDE api, Outcome log replay, lazy Stdin, EnvLookup
+  Arc); then **T1**: `oxidizr-e2e` crate + manifest sidecar reader/writer +
+  `cargo xtask e2e bless` + ~10 seed entries + coverage skeleton + subprocess
+  smoke (`CARGO_BIN_EXE_oxidizr`); measure V-T2 quick-tier budget. Then T2
+  (≥150 valid), T3 (≥120 invalid + `xtask e2e mutate`), T4 (invariants +
+  nightly `e2e.yml`), T5 (`e2e_` benches behind feature `e2e-bench` +
+  `bench save 1T`), T6 close-out, no tag.
+- **Open questions:** none.
+- **Don't re-derive (trust):** P1T-D1..D9 decisions (`build/PHASE_1T.md`);
+  the shim invariants above (esp. WHY stdin is lazy + bytes-before-log replay
+  order + log suppression on stdout-write failure — all contract-pinned by
+  the byte-e2e tests); `ParseOptions` now has 4 fields + Clone (child opts
+  clones `env_lookup`); fuzz mingw-CC-strip; `testing/cli-e2e-pitfalls.md`;
+  `env/fuzz-host-toolchain.md`; JSON byte rules `WRITE-CATALOG.md`.
 - **Cadence:** `cargo xtask ci` green → commit + rewrite this file; never push.

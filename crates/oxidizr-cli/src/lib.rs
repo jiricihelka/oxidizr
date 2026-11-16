@@ -1,5 +1,5 @@
-//! `oxidizr-cli` — the user-facing binary (P1-D8). Command surface is defined here
-//! from day one (stable flags); implementations land with their milestones.
+//! `oxidizr-cli` — the user-facing binary (P1-D8). Command surface is defined
+//! here from day one (stable flags).
 //!
 //! Exit codes: `0` ok · `1` diagnostics errors (or warnings with `--strict`) ·
 //! `2` usage (clap default) · `3` I/O. `-` means stdin/stdout where a command takes a
@@ -8,16 +8,21 @@
 //! M6-a landed `dsl2json` / `json2json` / `validate` (miette-rendered
 //! diagnostics, JSON-base loader injected for `workspace extends <*.json>`,
 //! D3 `--keep-unknown` capture through `oxidizr_json::roundtrip_keep_unknown`);
-//! M6-b landed `fmt` (the P1-D7 printer lives in `oxidizr_dsl::fmt` — this
-//! crate only adds the file/stdin plumbing and the check/write modes);
+//! M6-b landed `fmt` (the P1-D7 printer lives in `oxidizr_dsl::fmt`);
 //! M6-c landed `reconcile` (the F1 geometry re-attach, [`reconcile`], plus
 //! its OXZ-3002 ambiguity code). Input decoding is UTF-8-only at v0.1
 //! (V-8 resolved: no `--encoding` flag; non-UTF-8 input is an OXZ-5006 exit-3
 //! failure like any other I/O problem).
+//!
+//! Since Phase 1T T0-d the command bodies live in [`oxidizr_api`]
+//! (`Request → execute() → Outcome`); this crate adds ONLY the argv surface,
+//! the miette rendering ([`report`]) and the exit-code mapping. `run()` adds
+//! no command logic — the invariant that keeps the binary and the e2e suite
+//! (which drives the API in-process) in lockstep
+//! (`agents/plan/build/PHASE_1T.md` P1T-D1).
 
-pub mod reconcile;
 pub mod report;
-pub use oxidizr_api::suggest;
+pub use oxidizr_api::{reconcile, suggest};
 
 use std::io::Read as _;
 use std::io::Write as _;
@@ -25,9 +30,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use oxidizr_core::Workspace;
-use oxidizr_diag::codes;
-use oxidizr_dsl::engine::{ParseOptions, ParseResult, parse_dsl};
+use oxidizr_api::{ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request};
 
 use report::{Issue, Renderer};
 
@@ -119,431 +122,129 @@ pub enum Command {
 /// is reserved for internal faults and main maps it to exit `1`. Usage
 /// errors never reach `Err`: clap exits `2` directly.
 ///
+/// Pipeline (T0-d): argv → [`Request`] → [`oxidizr_api::execute`] → replay
+/// the [`Outcome`] (stdout bytes, then the ordered log) → exit code. No
+/// command logic here.
+///
 /// # Errors
 ///
 /// [`anyhow::Error`] only for unimplemented milestones / internal faults.
 pub fn run() -> anyhow::Result<i32> {
     let cli = Cli::parse();
     let renderer = Renderer::new(cli.no_color, cli.quiet);
-    let code = match &cli.command {
-        Command::Dsl2Json { dsl, output } => dsl2json(&renderer, dsl.as_deref(), output.as_deref()),
-        Command::Json2Json { json, output } => {
-            json2json(&cli, &renderer, json.as_deref(), output.as_deref())
-        }
-        Command::Validate { files } => validate(&cli, &renderer, files),
+    let options = ApiOptions {
+        strict: cli.strict,
+        keep_unknown: cli.keep_unknown,
+        // Production keeps the V-3 process-env behavior (ApiOptions::env=None).
+        env: None,
+        stdin: Some(read_stdin),
+    };
+    let outcome = oxidizr_api::execute(to_request(&cli), &options);
+    Ok(replay(&renderer, &outcome))
+}
+
+/// argv → Request mapping: `-`/omitted paths become the lazy [`Input::Stdin`]
+/// variant (nothing is read before `execute` decides — a `fmt --write -`
+/// usage exit must not block on an open pipe).
+fn to_request(cli: &Cli) -> Request {
+    match &cli.command {
+        Command::Dsl2Json { dsl, output } => Request::Dsl2Json {
+            input: input_of(dsl.as_deref()),
+            output: output.clone(),
+        },
+        Command::Json2Json { json, output } => Request::Json2Json {
+            input: input_of(json.as_deref()),
+            output: output.clone(),
+        },
+        Command::Validate { files } => Request::Validate {
+            files: files.clone(),
+        },
         Command::Fmt {
             files,
             write,
             check,
-        } => fmt_cmd(&renderer, files, *write, *check),
+        } => Request::Fmt {
+            // No file arguments = stdin (P1-D8: `-` stands for stdin/stdout).
+            inputs: if files.is_empty() {
+                vec![Input::Stdin]
+            } else {
+                files.iter().map(|p| input_of(Some(p))).collect()
+            },
+            mode: if *check {
+                FmtMode::Check
+            } else if *write {
+                FmtMode::Write
+            } else {
+                FmtMode::Print
+            },
+        },
         Command::Reconcile {
             dsl,
             layout,
             output,
-        } => reconcile_cmd(&renderer, dsl, layout, output.as_deref()),
-    };
-    Ok(code)
-}
-
-/// `oxidizr-json` as the engine's `.json` base loader for
-/// `workspace extends <file.json>` (topology P1-D1: the dsl crate must not
-/// depend on json — the CLI injects it here).
-fn json_loader(path: &str) -> Result<Workspace, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("Error reading file at {path}: {e}"))?;
-    oxidizr_json::from_slice(&bytes).map_err(|e| e.to_string())
-}
-
-/// One decoded input: engine-visible file path (canonical, `None` for stdin
-/// so the reference `parse(String)` quirks hold) + UTF-8 text + display name.
-struct Input {
-    file: Option<String>,
-    text: String,
-    display: String,
-}
-
-/// Read `-`/stdin or a file; strict UTF-8 (V-8). Errors are OXZ-5006 issues
-/// (exit 3 family).
-fn read_input(path: Option<&Path>) -> Result<Input, Issue> {
-    if path.is_none_or(|p| p == Path::new("-")) {
-        let mut buf = Vec::new();
-        std::io::stdin()
-            .read_to_end(&mut buf)
-            .map_err(|e| Issue::io("failed to read stdin", &e))?;
-        let text = decode(&buf, "-")?;
-        return Ok(Input {
-            file: None,
-            text,
-            display: "-".to_string(),
-        });
-    }
-    let path = path.unwrap_or_else(|| Path::new("-"));
-    let bytes = std::fs::read(path)
-        .map_err(|e| Issue::io(&format!("failed to read `{}`", path.display()), &e))?;
-    let text = decode(&bytes, &path.display().to_string())?;
-    let file = std::fs::canonicalize(path)
-        .ok()
-        .map(|p| p.display().to_string())
-        .or_else(|| Some(path.display().to_string()));
-    Ok(Input {
-        file,
-        text,
-        display: path.display().to_string(),
-    })
-}
-
-/// V-8 (resolved): UTF-8 only at v0.1 — no `--encoding` flag; the reference
-/// `parse(File)` reads the platform charset, oxidizr pins UTF-8 and fails
-/// loudly instead of garbling.
-fn decode(bytes: &[u8], name: &str) -> Result<String, Issue> {
-    String::from_utf8(bytes.to_vec()).map_err(|_| {
-        Issue::error(
-            codes::CLI_IO,
-            format!("`{name}` is not valid UTF-8 (oxidizr reads UTF-8 only)"),
-        )
-    })
-}
-
-/// Write exact bytes to `-o`/file or stdout (no trailing newline added —
-/// stdout carries the same bytes as the file).
-fn write_output(bytes: &[u8], output: Option<&Path>) -> Result<(), Issue> {
-    match output {
-        None => {
-            let mut stdout = std::io::stdout().lock();
-            stdout
-                .write_all(bytes)
-                .and_then(|()| stdout.flush())
-                .map_err(|e| Issue::io("failed to write stdout", &e))
-        }
-        Some(p) => std::fs::write(p, bytes)
-            .map_err(|e| Issue::io(&format!("failed to write `{}`", p.display()), &e)),
-    }
-}
-
-/// Parse a DSL input with production options (JSON-base loader injected).
-/// The `Err` arm is the fatal statement-level failure (empty source) — exit 1.
-fn parse_dsl_input(input: &Input) -> Result<ParseResult, Issue> {
-    let opts = match &input.file {
-        Some(f) => ParseOptions {
-            json_loader: Some(json_loader),
-            env_lookup: None,
-            ..ParseOptions::file(f)
+        } => Request::Reconcile {
+            dsl: input_of(Some(dsl)),
+            layout: input_of(Some(layout)),
+            output: output.clone(),
         },
-        None => ParseOptions {
-            file: None,
-            base_dir: None,
-            json_loader: Some(json_loader),
-            env_lookup: None,
-        },
-    };
-    parse_dsl(&input.text, opts).map_err(|e| suggest::decorate(Issue::from_dsl(&e), None))
-}
-
-/// Render a batch and report whether any issue blocks exit 1 (severity vs
-/// `--strict`).
-fn emit(renderer: &Renderer, issues: &[Issue], strict: bool) -> bool {
-    renderer.issues(issues);
-    issues.iter().any(|i| i.blocks(strict))
-}
-
-fn dsl2json(renderer: &Renderer, input: Option<&Path>, output: Option<&Path>) -> i32 {
-    let source = match read_input(input) {
-        Ok(s) => s,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&e));
-            return 3;
-        }
-    };
-    let result = match parse_dsl_input(&source) {
-        Ok(r) => r,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&e));
-            return 1;
-        }
-    };
-    if !result.errors.is_empty() {
-        // D1 recovery: all recorded statement errors render; the reference
-        // export would have aborted on the first one — no partial output.
-        let issues: Vec<Issue> = result
-            .errors
-            .iter()
-            .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&result.workspace)))
-            .collect();
-        renderer.issues(&issues);
-        return 1;
     }
-    let bytes = match oxidizr_json::to_vec(&result.workspace) {
-        Ok(b) => b,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&Issue::from_json(
+}
+
+fn input_of(path: Option<&Path>) -> Input {
+    match path {
+        None => Input::Stdin,
+        Some(p) if p == Path::new("-") => Input::Stdin,
+        Some(p) => Input::File(p.to_path_buf()),
+    }
+}
+
+/// The process-stdin reader the pipeline resolves `Input::Stdin` through
+/// (OXZ-5006 exit-3 family on failure, like the pre-extraction code).
+fn read_stdin() -> Result<Vec<u8>, Issue> {
+    let mut buf = Vec::new();
+    std::io::stdin()
+        .read_to_end(&mut buf)
+        .map_err(|e| Issue::io("failed to read stdin", &e))?;
+    Ok(buf)
+}
+
+/// Replay an [`Outcome`] onto the process streams: stdout payload first (a
+/// write failure is the old `write_output` exit 3 and suppresses the log —
+/// the extracted contract), then the ordered log. Consecutive issues render
+/// as one batch (single stderr write, as before).
+fn replay(renderer: &Renderer, outcome: &Outcome) -> i32 {
+    if let Some(bytes) = &outcome.bytes {
+        let mut stdout = std::io::stdout().lock();
+        if let Err(e) = stdout.write_all(bytes).and_then(|()| stdout.flush()) {
+            renderer.issues(std::slice::from_ref(&Issue::io(
+                "failed to write stdout",
                 &e,
-                &source.text,
-                &source.display,
             )));
-            return 1;
-        }
-    };
-    match write_output(&bytes, output) {
-        Ok(()) => 0,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&e));
-            3
+            return ExitClass::Io.code();
         }
     }
+    let mut batch: Vec<Issue> = Vec::new();
+    for item in &outcome.log {
+        match item {
+            LogItem::Issue(issue) => batch.push(issue.clone()),
+            LogItem::OkLine(line) => {
+                flush(renderer, &mut batch);
+                renderer.ok(line);
+            }
+            LogItem::NoteLine(line) => {
+                flush(renderer, &mut batch);
+                renderer.note(line);
+            }
+        }
+    }
+    flush(renderer, &mut batch);
+    outcome.exit.code()
 }
 
-fn json2json(cli: &Cli, renderer: &Renderer, input: Option<&Path>, output: Option<&Path>) -> i32 {
-    let source = match read_input(input) {
-        Ok(s) => s,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&e));
-            return 3;
-        }
-    };
-    let bytes = source.text.as_bytes();
-    let produced = if cli.keep_unknown {
-        // D3 superset mode: unknown / legacy / writer-omitted members ride
-        // through verbatim (output intentionally non-parity).
-        oxidizr_json::roundtrip_keep_unknown(bytes)
-    } else {
-        oxidizr_json::from_slice(bytes).and_then(|ws| oxidizr_json::to_vec(&ws))
-    };
-    match produced {
-        Ok(b) => match write_output(&b, output) {
-            Ok(()) => 0,
-            Err(e) => {
-                renderer.issues(std::slice::from_ref(&e));
-                3
-            }
-        },
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&Issue::from_json(
-                &e,
-                &source.text,
-                &source.display,
-            )));
-            1
-        }
-    }
-}
-
-/// `reconcile` (F1, P1-D8): re-parse the edited DSL (the model authority),
-/// load the pre-edit layout JSON (the geometry authority), remap ids
-/// (identifier exact → canonical fallback, ambiguity = OXZ-3002, never
-/// guessed) and graft the layout. The standard JSON is emitted FIRST (the
-/// contract emits even when ambiguous), then the human report on stderr
-/// (`--quiet` silences it); ambiguous entries exit 1, I/O 3, else 0.
-fn reconcile_cmd(renderer: &Renderer, dsl: &Path, layout: &Path, output: Option<&Path>) -> i32 {
-    let source = match read_input(Some(dsl)) {
-        Ok(s) => s,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&e));
-            return 3;
-        }
-    };
-    let result = match parse_dsl_input(&source) {
-        Ok(r) => r,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&e));
-            return 1;
-        }
-    };
-    if !result.errors.is_empty() {
-        let issues: Vec<Issue> = result
-            .errors
-            .iter()
-            .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&result.workspace)))
-            .collect();
-        renderer.issues(&issues);
-        return 1;
-    }
-    let layout_source = match read_input(Some(layout)) {
-        Ok(s) => s,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&e));
-            return 3;
-        }
-    };
-    let layout_ws = match oxidizr_json::from_slice(layout_source.text.as_bytes()) {
-        Ok(ws) => ws,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&Issue::from_json(
-                &e,
-                &layout_source.text,
-                &layout_source.display,
-            )));
-            return 1;
-        }
-    };
-    let (reconciled, report) = reconcile::reconcile(&layout_ws, &result.workspace);
-    let bytes = match oxidizr_json::to_vec(&reconciled) {
-        Ok(b) => b,
-        Err(e) => {
-            renderer.issues(std::slice::from_ref(&Issue::from_json(
-                &e,
-                &source.text,
-                &source.display,
-            )));
-            return 1;
-        }
-    };
-    if let Err(e) = write_output(&bytes, output) {
-        renderer.issues(std::slice::from_ref(&e));
-        return 3;
-    }
-    renderer.note(&report.summary());
-    for line in &report.dropped {
-        renderer.note(&format!("dropped: {line}"));
-    }
-    renderer.issues(&report.ambiguous);
-    i32::from(report.ambiguous.iter().any(|i| i.blocks(false)))
-}
-
-/// `validate`: format by extension (P1-D8), DSL parse or JSON read + hydrate,
-/// then the M2 validation catalog on the loaded workspace. Exit: 1 when any
-/// issue blocks (severity vs `--strict`), else 3 on I/O trouble, else 0.
-fn validate(cli: &Cli, renderer: &Renderer, files: &[PathBuf]) -> i32 {
-    let strict = cli.strict;
-    let mut blocked = false;
-    let mut io_error = false;
-    for path in files {
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_ascii_lowercase);
-        let source = if let Some("dsl" | "json") = ext.as_deref() {
-            match read_input(Some(path)) {
-                Ok(s) => s,
-                Err(e) => {
-                    renderer.issues(std::slice::from_ref(&e));
-                    io_error = true;
-                    continue;
-                }
-            }
-        } else {
-            blocked |= emit(
-                renderer,
-                std::slice::from_ref(&Issue::error(
-                    codes::CLI_IO,
-                    format!(
-                        "cannot determine the workspace format of `{}` (expected `.dsl` or `.json`)",
-                        path.display()
-                    ),
-                )),
-                strict,
-            );
-            continue;
-        };
-        let workspace = if ext.as_deref() == Some("dsl") {
-            match parse_dsl_input(&source) {
-                Ok(r) if r.errors.is_empty() => r.workspace,
-                Ok(r) => {
-                    let issues: Vec<Issue> = r
-                        .errors
-                        .iter()
-                        .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&r.workspace)))
-                        .collect();
-                    blocked |= emit(renderer, &issues, strict);
-                    continue;
-                }
-                Err(e) => {
-                    blocked |= emit(renderer, std::slice::from_ref(&e), strict);
-                    continue;
-                }
-            }
-        } else {
-            match oxidizr_json::from_slice(source.text.as_bytes()) {
-                Ok(ws) => ws,
-                Err(e) => {
-                    blocked |= emit(
-                        renderer,
-                        std::slice::from_ref(&Issue::from_json(&e, &source.text, &source.display)),
-                        strict,
-                    );
-                    continue;
-                }
-            }
-        };
-        let violations = oxidizr_core::validate(&workspace.model, &workspace.views);
-        if violations.is_empty() {
-            renderer.ok(&format!("{}: ok", source.display));
-        } else {
-            let issues: Vec<Issue> = violations
-                .iter()
-                .map(|v| Issue::validation(&v.message))
-                .collect();
-            blocked |= emit(renderer, &issues, strict);
-        }
-    }
-    if blocked {
-        1
-    } else if io_error {
-        3
-    } else {
-        0
-    }
-}
-
-/// `fmt`: reformat DSL sources to the canonical P1-D7 style. The printer is
-/// `oxidizr_dsl::fmt::format` (it never validates — an invalid statement is
-/// re-printed token-identically and fails to parse exactly as before).
-/// Modes (P1-D8): default prints the formatted text of every input to stdout;
-/// `--write` rewrites files in place, only when they change; `--check` lists
-/// the unformatted files and exits `1`. Stdin has no in-place target:
-/// `--write` with `-` is a usage error (exit `2`). I/O and UTF-8 failures are
-/// OXZ-5006 → exit `3`.
-fn fmt_cmd(renderer: &Renderer, files: &[PathBuf], write: bool, check: bool) -> i32 {
-    // No file arguments = stdin (P1-D8: `-` stands for stdin/stdout).
-    let inputs: Vec<Option<&Path>> = if files.is_empty() {
-        vec![None]
-    } else {
-        files.iter().map(|p| Some(p.as_path())).collect()
-    };
-    let mut unformatted = false;
-    let mut io_error = false;
-    for path in inputs {
-        let stdin = path.is_none_or(|p| p == Path::new("-"));
-        if write && stdin {
-            renderer.issues(std::slice::from_ref(&Issue::error(
-                codes::CLI_IO,
-                "`fmt --write` needs a file to rewrite (stdin has no in-place target)",
-            )));
-            return 2; // usage error (P1-D8 code 2), not an I/O failure
-        }
-        let input = match read_input(path) {
-            Ok(i) => i,
-            Err(e) => {
-                renderer.issues(std::slice::from_ref(&e));
-                io_error = true;
-                continue;
-            }
-        };
-        let formatted = oxidizr_dsl::fmt::format(&input.text);
-        if check {
-            if formatted != input.text {
-                unformatted = true;
-                renderer.ok(&input.display);
-            }
-        } else if write {
-            if formatted != input.text {
-                // Only changed files are rewritten (mtime stability).
-                if let Err(e) = write_output(formatted.as_bytes(), path) {
-                    renderer.issues(std::slice::from_ref(&e));
-                    io_error = true;
-                } else {
-                    renderer.ok(&input.display);
-                }
-            }
-        } else if let Err(e) = write_output(formatted.as_bytes(), None) {
-            renderer.issues(std::slice::from_ref(&e));
-            io_error = true;
-        }
-    }
-    if unformatted {
-        1
-    } else if io_error {
-        3
-    } else {
-        0
+fn flush(renderer: &Renderer, batch: &mut Vec<Issue>) {
+    if !batch.is_empty() {
+        renderer.issues(batch);
+        batch.clear();
     }
 }
 
