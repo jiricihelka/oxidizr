@@ -9,11 +9,13 @@
 //! diagnostics, JSON-base loader injected for `workspace extends <*.json>`,
 //! D3 `--keep-unknown` capture through `oxidizr_json::roundtrip_keep_unknown`);
 //! M6-b landed `fmt` (the P1-D7 printer lives in `oxidizr_dsl::fmt` — this
-//! crate only adds the file/stdin plumbing and the check/write modes).
-//! `reconcile` arrives with M6-c. Input decoding is UTF-8-only at v0.1
+//! crate only adds the file/stdin plumbing and the check/write modes);
+//! M6-c landed `reconcile` (the F1 geometry re-attach, [`reconcile`], plus
+//! its OXZ-3002 ambiguity code). Input decoding is UTF-8-only at v0.1
 //! (V-8 resolved: no `--encoding` flag; non-UTF-8 input is an OXZ-5006 exit-3
 //! failure like any other I/O problem).
 
+pub mod reconcile;
 pub mod report;
 
 use std::io::Read as _;
@@ -112,9 +114,9 @@ pub enum Command {
 ///
 /// `Ok(0)` success · `Ok(1)` diagnostics with an error (or a warning under
 /// `--strict`) · `Ok(3)` I/O failure; diagnostics are rendered by miette on
-/// stderr before returning ([`report`]). `Err` is reserved for the milestone
-/// not yet landed (`reconcile` M6-c) and internal faults; main maps it to
-/// exit `1`. Usage errors never reach `Err`: clap exits `2` directly.
+/// stderr before returning ([`report`]). Every P1 command has landed; `Err`
+/// is reserved for internal faults and main maps it to exit `1`. Usage
+/// errors never reach `Err`: clap exits `2` directly.
 ///
 /// # Errors
 ///
@@ -133,9 +135,11 @@ pub fn run() -> anyhow::Result<i32> {
             write,
             check,
         } => fmt_cmd(&renderer, files, *write, *check),
-        Command::Reconcile { .. } => {
-            anyhow::bail!("`reconcile` lands with M6-c (identifier-keyed layout remap)")
-        }
+        Command::Reconcile {
+            dsl,
+            layout,
+            output,
+        } => reconcile_cmd(&renderer, dsl, layout, output.as_deref()),
     };
     Ok(code)
 }
@@ -313,6 +317,74 @@ fn json2json(cli: &Cli, renderer: &Renderer, input: Option<&Path>, output: Optio
             1
         }
     }
+}
+
+/// `reconcile` (F1, P1-D8): re-parse the edited DSL (the model authority),
+/// load the pre-edit layout JSON (the geometry authority), remap ids
+/// (identifier exact → canonical fallback, ambiguity = OXZ-3002, never
+/// guessed) and graft the layout. The standard JSON is emitted FIRST (the
+/// contract emits even when ambiguous), then the human report on stderr
+/// (`--quiet` silences it); ambiguous entries exit 1, I/O 3, else 0.
+fn reconcile_cmd(renderer: &Renderer, dsl: &Path, layout: &Path, output: Option<&Path>) -> i32 {
+    let source = match read_input(Some(dsl)) {
+        Ok(s) => s,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&e));
+            return 3;
+        }
+    };
+    let result = match parse_dsl_input(&source) {
+        Ok(r) => r,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&e));
+            return 1;
+        }
+    };
+    if !result.errors.is_empty() {
+        let issues: Vec<Issue> = result.errors.iter().map(Issue::from_dsl).collect();
+        renderer.issues(&issues);
+        return 1;
+    }
+    let layout_source = match read_input(Some(layout)) {
+        Ok(s) => s,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&e));
+            return 3;
+        }
+    };
+    let layout_ws = match oxidizr_json::from_slice(layout_source.text.as_bytes()) {
+        Ok(ws) => ws,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&Issue::from_json(
+                &e,
+                &layout_source.text,
+                &layout_source.display,
+            )));
+            return 1;
+        }
+    };
+    let (reconciled, report) = reconcile::reconcile(&layout_ws, &result.workspace);
+    let bytes = match oxidizr_json::to_vec(&reconciled) {
+        Ok(b) => b,
+        Err(e) => {
+            renderer.issues(std::slice::from_ref(&Issue::from_json(
+                &e,
+                &source.text,
+                &source.display,
+            )));
+            return 1;
+        }
+    };
+    if let Err(e) = write_output(&bytes, output) {
+        renderer.issues(std::slice::from_ref(&e));
+        return 3;
+    }
+    renderer.note(&report.summary());
+    for line in &report.dropped {
+        renderer.note(&format!("dropped: {line}"));
+    }
+    renderer.issues(&report.ambiguous);
+    i32::from(report.ambiguous.iter().any(|i| i.blocks(false)))
 }
 
 /// `validate`: format by extension (P1-D8), DSL parse or JSON read + hydrate,

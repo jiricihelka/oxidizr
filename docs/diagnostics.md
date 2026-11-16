@@ -22,6 +22,7 @@ after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxi
 | `OXZ-2002` | Error | reference statement message | any statement rejected by the faithful reference port (grammar, unknown identifier, duplicate name, …) — the reference text travels verbatim |
 | `OXZ-2003` | Error | `Unexpected end of DSL content - are one or more closing curly braces missing?` | unclosed context at EOF |
 | `OXZ-3001` | Error | reference validation message | `oxidizr validate` (M6): model/view rule from the M2 catalog violated — reference `hydrate()` text verbatim |
+| `OXZ-3002` | Error | `ambiguous reconcile: …` | `oxidizr reconcile` (M6-c): a layout id matches >1 re-parsed id (or two match one) — never guessed, entry not remapped (F1, P1-D8) |
 | `OXZ-4001` | Error | `failed to parse JSON: …` / `failed to read workspace: …` / `workspace validation failed: …` | JSON input rejected — syntax, structural read or hydrate validation (`JsonError::Parse/Read/Validation`) |
 | `OXZ-4002` | Error | `failed to write workspace: …` | the model cannot be written byte-faithfully (`JsonError::Write`, e.g. filtered view without base) |
 | `OXZ-5001` | Error | network disabled | `!include <url>` / `workspace extends <url>` / theme URL fetch without `--allow-net` (D5; flag ships P2) |

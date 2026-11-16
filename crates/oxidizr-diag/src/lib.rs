@@ -184,6 +184,9 @@ pub mod codes {
     /// Model/view validation failure — reference `hydrate()`/validate message
     /// verbatim (M6 CLI `validate`).
     pub const VALIDATION: Code = Code::new(3001);
+    /// Reconcile ambiguity: an old layout id resolves to more than one new id
+    /// (or two old ids claim one new id) — never guessed (M6-c, P1-D8).
+    pub const RECONCILE: Code = Code::new(3002);
     /// JSON input rejected: syntax, structural read or `hydrate()` validation
     /// (M6 CLI; the `JsonError` variant decides the message shape).
     pub const JSON_READ: Code = Code::new(4001);

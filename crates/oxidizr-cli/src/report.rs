@@ -178,6 +178,14 @@ impl Renderer {
         }
     }
 
+    /// Human-report line on STDERR (stdout may carry machine output — the
+    /// JSON commands write; suppressed by `--quiet`).
+    pub fn note(&self, message: &str) {
+        if !self.quiet {
+            eprintln!("{message}");
+        }
+    }
+
     /// Render all issues to stderr (color honored).
     pub fn issues(&self, issues: &[Issue]) {
         let handler = GraphicalReportHandler::new()

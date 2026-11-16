@@ -284,11 +284,149 @@ fn usage_errors_exit_2() {
     assert_eq!(out.status.code(), Some(2));
 }
 
+/// Temp-dir helper for the `reconcile` end-to-end fixtures.
+fn recon_temp(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("oxidizr-cli-recon-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name)
+}
+
 #[test]
-fn unreached_milestones_bail_with_plan_refs() {
-    let out = run(&["reconcile", "--dsl", "e.dsl", "--layout", "l.json"], None);
+fn reconcile_remaps_geometry_by_identifier() {
+    // Layout (pre-edit): person Bob is old id "2". Edited DSL inserts two
+    // systems first — Bob re-parses as id "3" — but his `structurizr.dsl.
+    // identifier` is stable, so the view geometry must follow him there.
+    let dsl = recon_temp("edited.dsl");
+    std::fs::write(
+        &dsl,
+        "workspace \"W\" {\n    model {\n        z1 = softwareSystem \"Z1\"\n        z2 = softwareSystem \"Z2\"\n        bob = person \"Bob\"\n    }\n    views {\n        systemLandscape \"L\" {\n            include bob\n        }\n    }\n}\n",
+    )
+    .unwrap();
+    let layout = recon_temp("layout.json");
+    std::fs::write(
+        &layout,
+        r#"{
+  "configuration": { },
+  "id": 0,
+  "model": {
+    "people": [ {
+      "id": "2",
+      "name": "Bob",
+      "properties": { "structurizr.dsl.identifier": "bob" },
+      "tags": "Element,Person"
+    } ]
+  },
+  "name": "W",
+  "views": {
+    "systemLandscapeViews": [ {
+      "elements": [ { "id": "2", "x": 777, "y": 778 } ],
+      "enterpriseBoundaryVisible": true,
+      "key": "L",
+      "relationships": [ ]
+    } ]
+  }
+}"#,
+    )
+    .unwrap();
+    let out_json = recon_temp("out-clean.json");
+    let out = run(
+        &[
+            "reconcile",
+            "--dsl",
+            dsl.to_str().unwrap(),
+            "--layout",
+            layout.to_str().unwrap(),
+            "--output",
+            out_json.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("reconciled 1 view(s)"), "{stderr}");
+    let json = std::fs::read_to_string(&out_json).unwrap();
+    assert!(json.contains("\"x\" : 777"), "{json}");
+    // The grafted entry carries the NEW id, not the layout's old one.
+    assert!(json.contains("\"id\" : \"3\""), "{json}");
+}
+
+#[test]
+fn reconcile_ambiguous_contest_emits_json_and_exits_1() {
+    // The edited system took the FIRST old element's identifier and the
+    // SECOND's name — identifier and canonical-name lookups both land on the
+    // single new id. Contest: OXZ-3002, never guessed — JSON is still
+    // emitted, geometry is not, exit is 1.
+    let dsl = recon_temp("contested.dsl");
+    std::fs::write(
+        &dsl,
+        "workspace \"W\" {\n    model {\n        x = softwareSystem \"Bar\"\n    }\n    views {\n        systemLandscape \"L\" {\n            include x\n        }\n    }\n}\n",
+    )
+    .unwrap();
+    let layout = recon_temp("contested.json");
+    std::fs::write(
+        &layout,
+        r#"{
+  "configuration": { },
+  "id": 0,
+  "model": {
+    "softwareSystems": [
+      {
+        "id": "1",
+        "name": "Foo",
+        "properties": { "structurizr.dsl.identifier": "x" },
+        "tags": "Element,Software System"
+      },
+      {
+        "id": "2",
+        "name": "Bar",
+        "properties": { "structurizr.dsl.identifier": "y" },
+        "tags": "Element,Software System"
+      }
+    ]
+  },
+  "name": "W",
+  "views": {
+    "systemLandscapeViews": [ {
+      "elements": [
+        { "id": "1", "x": 10, "y": 10 },
+        { "id": "2", "x": 20, "y": 20 }
+      ],
+      "enterpriseBoundaryVisible": true,
+      "key": "L",
+      "relationships": [ ]
+    } ]
+  }
+}"#,
+    )
+    .unwrap();
+    let out_json = recon_temp("out-contested.json");
+    let out = run(
+        &[
+            "reconcile",
+            "--dsl",
+            dsl.to_str().unwrap(),
+            "--layout",
+            layout.to_str().unwrap(),
+            "--output",
+            out_json.to_str().unwrap(),
+        ],
+        None,
+    );
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("M6-c"));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("ambiguous reconcile"), "{stderr}");
+    assert!(stderr.contains("OXZ-3002"), "{stderr}");
+    // The contract: the JSON is emitted even when ambiguous.
+    let json = std::fs::read_to_string(&out_json).unwrap();
+    assert!(json.contains("\"id\" : \"1\""), "{json}");
+    assert!(
+        !json.contains("\"x\" : 10") && !json.contains("\"x\" : 20"),
+        "contested geometry must not graft: {json}"
+    );
 }
 
 /// Temp-dir helper for the `fmt` end-to-end tests.
