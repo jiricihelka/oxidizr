@@ -13,9 +13,10 @@
 //! its OXZ-3002 ambiguity code). Input decoding is UTF-8-only at v0.1
 //! (V-8 resolved: no `--encoding` flag; non-UTF-8 input is an OXZ-5006 exit-3
 //! failure like any other I/O problem). Phase 2 M0 added `export` (reference
-//! `-w/--workspace`, required `-f/--format`, optional `-o/--output`): `theme`
-//! and `json` write through the `oxidizr_export` dispatch; diagram registry
-//! formats raise OXZ-5007 until M1–M4; unknown format strings stay the exit-0
+//! `-w/--workspace`, required `-f/--format`, optional `-o/--output`): `theme`,
+//! `json` and the Structurizr `plantuml` diagram leg (M2-d) write through the
+//! `oxidizr_export` dispatch; `plantuml/c4plantuml` (M3) and `mermaid` (M4)
+//! raise OXZ-5007; unknown format strings stay the exit-0
 //! note, mirroring `ExportCommand` (`agents/plan/build/PHASE_2.md`).
 //!
 //! Since Phase 1T T0-d the command bodies live in [`oxidizr_api`]

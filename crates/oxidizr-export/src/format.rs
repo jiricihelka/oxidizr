@@ -8,10 +8,12 @@
 //! and the command STILL EXITS 0 — mirrored as [`ExportFormat::Unknown`].
 
 use oxidizr_core::Workspace;
+use oxidizr_core::views::ColorScheme;
 
 use crate::diagram::WorkspaceExport;
 use crate::error::ExportError;
-use crate::naming::{ExportedFile, workspace_export_files};
+use crate::naming::{ExportedFile, diagram_files, diagram_prefix, workspace_export_files};
+use crate::plantuml::{Engine, StructurizrDialect};
 
 /// `-light` / `-dark` format suffix (the reference constructs the exporter
 /// with that `ColorScheme`; unmarked formats keep the workspace theme).
@@ -116,21 +118,35 @@ impl ExportFormat {
         }
     }
 
-    /// `ExportCommand` dispatch for the `WorkspaceExporter` branch — the M0
-    /// implemented set (`json`, `theme`). Diagram formats report
-    /// [`ExportError::NotImplemented`] until M1–M4; [`ExportFormat::Unknown`]
-    /// is the CALLER's exit-0 note path (the reference never gets here).
+    /// `ExportCommand` dispatch. `plantuml` / `plantuml/structurizr` (M2-d)
+    /// run the `DiagramExporter` branch — the engine + `StructurizrDialect`,
+    /// one file per diagram plus `-key` legend and numbered frame files, the
+    /// id-keyed names of the reference write loop. `json` and `theme` are the
+    /// implemented `WorkspaceExporter` pair (M0). The remaining registry
+    /// formats report [`ExportError::NotImplemented`] (`plantuml/c4plantuml`
+    /// until M3, `mermaid` until M4); [`ExportFormat::Unknown`] is the
+    /// CALLER's exit-0 note path (the reference never gets here).
     ///
     /// # Errors
     ///
     /// [`ExportError::NotImplemented`] for known-but-unlanded formats,
-    /// [`ExportError::NoExtension`] when the workspace file name has no `.`,
-    /// [`ExportError::Json`] when serialization fails.
+    /// [`ExportError::NoExtension`] when the workspace file name has no `.`
+    /// (the `WorkspaceExporter` branch only), [`ExportError::Json`] when
+    /// serialization fails, [`ExportError::ReferenceAbort`] when the
+    /// diagram engine hits a Java abort path (§14).
     pub fn export(
         &self,
         workspace: &Workspace,
         workspace_file_name: &str,
     ) -> Result<Vec<ExportedFile>, ExportError> {
+        if let Self::StructurizrPlantUml(mode) = self {
+            // The `DiagramExporter` branch of `ExportCommand.run`: the
+            // workspace file name plays no role (names key on the workspace
+            // ID — `prefix(workspaceId)`).
+            let mut engine = Engine::new(workspace, mode.color_scheme());
+            let diagrams = engine.export_all(&mut StructurizrDialect::new())?;
+            return Ok(diagram_files(&diagram_prefix(workspace.id), &diagrams));
+        }
         let (export, theme) = match self {
             Self::Json => (
                 WorkspaceExport::new(oxidizr_json::to_vec(workspace)?, "json".into()),
@@ -166,6 +182,15 @@ impl ColorMode {
             Self::Default => "",
             Self::Light => "-light",
             Self::Dark => "-dark",
+        }
+    }
+
+    /// The exporter's `ColorScheme`: the suffixless key builds the no-arg
+    /// exporter, which is `this(ColorScheme.Light)` (`StructurizrPlantUMLExporter`).
+    pub(crate) const fn color_scheme(self) -> ColorScheme {
+        match self {
+            Self::Dark => ColorScheme::Dark,
+            Self::Default | Self::Light => ColorScheme::Light,
         }
     }
 }
@@ -224,6 +249,93 @@ mod tests {
                 "{raw}"
             );
             assert!(!f.is_known(), "{raw}");
+        }
+    }
+
+    /// A one-person landscape workspace, id 7 (the `prefix(workspaceId)`
+    /// key of the reference write loop).
+    fn workspace() -> Workspace {
+        use oxidizr_core::Id;
+        use oxidizr_core::model::{ModelItem, Person};
+        use oxidizr_core::views::{ElementView, SystemLandscapeView, ViewBase, ViewContent};
+        let mut ws = Workspace {
+            id: 7,
+            ..Default::default()
+        };
+        ws.model.people = vec![Person {
+            item: ModelItem::new(Id::new("1"), "Alice".to_string()),
+            group: None,
+            relationships: Vec::new(),
+        }];
+        let mut view = SystemLandscapeView {
+            base: ViewBase::new("SystemLandscape-001", 1),
+            content: ViewContent::default(),
+            enterprise_boundary_visible: false,
+            animations: Vec::new(),
+        };
+        view.content.elements = vec![ElementView {
+            id: Id::new("1"),
+            x: 0,
+            y: 0,
+        }];
+        ws.views.system_landscape_views.push(view);
+        ws
+    }
+
+    #[test]
+    fn plantuml_diagram_leg_writes_id_keyed_files() {
+        let files = ExportFormat::parse("plantuml")
+            .export(&workspace(), "no-dot-needed")
+            .expect("diagram leg needs no file stem");
+        let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "structurizr-7-SystemLandscape-001.puml",
+                "structurizr-7-SystemLandscape-001-key.puml",
+            ]
+        );
+        let definition = String::from_utf8(files[0].bytes.clone()).expect("utf-8");
+        assert!(definition.starts_with("@startuml\n"), "{definition}");
+        assert!(definition.ends_with("@enduml"), "{definition}");
+    }
+
+    #[test]
+    fn plantuml_color_suffixes_reach_the_engine() {
+        let dark = ExportFormat::parse("plantuml-dark")
+            .export(&workspace(), "ws.dsl")
+            .expect("dark");
+        let definition = String::from_utf8(dark[0].bytes.clone()).expect("utf-8");
+        assert!(
+            definition.contains("BackgroundColor: #111111"),
+            "{definition}"
+        );
+        let light = ExportFormat::parse("plantuml-light")
+            .export(&workspace(), "ws.dsl")
+            .expect("light");
+        assert!(
+            String::from_utf8(light[0].bytes.clone())
+                .expect("utf-8")
+                .contains("BackgroundColor: #ffffff;")
+        );
+    }
+
+    #[test]
+    fn other_registry_formats_stay_not_implemented() {
+        for raw in [
+            "plantuml/c4plantuml",
+            "plantuml/c4plantuml-dark",
+            "mermaid",
+            "websequencediagrams",
+            "static",
+        ] {
+            let err = ExportFormat::parse(raw)
+                .export(&workspace(), "ws.dsl")
+                .expect_err("unlanded format");
+            assert!(
+                matches!(&err, ExportError::NotImplemented { format } if format == &ExportFormat::parse(raw).label()),
+                "{raw}: {err}"
+            );
         }
     }
 

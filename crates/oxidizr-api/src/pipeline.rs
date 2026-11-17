@@ -779,13 +779,15 @@ fn load_export_workspace(
 /// happens BEFORE format dispatch, so it is created even for formats that
 /// then fail), and write every exported file verbatim, logging a
 /// `Writing <path>` line per file. Dispatch follows the reference registry:
-/// `theme` and `json` are implemented (M0); other registry formats are
-/// OXZ-5007 until M1–M4; unknown strings mirror the reference's
-/// class-load miss — `Unknown export format: …`, exit 0. Theme pre-loading
-/// (`ThemeUtils.loadThemes`, P2-D3, M1-d) runs for `DiagramExporter`
-/// formats BEFORE the export attempt — exactly the reference order, so a
-/// broken theme (or a URL without `--allow-net`) reports OXZ-5008/OXZ-5001
-/// ahead of the format's OXZ-5007.
+/// `theme` and `json` are implemented (M0) with the Structurizr `plantuml`
+/// diagram leg (M2-d — id-keyed per-view, `-key` legend and numbered frame
+/// files, and the reference's viewless `log.error` branch); the unlanded
+/// diagram formats raise OXZ-5007 until M3–M4; unknown strings mirror the
+/// reference's class-load miss — `Unknown export format: …`, exit 0. Theme
+/// pre-loading (`ThemeUtils.loadThemes`, P2-D3, M1-d) runs for
+/// `DiagramExporter` formats BEFORE the export attempt — exactly the
+/// reference order, so a broken theme (or a URL without `--allow-net`)
+/// reports OXZ-5008/OXZ-5001 ahead of the format's OXZ-5007.
 fn export_cmd(
     workspace_file: &Path,
     format: &str,
@@ -842,6 +844,14 @@ fn export_cmd(
                 _ => codes::EXPORT_THEME,
             };
             out.fail(Issue::error(code, e.to_string()), ExitClass::Diagnostics);
+            return out;
+        }
+        if workspace.views.all_views().is_empty() {
+            // `ExportCommand` 233: the `DiagramExporter` branch logs the
+            // error and STILL finishes (exit 0) — no files written.
+            out.log.push(LogItem::NoteLine(
+                "The workspace contains no views".to_string(),
+            ));
             return out;
         }
     }

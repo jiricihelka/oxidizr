@@ -3,7 +3,7 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = M2-c dialect commit (tip of `main`, tag
+Updated: 2026-11-17 · HEAD = M2-d part 1 dispatch commit (tip of `main`, tag
 `v0.1.0` far down) · gates green · nothing pushed.
 
 - **Done:** **PHASE 1 + 1T COMPLETE** (`v0.1.0`, T0–T6, no tag) · **P2-M0**
@@ -29,11 +29,23 @@ Updated: 2026-11-17 · HEAD = M2-c dialect commit (tip of `main`, tag
   `idOf`/`filter` `(?U)\W`, Java-substring group cuts. Engine fixes carried
   here: Result-converted body hooks + the MISSING `end_deployment_node_boundary`
   call (ref `AbstractDiagramExporter` 702, found via DN dump). 42 tests — 11
-  pinned full-document/legend assertions + leg asserts.
-- **Next:** **M2-d**: `export_cmd` plantuml dispatch leg, per-view + legend
-  files, Category-A goldens, render smoke, oracle A/B over corpus
-  (`build/PHASE_2.md` spec). Then M3 (C4-PlantUML + `xtask export-verify`
-  semantic comparator), M4 (Mermaid), M5 (docs, proptest, tag `v0.2.0`).
+  pinned full-document/legend assertions + leg asserts. **P2-M2-d part 1**
+  (this commit): dispatch leg — `ExportFormat::export` runs
+  `Engine::new(ws, mode.color_scheme())` + `export_all(&mut
+  StructurizrDialect::new())` → `diagram_files(diagram_prefix(ws.id))` for
+  `plantuml`/`plantuml[-light|-dark]` (`Default`→Light: the ref no-arg ctor
+  is `this(Light)`); `export_cmd` viewless leg = `NoteLine("The workspace
+  contains no views")` + exit 0 (ref `log.error`s and returns true), after
+  `loadThemes` inside `is_diagram`. 3 format unit tests + 4 integration
+  tests (`export_plantuml.rs`: `structurizr-sys-landscape.puml` +
+  `-key.puml`, `Writing <path>` order, dark `#111111`, viewless exit-0,
+  `plantuml/c4plantuml` still OXZ-5007).
+- **Next:** **M2-d part 2** — the proof: Category-A goldens generated from
+  the oracle (normalized), render smoke (skip when plantuml absent), oracle
+  A/B byte compare over the corpus set (icon-scale `0.5` lands identically
+  offline); xtask + testdata + docs touches. Then M3 (C4-PlantUML +
+  `xtask export-verify` semantic comparator), M4 (Mermaid + `theme` export
+  + CI render checks + benches), M5 (docs, proptest, tag `v0.2.0`).
 - **Open questions:** T4 exit gate's *dispatched CI run* of `e2e.yml` needs a
   push — **USER DECLINED (2026-11-17): keep everything local**; the gate is
   documented push-pending, T0–T6 stay code-complete, do NOT re-ask. Vendored
