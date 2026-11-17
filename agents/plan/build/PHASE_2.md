@@ -77,6 +77,15 @@ Resolution order for `themes { url … }` / `theme "<name>"`:
 4. Default theme: **always available offline**, vendored `theme.json` + fonts/assets
    via `include_bytes!` in `export` (Apache-2.0 attribution, source version recorded
    in `testdata/README.md` alongside goldens).
+   **Amendment 2026-11-17 (M1 research):** transport for item 3 = system `curl`
+   via `std::process::Command` (std has no TLS; no external crates) — `curl`
+   absent is a clean error, never a panic; the cache-key hash (item 2) is a
+   hand-rolled FIPS 180-4 SHA-256; the install-source order (incl. the
+   reference's `<workspace-parent>/themes` and `STRUCTURIZR_THEMES` fallbacks)
+   is cataloged in `EXPORT-PROPERTIES.md` §6.2. Item 4 stays blocked on this
+   machine's missing DNS: vendoring lands as soon as the user provides
+   `static.structurizr.com/themes/default/theme.json`; interim behavior is the
+   D3 rule (unknown theme name = keep working, styles simply unresolved).
 
 Relative `icon`/`logoUrl` resolution against the theme's base URL/dir per reference
 (verified behavior — catalog item P2-V3 covers what exporters do with icon URLs).
@@ -156,13 +165,18 @@ Port `C4PlantUMLExporter`; behaviors verified at the pinned commit, replicate ex
 
 ## P2-D8 Export property cascade
 
-Java `getViewOrViewSetProperty` equivalents are read by all exporters
-(`c4plantuml.stdlib`, enterprise name, `useAlphanumericShortIds`-style toggles, …).
-Deliverable **`agents/plan/build/EXPORT-PROPERTIES.md`** (same pattern as WRITE-CATALOG): <!-- refs:ignore forward reference, created by P2 -->
-exhaustive grep of property-name string literals in the four exporters → table
-property → read site → default → cascade order (verify order in Java) → observable
-effect. Implemented as one typed function `export_property(ws, view, name)` — no
-scattered `properties.get("…")` calls.
+Java `getViewOrViewSetProperty` equivalents are read by all exporters.
+Deliverable **landed 2026-11-17**: `agents/plan/build/EXPORT-PROPERTIES.md`
+(same pattern as WRITE-CATALOG) — exhaustive literal grep at the pin: property →
+read site → default → cascade → observable effect, plus the view-iteration/
+support matrix (§5), the theme-loading chain (§6) and the resolution constants
+(§7). Source-verified corrections to the early wording: the cascade is TWO
+levels + default (view → `views.configuration` → default; model properties are
+NOT consulted, and no enterprise-name/short-id property reads exist at this
+pin); match case-sensitivity differs per property (`plantuml.title`,
+`mermaid.title`, `mermaid.icons` use case-SENSITIVE `equals`). Implemented as
+one typed function `export_property(view, views, name, default)` in
+`oxidizr-export` — no scattered `properties.get("…")` calls.
 
 ## P2-D9 Fidelity harness (replaces byte-parity goldens)
 
@@ -201,7 +215,26 @@ scattered `properties.get("…")` calls.
   interim.
 - **M1** `core::styles` resolution engine + `ThemeStore` (offline dirs, cache,
   `--allow-net`, error UX) with full unit suites. EXPORT-PROPERTIES.md catalog first
-  (P2-D8), P2-V1/V2 verifications recorded.
+  (P2-D8), P2-V1/V2 verifications recorded. Decomposed 2026-11-17 (>4 modules):
+  - **M1-a** `EXPORT-PROPERTIES.md` catalog (P2-D8) + P2-V2/V4 evidence — **DONE
+    2026-11-17** (this commit).
+  - **M1-b** `oxidizr-core`: `Styles.themes: Vec<Theme>` (not serialized) +
+    `find_element_style(tag|element, scheme)` / `find_relationship_style(…)
+    ` resolution per `EXPORT-PROPERTIES.md` §7 + catalog §6.1-3 (defaults,
+    tag-composition order, `copyFrom` rules, darker-stroke `#%06X`, linked-
+    relationship tag chain) + unit matrix. Touches: core (+views.rs), tests.
+  - **M1-c** `oxidizr-export::themes` `ThemeStore` + `paths` module (XDG/APPDATA
+    cache, hand-rolled SHA-256) + installed-name registry + URL branch behind
+    `--allow-net` (curl delegate) + vendored default theme IF the file is
+    supplied (else D3 interim rule) + unit tests (offline fixtures). Touches:
+    export, diag (reuses 5001), core (`Theme` reuse).
+  - **M1-d** wiring: registry built in the pipeline BEFORE DSL parse
+    (`AbstractCommand.installThemes` parity — parser's `add_theme` gains the
+    installed-name branch); `loadThemes` equivalent in the diagram branch of
+    `export_cmd`; CLI flags `--themes-dir`/`--allow-net` + `OXIDZR_THEMES_DIR`
+    (`ApiOptions`); D5 register row; oracle A/B probe with a local
+    `STRUCTURIZR_THEMES`-style install. Touches: api, cli, dsl (one branch),
+    docs, PROGRESS/RESUME.
 - **M2** Structurizr-PlantUML exporter complete (all supported view types, legend,
   boundaries/groups, properties); Category A goldens + render smoke (comparator comes
   in P4 — P2-D9).
@@ -234,13 +267,32 @@ scattered `properties.get("…")` calls.
   (byte-exact witnesses) + `styles_parity.rs`; CLI `export -f theme`
   reproduces out1/out6 byte-for-byte. Spin-offs folded into WRITE-CATALOG
   §5/§6 (commit 6f6cc64).
-- [ ] P2-V2 per-exporter supported view-kind matrix + full property-name list + output
-  micro-grammar (drives comparator design) — from source at pinned commit.
+- [x] **P2-V2** (matrix + properties part) per-exporter supported view-kind
+  matrix + full property-name list — **VERIFIED 2026-11-17** (M1-a):
+  `EXPORT-PROPERTIES.md` §1–§5 (shared `final` iteration order
+  custom→landscape→context→container→component→dynamic→deployment, FilteredView
+  never exported, WSD deployment = null-skip; 15 cascade + 3 style-level
+  property literals with read sites, defaults and per-site match
+  case-sensitivity; the cascade is 2 levels + default, not 3). The **output
+  micro-grammar** half is deferred per dialect to its own port (M2/M3/M4) where
+  the comparator consumes it — keeping it here would port syntax from memory.
 - [ ] P2-V3 icon/logo URL handling in generated PlantUML/Mermaid (pass-through? fetched?
   omitted?) — decide mirror behavior, keep export-time zero-network.
-- [ ] P2-V4 `STRUCTURIZR_THEMES`/theme dir layout + `theme "<name>"` URL mapping
-  (`static.structurizr.com/themes/<name>/`) — mirror lookup semantics.
+  (Input side verified at M1-a: `loadThemes` rewrites relative icons to
+  `baseUrl + icon` for URL themes only — catalog §6.1-3.)
+- [x] **P2-V4** `STRUCTURIZR_THEMES`/theme dir layout + `theme "<name>"` URL
+  mapping — **VERIFIED 2026-11-17** (M1-a, source): install = one-level scan of
+  `<workspace-parent>/themes` else `STRUCTURIZR_THEMES` env, name = subdir
+  containing `theme.json`; `default` → `static.structurizr.com/themes/default/theme.json`;
+  unknown non-URL names at JSON load = `log.warn` only; load = URL (content-type
+  checked) else installed file else SILENT SKIP; theme styles append to a
+  non-serialized `Styles.themes` consulted at resolution time. Catalog §6.1;
+  oxidizr source-order mapping §6.2. Runtime A/B probe (local install +
+  `theme <name>` export) scheduled for M1-d; the URL-fetch leg is not
+  observable on this machine (no DNS) and is mirrored from source.
 - [ ] P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
+  (Core-level constants pinned at M1-a — catalog §7; the per-dialect skinparam
+  / `$`-default colors come with the M2/M3 ports.)
 - [ ] P2-V6 legend diagram generation rules (when emitted, content per dialect).
 Each gets a checkbox + evidence in the implementing PR; surprises fold into `agents/plan/`
 (errata process), per AGENTS.md working style.
