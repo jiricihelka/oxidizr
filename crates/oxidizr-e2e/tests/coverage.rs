@@ -26,6 +26,7 @@ const REGISTRY: &[(u16, &str)] = &[
     (5005, "IMPORT_DEFERRED"),
     (5006, "CLI_IO"),
     (5007, "EXPORT_NOT_IMPLEMENTED"),
+    (5008, "EXPORT_THEME"),
     (9001, "TOO_MANY_ERRORS"),
 ];
 
@@ -46,6 +47,12 @@ const ALLOWLIST: &[(u16, &str)] = &[
         "export dispatch landed at M0 with `theme`/`json` only — the diagram \
          formats (M2–M4) make the code corpus-reachable; remove this entry \
          when an export manifest covers it (PHASE_2.md)",
+    ),
+    (
+        5008,
+        "theme loading (P2-D3) landed at M1 — no corpus manifest emits it yet \
+         (manifests cover dsl2json/json2json/validate/reconcile, not export); \
+         remove when an export manifest covers it (PHASE_2.md)",
     ),
     (
         9001,

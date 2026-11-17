@@ -3,27 +3,25 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = P2-M0 docs commit (tip of `main`, tag `v0.1.0` far
+Updated: 2026-11-17 · HEAD = P2-M1-b commit (tip of `main`, tag `v0.1.0` far
 down) · gates green · nothing pushed.
 
-- **Done:** **PHASE 1 + 1T COMPLETE** (`v0.1.0`, T0–T6, no tag) · **PHASE 2 M0
-  COMPLETE**: P2-V1 VERIFIED (theme contract incl. style doc-order + setter
-  clamps — WRITE-CATALOG §5/§6, commit 6f6cc64); `oxidizr-export` crate
-  (IndentingWriter/Diagram beans/format registry/naming, 11 tests);
-  `oxidizr_json::theme` de/ser byte-exact vs oracle witnesses (`theme_json.rs`);
-  api `Request::Export`+`export_cmd` mirroring `ExportCommand` (mkdirs before
-  dispatch, unknown format = note + exit 0, OXZ-5007 unimplemented); cli
-  `export -w/-f/-o`; A/B: `-f theme` byte-identical to out1/out6 (commit
-  ca292e7). Evidence: `build/PHASE_2.md` (P2-D11 V1 checkbox) + PROGRESS log.
-- **Next:** **PHASE 2 M1** per `build/PHASE_2.md`: FIRST the
-  `EXPORT-PROPERTIES.md` catalog (P2-D8 — exporter property reads, from the
-  pinned monorepo, do not port from memory) + P2-V2/V3/V4 verifications, THEN
-  `core::styles::resolve` (P2-D2) + `ThemeStore` in `oxidizr-export` (P2-D3:
-  `--themes-dir`/`OXIDZR_THEMES_DIR`, cache, `--allow-net` — the flag ships
-  here, D5 register update, error UX), wire `loadThemes` into the diagram
-  branch of `export_cmd`. Default-theme vendoring DEFERRED (no DNS to
-  static.structurizr.com; file absent from the pinned monorepo) — record if
-  M2 needs it. M1 is >4 modules: decompose in PHASE_2.md before code (charter).
+- **Done:** **PHASE 1 + 1T COMPLETE** (`v0.1.0`, T0–T6, no tag) · **P2-M0
+  COMPLETE** (theme/json export byte-parity, see PROGRESS log) · **P2-M1-a**
+  `EXPORT-PROPERTIES.md` catalog + V2(matrix+props)/V4 VERIFIED + M1 decomposed
+  (`199bc70`) · **P2-M1-b** `oxidizr-core::styles` resolution engine (P2-D2:
+  find_*/element_style/relationship_style, `Styles.themes`, copyFrom,
+  Color.decode/darker; 12 tests, `95130bb`).
+- **Next:** **P2-M1-c** `oxidizr-export::themes::ThemeStore` + `paths` module
+  (XDG/APPDATA cache + hand-rolled SHA-256, installed-name registry per
+  `EXPORT-PROPERTIES.md` §6.2: `--themes-dir` > `OXIDZR_THEMES_DIR` >
+  `<ws-parent>/themes` > `STRUCTURIZR_THEMES`, one-level `theme.json` scan;
+  URL branch behind `--allow-net` via curl delegate + content-type check +
+  relative-icon rewrite; vendored default theme stays blocked (no DNS) — D3
+  interim rule), then **M1-d** wiring: registry BEFORE DSL parse (parser
+  `add_theme` gains the installed-name branch), `loadThemes` mirror in the
+  diagram branch of `export_cmd`, CLI flags + `ApiOptions`, D5 register row,
+  oracle A/B probe with a local themes dir. Then M2 (Structurizr-PlantUML).
 - **Open questions:** T4 exit gate's *dispatched CI run* of `e2e.yml` needs a
   push — ask the user before any push (all P1/P1T/P2 commits sit unpushed).
   Consider registering the 9001 Collector-wiring decision.

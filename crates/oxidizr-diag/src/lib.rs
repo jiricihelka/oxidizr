@@ -187,6 +187,12 @@ pub mod codes {
     /// Unknown format strings are NOT this code — the reference logs them and
     /// exits 0 (`ExportCommand`), and oxidizr notes likewise.
     pub const EXPORT_NOT_IMPLEMENTED: Code = Code::new(5007);
+    /// Theme loading failed (Phase 2 M1, `PHASE_2.md` P2-D3): an installed
+    /// theme's `theme.json` is unreadable/unparsable, a fetched theme's
+    /// content-type is neither JSON nor plain text, or the fetch itself
+    /// failed (including no system `curl` to perform it with `--allow-net`).
+    /// URL-without-`--allow-net` is NOT this code — that is `OXZ-5001` (D5).
+    pub const EXPORT_THEME: Code = Code::new(5008);
     /// Model/view validation failure — reference `hydrate()`/validate message
     /// verbatim (M6 CLI `validate`).
     pub const VALIDATION: Code = Code::new(3001);

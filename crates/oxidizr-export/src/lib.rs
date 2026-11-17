@@ -28,9 +28,12 @@ pub mod error;
 pub mod format;
 pub mod indent;
 pub mod naming;
+pub mod paths;
+pub mod themes;
 
 pub use diagram::{Diagram, DiagramExporter, Legend, WorkspaceExport, WorkspaceExporter};
 pub use error::ExportError;
 pub use format::{ColorMode, ExportFormat};
 pub use indent::{IndentType, IndentingWriter};
 pub use naming::{ExportedFile, diagram_files, diagram_prefix, workspace_export_files};
+pub use themes::{ThemeError, ThemeStore};
