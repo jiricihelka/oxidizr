@@ -5,7 +5,8 @@
 //! Ports of `com.structurizr.export` (`structurizr-export` at the pinned
 //! monorepo revision): [`indent::IndentingWriter`], the [`diagram`] bean
 //! model (`Diagram`, `Legend`, the `WorkspaceExporter`/`DiagramExporter`
-//! shapes) and the `export` command's dispatch + file-naming rules
+//! shapes), the shared property cascade ([`property::export_property`],
+//! P2-D8) and the `export` command's dispatch + file-naming rules
 //! ([`format`], [`naming`]) per `ExportCommand` (oracle-verified 2026-11-17,
 //! P2-V1):
 //!
@@ -29,6 +30,7 @@ pub mod format;
 pub mod indent;
 pub mod naming;
 pub mod paths;
+pub mod property;
 pub mod themes;
 
 pub use diagram::{Diagram, DiagramExporter, Legend, WorkspaceExport, WorkspaceExporter};
@@ -36,4 +38,5 @@ pub use error::ExportError;
 pub use format::{ColorMode, ExportFormat};
 pub use indent::{IndentType, IndentingWriter};
 pub use naming::{ExportedFile, diagram_files, diagram_prefix, workspace_export_files};
+pub use property::export_property;
 pub use themes::{ThemeError, ThemeStore};
