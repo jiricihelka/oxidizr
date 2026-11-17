@@ -297,7 +297,12 @@ one typed function `export_property(view, views, name, default)` in
     checkboxes + evidence here) + `export_property(view, views, name,
     default)` typed helper implementing P2-D8's two-level cascade in
     `oxidizr-export` + DEVIATIONS D12 row (P2-V3 decision: scale pinned
-    `0.5`, zero-network). Touches: export (one helper), plan docs.
+    `0.5`, zero-network). Touches: export (one helper), plan docs. **DONE
+    2026-11-17** — D12 `be26b56`, `export_property` + 4 cascade tests
+    `d179653`, catalog `EXPORT-PLANTUML.md` §§1–13 (§10 legend/P2-V6,
+    §12 colors/P2-V5, §13 quirk register incl. the `findGroupStyle` 711
+    icon←color upstream bug we must mirror); engine iteration section is
+    appended with the M2-b port.
   - **M2-b** shared diagram-engine port in `oxidizr-export::plantuml`
     (`AbstractDiagramExporter` + `AbstractExporter` + `AbstractPlantUML
     Exporter` helpers): per-view export methods + iteration order,
@@ -385,9 +390,17 @@ one typed function `export_property(view, views, name, default)` in
   `/tmp/nix-shell.uni100/p2/m1d`); the URL-fetch leg is not
   observable on this machine (no DNS) and is mirrored from source.
 - [ ] P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
-  (Core-level constants pinned at M1-a — catalog §7; the per-dialect skinparam
-  / `$`-default colors come with the M2/M3 ports.)
+  **Structurizr half VERIFIED 2026-11-17** (M2-a): `Styles.DEFAULT_*` =
+  `#ffffff`/`#444444` light, `#111111`/`#cccccc` dark (`EXPORT-PLANTUML.md`
+  §12). C4/Mermaid halves land with M3/M4. (Core-level constants pinned at
+  M1-a — catalog §7; the per-dialect skinparam / `$`-default colors come with
+  the M2/M3 ports.)
 - [ ] P2-V6 legend diagram generation rules (when emitted, content per dialect).
+  **Structurizr half VERIFIED 2026-11-17** (M2-a): emitted for EVERY view of
+  the dialect (override never returns null; base does), content per
+  `EXPORT-PLANTUML.md` §10 (DeploymentNode/Element/Relationship style passes,
+  width 200, transparent self-loops, own `<style>` replace). C4/Mermaid halves
+  land with M3/M4.
 Each gets a checkbox + evidence in the implementing PR; surprises fold into `agents/plan/`
 (errata process), per AGENTS.md working style.
 

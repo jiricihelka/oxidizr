@@ -22,7 +22,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
 | P1T | e2e suite (interlude) | **COMPLETE 2026-11-17** — T0–T6 all done: API + harness + 300-entry corpus + full-tier invariants + `e2e_` benches + `1T` baseline + docs. Net caught 2 real bugs (oracle-fixed). No tag (user decision). Log below (`build/PHASE_1T.md`) |
 | P2 | M0 export scaffold + theme/json dispatch | **done 2026-11-17** (commits 6f6cc64, ca292e7) — log below |
-| P2 | exporters (M1–M5) | **next** — M1 `core::styles` + `ThemeStore` per `build/PHASE_2.md` |
+| P2 | M1 theme infrastructure | **COMPLETE 2026-11-17** (a `199bc70`–e-B `53d2e5e`) — log below |
+| P2 | M2 Structurizr-PlantUML | **in progress** — M2-a done (catalog + `export_property` + D12); M2-b next (`build/PHASE_2.md`) |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -144,6 +145,31 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P2-M2 — Structurizr-PlantUML exporter (2026-11-17, in progress)
+
+Decomposition M2-a..d + recon inventory: `build/PHASE_2.md`. P2-V3 settled
+during recon (icon scale pin → DEVIATIONS D12).
+
+- **M2-a** (this commit, 3 pieces): D12 row `be26b56` (reference
+  `calculateIconScale` FETCHES the icon at export time — `ImageIO.read(new
+  URL(…))` — every failure path lands on `0.5`; oxidizr pins `0.5`,
+  zero-network); `oxidizr-export::property::export_property` `d179653` —
+  THE typed 2-level cascade (`view → views.configuration → default`, Java
+  `getOrDefault` semantics: present-but-empty SUPPRESSES, never cascades;
+  4 tests); catalog `build/EXPORT-PLANTUML.md` §§1–13 = the P2-V2 deferred
+  micro-grammar half, line-exact from the pin: writer mechanics (2-space
+  indent, literal `\n` escapes, `replace` first-hit), full header order
+  (title sizes incl. the null-fontSize `null` literal, ranksep `/5` +
+  nodesep `/10` INTEGER division, `<style></style>` placeholder), element/
+  relationship/boundary/group/legend grammars with exact format strings,
+  the sequence-diagram path (teoz, LinkedHashSet + boundary stack,
+  actor/database stroke-color rewrite), style-footer layout (7 category
+  passes over the name-sorted `HashSet`, base64 selectors, per-class field
+  order), `idOf`/`(?U)\W` filter, P2-V5 (`#ffffff`/`#444444`, `#111111`/
+  `#cccccc`) + P2-V6 (legend for every view) Structurizr halves, and the
+  quirk register — including the `findGroupStyle` 711 upstream bug (icon ←
+  color) we must mirror.
 
 ### P2-M1 — theme infrastructure: styles + ThemeStore + wiring (2026-11-17)
 
