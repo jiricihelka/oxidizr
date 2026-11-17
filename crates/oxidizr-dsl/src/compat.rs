@@ -84,9 +84,61 @@ pub fn java_eq_ignore_case(a: &str, b: &str) -> bool {
     }
 }
 
+/// `String.split("\\r?\\n")` — the reference parser's line split
+/// (`StructurizrDslParser.parse(String)`), used for the retained-DSL source
+/// lines (M1-e): one `\r` directly before each `\n` belongs to the
+/// separator, and Java's limit-0 `split` drops ALL trailing empty strings —
+/// a file ending in a newline never retains one, and trailing blank lines
+/// vanish. `""` keeps Java's documented single-empty-element result.
+#[must_use]
+pub fn java_split_dsl_lines(text: &str) -> Vec<String> {
+    if text.is_empty() {
+        return vec![String::new()];
+    }
+    let mut lines: Vec<&str> = text.split('\n').collect();
+    for line in &mut lines {
+        *line = line.strip_suffix('\r').unwrap_or(line);
+    }
+    while lines.last().is_some_and(|l| l.is_empty()) {
+        lines.pop();
+    }
+    lines.into_iter().map(str::to_string).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn java_split_dsl_lines_mirrors_regex_split() {
+        // No final newline: plain split.
+        assert_eq!(
+            java_split_dsl_lines("a\nb"),
+            ["a".to_string(), "b".to_string()]
+        );
+        // Final newline: Java drops the trailing empty entry (the M1-e A/B
+        // finding — the reference's retained DSL never carries it).
+        assert_eq!(
+            java_split_dsl_lines("a\nb\n"),
+            ["a".to_string(), "b".to_string()]
+        );
+        // ALL trailing empties go: blank lines at EOF vanish too.
+        assert_eq!(java_split_dsl_lines("a\n\n\n"), ["a".to_string()]);
+        // `\r\n` consumed as one separator; a lone `\r` before the `\n` pair
+        // stays in the line (the regex eats at most one).
+        assert_eq!(
+            java_split_dsl_lines("a\r\nb"),
+            ["a".to_string(), "b".to_string()]
+        );
+        assert_eq!(java_split_dsl_lines("a\r\r\n"), ["a\r".to_string()]);
+        // Interior empties stay; all-empty input reduces to Java's [].
+        assert_eq!(
+            java_split_dsl_lines("a\n\nb\n\n"),
+            ["a".to_string(), String::new(), "b".to_string()]
+        );
+        assert_eq!(java_split_dsl_lines("\n"), Vec::<String>::new());
+        assert_eq!(java_split_dsl_lines(""), [String::new()]);
+    }
 
     #[test]
     fn trim_matches_java_control_boundary() {

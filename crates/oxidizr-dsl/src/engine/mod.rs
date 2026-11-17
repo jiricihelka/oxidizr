@@ -1215,8 +1215,14 @@ impl<'a> Parser<'a> {
         if track_source {
             // Java accumulates the RAW lines (before per-line BOM strip and
             // before preprocessing folding); includes are never tracked.
+            // The reference's entry is `parse(String)`: `dsl.split("\\r?\\n")`
+            // — one `\r` before each `\n` is consumed by the split, and Java's
+            // `split` drops ALL trailing empty entries (a file ending with a
+            // newline never retains it; trailing blank lines vanish too).
+            // M1-e A/B probe 2026-11-17 (`m1d` witness): the reference's
+            // `structurizr.dsl` base64 has no trailing newline.
             self.dsl_source_lines
-                .extend(source.split('\n').map(str::to_string));
+                .extend(compat::java_split_dsl_lines(source));
         }
         for logical in lines {
             if logical.dropped {
@@ -2003,6 +2009,26 @@ mod tests {
                 "workspace \"W\" {\n  model {\n    p = person \"P\"\n    s = softwareSystem \"S\"\n    p -> s \"Uses\"\n  }\n}\n"
             ),
             "d29ya3NwYWNlICJXIiB7CiAgbW9kZWwgewogICAgcCA9IHBlcnNvbiAiUCIKICAgIHMgPSBzb2Z0d2FyZVN5c3RlbSAiUyIKICAgIHAgLT4gcyAiVXNlcyIKICB9Cn0K"
+        );
+    }
+
+    #[test]
+    fn retained_dsl_drops_trailing_newlines() {
+        // M1-e A/B probe 2026-11-17 (`m1d` witness): the reference splits the
+        // source with Java `split("\\r?\\n")` — the file's final newline can
+        // never enter the retained `structurizr.dsl`, and trailing blank
+        // lines drop out too. Vendored fixtures end `}` without a final
+        // newline, so only this shape pins the behavior.
+        let dir = std::env::temp_dir().join(format!("oxidizr-m1e-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("ws.dsl");
+        let text = "workspace {\n  model {\n  }\n}\n\n";
+        std::fs::write(&path, text).unwrap();
+        let r = parse_dsl(text, ParseOptions::file(&path.to_string_lossy())).unwrap();
+        assert_eq!(
+            r.workspace.properties.get("structurizr.dsl"),
+            Some(base64_std("workspace {\n  model {\n  }\n}").as_str())
         );
     }
 
