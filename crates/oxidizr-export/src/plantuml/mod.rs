@@ -5,10 +5,12 @@
 //! `AbstractDiagramExporter` port). Dialects implement [`Dialect`]:
 //! `structurizr` (M2-c), `c4plantuml` (M3).
 
+pub mod c4;
 pub mod engine;
 pub mod model;
 pub mod structurizr;
 
+pub use c4::C4PlantUmlDialect;
 pub use engine::{Dialect, Engine, Frame};
 pub use model::ElemRef;
 pub use structurizr::StructurizrDialect;
@@ -29,6 +31,25 @@ pub const PLANTUML_SEQUENCE_DIAGRAM_PROPERTY: &str = "plantuml.sequenceDiagram";
 pub const PLANTUML_BOUNDARIES_PROPERTY: &str = "plantuml.boundaries";
 /// Element-style property `plantuml.shadow` (`StructurizrPlantUMLExporter`).
 pub const PLANTUML_SHADOW_PROPERTY: &str = "plantuml.shadow";
+/// `C4PLANTUML_LEGEND_PROPERTY` (`SHOW_LEGEND`, default `true`).
+pub const C4PLANTUML_LEGEND_PROPERTY: &str = "c4plantuml.legend";
+/// `C4PLANTUML_STEREOTYPES_PROPERTY` (`show`/`hide stereotypes`, `false`).
+pub const C4PLANTUML_STEREOTYPES_PROPERTY: &str = "c4plantuml.stereotypes";
+/// `C4PLANTUML_TAGS_PROPERTY` (the tags section, `false`).
+pub const C4PLANTUML_TAGS_PROPERTY: &str = "c4plantuml.tags";
+/// `C4PLANTUML_STANDARD_LIBRARY_PROPERTY` (`<C4/…>` vs raw-URL includes,
+/// `true`).
+pub const C4PLANTUML_STANDARD_LIBRARY_PROPERTY: &str = "c4plantuml.stdlib";
+/// Element-style property `c4plantuml.sprite` (tags section `$sprite`).
+pub const C4PLANTUML_SPRITE: &str = "c4plantuml.sprite";
+/// Element-style property `c4plantuml.shadow` (tags section `$shadowing`).
+pub const C4PLANTUML_SHADOW: &str = "c4plantuml.shadow";
+/// `C4PLANTUML_ELEMENT_PROPERTIES_PROPERTY` (`AddProperty` on elements and
+/// deployment nodes, `false`).
+pub const C4PLANTUML_ELEMENT_PROPERTIES_PROPERTY: &str = "c4plantuml.elementProperties";
+/// `C4PLANTUML_RELATIONSHIP_PROPERTIES_PROPERTY` (`AddProperty` on
+/// relationships, `false`).
+pub const C4PLANTUML_RELATIONSHIP_PROPERTIES_PROPERTY: &str = "c4plantuml.relationshipProperties";
 /// `DIAGRAM_TITLE_TAG` (title font-size style tag).
 pub const DIAGRAM_TITLE_TAG: &str = "Diagram:Title";
 /// `DIAGRAM_DESCRIPTION_TAG`.

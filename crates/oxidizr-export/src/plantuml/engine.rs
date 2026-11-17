@@ -177,6 +177,13 @@ pub trait Dialect {
     fn render_as_sequence_diagram<'a>(&self, _e: &Engine<'a>, _view: View<'a>) -> bool {
         false
     }
+    /// Whether the dialect emits `CustomView` diagrams at all: the Java
+    /// `C4PlantUMLExporter.export(CustomView)` overload returns `null`, and
+    /// the `export(Workspace)` loop then skips the view entirely (M3;
+    /// witness: the `custom-view-animation` C4 sweep writes NO files).
+    fn exports_custom_views(&self) -> bool {
+        true
+    }
     /// `createDiagram`.
     fn create_diagram(&self, e: &Engine, view: View<'_>, definition: String) -> Diagram;
     /// `createLegend` (base returns `null`). Called AFTER the last body
@@ -253,6 +260,11 @@ impl<'a> Engine<'a> {
         let mut diagrams = Vec::new();
         for view in self.workspace.views.all_views() {
             if matches!(view, View::Filtered(_) | View::Image(_)) {
+                continue;
+            }
+            // The Java overload returning `null` (C4 custom views, M3) makes
+            // this loop skip the view — no diagram, no file.
+            if matches!(view, View::Custom(_)) && !d.exports_custom_views() {
                 continue;
             }
             diagrams.push(self.export_view(d, view)?);
@@ -823,7 +835,7 @@ impl<'a> Engine<'a> {
     /// `Model.GROUP_SEPARATOR_PROPERTY_NAME` — the raw model property
     /// (NOT the view cascade).
     #[must_use]
-    fn group_separator(&self) -> String {
+    pub(crate) fn group_separator(&self) -> String {
         self.workspace
             .model
             .properties
@@ -1007,7 +1019,7 @@ impl<'a> Engine<'a> {
 
     /// `getBoundarySoftwareSystems` — the distinct owners of the view's
     /// containers, id-string sorted.
-    fn get_boundary_systems(&self, view: View<'a>) -> Vec<ElemRef<'a>> {
+    pub(crate) fn get_boundary_systems(&self, view: View<'a>) -> Vec<ElemRef<'a>> {
         let mut systems: Vec<&oxidizr_core::Id> = Vec::new();
         for element in self.view_elements(view) {
             if let Some(system) = element.system() {
@@ -1046,7 +1058,7 @@ impl<'a> Engine<'a> {
 
     /// `getBoundaryContainers` — the distinct containers owning the view's
     /// components, id-string sorted.
-    fn get_boundary_containers(&self, view: View<'a>) -> Vec<ElemRef<'a>> {
+    pub(crate) fn get_boundary_containers(&self, view: View<'a>) -> Vec<ElemRef<'a>> {
         let mut out: Vec<ElemRef<'a>> = Vec::new();
         for element in self.view_elements(view) {
             if element.kind() == oxidizr_core::validate::ElementKind::Component {

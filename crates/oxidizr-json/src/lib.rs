@@ -21,7 +21,10 @@
 //! tolerates and rejects with the reference's first `hydrate()` message.
 
 pub mod error;
-mod javahash;
+// Public for the C4-PlantUML tags section (Phase 2 M3): the tags-section
+// maps iterate in Java `HashMap<String, Style>` order, the same contract the
+// JSON writer pins here.
+pub mod javahash;
 pub mod keep;
 mod printer;
 mod reader;

@@ -101,7 +101,7 @@ impl StructurizrDialect {
     /// `writeSkinParams` — `Result` because `parts[1]` is an
     /// `ArrayIndexOutOfBoundsException` when an entry's value splits
     /// empty (`"foo="` — Java `split("=")` drops the trailing empty).
-    fn write_skin_params<'a>(
+    pub(crate) fn write_skin_params<'a>(
         e: &Engine<'a>,
         view: View<'a>,
         w: &mut IndentingWriter,
@@ -132,7 +132,7 @@ impl StructurizrDialect {
     }
 
     /// `writeIncludes`.
-    fn write_includes<'a>(e: &Engine<'a>, view: View<'a>, w: &mut IndentingWriter) {
+    pub(crate) fn write_includes<'a>(e: &Engine<'a>, view: View<'a>, w: &mut IndentingWriter) {
         let comma_separated = e.property(view.base(), PLANTUML_INCLUDES_PROPERTY, "");
         if is_value(comma_separated) {
             for include in java_split(comma_separated, ',') {
@@ -146,14 +146,14 @@ impl StructurizrDialect {
 
     /// `includeTitle` — the one case-SENSITIVE property gate
     /// (`"true".equals`).
-    fn include_title<'a>(e: &Engine<'a>, view: View<'a>) -> bool {
+    pub(crate) fn include_title<'a>(e: &Engine<'a>, view: View<'a>) -> bool {
         e.property(view.base(), PLANTUML_TITLE_PROPERTY, "true") == "true"
     }
 
     /// The base-header title font: `titleStyle != null ? getFontSize() :
     /// DEFAULT_FONT_SIZE` — the `Integer` `null` renders the literal
     /// `null` through `%s`.
-    fn font_of(title_style: Option<&ElementStyle>) -> String {
+    pub(crate) fn font_of(title_style: Option<&ElementStyle>) -> String {
         title_style.map_or_else(
             || DEFAULT_FONT_SIZE.to_string(),
             |style| {
@@ -231,7 +231,10 @@ impl StructurizrDialect {
     /// group.lastIndexOf(sep) + sep.length())` — when the separator is
     /// ABSENT Java still cuts at `separator.length() - 1`
     /// (`-1 + length`), and an out-of-range cut aborts (`substring`).
-    fn group_display_name(group: &str, separator: Option<&str>) -> Result<String, ExportError> {
+    pub(crate) fn group_display_name(
+        group: &str,
+        separator: Option<&str>,
+    ) -> Result<String, ExportError> {
         let Some(separator) = separator.filter(|s| is_value(s)) else {
             return Ok(group.to_string());
         };
@@ -1218,7 +1221,7 @@ struct ElementSpec {
 /// (`ImageView`/`FilteredView` do not). The core `View::content()`
 /// accessor borrows from `&self`, so the port matches the variants to
 /// keep the view's `'a`.
-fn automatic_layout(view: View<'_>) -> Option<&AutomaticLayout> {
+pub(crate) fn automatic_layout(view: View<'_>) -> Option<&AutomaticLayout> {
     match view {
         View::Custom(v) => v.content.automatic_layout.as_ref(),
         View::Landscape(v) => v.content.automatic_layout.as_ref(),
@@ -1238,7 +1241,7 @@ fn metadata_font_size(font_size: i32) -> i32 {
 }
 
 /// The scheme's background/color defaults (`Styles.DEFAULT_*`).
-fn defaults(scheme: ColorScheme) -> (&'static str, &'static str) {
+pub(crate) fn defaults(scheme: ColorScheme) -> (&'static str, &'static str) {
     match scheme {
         ColorScheme::Dark => (DEFAULT_BACKGROUND_DARK, DEFAULT_COLOR_DARK),
         ColorScheme::Light => (DEFAULT_BACKGROUND_LIGHT, DEFAULT_COLOR_LIGHT),
@@ -1247,7 +1250,7 @@ fn defaults(scheme: ColorScheme) -> (&'static str, &'static str) {
 
 /// The color/`null` formatter: `%s` on a null Java `String` renders the
 /// literal `null`.
-fn color_or_null(value: Option<&String>) -> String {
+pub(crate) fn color_or_null(value: Option<&String>) -> String {
     value.cloned().unwrap_or_else(|| "null".to_string())
 }
 
@@ -1357,7 +1360,7 @@ fn icon_leg(icon: Option<&str>) -> String {
 /// [`ExportError::ReferenceAbort`]); a dangling Dynamic scope is the null
 /// `element` field ("Dynamic View") and a dangling Deployment scope the
 /// null `softwareSystem` (environment-only name).
-fn view_name(e: &Engine, view: View<'_>) -> Result<String, ExportError> {
+pub(crate) fn view_name(e: &Engine, view: View<'_>) -> Result<String, ExportError> {
     let scoped_system = |id: &Id| -> Result<String, ExportError> {
         element_by_id(e.model(), id)
             .ok_or(ExportError::ReferenceAbort(
@@ -1426,7 +1429,7 @@ fn view_name(e: &Engine, view: View<'_>) -> Result<String, ExportError> {
 /// `element.getName()` — an instance's name is its target's (the reference
 /// `StaticStructureElementInstance.getName()` delegation; a dangling
 /// target NPEs).
-fn display_name(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError> {
+pub(crate) fn display_name(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError> {
     if matches!(
         element.kind(),
         ElementKind::SoftwareSystemInstance | ElementKind::ContainerInstance
@@ -1445,7 +1448,10 @@ fn display_name(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError>
 
 /// The MERGED element style — `Styles.findElementStyle(Element,
 /// ColorScheme)`: instances PREPEND the parent's tags.
-fn element_style_of(e: &Engine, element: ElemRef<'_>) -> Result<ElementStyle, ExportError> {
+pub(crate) fn element_style_of(
+    e: &Engine,
+    element: ElemRef<'_>,
+) -> Result<ElementStyle, ExportError> {
     let styles = &e.configuration().styles;
     let scheme = e.color_scheme();
     let tags = if matches!(
@@ -1468,7 +1474,7 @@ fn element_style_of(e: &Engine, element: ElemRef<'_>) -> Result<ElementStyle, Ex
 /// top-level deployment node is `filter(environment).filter(name)`;
 /// instances are `filter(targetName)_instanceId`; custom elements carry
 /// the raw model id.
-fn id_of(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError> {
+pub(crate) fn id_of(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError> {
     let leaf = id_leaf(e, element)?;
     Ok(match element.parent_id() {
         Some(pid) => {
@@ -1511,7 +1517,7 @@ fn id_leaf(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError> {
 
 /// `idOf(getRelationship().getSource()/getDestination())` — a dangling
 /// endpoint is the reference NPE.
-fn element_ref_of(e: &Engine, id: &Id) -> Result<String, ExportError> {
+pub(crate) fn element_ref_of(e: &Engine, id: &Id) -> Result<String, ExportError> {
     let element = element_by_id(e.model(), id).ok_or(ExportError::ReferenceAbort(
         "relationship endpoint does not resolve (Java getSource()/getDestination() NPE)",
     ))?;
@@ -1520,14 +1526,14 @@ fn element_ref_of(e: &Engine, id: &Id) -> Result<String, ExportError> {
 
 /// `filter`: `s.replaceAll("(?U)\\W", "")` — drop every non-word
 /// character (Unicode letters/digits/underscore survive).
-fn filter(s: &str) -> String {
+pub(crate) fn filter(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric() || *c == '_')
         .collect()
 }
 
 /// Java `String.split(sep)` (limit 0): trailing empty pieces are dropped.
-fn java_split(s: &str, sep: char) -> Vec<&str> {
+pub(crate) fn java_split(s: &str, sep: char) -> Vec<&str> {
     let mut parts: Vec<&str> = s.split(sep).collect();
     while parts.last().is_some_and(|p| p.is_empty()) {
         parts.pop();

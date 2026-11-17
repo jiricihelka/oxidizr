@@ -13,7 +13,7 @@ use oxidizr_core::views::ColorScheme;
 use crate::diagram::WorkspaceExport;
 use crate::error::ExportError;
 use crate::naming::{ExportedFile, diagram_files, diagram_prefix, workspace_export_files};
-use crate::plantuml::{Engine, StructurizrDialect};
+use crate::plantuml::{C4PlantUmlDialect, Engine, StructurizrDialect};
 
 /// `-light` / `-dark` format suffix (the reference constructs the exporter
 /// with that `ColorScheme`; unmarked formats keep the workspace theme).
@@ -139,12 +139,15 @@ impl ExportFormat {
         workspace: &Workspace,
         workspace_file_name: &str,
     ) -> Result<Vec<ExportedFile>, ExportError> {
-        if let Self::StructurizrPlantUml(mode) = self {
+        if let Self::StructurizrPlantUml(mode) | Self::C4PlantUml(mode) = self {
             // The `DiagramExporter` branch of `ExportCommand.run`: the
             // workspace file name plays no role (names key on the workspace
             // ID — `prefix(workspaceId)`).
             let mut engine = Engine::new(workspace, mode.color_scheme());
-            let diagrams = engine.export_all(&mut StructurizrDialect::new())?;
+            let diagrams = match self {
+                Self::C4PlantUml(_) => engine.export_all(&mut C4PlantUmlDialect::new())?,
+                _ => engine.export_all(&mut StructurizrDialect::new())?,
+            };
             return Ok(diagram_files(&diagram_prefix(workspace.id), &diagrams));
         }
         let (export, theme) = match self {
@@ -322,13 +325,7 @@ mod tests {
 
     #[test]
     fn other_registry_formats_stay_not_implemented() {
-        for raw in [
-            "plantuml/c4plantuml",
-            "plantuml/c4plantuml-dark",
-            "mermaid",
-            "websequencediagrams",
-            "static",
-        ] {
+        for raw in ["mermaid", "websequencediagrams", "static"] {
             let err = ExportFormat::parse(raw)
                 .export(&workspace(), "ws.dsl")
                 .expect_err("unlanded format");
@@ -337,6 +334,54 @@ mod tests {
                 "{raw}: {err}"
             );
         }
+    }
+
+    /// M3-b: `plantuml/c4plantuml` exports through `C4PlantUmlDialect` —
+    /// the C4 header (`set separator none`, the ALWAYS `<style>` root
+    /// block, the `<C4/…>` includes) and NO legend file (the Java
+    /// `createLegend` returns `null`).
+    #[test]
+    fn c4plantuml_lands_the_c4_dialect() {
+        let files = ExportFormat::parse("plantuml/c4plantuml")
+            .export(&workspace(), "ws.dsl")
+            .expect("c4 export");
+        assert_eq!(files.len(), 1, "{files:?}"); // no `-key` legend file
+        assert_eq!(files[0].name, "structurizr-7-SystemLandscape-001.puml");
+        let definition = String::from_utf8(files[0].bytes.clone()).expect("utf-8");
+        assert!(definition.starts_with("@startuml\n"), "{definition}");
+        assert!(definition.contains("set separator none\n"), "{definition}");
+        assert!(
+            definition.contains("top to bottom direction\n"),
+            "{definition}"
+        );
+        assert!(definition.contains("<style>\n  root {\n"), "{definition}");
+        assert!(
+            definition.contains("BackgroundColor: #ffffff\n"),
+            "{definition}"
+        );
+        assert!(definition.contains("!include <C4/C4>\n"), "{definition}");
+        assert!(
+            definition.contains("!include <C4/C4_Context>\n"),
+            "{definition}"
+        );
+        assert!(
+            definition.contains("SHOW_LEGEND(true)\nhide stereotypes\n@enduml"),
+            "{definition}"
+        );
+    }
+
+    /// M3-b: the `-dark` suffix renders the DARK exporter defaults.
+    #[test]
+    fn c4plantuml_dark_suffix_renders_dark_defaults() {
+        let files = ExportFormat::parse("plantuml/c4plantuml-dark")
+            .export(&workspace(), "ws.dsl")
+            .expect("c4 dark");
+        let definition = String::from_utf8(files[0].bytes.clone()).expect("utf-8");
+        assert!(
+            definition.contains("BackgroundColor: #111111\n"),
+            "{definition}"
+        );
+        assert!(definition.contains("FontColor: #cccccc\n"), "{definition}");
     }
 
     #[test]

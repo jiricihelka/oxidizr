@@ -1,8 +1,9 @@
-//! `export` `PlantUML` dispatch integration tests (Phase 2 M2-d): the
+//! `export` `PlantUML` dispatch integration tests (Phase 2 M2-d/M3-b): the
 //! reference `ExportCommand` write loop end-to-end — id-keyed per-view
 //! files, `-key` legend files, `Writing <path>` notes — plus the
 //! `DiagramExporter` branch's viewless `log.error` leg (exit 0, no files)
-//! and the still-unlanded `plantuml/c4plantuml` format (OXZ-5007).
+//! and the C4 dialect (M3-b: diagram files, no legends, custom views
+//! skipped).
 
 #![allow(clippy::unwrap_used)]
 
@@ -10,7 +11,6 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use oxidizr_api::pipeline::{ApiOptions, ExitClass, LogItem, Request, execute};
-use oxidizr_diag::codes;
 
 /// Hermetic options: empty env map, no stdin, no network (the theme legs
 /// stay resolvable offline — P2-D3 keeps unknown theme names working).
@@ -152,19 +152,50 @@ fn viewless_diagram_export_notes_and_exits_zero() {
 }
 
 #[test]
-fn c4plantuml_still_reports_5007() {
-    let dir = temp_dir("c4-5007");
+fn c4plantuml_writes_view_files_without_legends() {
+    // M3-b: `plantuml/c4plantuml` exports through the C4 dialect — and
+    // the Java `createLegend` returns `null`, so there are NO `-key`
+    // legend files (unlike the Structurizr dialect's M2-d pair).
+    let dir = temp_dir("c4-export");
     let ws = write_ws(&dir, landscape_dsl());
     let out = run(&dir, &ws, "plantuml/c4plantuml");
-    let first = out
-        .log
-        .iter()
-        .find_map(|l| match l {
-            LogItem::Issue(i) => Some(i.code),
-            _ => None,
-        })
-        .expect("one issue");
-    assert_eq!(first, codes::EXPORT_NOT_IMPLEMENTED);
-    assert_eq!(out.exit, ExitClass::Diagnostics);
-    assert_eq!(files_with_ext(&dir, "puml"), Vec::<String>::new());
+    assert_eq!(out.exit, ExitClass::Ok, "{:?}", out.log);
+    assert_eq!(
+        files_with_ext(&dir, "puml"),
+        ["structurizr-sys-landscape.puml"]
+    );
+    let notes = note_lines(&out);
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].ends_with("structurizr-sys-landscape.puml"));
+    let body = std::fs::read_to_string(dir.join("structurizr-sys-landscape.puml")).unwrap();
+    assert!(body.starts_with("@startuml\n"), "{body}");
+    assert!(body.contains("set separator none\n"), "{body}");
+    assert!(body.contains("!include <C4/C4>\n"), "{body}");
+    assert!(
+        body.contains("Person(Alice, \"Alice\", $descr=\"\", $tags=\"\", $link=\"\")\n"),
+        "{body}"
+    );
+    assert!(
+        body.ends_with("SHOW_LEGEND(true)\nhide stereotypes\n@enduml"),
+        "{body}"
+    );
+}
+
+#[test]
+fn c4plantuml_skips_custom_views() {
+    // The Java `C4PlantUMLExporter.export(CustomView)` overload returns
+    // `null` — the view writes NO file (witness: the `custom-view-animation`
+    // C4 sweep directory is empty). The landscape view still exports, so
+    // the reference's "no views" leg stays silent.
+    let dir = temp_dir("c4-custom");
+    let dsl = "workspace {\n  model {\n    p = person \"Alice\"\n  \
+               }\n  views {\n    systemLandscape \"sys-landscape\" {\n      include *\n    \
+               }\n    custom \"cv\" \"Title\" \"Description\" {\n    }\n  }\n}\n";
+    let ws = write_ws(&dir, dsl);
+    let out = run(&dir, &ws, "plantuml/c4plantuml");
+    assert_eq!(out.exit, ExitClass::Ok, "{:?}", out.log);
+    assert_eq!(
+        files_with_ext(&dir, "puml"),
+        ["structurizr-sys-landscape.puml"]
+    );
 }
