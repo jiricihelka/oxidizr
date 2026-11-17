@@ -296,7 +296,7 @@ one typed function `export_property(view, views, name, default)` in
     half, from the sources above; P2-V5/V6 Structurizr-dialect halves get
     checkboxes + evidence here) + `export_property(view, views, name,
     default)` typed helper implementing P2-D8's two-level cascade in
-    `oxidizr-export` + DEVIATIONS D-ICON row (P2-V3 decision: scale pinned
+    `oxidizr-export` + DEVIATIONS D12 row (P2-V3 decision: scale pinned
     `0.5`, zero-network). Touches: export (one helper), plan docs.
   - **M2-b** shared diagram-engine port in `oxidizr-export::plantuml`
     (`AbstractDiagramExporter` + `AbstractExporter` + `AbstractPlantUML
@@ -367,7 +367,7 @@ one typed function `export_property(view, views, name, default)` in
   silent `0.5`; any other exception → `printStackTrace` then `0.5`. This
   machine has no DNS, so oracle A/B always lands on the reference's `0.5`
   fallback. DECISION: oxidizr pins `0.5` (export-time zero-network, per this
-  item's wording) — DEVIATIONS row D-ICON: scale is network-dependent in the
+  item's wording) — DEVIATIONS D12: scale is network-dependent in the
   reference, deterministic-here equal; scale formatting = Java
   `Double.toString` shortest round-trip when a computed value ever lands.
   (Input side verified at M1-a: `loadThemes` rewrites relative icons to

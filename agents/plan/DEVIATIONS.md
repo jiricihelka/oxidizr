@@ -181,6 +181,27 @@ as a tombstone so old references keep resolving.
   name branch stores the name verbatim and the file-branch existence check is
   reference-exact).
 
+## D12 — PlantUML icon scale pinned to 0.5 (export-time zero-network)
+
+- Structurizr: `AbstractPlantUMLExporter.calculateIconScale` FETCHES the icon
+  at export time (`ImageIO.read(new URL(icon))`) and emits
+  `scale = maxIconSize / max(width, height)` from the image's real pixel
+  dimensions (`maxIconSize = fontSize × 3`); any failure (no network, no AWT)
+  falls back to the constant `0.5` (P2-V3, `AbstractPlantUMLExporter`
+  387-406). The emitted PlantUML scale is therefore NETWORK-DEPENDENT in the
+  reference.
+- oxidizr (2026-11-17, M2): export NEVER touches the network (D5's rule,
+  extended to the diagram writers), so the scale is always the reference's
+  fallback `0.5`. On this machine the oracle itself cannot reach icon URLs
+  either (no DNS), so A/B witnesses exercise the identical fallback. A future
+  `--allow-net`-gated dimension probe (M4+ consideration, needs image header
+  parsing for PNG/JPEG/GIF sizes) could lift the pin; until then a workspace
+  with `http`-prefixed icons renders `scale=0.5` and a reference run WITH
+  network could differ from ours in that one number only.
+- Nature: permanent unless the gated probe ships; zero-network is a
+  first-class oxidizr promise (D5), and the deviation is invisible in every
+  hermetic (no-network) environment, including CI and the oracle box.
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact
