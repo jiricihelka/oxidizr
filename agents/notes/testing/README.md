@@ -8,3 +8,4 @@
 | [ast-grep-search.md](ast-grep-search.md) | structural code search recipes (`$X.unwrap()` etc.) |
 | [oracle-app-harness.md](oracle-app-harness.md) | export injects inspection props + default views; goldening limits |
 | [cli-e2e-pitfalls.md](cli-e2e-pitfalls.md) | subprocess CLI tests: piped stdio, random UUID identifiers, known-vs-legacy fields |
+| [e2e-suite-operations.md](e2e-suite-operations.md) | e2e corpus tiers, bless/mutate workflow + the bless-REVIEW rule (exit-class/counts smell), bench feature |

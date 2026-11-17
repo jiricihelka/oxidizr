@@ -20,8 +20,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
 | P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
 | P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
-| P1T | e2e suite (interlude) | **T5 done 2026-11-17** — six `e2e_` corpus benches (`oxidizr-e2e/benches/e2e.rs`) behind feature `e2e-bench` (CI skips, `xtask bench` opts in), `1T` baseline committed, V-T5 closed; T6 close-out next (`build/PHASE_1T.md`) |
-| P2 | exporters | pending — after P1T (plan per `agents/plan/README.md`) |
+| P1T | e2e suite (interlude) | **COMPLETE 2026-11-17** — T0–T6 all done: API + harness + 300-entry corpus + full-tier invariants + `e2e_` benches + `1T` baseline + docs. Net caught 2 real bugs (oracle-fixed). No tag (user decision). Log below (`build/PHASE_1T.md`) |
+| P2 | exporters | **next** — M0 scaffold per `build/PHASE_2.md` |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -143,6 +143,40 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P1T — e2e regression + benchmark suite (interlude) ✅ (2026-11-17)
+
+Full plan, decisions P1T-D1..D9, landed refinements and V-T1..V-T5 verdicts:
+`build/PHASE_1T.md`. Shape of the suite:
+
+- **T0** `oxidizr-api` crate: the whole CLI pipeline callable in-process
+  (`execute(Request, &Options) -> Output`) — the harness never shells out
+  (except one subprocess smoke anchor).
+- **T1–T3** corpus `e2e/corpus/`: 300 entries (156 valid / 24 authored-invalid /
+  120 mutated via `cargo xtask e2e mutate`, seeded, byte-stable). Sidecars
+  (`expected.toml`) assert USE-CASES: exit class + OXZ code set + shape counts
+  — never bytes, never message text (`xtask e2e bless`). Coverage gate:
+  ≥150/≥120 floor + 11/14 debt codes (allow-list {1001, 4002, 9001}).
+- **T4** full tier (env `OXIDZR_E2E_FULL=1`, nightly `e2e.yml`): invariants
+  over every valid entry — parse determinism, `dsl2json`→`json2json`
+  byte-stability, `fmt` fixpoint + semantics (scratch-dir replay),
+  self-`reconcile` identity. **Paid for itself on first run**: two REAL engine
+  bugs, both settled with oracle verdicts — (1) style colours normalize on the
+  DSL path too (`Color` port → `oxidizr-core::colors`, note
+  `pitfalls/dsl-style-color-normalization.md`); (2) `fmt` verbatim replay for
+  source-magic line ends (seed `0c3752…`, pre-existing at HEAD, note
+  `pitfalls/fmt-line-end-guards.md`). Also resolved: `group { url }` IS
+  reference-rejected — `testdata/dsl/group-url.dsl` is a negative fixture.
+- **T5** six `e2e_` criterion benches over the corpus behind feature
+  `e2e-bench` (CI's `cargo bench --workspace` skips them — local dev only);
+  `1T` baseline committed, `cargo xtask bench` always opts in.
+- **T6** close-out: TESTING.md §E2E suite + 1T bench paragraph, README dev
+  line, this log. **No tag** (interlude; v0.1.0 stands).
+
+Verification items V-T1..V-T5 all closed 2026-11-17 (details in PHASE_1T.md);
+notable: zero `#[ignore]`d tests workspace-wide → env gate chosen over
+`--include-ignored` (V-T4); feature-gated benches are not compiled without the
+feature (V-T5).
 
 ### P1-M7 — hardening, benches, docs, v0.1.0 ✅ (2026-11-16)
 

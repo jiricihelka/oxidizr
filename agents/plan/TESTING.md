@@ -44,6 +44,30 @@ only** — no percentage gate. Dev-only deps: `proptest`/`arbitrary`, `criterion
 - Round-trip tests: JSON → model → JSON must be lossless for the fields Structurizr
   itself preserves (see DEVIATIONS.md D3 for the reference-exact default).
 
+## E2E suite (`oxidizr-e2e`, Phase 1T interlude)
+
+End-to-end regression over a purpose-built corpus in `e2e/corpus/` — entries assert
+**use-cases** (exit class + OXZ code set + shape counts), never bytes, never message
+text; the JSON byte contract stays with the Category-A goldens. In-process via
+`oxidizr-api::execute` (subprocess smoke anchors the real CLI once); entries fan out
+on `thread::scope`. Plan and all decisions: `build/PHASE_1T.md`.
+
+- **Quick tier** (rides `cargo test --workspace`, every PR): sidecar expectations per
+  entry (`expected.toml`: exit class, codes, counts) + manifest coverage gate (≥150
+  valid / ≥120 invalid, code coverage floor with allow-list). Corpus tooling:
+  `cargo xtask e2e bless` (re-record sidecars; byte-stability is asserted, goldens
+  untouched) and `cargo xtask e2e mutate` (seeded mutation generator — REPLACES
+  `corpus/mutated/` wholesale, always re-bless after;
+  `agents/notes/pitfalls/t3-invalid-corpus-probes.md`).
+- **Full tier** (nightly `.github/workflows/e2e.yml`, local:
+  `OXIDZR_E2E_FULL=1 cargo test -p oxidizr-e2e --test full`): self-consistency
+  invariants over every valid entry — parse determinism, `dsl2json`→`json2json`
+  byte-stability, `fmt` fixpoint + `parse(fmt(x)) ≡ parse(x)` (scratch-dir replay so
+  relative `!include`/`extends` resolve), self-`reconcile` identity. Env-gated
+  instead of `#[ignore]` (V-T4: an env gate can never drag in future ignores).
+  The net caught two real engine bugs at first run — see P1T-D6 landed block.
+- **Benches**: six `e2e_` corpus benches, feature-gated, local-only — §Benchmarks.
+
 ## Benchmarks
 
 `criterion` benches live in `benches/` per crate; mandated targets: DSL parse (full
