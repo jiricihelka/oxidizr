@@ -9,7 +9,12 @@ licensed Apache-2.0 — attribution for all vendored files stays with the Struct
 counters the reference app injects on load are stripped at generation time (see
 `xtask::normalize_reference_output` and `agents/plan/PROGRESS.md`). Requires Java 21.
 Goldens are byte-faithful otherwise — including the ABSENT trailing newline the
-reference pretty-printer emits.
+reference pretty-printer emits. `golden/plantuml/<fixture>/` holds the M2-d
+diagram goldens (`cargo xtask oracle gen --plantuml --fixture <fixture>`):
+the oracle's `structurizr-<id>-<key>.puml` (+ `-key` legend) files, RAW — the
+diagram writer injects no harness artifacts, so nothing is normalized. The
+corpus is the A/B sweep SAME set minus vacuous (viewless) fixtures; compared
+by the Category-A test `crates/oxidizr-api/tests/export_plantuml_goldens.rs`.
 * `dsl/` — 107 DSL fixtures (reference test resources; P1 parse corpus).
 * `probes/` — hand-written oracle-probe fixtures (WRITE-CATALOG witnesses; see
   `agents/plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.

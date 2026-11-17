@@ -1,0 +1,73 @@
+@startuml
+title <size:24>Component View: X - Customer API</size>
+
+set separator none
+top to bottom direction
+hide stereotype
+
+<style>
+  root {
+    BackgroundColor: #ffffff;
+    FontColor: #444444;
+  }
+  // Element
+  .Element-RWxlbWVudA== {
+    BackgroundColor: #ffffff;
+    LineColor: #444444;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #444444;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Relationship
+  .Relationship-UmVsYXRpb25zaGlw {
+    LineThickness: 2;
+    LineStyle: 10-10;
+    LineColor: #444444;
+    FontColor: #444444;
+    FontSize: 24;
+    MaximumWidth: 200;
+  }
+  // Customer API
+  .Boundary-Q3VzdG9tZXIgQVBJ {
+    BackgroundColor: #ffffff;
+    LineColor: #444444;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #444444;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+  }
+  // X
+  .Boundary-WA== {
+    BackgroundColor: #ffffff;
+    LineColor: #444444;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #444444;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+  }
+</style>
+
+rectangle "==A\n<size:16>[Software System]</size>" <<Element-RWxlbWVudA==>> as A
+
+rectangle "X\n<size:16>[Software System]</size>" <<Boundary-WA==>> {
+  rectangle "Customer API\n<size:16>[Container: Spring Boot]</size>" <<Boundary-Q3VzdG9tZXIgQVBJ>> {
+    rectangle "==Customer Controller\n<size:16>[Component: Spring MVC REST Controller]</size>" <<Element-RWxlbWVudA==>> as X.CustomerAPI.CustomerController
+    rectangle "==Customer Repository\n<size:16>[Component: Spring Data Repository]</size>" <<Element-RWxlbWVudA==>> as X.CustomerAPI.CustomerRepository
+  }
+
+  rectangle "==Customer database\n<size:16>[Container]</size>" <<Element-RWxlbWVudA==>> as X.Customerdatabase
+}
+
+X.CustomerAPI.CustomerController --> X.CustomerAPI.CustomerRepository <<Relationship-UmVsYXRpb25zaGlw>> : ""
+X.CustomerAPI.CustomerRepository --> X.Customerdatabase <<Relationship-UmVsYXRpb25zaGlw>> : ""
+A --> X.CustomerAPI.CustomerController <<Relationship-UmVsYXRpb25zaGlw>> : "Makes API calls using\n<size:16>[HTTPS]</size>"
+
+@enduml

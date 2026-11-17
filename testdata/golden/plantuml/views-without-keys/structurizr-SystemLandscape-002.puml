@@ -1,0 +1,15 @@
+@startuml
+title <size:24>System Landscape View</size>
+
+set separator none
+top to bottom direction
+hide stereotype
+
+<style>
+  root {
+    BackgroundColor: #ffffff;
+    FontColor: #444444;
+  }
+</style>
+
+@enduml

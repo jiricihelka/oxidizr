@@ -1,0 +1,264 @@
+@startuml
+title <size:24>System Landscape View</size>\n<size:24>An example of all shapes available in Structurizr.</size>
+
+set separator none
+top to bottom direction
+hide stereotype
+
+<style>
+  root {
+    BackgroundColor: #ffffff;
+    FontColor: #444444;
+  }
+  // Element,Box
+  .Element-RWxlbWVudCxCb3g= {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Bucket
+  .Element-RWxlbWVudCxCdWNrZXQ= {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Circle
+  .Element-RWxlbWVudCxDaXJjbGU= {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Component
+  .Element-RWxlbWVudCxDb21wb25lbnQ= {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Cylinder
+  .Element-RWxlbWVudCxDeWxpbmRlcg== {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Diamond
+  .Element-RWxlbWVudCxEaWFtb25k {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Ellipse
+  .Element-RWxlbWVudCxFbGxpcHNl {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Folder
+  .Element-RWxlbWVudCxGb2xkZXI= {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Hexagon
+  .Element-RWxlbWVudCxIZXhhZ29u {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Mobile Device Landscape
+  .Element-RWxlbWVudCxNb2JpbGUgRGV2aWNlIExhbmRzY2FwZQ== {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Mobile Device Portrait
+  .Element-RWxlbWVudCxNb2JpbGUgRGV2aWNlIFBvcnRyYWl0 {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Person
+  .Element-RWxlbWVudCxQZXJzb24= {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Pipe
+  .Element-RWxlbWVudCxQaXBl {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Robot
+  .Element-RWxlbWVudCxSb2JvdA== {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,RoundedBox
+  .Element-RWxlbWVudCxSb3VuZGVkQm94 {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    RoundCorner: 20;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Shell
+  .Element-RWxlbWVudCxTaGVsbA== {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Terminal
+  .Element-RWxlbWVudCxUZXJtaW5hbA== {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Web Browser
+  .Element-RWxlbWVudCxXZWIgQnJvd3Nlcg== {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Window
+  .Element-RWxlbWVudCxXaW5kb3c= {
+    BackgroundColor: #ffffff;
+    LineColor: #000000;
+    LineStyle: 0;
+    LineThickness: 7;
+    FontColor: #000000;
+    FontSize: 35;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+</style>
+
+rectangle "==Box" <<Element-RWxlbWVudCxCb3g=>> as Box
+folder "==Folder" <<Element-RWxlbWVudCxGb2xkZXI=>> as Folder
+queue "==Pipe" <<Element-RWxlbWVudCxQaXBl>> as Pipe
+rectangle "==Web Browser" <<Element-RWxlbWVudCxXZWIgQnJvd3Nlcg==>> as WebBrowser
+rectangle "==Window" <<Element-RWxlbWVudCxXaW5kb3c=>> as Window
+rectangle "==Shell" <<Element-RWxlbWVudCxTaGVsbA==>> as Shell
+rectangle "==Terminal" <<Element-RWxlbWVudCxUZXJtaW5hbA==>> as Terminal
+rectangle "==Mobile Device Portrait" <<Element-RWxlbWVudCxNb2JpbGUgRGV2aWNlIFBvcnRyYWl0>> as MobileDevicePortrait
+rectangle "==Mobile Device Landscape" <<Element-RWxlbWVudCxNb2JpbGUgRGV2aWNlIExhbmRzY2FwZQ==>> as MobileDeviceLandscape
+person "==Person" <<Element-RWxlbWVudCxQZXJzb24=>> as Person
+person "==Robot" <<Element-RWxlbWVudCxSb2JvdA==>> as Robot
+rectangle "==Rounded Box" <<Element-RWxlbWVudCxSb3VuZGVkQm94>> as RoundedBox
+storage "==Circle" <<Element-RWxlbWVudCxDaXJjbGU=>> as Circle
+storage "==Ellipse" <<Element-RWxlbWVudCxFbGxpcHNl>> as Ellipse
+hexagon "==Hexagon" <<Element-RWxlbWVudCxIZXhhZ29u>> as Hexagon
+rectangle "==Diamond" <<Element-RWxlbWVudCxEaWFtb25k>> as Diamond
+component "==Component" <<Element-RWxlbWVudCxDb21wb25lbnQ=>> as Component
+database "==Cylinder" <<Element-RWxlbWVudCxDeWxpbmRlcg==>> as Cylinder
+rectangle "==Bucket" <<Element-RWxlbWVudCxCdWNrZXQ=>> as Bucket
+
+@enduml

@@ -1,0 +1,19 @@
+@startuml
+
+set separator none
+hide stereotype
+
+<style>
+  root {
+    BackgroundColor: #ffffff;
+    FontColor: #444444;
+  }
+  // transparent element for relationships in legend
+  .Element-Transparent {
+    BackgroundColor: transparent;
+    LineColor: transparent;
+    FontColor: transparent;
+  }
+</style>
+
+@enduml

@@ -10,6 +10,9 @@
 //! Invocation contract (verified against 2026.10.26, see agents/plan/PROGRESS.md):
 //! `structurizr export --workspace F --format json --output DIR` — GNU-style options
 //! only; `DIR` is a directory and receives `<input-basename>.json`.
+//! `--format plantuml` writes `structurizr-<id>-<key>.puml` (+ `-key` legend) files
+//! into `DIR` instead (M2-d); those goldens land under
+//! `testdata/golden/plantuml/<fixture>/` and need NO normalization.
 
 use std::{
     collections::BTreeSet,
@@ -90,21 +93,35 @@ fn real_main(args: Vec<String>) -> Result<()> {
             match args.next().as_deref() {
                 Some("gen") => {
                     let mut fixtures = Vec::new();
+                    let mut plantuml = false;
                     while let Some(a) = args.next() {
+                        if a == "--plantuml" {
+                            plantuml = true;
+                            continue;
+                        }
                         ensure!(a == "--fixture", "unexpected argument `{a}`");
                         let name = args.next().context("--fixture needs a name")?;
                         fixtures.push(name);
                     }
-                    if fixtures.is_empty() {
+                    if !plantuml && fixtures.is_empty() {
                         fixtures.push("workspace-properties".into());
                     }
-                    cmd_oracle_gen(&oracle, &fixtures)
+                    ensure!(
+                        !plantuml || !fixtures.is_empty(),
+                        "oracle gen --plantuml needs at least one --fixture"
+                    );
+                    cmd_oracle_gen(&oracle, &fixtures, plantuml)
                 }
                 Some("verify") => {
                     ensure!(args.next().is_none(), "unexpected argument");
                     cmd_oracle_verify(&oracle)
                 }
-                _ => bail!("usage: cargo xtask oracle gen [--fixture NAME]… | verify"),
+                _ => {
+                    bail!(
+                        "usage: cargo xtask oracle gen [--plantuml] [--fixture NAME]… \
+                         | verify"
+                    )
+                }
             }
         }
         Some("e2e") => cmd_e2e(&mut args),
@@ -147,7 +164,8 @@ fn print_help() {
          cargo xtask e2e bless [FILTER]       regenerate e2e/corpus sidecars (Phase 1T);\n\
          cargo xtask e2e mutate [SEED]        generate e2e/corpus/mutated fixtures\n\
          \x20              FILTER matches `<kind>/<name>` substrings; review the diff\n\
-         cargo xtask oracle gen [--fixture N]…  generate goldens via the reference binary\n\
+         cargo xtask oracle gen [--fixture N]…  generate JSON goldens via the reference binary\n\
+         \x20   [--plantuml] + --fixture N…    generate plantuml goldens (golden/plantuml/<N>/)\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
          \n\
          pinned reference: commit {REFERENCE_COMMIT}, app release {REFERENCE_APP_VERSION}\n\
@@ -707,6 +725,37 @@ fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Resu
     Ok(produced)
 }
 
+/// Run `structurizr export --format plantuml` and return the `.puml` files the
+/// app wrote (sorted by name). The reference names them
+/// `structurizr-<workspaceId>-<key>.puml` (+ a `-key` legend file per view with
+/// a legend); an empty set is legitimate only for viewless workspaces, which
+/// the golden corpus excludes (nothing to pin).
+fn reference_export_plantuml(
+    oracle: &Path,
+    workspace: &Path,
+    outdir: &Path,
+) -> Result<Vec<PathBuf>> {
+    fs::create_dir_all(outdir)?;
+    let output = Command::new(oracle)
+        .arg("export")
+        .arg("--workspace")
+        .arg(workspace)
+        .arg("--format")
+        .arg("plantuml")
+        .arg("--output")
+        .arg(outdir)
+        .output()
+        .with_context(|| format!("failed to run {}", oracle.display()))?;
+    if !output.status.success() {
+        bail!(
+            "structurizr plantuml export failed ({}):\n{}",
+            workspace.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    walk_files(outdir, ".puml")
+}
+
 /// Golden normalization: drop the four violation-counter properties the reference
 /// **application harness** injects into `workspace.properties` on every load
 /// (`AbstractCommand.loadWorkspace` → `new DefaultInspector(workspace)`;
@@ -958,9 +1007,33 @@ fn scratch(name: &str) -> PathBuf {
     env::temp_dir().join(format!("oxz-oracle-{}-{}", std::process::id(), name))
 }
 
-fn cmd_oracle_gen(oracle: &Path, fixtures: &[String]) -> Result<()> {
+fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], plantuml: bool) -> Result<()> {
     let root = repo_root()?;
     let golden_dir = root.join("testdata").join("golden");
+    if plantuml {
+        let base = golden_dir.join("plantuml");
+        for name in fixtures {
+            let dsl = find_fixture(&root, name)?;
+            let tmp = scratch(&format!("{name}-puml"));
+            let produced = reference_export_plantuml(oracle, &dsl, &tmp)
+                .with_context(|| format!("oracle gen --plantuml `{name}`"))?;
+            ensure!(
+                !produced.is_empty(),
+                "oracle gen --plantuml `{name}`: reference produced no .puml files \
+                 (viewless workspace — nothing to pin)"
+            );
+            let out = base.join(name);
+            let _ = fs::remove_dir_all(&out);
+            fs::create_dir_all(&out)?;
+            for path in &produced {
+                let file = path.file_name().context("bad puml file name")?;
+                fs::copy(path, out.join(file))?;
+            }
+            let _ = fs::remove_dir_all(&tmp);
+            println!("golden: {}/ ({} .puml)", out.display(), produced.len());
+        }
+        return Ok(());
+    }
     fs::create_dir_all(&golden_dir)?;
     for name in fixtures {
         let dsl = find_fixture(&root, name)?;
@@ -1000,8 +1073,58 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
             println!("MISMATCH: {name} (reference output drifted from committed golden)");
         }
     }
+    // PlantUML goldens (M2-d): `testdata/golden/plantuml/<fixture>/*.puml`,
+    // byte-exact (no normalization — the diagram writer injects no harness
+    // artifacts). The fixture name is the directory name.
+    let puml_base = root.join("testdata").join("golden").join("plantuml");
+    let mut puml_dirs: Vec<PathBuf> = fs::read_dir(&puml_base)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.is_dir())
+                .collect()
+        })
+        .unwrap_or_default();
+    puml_dirs.sort();
+    for dir in &puml_dirs {
+        let name = dir
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .context("bad fixture")?;
+        let dsl = find_fixture(&root, name)?;
+        let tmp = scratch(&format!("{name}-puml"));
+        let fresh = reference_export_plantuml(oracle, &dsl, &tmp)
+            .with_context(|| format!("oracle verify `{name}` (plantuml)"))?;
+        let mut fresh_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
+        for path in &fresh {
+            let n = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            fresh_files.insert((n.to_owned(), fs::read(path)?));
+        }
+        let _ = fs::remove_dir_all(&tmp);
+        let mut committed_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
+        for path in walk_files(dir, ".puml")? {
+            let n = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            committed_files.insert((n.to_owned(), fs::read(&path)?));
+        }
+        if fresh_files == committed_files {
+            println!("ok: {name} (plantuml, {} files)", fresh_files.len());
+        } else {
+            failures += 1;
+            println!("MISMATCH: {name} (plantuml output drifted from committed goldens)");
+        }
+    }
     ensure!(failures == 0, "{failures} golden(s) failed verification");
-    println!("oracle verify: {} golden(s) match", goldens.len());
+    println!(
+        "oracle verify: {} json + {} plantuml golden set(s) match",
+        goldens.len(),
+        puml_dirs.len()
+    );
     Ok(())
 }
 
