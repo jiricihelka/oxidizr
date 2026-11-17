@@ -1,0 +1,16 @@
+{
+  "json2json": {
+    "exit": "error",
+    "codes": [
+      4001
+    ],
+    "counts": null
+  },
+  "validate": {
+    "exit": "error",
+    "codes": [
+      4001
+    ],
+    "counts": null
+  }
+}

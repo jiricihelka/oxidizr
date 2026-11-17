@@ -8,6 +8,7 @@ members = [
     "crates/oxidizr-json",
     "crates/oxidizr-api",
     "crates/oxidizr-cli",
+    "crates/oxidizr-e2e",
     "crates/xtask",
 ]
 # cargo-fuzz workspace (nightly + sanitizers) — driven by `cargo xtask fuzz`;
@@ -28,6 +29,7 @@ oxidizr-diag = { path = "crates/oxidizr-diag", version = "0.1.0" }
 oxidizr-dsl = { path = "crates/oxidizr-dsl", version = "0.1.0" }
 oxidizr-json = { path = "crates/oxidizr-json", version = "0.1.0" }
 oxidizr-api = { path = "crates/oxidizr-api", version = "0.1.0" }
+oxidizr-e2e = { path = "crates/oxidizr-e2e", version = "0.1.0" }
 
 # `preserve_order`: property maps must iterate in DOCUMENT order on read
 # (byte-stable round-trip, WRITE-CATALOG §1) — the default BTreeMap sorts.

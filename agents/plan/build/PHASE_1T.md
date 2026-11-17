@@ -109,8 +109,9 @@ crates/
 - Layout: `e2e/corpus/valid/<nn-feature>-<name>/workspace.dsl (+ include/extends
   children)`; `e2e/corpus/invalid/<nn-class>-<name>/…`;
   `e2e/corpus/mutated/…` (generated, COMMITTED — hermetic + diff-reviewable).
-  Entry = the directory's `workspace.dsl`; every entry is run through all
-  commands its kind allows + the benches.
+  Entry = the directory's `workspace.dsl` and/or `workspace.json` (T1
+  refinement, see D5: the JSON input lets raw-JSON failure classes enter);
+  every entry is run through all commands its inputs allow + the benches.
 - Feature axes for authored originals (≈150 valid): per P1 feature — model
   (people/systems/containers/components/groups), relationships (+bounded
   context, `->` dynamic pairs), deployment (nodes/instances/AWS forms), views
@@ -180,9 +181,27 @@ crates/
   Nightly `e2e.yml` (workflow_dispatch + schedule; kept out of `ci.yml` so its
   weekly Category-B schedule stays weekly — fuzz.yml precedent) exports the env
   and runs `cargo test --workspace`.
-- Subprocess stays a SPARSE smoke (~6 entries via `CARGO_BIN_EXE_oxidizr`):
-  exit class + non-empty output only — anchors "the binary wires the API the
-  way tests exercise it" (bytes stay owned by `crates/oxidizr-cli/tests/cli.rs`).
+- Subprocess stays a SPARSE smoke (~6 entries): exit class + non-empty
+  output only — anchors "the binary wires the API the way tests exercise
+  it" (bytes stay owned by `crates/oxidizr-cli/tests/cli.rs`).
+  **T1 landed correction:** `CARGO_BIN_EXE_oxidizr` is NOT exported for a
+  bin owned by a dev-dependency crate (verified empty at runtime) — the
+  smoke resolves the binary via `$OXIDZR_BIN` → `$CARGO_BIN_EXE_oxidizr` →
+  walking up from `current_exe()` for a sibling `oxidizr` (cargo's test-bin
+  layout here is `target/<profile>/build/<pkg>/<hash>/out/`, the walk finds
+  `target/<profile>/oxidizr`). `cargo test --workspace` builds the bin; a
+  cold `-p oxidizr-e2e`-only run must build it first (the panic says so).
+- **T1 landed 2026-11-17** — entry inputs are `workspace.dsl` and/or
+  `workspace.json` (at least one): the JSON file is the explicit `json2json`
+  feed and the `validate` target when there is no DSL — the way raw-JSON
+  failure classes (OXZ-4001) enter a DSL-first corpus. `json2json` otherwise
+  re-reads the `dsl2json` output (only when that succeeded). Sections are
+  per-applicability; absent = not applicable (checked both ways).
+  Blessed reality note: a malformed `workspace extends <base.json>` yields
+  the loader error as OXZ-2002 (`DslError::stmt` wrapping — the dsl crate
+  carries no json dep) plus the D1-recovery cascade, NOT a clean OXZ-4001;
+  4001 coverage comes from the JSON-only fixture, and the allow-list stays
+  honest.
 
 ## P1T-D6 Invariants (full tier) — self-consistency, immune to deviation
 
@@ -213,7 +232,7 @@ own JSON export ⇒ zero ambiguity, zero element graft).
 | MS | Deliverable | Exit gate |
 |---|---|---|
 | **T0** | **DONE 2026-11-17** (`5eedf99`/`52a83c1`/`075cb90`/`2d2e159`) — `oxidizr-api` extraction; `run()` shim; F9 registered; crate docs; refinements recorded in D1 | quartet green; **all existing tests unmodified** (byte-proof); V-T1 closed |
-| **T1** | `oxidizr-e2e` crate; manifest reader/writer + compare; `xtask e2e bless`; 10 seed entries (valid+invalid, hand-authored); subprocess smoke; coverage test skeleton | bless round-trips byte-stably; quick tier green + measured runtime |
+| **T1** | **DONE 2026-11-17** — `oxidizr-e2e` crate (corpus/manifest/runner/bless); sidecar reader/writer + both-ways compare; `xtask e2e bless [FILTER]`; 14 seed entries (7 valid incl. a JSON-only + deployment, 7 invalid: 2003/2002/2001/5002+5003/extends-json/5006/4001); quick fan-out (`thread::scope`); coverage gate w/ registry + reasoned allow-list; subprocess smoke (binary resolution refined in D5) | bless round-trips byte-stably (2nd bless: all unchanged); quick tier green; V-T2 closed (10 ms/14 entries) |
 | **T2** | valid corpus to ≥150 entries across the D2 axes (multi-file composites incl.) | all manifests green; V-T2 re-measured (< 60 s) |
 | **T3** | invalid corpus to ≥120 total + `xtask e2e mutate`; every emitted `Code` covered (allow-list registered with reasons) | coverage gate green; mutate determinism V-T3 closed |
 | **T4** | invariant tier behind `OXIDZR_E2E_FULL` + `e2e.yml` nightly + V-T4 ignore inventory | full tier green locally + in a dispatched run |
@@ -230,6 +249,9 @@ Size-gate honored: >4 modules (cli, new api + e2e crates, xtask, corpus, docs)
   a 4-thread stress parse of the M7 corpus is deterministic.
 - **V-T2** (T1) — quick-tier wall time on the dev box for 10 entries; the
   ×25 extrapolation must land < 60 s, else batch manifests per directory.
+  **CLOSED 2026-11-17 (T1):** 14 entries (incl. the deployment + multilayer
+  fixtures) run the whole manifest check in 10 ms single-threaded
+  (~0.7 ms/entry) ⇒ ×25 ≈ 350 entries ≈ 0.3 s — no batching needed.
 - **V-T3** (T3) — `xtask e2e mutate 7` twice ⇒ byte-identical corpus.
 - **V-T4** (T4) — inventory today's `#[ignore]`d tests (expect-test gaps seen
   in M7 runs); confirm the env-gate choice beats `--include-ignored`.

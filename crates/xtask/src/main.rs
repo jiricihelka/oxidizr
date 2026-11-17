@@ -107,6 +107,20 @@ fn real_main(args: Vec<String>) -> Result<()> {
                 _ => bail!("usage: cargo xtask oracle gen [--fixture NAME]… | verify"),
             }
         }
+        Some("e2e") => match args.next().as_deref() {
+            Some("bless") => {
+                let filter = args.next();
+                ensure!(
+                    args.next().is_none(),
+                    "usage: cargo xtask e2e bless [FILTER]"
+                );
+                cmd_e2e_bless(filter.as_deref())
+            }
+            Some("mutate") => {
+                bail!("e2e mutate lands with T3 (agents/plan/build/PHASE_1T.md §P1T-D4)")
+            }
+            _ => bail!("usage: cargo xtask e2e bless [FILTER]"),
+        },
         Some("-h" | "--help" | "help") => {
             print_help();
             Ok(())
@@ -142,6 +156,8 @@ fn print_help() {
          \x20              seed from testdata/, run each SECONDS (default 10; CI nightly)\n\
          \n\
          cargo xtask vendor --src <clone>     vendor reference fixtures into testdata/\n\
+         cargo xtask e2e bless [FILTER]       regenerate e2e/corpus sidecars (Phase 1T);\n\
+         \x20              FILTER matches `<kind>/<name>` substrings; review the diff\n\
          cargo xtask oracle gen [--fixture N]…  generate goldens via the reference binary\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
          \n\
@@ -165,6 +181,19 @@ fn repo_root() -> Result<PathBuf> {
         .and_then(Path::parent)
         .map(PathBuf::from)
         .context("xtask must live in <root>/crates/xtask")
+}
+
+// ---------------------------------------------------------------- e2e corpus
+
+/// `cargo xtask e2e bless [FILTER]` — regenerate the `workspace.e2e.json`
+/// sidecars from observed behavior (Phase 1T, P1T-D3). The resulting git
+/// diff is the review artifact.
+fn cmd_e2e_bless(filter: Option<&str>) -> Result<()> {
+    let reports = oxidizr_e2e::bless::bless(filter).map_err(anyhow::Error::msg)?;
+    for line in reports {
+        println!("{line}");
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------- local CI mirror

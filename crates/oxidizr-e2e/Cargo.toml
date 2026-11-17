@@ -1,0 +1,22 @@
+[package]
+name = "oxidizr-e2e"
+description = "oxidizr e2e regression suite: in-process manifest checks over e2e/corpus (Phase 1T); Category A, dev-only"
+publish = false
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+oxidizr-api = { workspace = true }
+oxidizr-core = { workspace = true }
+oxidizr-json = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+# Binary for the subprocess smoke test (CARGO_BIN_EXE_oxidizr).
+oxidizr-cli = { path = "../oxidizr-cli" }

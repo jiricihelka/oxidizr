@@ -1,0 +1,69 @@
+{
+  "configuration" : { },
+  "description" : "Entry read straight from JSON",
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "description" : "A user",
+      "id" : "1",
+      "name" : "User",
+      "properties" : {
+        "structurizr.dsl.identifier" : "user"
+      },
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "2",
+        "id" : "3",
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "description" : "The system",
+      "documentation" : { },
+      "id" : "2",
+      "name" : "System",
+      "properties" : {
+        "structurizr.dsl.identifier" : "system"
+      },
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "JSON Only",
+  "properties" : {
+    "structurizr.dsl" : "d29ya3NwYWNlICJKU09OIE9ubHkiICJFbnRyeSByZWFkIHN0cmFpZ2h0IGZyb20gSlNPTiIgewoKICAgIG1vZGVsIHsKICAgICAgICB1c2VyID0gcGVyc29uICJVc2VyIiAiQSB1c2VyIgogICAgICAgIHN5c3RlbSA9IHNvZnR3YXJlU3lzdGVtICJTeXN0ZW0iICJUaGUgc3lzdGVtIgogICAgICAgIHVzZXIgLT4gc3lzdGVtICJVc2VzIgogICAgfQoKICAgIHZpZXdzIHsKICAgICAgICBzeXN0ZW1MYW5kc2NhcGUgImxhbmRzY2FwZSIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b0xheW91dAogICAgICAgIH0KICAgIH0KCn0K"
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    },
+    "systemLandscapeViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "landscape",
+      "name" : "System Landscape View",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "3"
+      } ]
+    } ]
+  }
+}

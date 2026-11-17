@@ -1,0 +1,25 @@
+{
+  "dsl2json": {
+    "exit": "ok",
+    "codes": [],
+    "counts": {
+      "elements": 6,
+      "relationships": 4,
+      "views": 2
+    }
+  },
+  "json2json": {
+    "exit": "ok",
+    "codes": [],
+    "counts": null
+  },
+  "validate": {
+    "exit": "ok",
+    "codes": [],
+    "counts": null
+  },
+  "fmt": {
+    "exit": "ok",
+    "idempotent": true
+  }
+}
