@@ -86,8 +86,11 @@ fn validate_view_key(key: String) -> Result<String, DslError> {
 }
 
 /// `View.setDescription` / `setTitle` applied post-create: the reference
-/// stores the (possibly empty) string verbatim; the writer omits empty
-/// text, so an empty value is not stored at all.
+/// parsers call the setter only when the token is present (empty quoted
+/// tokens never reach it), and the writer's `NON_EMPTY` omission hides any
+/// residual difference — so an empty value is not stored. `custom` views are
+/// the exception (the `CustomView` constructor stores "" verbatim) and do
+/// not use this helper.
 fn apply_text(p: &mut Parser, view: ViewRef, text: String, title: bool) {
     if !text.is_empty()
         && let Some(base) = p.builder.view_base_mut(view)
@@ -126,8 +129,15 @@ fn custom_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         .builder
         .create_custom_view(&key, None)
         .map_err(|e| DslError::core(&e))?;
-    apply_text(p, view, title, true);
-    apply_text(p, view, description, false);
+    // `CustomViewParser` defaults title/description to "" and the `CustomView`
+    // constructor stores them VERBATIM — unlike the other view kinds, an empty
+    // value IS stored. JSON still omits it (`NON_EMPTY`), but
+    // `CustomView.getName()` = `"Custom View: " + getTitle()` makes the empty
+    // title observable in the plantuml header (M2-d A/B: custom-view-animation).
+    if let Some(base) = p.builder.view_base_mut(view) {
+        base.title = Some(title);
+        base.description = Some(description);
+    }
     Ok(view)
 }
 
@@ -522,6 +532,21 @@ fn add_element_ignoring_not_permitted(
     }
 }
 
+/// The deployment-view sibling of [`add_element_ignoring_not_permitted`]:
+/// dispatches to the kind-matched `DeploymentView.add` overload (ancestor
+/// chain incl.) inside the same per-item
+/// `catch (ElementNotPermittedInViewException) { // ignore }`.
+fn add_deployment_element_ignoring_not_permitted(
+    p: &mut Parser,
+    view: ViewRef,
+    id: &Id,
+) -> Result<(), DslError> {
+    match p.builder.view_add_deployment_element(view, id, true) {
+        Ok(()) | Err(CoreError::ElementNotPermittedInView(_)) => Ok(()),
+        Err(e) => Err(DslError::core(&e)),
+    }
+}
+
 /// `StringUtils.isNullOrEmpty(identifier)` — the add-ladder error fires on
 /// the identifier path only (expressions pass `null`).
 fn cannot_add(identifier: Option<&String>) -> Option<DslError> {
@@ -694,15 +719,23 @@ fn add_deployment_item(
                     | ElementKind::SoftwareSystemInstance
                     | ElementKind::ContainerInstance,
                 ) => {
-                    add_element_ignoring_not_permitted(p, view, &id)?;
+                    // The kind-matched `DeploymentView.add` overload — incl.
+                    // the parent-`DeploymentNode` chain walk (M2-d A/B).
+                    add_deployment_element_ignoring_not_permitted(p, view, &id)?;
                 }
                 Some(ElementKind::SoftwareSystem | ElementKind::Container) => {
                     // Instances of the static element in the view's
-                    // environment.
+                    // environment. Reference: the `forEach(view::add)` sits
+                    // INSIDE the per-item catch — the first rejection aborts
+                    // the rest of the loop.
                     let env = deployment_environment(p, view);
                     let instances = p.builder.find_instances_of(&id, &env);
                     for instance in instances {
-                        add_element_ignoring_not_permitted(p, view, &instance)?;
+                        match p.builder.view_add_deployment_element(view, &instance, true) {
+                            Ok(()) => {}
+                            Err(CoreError::ElementNotPermittedInView(_)) => break,
+                            Err(e) => return Err(DslError::core(&e)),
+                        }
                     }
                 }
                 _ => {
@@ -2324,10 +2357,17 @@ mod tests {
             model,
         );
         assert_clean(&r);
-        assert_eq!(
-            r.workspace.views.deployment_views[0].content.elements,
-            [] as [oxidizr_core::views::ElementView; 0]
-        );
+        // `exclude s` removes only the instance — Java
+        // `DeploymentView.remove(SoftwareSystemInstance)` has no ancestor
+        // leg, so the parent node `include` added via the ancestor walk
+        // STAYS (oracle-witnessed 2026-11-17: ref view keeps the node id).
+        let ids: Vec<&str> = r.workspace.views.deployment_views[0]
+            .content
+            .elements
+            .iter()
+            .map(|e| e.id.as_str())
+            .collect();
+        assert_eq!(ids, ["3"]);
     }
 
     #[test]

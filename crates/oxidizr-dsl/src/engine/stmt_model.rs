@@ -42,19 +42,19 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     // a context.
     if raw.size() >= 4 && raw.raw_token(1) == tok::NO_RELATIONSHIP && open && is_env {
         return (|| {
-            let removed = p.no_relationship(&t)?;
+            let (_removed, first_linked) = p.no_relationship(&t)?;
             // HashSet order is not portable; first-removal order stands in
-            // (agents/plan/PROGRESS.md). Removed relationships are always linked,
-            // so the static (linked) relationship resolves.
-            let Some(first_removed) = removed.first() else {
+            // (agents/plan/PROGRESS.md). The reference reads the linked
+            // (static) relationship off the removed object — which still
+            // answers after `Model.remove` — so `no_relationship` captures
+            // its id mid-loop; a post-removal model lookup would be blind
+            // (M2-d A/B: no-relationship lost the inherited description and
+            // technology).
+            let Some(linked) = first_linked else {
                 return Err(DslError::stmt(
                     "A relationship between the given elements does not exist",
                 ));
             };
-            let linked = p
-                .builder
-                .linked_relationship_id(first_removed)
-                .unwrap_or_else(|| first_removed.clone());
             let (environment, group) = match p.top() {
                 Some(Ctx::Environment { env, group }) => (env.name.clone(), group.clone()),
                 Some(Ctx::NoRelInEnv {

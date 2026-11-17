@@ -202,6 +202,27 @@ as a tombstone so old references keep resolving.
   first-class oxidizr promise (D5), and the deviation is invisible in every
   hermetic (no-network) environment, including CI and the oracle box.
 
+## D13 — `!elements` bulk fan-out order: deterministic, not identity-hash (permanent)
+
+- Structurizr: `FindElementsParser.parse` collects matches with
+  `.collect(Collectors.toSet())` — a Java `HashSet` keyed by IDENTITY hash
+  (`ModelItem`/`Element` override no `hashCode`). The statements inside
+  `!elements <expr> { … }` execute once per match in that bucket order, so
+  the relationship ids the fan-out mints follow identity-hash iteration. The
+  oracle is run-stable on a fixed JVM (2026-11-17 witness: `bulk-operations`
+  mints the matched set B, C, A in both blocks, identical across two runs),
+  but the order is an artifact of `HashSet` bucket iteration over freshly
+  allocated objects — reimplementable only by emulating JVM allocation, out
+  of scope (D8's pathological-order precedent).
+- oxidizr: the fan-out iterates the matched set in filter/insertion order
+  (A, B, C). Element ids match; the fan-out mints the same RELATIONSHIP
+  multiset — same count, endpoints and fields — but the id↔endpoint pairing
+  within the minted group is permuted.
+- Nature: permanent. Every other byte of the contract stands; the A/B byte
+  corpus excludes fixtures containing `!elements`/`!relationships` fan-outs
+  whose minted relationships are id-visible, recording them as a
+  deviation-documented DIFF instead of editing expectations (COMPAT.md).
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact

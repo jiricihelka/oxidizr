@@ -449,11 +449,12 @@ impl Ctx<'_> {
         Ok(Json::obj(vec![
             (
                 "customElements",
-                set_list(
-                    &model.custom_elements,
-                    |a, b| id_ord(&a.item.id, &b.item.id),
-                    |e| Ok(self.custom_element(e)),
-                )?,
+                // STORED order, not sorted: the reference writes the raw
+                // `customElements` collection — fresh DSL workspaces store it
+                // reverse-inserted (B,A witness 2026-11-17) while JSON imports
+                // re-sort ascending in the reader (`setCustomElements` TreeSet
+                // rebuild), which together explain every observed order.
+                list(&model.custom_elements, |e| Ok(self.custom_element(e)))?,
             ),
             (
                 "deploymentNodes",
@@ -1058,7 +1059,12 @@ impl Ctx<'_> {
     }
 
     /// The `ModelView` content entries (§3), merged alphabetically.
-    fn view_content(entries: &mut Vec<(&'static str, Option<Json>)>, content: &ViewContent) {
+    /// `dynamic` switches `relationships` to the `DynamicView` accessor order.
+    fn view_content(
+        entries: &mut Vec<(&'static str, Option<Json>)>,
+        content: &ViewContent,
+        dynamic: bool,
+    ) {
         insert_sorted(
             entries,
             (
@@ -1077,10 +1083,12 @@ impl Ctx<'_> {
                     .map(|p| Json::Str(p.as_str().to_string())),
             ),
         );
-        insert_sorted(
-            entries,
-            ("relationships", relationship_views(&content.relationships)),
-        );
+        let rels = if dynamic {
+            dynamic_relationship_views(&content.relationships)
+        } else {
+            relationship_views(&content.relationships)
+        };
+        insert_sorted(entries, ("relationships", rels));
     }
 
     fn animations(steps: &[Animation]) -> Option<Json> {
@@ -1104,7 +1112,7 @@ impl Ctx<'_> {
 
     fn landscape_view(&self, v: &SystemLandscapeView) -> Result<Json, JsonError> {
         let mut entries = Self::view_base(&v.base, &self.view_name(View::Landscape(v))?);
-        Self::view_content(&mut entries, &v.content);
+        Self::view_content(&mut entries, &v.content, false);
         insert_sorted(
             &mut entries,
             ("animations", Self::animations(&v.animations)),
@@ -1121,7 +1129,7 @@ impl Ctx<'_> {
 
     fn context_view(&self, v: &SystemContextView) -> Result<Json, JsonError> {
         let mut entries = Self::view_base(&v.base, &self.view_name(View::Context(v))?);
-        Self::view_content(&mut entries, &v.content);
+        Self::view_content(&mut entries, &v.content, false);
         insert_sorted(
             &mut entries,
             ("animations", Self::animations(&v.animations)),
@@ -1145,7 +1153,7 @@ impl Ctx<'_> {
 
     fn container_view(&self, v: &ContainerView) -> Result<Json, JsonError> {
         let mut entries = Self::view_base(&v.base, &self.view_name(View::Container(v))?);
-        Self::view_content(&mut entries, &v.content);
+        Self::view_content(&mut entries, &v.content, false);
         insert_sorted(
             &mut entries,
             ("animations", Self::animations(&v.animations)),
@@ -1169,7 +1177,7 @@ impl Ctx<'_> {
 
     fn component_view(&self, v: &ComponentView) -> Result<Json, JsonError> {
         let mut entries = Self::view_base(&v.base, &self.view_name(View::Component(v))?);
-        Self::view_content(&mut entries, &v.content);
+        Self::view_content(&mut entries, &v.content, false);
         insert_sorted(
             &mut entries,
             ("animations", Self::animations(&v.animations)),
@@ -1193,7 +1201,7 @@ impl Ctx<'_> {
 
     fn dynamic_view(&self, v: &DynamicView) -> Result<Json, JsonError> {
         let mut entries = Self::view_base(&v.base, &self.view_name(View::Dynamic(v))?);
-        Self::view_content(&mut entries, &v.content);
+        Self::view_content(&mut entries, &v.content, true);
         insert_sorted(
             &mut entries,
             (
@@ -1216,7 +1224,7 @@ impl Ctx<'_> {
 
     fn deployment_view(&self, v: &DeploymentView) -> Result<Json, JsonError> {
         let mut entries = Self::view_base(&v.base, &self.view_name(View::Deployment(v))?);
-        Self::view_content(&mut entries, &v.content);
+        Self::view_content(&mut entries, &v.content, false);
         insert_sorted(
             &mut entries,
             ("animations", Self::animations(&v.animations)),
@@ -1236,7 +1244,7 @@ impl Ctx<'_> {
 
     fn custom_view(&self, v: &CustomView) -> Result<Json, JsonError> {
         let mut entries = Self::view_base(&v.base, &self.view_name(View::Custom(v))?);
-        Self::view_content(&mut entries, &v.content);
+        Self::view_content(&mut entries, &v.content, false);
         insert_sorted(
             &mut entries,
             ("animations", Self::animations(&v.animations)),
@@ -1346,17 +1354,55 @@ fn element_views(items: &[ElementView]) -> Option<Json> {
 /// `relationships[]`: text `id + "/" + order` order; a null order
 /// concatenates as the literal `"null"` (§5).
 fn relationship_views(items: &[RelationshipView]) -> Option<Json> {
-    set_list(
-        items,
-        |a, b| {
-            java_ord(
-                &format!("{}/{}", a.id, a.order.as_deref().unwrap_or("null")),
-                &format!("{}/{}", b.id, b.order.as_deref().unwrap_or("null")),
-            )
-        },
-        |r| Ok(relationship_view(r)),
-    )
-    .unwrap_or(None) // infallible renderer
+    relationship_views_with(items, false)
+}
+
+/// Dynamic views: Jackson serializes `DynamicView.getRelationships()`, which
+/// re-sorts the `TreeSet` list by numeric `order` (`Double.parseDouble`)
+/// when EVERY order is numeric, else by `order` text (2026-11-17 witness:
+/// `parallel1` → `7/1, 9/2, 10/3, 11/3`).
+fn dynamic_relationship_views(items: &[RelationshipView]) -> Option<Json> {
+    relationship_views_with(items, true)
+}
+
+fn relationship_views_with(items: &[RelationshipView], dynamic: bool) -> Option<Json> {
+    let mut sorted: Vec<&RelationshipView> = items.iter().collect();
+    sorted.sort_by(|a, b| {
+        java_ord(
+            &format!("{}/{}", a.id, a.order.as_deref().unwrap_or("null")),
+            &format!("{}/{}", b.id, b.order.as_deref().unwrap_or("null")),
+        )
+    });
+    if dynamic {
+        // A missing order joins the string branch as `""` where the reference
+        // NPEs (JSON import of a dynamic view without orders) - oxidizr
+        // never crashes on it.
+        let order_key = |rv: &RelationshipView| rv.order.clone().unwrap_or_default();
+        let numeric = sorted.iter().all(|rv| {
+            rv.order
+                .as_deref()
+                .is_some_and(|o| o.parse::<f64>().is_ok())
+        });
+        if numeric {
+            sorted.sort_by(|a, b| {
+                order_key(a)
+                    .parse::<f64>()
+                    .unwrap_or(0.0)
+                    .total_cmp(&order_key(b).parse::<f64>().unwrap_or(0.0))
+            });
+        } else {
+            sorted.sort_by(|a, b| java_ord(&order_key(a), &order_key(b)));
+        }
+    }
+    if sorted.is_empty() {
+        return None;
+    }
+    Some(Json::Arr(
+        sorted
+            .iter()
+            .map(|r| relationship_view(r))
+            .collect::<Vec<_>>(),
+    ))
 }
 
 fn relationship_view(r: &RelationshipView) -> Json {

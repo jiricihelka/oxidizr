@@ -951,6 +951,40 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
+    /// The `DeploymentView.add` overload the DSL content parser picks for the
+    /// element's kind (`DeploymentViewContentParser.addModelItemToView`):
+    /// deployment nodes cascade their subtree, then walk up the ancestor
+    /// chain (`DeploymentView.add(DeploymentNode)`); infrastructure nodes and
+    /// static-element instances add themselves, then walk the same chain
+    /// (`addElement(el, true)` + `while (parent != null) addElement(parent)`);
+    /// custom elements just add. Other kinds fall through to
+    /// `view_add_element`, whose `checkElementCanBeAdded` rejects them exactly
+    /// like the reference.
+    pub fn view_add_deployment_element(
+        &mut self,
+        view: ViewRef,
+        id: &Id,
+        add_relationships: bool,
+    ) -> Result<(), CoreError> {
+        match self.element_kind(id) {
+            Some(ElementKind::DeploymentNode) => self.deployment_view_add_node_top(view, id),
+            Some(
+                ElementKind::InfrastructureNode
+                | ElementKind::SoftwareSystemInstance
+                | ElementKind::ContainerInstance,
+            ) => {
+                self.view_add_element(view, id, add_relationships)?;
+                let mut parent = self.element_parent(id);
+                while let Some(p) = parent {
+                    self.view_add_element(view, &p, add_relationships)?;
+                    parent = self.element_parent(&p);
+                }
+                Ok(())
+            }
+            _ => self.view_add_element(view, id, add_relationships),
+        }
+    }
+
     // ------------------------------------------------------------------
     // default views (`ViewSet.createDefaultViews`)
     // ------------------------------------------------------------------

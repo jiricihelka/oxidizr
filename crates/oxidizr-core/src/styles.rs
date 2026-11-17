@@ -354,8 +354,11 @@ fn is_non_empty(value: Option<&str>) -> bool {
 fn java_darker_hex(s: &str) -> Option<String> {
     let v = java_color_decode(s)?;
     let darker = |c: u32| darker_channel(c) & 0xFF;
+    // The reference formats `#%06X` (upper) but assigns via
+    // `ElementStyle.setStroke`, which lowercases every hex code — net:
+    // lower-case storage (M2-d A/B: `#944a4a`).
     Some(format!(
-        "#{:06X}",
+        "#{:06x}",
         (darker((v >> 16) & 0xFF) << 16) | (darker((v >> 8) & 0xFF) << 8) | darker(v & 0xFF)
     ))
 }
@@ -547,7 +550,7 @@ mod tests {
         assert_eq!(s.background.as_deref(), Some("#ff0000")); // later tag wins
         assert_eq!(s.font_size, Some(30)); // Element rule survives
         assert_eq!(s.color.as_deref(), Some("#00ff00"));
-        assert_eq!(s.stroke.as_deref(), Some("#B20000")); // darker(win bg)
+        assert_eq!(s.stroke.as_deref(), Some("#b20000")); // darker(win bg)
         // whitespace-only chain parts skip (StringUtils.isNullOrEmpty trims)
         let s = styles.element_style("Element,  ,Person", ColorScheme::Light);
         assert_eq!(s.tag, "Element,Person");
@@ -563,7 +566,7 @@ mod tests {
             ..Styles::default()
         };
         let s = styles.element_style("Element,Person", ColorScheme::Light);
-        assert_eq!(s.stroke.as_deref(), Some("#B20000")); // (255*0.7, 0, 0)
+        assert_eq!(s.stroke.as_deref(), Some("#b20000")); // (255*0.7, 0, 0)
         // explicit stroke survives
         let styles = Styles {
             element_styles: vec![ElementStyle {

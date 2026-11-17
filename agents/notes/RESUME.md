@@ -3,80 +3,67 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = M2-d part 1 dispatch commit (tip of `main`, tag
+Updated: 2026-11-17 · HEAD = M2-d part 2 fix-batch commit (tip of `main`, tag
 `v0.1.0` far down) · gates green · nothing pushed.
 
 - **Done:** **PHASE 1 + 1T COMPLETE** (`v0.1.0`, T0–T6, no tag) · **P2-M0**
   theme/json export byte-parity · **P2-M1 COMPLETE** (`199bc70`–`53d2e5e`) ·
-  **P2-M2-a** D12 `be26b56` + `export_property` `d179653` + catalog
-  `build/EXPORT-PLANTUML.md` §§1–13 `a12bd29`. **P2-M2-b COMPLETE** (this
-  commit): `oxidizr-export::plantuml` — shared diagram engine: `Engine<'a>`
-  (workspace + color scheme + `Frame::Step`/`Frame::Order`) drives a
-  `Dialect` trait; `model.rs` `ElemRef` adapter; `mod.rs` constants/shape
-  maps/`java_cmp_str`. All §14 order contracts, per-kind bodies, nested-group
-  quirks, frames + legend LAST lifecycle, sequence path, `is_visible`,
-  `type_of`, `break_text`. Java abort paths → `ExportError::ReferenceAbort`
-  = **new OXZ-5009 EXPORT_ABORT** (diag const + docs row + pipeline arm +
-  coverage REGISTRY + allow-list). 31 tests, MockDialect pins hook sequences.
-  **P2-M2-c COMPLETE** (this commit): `plantuml/structurizr.rs` =
-  `StructurizrDialect` — `StructurizrPlantUMLExporter` 757 +
-  `plantuml/AbstractPlantUMLExporter` 464 writers ported: header (title/skinparams/
-  includes/direction/teoz legs), `PlantUMLStyle` enum (base64 selectors,
-  name-sorted class-pass `writeStyles` footer replace, per-class `toString`
-  field orders), boundary/group/DN writers (synthesized `ElementStyle("")` →
-  shadow ALWAYS false; line-711 icon→color bug mirrored), `createLegend`
-  (width-200 rewrite, transparent rel lines, appended Legend style),
-  `idOf`/`filter` `(?U)\W`, Java-substring group cuts. Engine fixes carried
-  here: Result-converted body hooks + the MISSING `end_deployment_node_boundary`
-  call (ref `AbstractDiagramExporter` 702, found via DN dump). 42 tests — 11
-  pinned full-document/legend assertions + leg asserts. **P2-M2-d part 1**
-  (this commit): dispatch leg — `ExportFormat::export` runs
-  `Engine::new(ws, mode.color_scheme())` + `export_all(&mut
-  StructurizrDialect::new())` → `diagram_files(diagram_prefix(ws.id))` for
-  `plantuml`/`plantuml[-light|-dark]` (`Default`→Light: the ref no-arg ctor
-  is `this(Light)`); `export_cmd` viewless leg = `NoteLine("The workspace
-  contains no views")` + exit 0 (ref `log.error`s and returns true), after
-  `loadThemes` inside `is_diagram`. 3 format unit tests + 4 integration
-  tests (`export_plantuml.rs`: `structurizr-sys-landscape.puml` +
-  `-key.puml`, `Writing <path>` order, dark `#111111`, viewless exit-0,
-  `plantuml/c4plantuml` still OXZ-5007).
-- **Next:** **M2-d part 2** — the proof: Category-A goldens generated from
-  the oracle (normalized), render smoke (skip when plantuml absent), oracle
-  A/B byte compare over the corpus set (icon-scale `0.5` lands identically
-  offline); xtask + testdata + docs touches. Then M3 (C4-PlantUML +
-  `xtask export-verify` semantic comparator), M4 (Mermaid + `theme` export
-  + CI render checks + benches), M5 (docs, proptest, tag `v0.2.0`).
+  **P2-M2-a/b/c COMPLETE** (engine `oxidizr-export::plantuml` + `StructurizrDialect`,
+  catalog `build/EXPORT-PLANTUML.md` §§1–14 THE contract) · **P2-M2-d part 1**
+  dispatch leg (`ExportFormat::export` → `structurizr-<id>-<key>.puml`, viewless
+  = NoteLine + exit 0) · **P2-M2-d part 2 fix batch (this commit)** — the full-corpus
+  oracle A/B sweep (43 fixtures, 35 SAME) fully root-caused and fixed:
+  (1) deployment-view ancestor chain (`viewops::view_add_deployment_element`
+  kind-matched `DeploymentView.add` overloads; `groups` now byte-identical);
+  (2) darker-stroke hex LOWER-CASE (`java_darker_hex` → `#{:06x}` — `setStroke`
+  lowercases after `#%06X`); (3) dynamic-view RV order — `DynamicView.getRelationships()`
+  override: stable re-sort by numeric `order` (all numeric) else by order-text,
+  missing order first as `""` (never-crash; Java NPEs) — wired in BOTH the JSON
+  writer (`view_content(…, dynamic)`) and the engine `view_relationships`
+  (covers body/frames/sequence); (4) `custom` views store title/description
+  VERBATIM incl. "" (`CustomView` ctor; JSON omits via NON_EMPTY, but
+  `getName()` = `"Custom View: " + title` prints `Custom View: ` in puml;
+  JSON-imported nulls keep `unwrap_or("null")`); (5) `source -/> dest { }`
+  inheritance — `no_relationship` captures the FIRST removal's linked id
+  mid-loop (Java reads `getLinkedRelationshipId()` off the still-live removed
+  object; post-removal lookup is blind); (6) `model.customElements` = STORED
+  order: DSL inserts at the FRONT (oracle witnesses: A..F export as F..A;
+  Zulu,Alpha → Alpha,Zulu), JSON reader re-sorts numeric-id ascending
+  (`setCustomElements` TreeSet rebuild), writer sorts nothing. All 6 target
+  fixtures PUML-SAME vs archived oracle witnesses; JSON byte-equal after the
+  established harness normalizations (inspection.* + random dsl.identifier
+  GUIDs); `bulk-operations` stays DIFF = documented deviation **D13**
+  (`!elements` fan-out identity-hash order — DEVIATIONS.md). Contracts
+  recorded in WRITE-CATALOG §2/§5 (customElements, dynamic RV re-sort).
+- **Next:** **M2-d part 3 — the proof assets**: plantuml goldens
+  (`testdata/golden/plantuml/<fixture>/*.puml`, corpus = sweep SAME set minus
+  deviation fixtures) via extended `xtask oracle gen|verify`, Category-A
+  golden test (pattern: `oxidizr-dsl/tests/m5_goldens.rs`), render smoke
+  (skip when plantuml absent), testdata/docs touches. Then M3 (C4-PlantUML
+  dialect + `xtask export-verify` semantic comparator), M4 (Mermaid + `theme`
+  export + CI render checks + benches), M5 (proptest panic suite, docs,
+  tag `v0.2.0`).
 - **Open questions:** T4 exit gate's *dispatched CI run* of `e2e.yml` needs a
   push — **USER DECLINED (2026-11-17): keep everything local**; the gate is
   documented push-pending, T0–T6 stay code-complete, do NOT re-ask. Vendored
   default theme still blocked (no DNS) — D3 interim rule (unknown name = keep
   working, unresolved styles) until the user supplies
   `static.structurizr.com/themes/default/theme.json`.
-- **Don't re-derive (trust):** P2-D1..D11 + M1/M2 decomposition + M2-b
-  closure notes (`build/PHASE_2.md`); **`build/EXPORT-PLANTUML.md` §§1–14 is
-  THE contract** — §14 = the engine iteration just ported; two contracts the
-  pinned Java corrected during testing: `findGroups` sorts IN PLACE by id
-  STRING (numeric `TreeSet` order never survives: `"10"<"2"<"9"<"abc"`), and
-  the shallow-move leg writes `endGroupBoundary` AT the current indent first
-  (first `G-` gets 2 spaces). `Dialect` hooks all tie engine/view/element to
-  one `'a`; hooks reaching Java abort paths (`write_header`/`write_element`/
-  `write_relationship`/`start_group_boundary`/`start_deployment_node_boundary`)
-  are `Result`, the rest infallible; Java reference identity = id equality.
-  MockDialect tokens: `HDR`/`FTR`, `E id`/`x id`, `G+`/`G-`, `S+`/`S-`,
-  `C+`/`C-`, `N+`/`N-`, `B+ name`+indent / `end box`+outdent. Null frame =
-  everything visible, no NPE; frames write ALL relationships; legend created
-  LAST with last-body frame state. `IndentingWriter`: `to_string()` trims one
-  trailing `\n`, negative indent pads nothing. `View::content()` ties borrow
-  too short — engine has `content_of`; `Properties::get → Option<&str>` (use
-  `.map(str::to_owned)`); group separator is a raw MODEL property, not the
-  cascade; `java_split_len` no-match → 1, trailing empties dropped; `type_of`
-  custom = raw metadata, instances → `""`, `: <tech>` only DN/IN/container/
-  component. `System` name at `s.item.name`; `ViewBase::new(key, order)`;
-  `ApiOptions` has 6 fields. P2-V3 settled (icon scale `0.5`);
-  `EXPORT-PROPERTIES.md` is THE property/theme-chain contract; P1T-D1..D9;
-  oracle = `$OXIDZR_STRUCTURIZR_BIN` (slow JVM; witnesses
-  `/tmp/nix-shell.uni100/p2/`); coverage gate FAILS if a covered code stays
-  allow-listed (5009 entry: remove when an export manifest covers it); NO
-  NETWORK here; pinned Java `/tmp/nix-shell.uni100/opencode/structurizr/`
-  `ad34036` — the reference decides ambiguities.
+- **Don't re-derive (trust):** P2-D1..D11 + M1/M2 decomposition (`build/PHASE_2.md`);
+  `build/EXPORT-PLANTUML.md` §§1–14 + WRITE-CATALOG §5 (updated 2026-11-17:
+  customElements stored order, dynamic RV re-sort) are THE contracts. Oracle
+  A/B corpus rules: exclude theme-URL fixtures (offline crash — `getting-started`,
+  `exclude-relationships`, `test`), intentional-deviation fixtures (`script-*`
+  D2, `text-block` D11 exit-1, `bulk-operations` D13); JSON A/B must strip the
+  4 `structurizr.inspection.*` lines (+ dangling comma) and normalize random
+  `structurizr.dsl.identifier` UUID chains (`<env>.<uuid>…`, random per parse
+  BOTH sides — notes/testing/cli-e2e-pitfalls). Sweep witnesses:
+  `/tmp/nix-shell.uni100/opencode/m2d/{sweep,jsweep,nr,bulkdet,custdet}/`.
+  Oracle = `$OXIDZR_STRUCTURIZR_BIN` (slow JVM, minimal use); plantuml IS on
+  PATH here. Pinned Java `/tmp/nix-shell.uni100/opencode/structurizr/`
+  `ad34036` — the reference decides ambiguities; fix oxidizr, never
+  expectations/goldens. `apply_text` stays for non-custom views (parsers call
+  setters only on present tokens); `Ctx::NoRelInEnv.linked` now carries the
+  captured static rel id (inheritance at `rel.rs` `relationship_parts`).
+  `View::Dynamic` detection in the engine = `matches!` (no new ViewRef arms).
 - **Cadence:** `cargo xtask ci` green → commit + rewrite this file; never push.

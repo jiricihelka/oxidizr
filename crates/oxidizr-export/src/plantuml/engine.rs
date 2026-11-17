@@ -963,7 +963,12 @@ impl<'a> Engine<'a> {
 
     /// `view.getRelationships()` — the `TreeSet<RelationshipView>` order
     /// (`id + "/" + order`, a null order joining as the literal `null`),
-    /// deduped by key (first insertion wins).
+    /// deduped by key (first insertion wins). Dynamic views apply the
+    /// `DynamicView.getRelationships()` override: a stable re-sort by numeric
+    /// `order` when EVERY order parses as a double, else by `order` text —
+    /// stability preserves the `10/3, 11/3` tie (`parallel1` witness
+    /// 2026-11-17) because Java's `List.sort` (`TimSort`) and Rust's
+    /// `sort_by` are both stable.
     #[must_use]
     pub fn view_relationships(&self, view: View<'a>) -> Vec<&'a RelationshipView> {
         let Some(content) = content_of(view) else {
@@ -972,6 +977,31 @@ impl<'a> Engine<'a> {
         let mut rvs: Vec<&'a RelationshipView> = content.relationships.iter().collect();
         rvs.sort_by(|a, b| java_cmp_str(&relationship_view_key(a), &relationship_view_key(b)));
         dedup_by_key(&mut rvs, |r| relationship_view_key(r));
+        if matches!(view, View::Dynamic(_)) {
+            // `Double.parseDouble(null)` throws, so a missing order forces
+            // the text branch — where the reference NPEs comparing nulls;
+            // oxidizr sorts a missing order first as the empty string
+            // (never-crash policy, same as the JSON writer).
+            let numeric = rvs.iter().all(|rv| {
+                rv.order
+                    .as_deref()
+                    .is_some_and(|o| o.parse::<f64>().is_ok())
+            });
+            if numeric {
+                rvs.sort_by(|a, b| {
+                    let x = a.order.as_deref().unwrap_or_default().parse::<f64>();
+                    let y = b.order.as_deref().unwrap_or_default().parse::<f64>();
+                    x.unwrap_or(0.0).total_cmp(&y.unwrap_or(0.0))
+                });
+            } else {
+                rvs.sort_by(|a, b| {
+                    java_cmp_str(
+                        a.order.as_deref().unwrap_or_default(),
+                        b.order.as_deref().unwrap_or_default(),
+                    )
+                });
+            }
+        }
         rvs
     }
 
@@ -1722,7 +1752,12 @@ mod tests {
             external_boundaries_visible: false,
         };
         view.content.elements = vec![ev("1"), ev("2"), ev("3")];
-        // TreeSet key `id + "/" + order`: "5/2" < "5/null" < "6/null".
+        // TreeSet key `id + "/" + order` gives "5/2" < "5/null" < "6/null",
+        // but the `DynamicView.getRelationships()` override then re-sorts:
+        // orders are NOT all numeric (two are null), so the TEXT branch runs
+        // — where the reference NPEs on null orders; oxidizr sorts a missing
+        // order first as the empty string (never-crash). Stable ties keep
+        // TreeSet order: 5/null, 6/null, then 5/"2".
         view.content.relationships = vec![rv("5", None), rv("6", None), rv("5", Some("2"))];
         workspace.views.dynamic_views.push(view);
 
@@ -1736,25 +1771,25 @@ mod tests {
             engine.export_all(&mut d).expect("export")
         };
         let diagram = &diagrams[0];
-        // Main export: no frame -> everything visible; the TreeSet order
-        // puts the ordered 5/2 view first.
+        // Main export: no frame -> everything visible; the re-sorted order
+        // puts the null orders (as "") before the order-"2" view.
         assert_eq!(
             diagram.definition(),
-            "HDR\nE 1\nE 2\nE 3\n\nR 5\nR 5\nR 6\n\nFTR"
+            "HDR\nE 1\nE 2\nE 3\n\nR 5\nR 6\nR 5\n\nFTR"
         );
-        // Frames: LinkedHashSet of orders over the TreeSet traversal:
-        // Some("2"), then None (the second null joins nothing) -> TWO
+        // Frames: LinkedHashSet of orders over the RE-SORTED traversal:
+        // None, then Some("2") (the second null joins nothing) -> TWO
         // frames; a null order re-exports with frame = null.
         assert_eq!(diagram.frames().len(), 2);
         assert_eq!(diagram.legend().map(Legend::definition), Some("LEGEND"));
+        // Frame null (Java null order): identical to the main export.
+        assert_eq!(diagram.frames()[0].definition(), diagram.definition());
         // Frame "2": only endpoints of the order-2 relationship are
         // visible; element 3 hides. ALL relationships are still written.
         assert_eq!(
-            diagram.frames()[0].definition(),
-            "HDR\nE 1\nE 2\nx 3\n\nR 5\nR 5\nR 6\n\nFTR"
+            diagram.frames()[1].definition(),
+            "HDR\nE 1\nE 2\nx 3\n\nR 5\nR 6\nR 5\n\nFTR"
         );
-        // Frame null (Java null order): identical to the main export.
-        assert_eq!(diagram.frames()[1].definition(), diagram.definition());
     }
 
     #[test]

@@ -77,7 +77,7 @@ Accepted edge-case deviations (recorded in `DEVIATIONS.md`):
 | --- | --- |
 | workspace | `configuration` (bean, always), `description?`, `documentation` (always), `id` (long, always incl. 0), `lastModifiedAgent?`, `lastModifiedDate?`, `lastModifiedUser?`, `model` (always), `name?`, `properties?` (§1), `thumbnail?`, `version?`, `views` (always) |
 | workspace.configuration | `scope?` (enum name `Landscape`/`SoftwareSystem`), `users?` (`[{username, role}]`, TreeSet by username; `role` **omitted when null** — unknown/absent binds null; users DO round-trip), `visibility?` (enum name) |
-| model | `customElements?`, `deploymentNodes?`, `people?`, `properties?` (§1), `softwareSystems?` — each array TreeSet-ordered by **numeric id ascending** (§5) |
+| model | `customElements?` (**stored order** — §5), `deploymentNodes?`, `people?`, `properties?` (§1), `softwareSystems?` — the other arrays TreeSet-ordered by **numeric id ascending** (§5) |
 | model.*.…relationships | nested under the SOURCE element only; TreeSet numeric-id order; implied/linked rels ride along (no tags, `linkedRelationshipId` set, technology copied) |
 
 `ModelItem` visible properties: `id`, `tags` (comma string: derived defaults
@@ -180,10 +180,11 @@ write only what was read.
 
 | JSON path | Order rule |
 | --- | --- |
-| people / softwareSystems / customElements / deploymentNodes / containers / components / children / infrastructureNodes / *Instances / every nested `relationships[]` | **numeric id ascending** (Java `Integer.parseInt` semantics: `-?\d+`, overflow → text compare; non-numeric ids fall back to UTF-16 text ascending) |
+| people / softwareSystems / deploymentNodes / containers / components / children / infrastructureNodes / *Instances / every nested `relationships[]` | **numeric id ascending** (Java `Integer.parseInt` semantics: `-?\d+`, overflow → text compare; non-numeric ids fall back to UTF-16 text ascending) |
+| model `customElements[]` | **stored order** — the writer emits the raw collection: the DSL path stores REVERSE-inserted (fresh reference exports list creation order backwards — 2026-11-17 witnesses: `A`..`F` → `F`..`A`; `Zulu`,`Alpha` → `Alpha`,`Zulu`), while the JSON reader rebuilds a `TreeSet` (`setCustomElements`) so imported workspaces re-export **numeric id ascending** (file `[2,1]` → export `[1,2]`) — together these explain every observed order; writer sorts nothing |
 | view lists (each kind) | `order` asc, then `key` case-insensitive (Java `compareToIgnoreCase` = UTF-16 units lowercased) |
 | view `elements[]` | numeric id ascending (same parseInt fallback) |
-| view `relationships[]` | text `id + "/" + order` UTF-16 ascending; null order concatenates as the literal string `null` |
+| view `relationships[]` | text `id + "/" + order` UTF-16 ascending; null order concatenates as the literal string `null`; **dynamicViews** apply the `DynamicView.getRelationships()` override: STABLE re-sort by numeric `order` (`Double.parseDouble`) when EVERY order is numeric, else by `order` text (a missing order sorts first as `""` — the reference NPEs there, never-crash) — the same accessor backs every plantuml leg (`parallel1` witness: `7/1, 9/2, 10/3, 11/3` keeps the `3`-tie in TreeSet order) |
 | styles `elements[]` / `relationships[]` | **load order, not re-sorted**: the DSL/builder path inserts in `AbstractStyle.compareTo` order (null `colorScheme` first, then `tag`; both schemes → `colorScheme + "/" + tag` — the Java fields are `TreeSet`s; `Styles::insert_element_style`/`insert_relationship_style`), while the JSON reader keeps **document order** — Jackson binds these two by FIELD (`Styles` has NO setter, so unlike every `setX` above the `TreeSet` is replaced; oracle probes 2026-11-17, `testdata/golden/m3-order.json` + `/tmp/nix-shell.uni100/p2/v1/out5`). The writer replays model order |
 | filtered `tags`, animation id sets, `deploymentGroups`, perspectives (by name), healthChecks (by name, then url) | Java `String.compareTo` = **UTF-16 code-unit** lexicographic (≠ Rust `str::cmp` for non-BMP vs U+E000-class keys — implement a `java_ord` comparator) |
 | headers map | **HashMap bucket order** replayed from UTF-16-sorted (`TreeMap`) insertion — `new HashMap<>(TreeMap)` copy in `getHeaders()` (writer: `javahash::entry_order`) |

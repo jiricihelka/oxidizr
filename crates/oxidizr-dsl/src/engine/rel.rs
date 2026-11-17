@@ -404,14 +404,22 @@ impl Parser<'_> {
 
     /// `NoRelationshipParser.parse` — removes the LINKED instance
     /// relationships between the two endpoints in the environment and
-    /// returns them (first removal first).
+    /// returns them (first removal first) together with the LINKED id of
+    /// the FIRST removal. Java reads `getLinkedRelationshipId()` off the
+    /// removed object, which still answers after `Model.remove` leaves the
+    /// object alive; a model lookup AFTER removal is blind, so the id must
+    /// be captured mid-loop (M2-d A/B: `no-relationship` lost the inherited
+    /// description/technology).
     ///
     /// Erratum: the reference `do { … } while (relationship != null)`
     /// spins forever when the first found match is NOT linked
     /// (`linkedRelationshipId == null`); this port removes every linked
     /// match and stops — the closest terminating behavior (recorded in
     /// `agents/plan/DSL-ERRATA.md`).
-    pub(crate) fn no_relationship(&mut self, tokens: &Tokens) -> Result<Vec<Id>, DslError> {
+    pub(crate) fn no_relationship(
+        &mut self,
+        tokens: &Tokens,
+    ) -> Result<(Vec<Id>, Option<Id>), DslError> {
         const GRAMMAR: &str = "<identifier> -/> <identifier> [description]";
         if tokens.has_more_than(3) {
             return Err(DslError::stmt(format!(
@@ -446,6 +454,7 @@ impl Parser<'_> {
 
         let description = tokens.includes(3).then(|| tokens.get(3));
         let mut removed: Vec<Id> = Vec::new();
+        let mut first_linked: Option<Id> = None;
         let mut count = 0usize;
         for s in &sources {
             for d in &destinations {
@@ -458,7 +467,9 @@ impl Parser<'_> {
                     let Some(linked) = self.builder.linked_relationship_id(&rel) else {
                         break; // un-linked match: the Java do-while hangs here
                     };
-                    let _ = linked;
+                    if first_linked.is_none() {
+                        first_linked = Some(linked);
+                    }
                     self.builder.remove_relationship(&rel);
                     removed.push(rel.clone());
                     count += 1;
@@ -475,7 +486,7 @@ impl Parser<'_> {
                 )),
             });
         }
-        Ok(removed)
+        Ok((removed, first_linked))
     }
 
     /// `NoRelationshipParser` endpoint resolution: a software system /

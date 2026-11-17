@@ -484,6 +484,16 @@ fn read_model(o: Option<Obj<'_>>) -> Result<Model, JsonError> {
                 relationships: read_relationships(e, &mut rels),
             })
             .collect();
+        // `Model.setCustomElements` rebuilds the field as a `TreeSet`, so a
+        // JSON-loaded workspace re-exports custom elements in `ModelItem`
+        // natural order — numeric-id compare, string compare if either id
+        // fails `Integer.parseInt` (2026-11-17 witness: file `[2,1]` re-exports
+        // `[1,2]`). The other element collections are `TreeSet`-ordered too,
+        // but reference-written files already list them that way, so keeping
+        // their file order stays byte-identical; only this collection can
+        // arrive unsorted (fresh reference exports list it reverse-inserted).
+        out.custom_elements
+            .sort_by(|a, b| id_ord(&a.item.id, &b.item.id));
         out.deployment_nodes = objects(o, "deploymentNodes")
             .into_iter()
             .map(|n| read_node(n, &mut rels))

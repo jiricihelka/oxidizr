@@ -279,6 +279,13 @@ impl WorkspaceBuilder {
     }
 
     /// `element "Name" ["metadata"] ["Desc"] ["Tags"]` — custom element.
+    ///
+    /// The reference stores fresh DSL custom elements in REVERSE creation
+    /// order (2026-11-17 oracle witness: `A`..`F` export as `F`..`A`, and
+    /// `Zulu`,`Alpha` as `Alpha`,`Zulu` — reverse insertion, not id sort,
+    /// which the JSON-import path proves by re-sorting ascending through
+    /// `Model.setCustomElements`' `TreeSet` rebuild). JSON export is stored
+    /// order, so insertion goes at the FRONT.
     pub fn add_custom_element(
         &mut self,
         name: &str,
@@ -288,12 +295,15 @@ impl WorkspaceBuilder {
         check_name(name)?;
         self.check_top_level_name(name, ElementKind::CustomElement)?;
         let item = self.new_item(name, description, tags_csv);
-        self.workspace.model.custom_elements.push(CustomElement {
-            item: item.clone(),
-            group: None,
-            metadata: None,
-            relationships: Vec::new(),
-        });
+        self.workspace.model.custom_elements.insert(
+            0,
+            CustomElement {
+                item: item.clone(),
+                group: None,
+                metadata: None,
+                relationships: Vec::new(),
+            },
+        );
         Ok(item.id)
     }
 
