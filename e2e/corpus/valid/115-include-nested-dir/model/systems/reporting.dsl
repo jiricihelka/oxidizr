@@ -1,0 +1,1 @@
+reporting = softwareSystem "Reporting" "BI"

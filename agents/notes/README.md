@@ -25,6 +25,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [git-mv-deletes-untracked.md](pitfalls/git-mv-deletes-untracked.md) | dir moves eat untracked files; Trash first |
 | [fmt-line-end-guards.md](pitfalls/fmt-line-end-guards.md) | fmt: CR-split contract, `\`/`"""` end guards, joiner-only stripLeading |
 | [reconcile-ambiguity-fixtures.md](pitfalls/reconcile-ambiguity-fixtures.md) | duplicate names die at parse/hydrate; contest needs identifier-vs-canonical |
+| [dsl-corpus-grammar-gotchas.md](pitfalls/dsl-corpus-grammar-gotchas.md) | e2e-corpus grammar traps: own-line comments, identifier charsets, context-statement tables, dotted scopes, extends-env via `!element` |
 
 ## testing/ — test architecture ([index](testing/README.md))
 

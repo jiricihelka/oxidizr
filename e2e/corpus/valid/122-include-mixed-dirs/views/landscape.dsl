@@ -1,0 +1,4 @@
+systemLandscape "landscape" {
+    include *
+    autoLayout
+}

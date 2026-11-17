@@ -12,3 +12,4 @@ tools, not guessed.
 | [git-mv-deletes-untracked.md](git-mv-deletes-untracked.md) | `git mv dir/ …` removes untracked files inside `dir/` (they land in `~/.local/share/Trash`) |
 | [fmt-line-end-guards.md](fmt-line-end-guards.md) | `split("\\r?\\n")` contract; `\`/`"""` line-end guards; joiner-only `stripLeading` |
 | [reconcile-ambiguity-fixtures.md](reconcile-ambiguity-fixtures.md) | duplicate names die at parse/hydrate; contest needs identifier-vs-canonical on one new id |
+| [dsl-corpus-grammar-gotchas.md](dsl-corpus-grammar-gotchas.md) | T2 e2e-corpus grammar traps: own-line comments only, identifier charsets, context-statement tables, hierarchical dotted scopes, extends-env via `!element` |
