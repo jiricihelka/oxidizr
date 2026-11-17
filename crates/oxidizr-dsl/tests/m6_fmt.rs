@@ -69,6 +69,7 @@ fn file_opts(path: &str) -> ParseOptions<'_> {
         base_dir: None,
         json_loader: Some(json_loader),
         env_lookup: None,
+        installed_themes: None,
     }
 }
 

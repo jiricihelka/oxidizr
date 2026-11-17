@@ -19,6 +19,7 @@ fn opts() -> ParseOptions<'static> {
         base_dir: None,
         json_loader: None,
         env_lookup: Some(EnvLookup::new(no_env)),
+        installed_themes: None,
     }
 }
 

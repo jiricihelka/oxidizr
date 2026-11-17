@@ -459,6 +459,7 @@ mod tests {
                 base_dir: None,
                 json_loader: None,
                 env_lookup: None,
+                installed_themes: None,
             },
         )
         .unwrap_or_else(|e| panic!("parse: {e}"));

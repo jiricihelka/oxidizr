@@ -234,7 +234,38 @@ one typed function `export_property(view, views, name, default)` in
     `export_cmd`; CLI flags `--themes-dir`/`--allow-net` + `OXIDZR_THEMES_DIR`
     (`ApiOptions`); D5 register row; oracle A/B probe with a local
     `STRUCTURIZR_THEMES`-style install. Touches: api, cli, dsl (one branch),
-    docs, PROGRESS/RESUME.
+    docs, PROGRESS/RESUME. **DONE 2026-11-17 (this commit)** — registry reaches
+    the parser via `ParseOptions.installed_themes` (Arc-closure newtype, dsl
+    crate stays FS-free per P1-D1); `add_theme` installed branch mirrors
+    `Configuration.addTheme` (raw-token registry check, then trim + append
+    WITHOUT dedup — only the URL branch dedups); `loadThemes` runs in
+    `export_cmd` for `ExportFormat::is_diagram()` formats BEFORE dispatch
+    (reference order: theme failures precede the format's OXZ-5007;
+    `ThemeError::NetDisabled` → 5001, others → 5008); `oxidizr-api/tests/
+    export.rs` pins all four legs. Oracle A/B (`/tmp/nix-shell.uni100/p2/m1d`):
+    `themes` arrays byte-identical (`["probe", <url>]` with a
+    `STRUCTURIZR_THEMES` install + `-f json`); the probe surfaced two
+    PRE-EXISTING app-layer load-parity gaps (both also on the P1-era dsl2json
+    path, corpus-immune because vendored fixtures define views and end without
+    a final newline) → **M1-e**.
+  - **M1-e** load-path parity, found by the M1-d oracle probe 2026-11-17 — the
+    shared `AbstractCommand.loadWorkspace` mirror (dsl2json/json2json/validate/
+    export all go through it):
+    1. **default views**: the reference creates them at the app layer when the
+       workspace defines none (`AbstractCommand` 109-112 → `Views.
+       createDefaultViews`); oxidizr creates none anywhere (Locked list: "default
+       views generation only where the reference does it (app layer)" — this is
+       a must-fix). Port needs the generation order/keys (`SystemLandscape-001`
+       order 1, `SystemContext-NNN` per software system order 2, … witness in
+       `m1d/ref/workspace.json`) + per-load call site + oracle A/B on a
+       no-views workspace.
+    2. **retained `structurizr.dsl` trailing newline**: the reference appends
+       RAW lines as `readLine` yields them (a final file newline can never
+       enter the retained source); oxidizr joins `source.split('\n')` — the
+       trailing `""` survives, so files ending with `\n` get base64 `…Cg==`
+       where the reference has `…fQ==`. Vendored fixtures end `\n}` (no final
+       newline) so no gate could ever catch it. Mirror `readLine` semantics in
+       `dsl_source_lines` (engine/mod.rs 1218).
 - **M2** Structurizr-PlantUML exporter complete (all supported view types, legend,
   boundaries/groups, properties); Category A goldens + render smoke (comparator comes
   in P4 — P2-D9).
@@ -287,8 +318,10 @@ one typed function `export_property(view, views, name, default)` in
   unknown non-URL names at JSON load = `log.warn` only; load = URL (content-type
   checked) else installed file else SILENT SKIP; theme styles append to a
   non-serialized `Styles.themes` consulted at resolution time. Catalog §6.1;
-  oxidizr source-order mapping §6.2. Runtime A/B probe (local install +
-  `theme <name>` export) scheduled for M1-d; the URL-fetch leg is not
+  oxidizr source-order mapping §6.2. Runtime A/B probe **RUN at M1-d** (local
+  `STRUCTURIZR_THEMES` install + `theme probe` + URL theme + `-f json`):
+  `themes` arrays byte-identical ref-vs-oxidizr (witness
+  `/tmp/nix-shell.uni100/p2/m1d`); the URL-fetch leg is not
   observable on this machine (no DNS) and is mirrored from source.
 - [ ] P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
   (Core-level constants pinned at M1-a — catalog §7; the per-dialect skinparam

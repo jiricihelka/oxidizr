@@ -83,6 +83,22 @@ impl ExportFormat {
         !matches!(self, Self::Unknown(_))
     }
 
+    /// Whether the reference dispatches this format through a
+    /// `DiagramExporter` — the branch that runs `ThemeUtils.loadThemes`
+    /// BEFORE the export (`ExportCommand` 222-227). `static` is handled
+    /// before the registry map, `png`/`svg` are rejected at build time, so
+    /// none of them load themes.
+    #[must_use]
+    pub const fn is_diagram(&self) -> bool {
+        matches!(
+            self,
+            Self::StructurizrPlantUml(_)
+                | Self::C4PlantUml(_)
+                | Self::Mermaid
+                | Self::WebSequenceDiagrams
+        )
+    }
+
     /// The format string for diagnostics (canonical spelling of the request).
     #[must_use]
     pub fn label(&self) -> String {

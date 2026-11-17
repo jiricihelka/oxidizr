@@ -25,7 +25,7 @@ after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxi
 | `OXZ-3002` | Error | `ambiguous reconcile: …` | `oxidizr reconcile` (M6-c): a layout id matches >1 re-parsed id (or two match one) — never guessed, entry not remapped (F1, P1-D8) |
 | `OXZ-4001` | Error | `failed to parse JSON: …` / `failed to read workspace: …` / `workspace validation failed: …` | JSON input rejected — syntax, structural read or hydrate validation (`JsonError::Parse/Read/Validation`) |
 | `OXZ-4002` | Error | `failed to write workspace: …` | the model cannot be written byte-faithfully (`JsonError::Write`, e.g. filtered view without base) |
-| `OXZ-5001` | Error | network disabled | `!include <url>` / `workspace extends <url>` / theme URL fetch without `--allow-net` (D5; flag ships P2) |
+| `OXZ-5001` | Error | network disabled | theme URL fetch without `--allow-net` (D5, flag ships P2-M1; `!include <url>` / `workspace extends <url>` are rejected regardless of the flag — hardened P1 behavior) |
 | `OXZ-5002` | Error | JVM-only directive not supported | `!script`, `!plugin`, `!components`, `!impliedRelationships <fqcn>` (D2) |
 | `OXZ-5003` | Error | documentation import arrives in Phase 4 | `!docs`/`!adrs` statement parsed, importer deferred (D7, retired by P4-D13) |
 | `OXZ-5004` | — | (tombstone) | retired at M5 (D9): `workspace extends` landed with file and JSON bases; never emitted, must not be reused |

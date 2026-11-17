@@ -228,6 +228,39 @@ impl std::fmt::Debug for EnvLookup {
     }
 }
 
+/// Installed-theme name check for `ThemeParser.addTheme`'s installed branch
+/// (`InstalledThemes.isInstalled`, P2-D3/M1-d). The pipeline builds the
+/// registry BEFORE parsing (reference `AbstractCommand.installThemes`) and
+/// injects it here — this crate never touches the filesystem for themes
+/// (topology P1-D1). `None` = an empty registry (fragment parses, library
+/// defaults): every non-URL theme token takes the FILE branch.
+/// The boxed check behind [`InstalledThemes`] (named to tame
+/// `type_complexity`).
+type ThemeInstalledFn = dyn Fn(&str) -> bool + Send + Sync;
+
+#[derive(Clone)]
+pub struct InstalledThemes(std::sync::Arc<ThemeInstalledFn>);
+
+impl InstalledThemes {
+    /// Wrap any total, thread-safe registry check.
+    #[must_use]
+    pub fn new(check: impl Fn(&str) -> bool + Send + Sync + 'static) -> Self {
+        InstalledThemes(std::sync::Arc::new(check))
+    }
+
+    /// `InstalledThemes.isInstalled` — the sole parse-time entry point.
+    #[must_use]
+    pub fn is_installed(&self, name: &str) -> bool {
+        (self.0)(name)
+    }
+}
+
+impl std::fmt::Debug for InstalledThemes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("InstalledThemes(..)")
+    }
+}
+
 /// `(identifier, item id)` pairs from a JSON base
 /// ([`json_dsl_identifiers`]).
 type DslIdentifiers = Vec<(String, Id)>;
@@ -254,6 +287,11 @@ pub struct ParseOptions<'a> {
     /// (V-3). Set by the headless API for hermetic in-process runs
     /// (`agents/plan/build/PHASE_1T.md` P1T-D1).
     pub env_lookup: Option<EnvLookup>,
+    /// Installed-theme registry check ([`InstalledThemes`], M1-d): gates
+    /// `ThemeParser.addTheme`'s installed-name branch. `None` = empty
+    /// registry (the reference's `InstalledThemes` when no themes dir was
+    /// installed) — non-URL theme tokens then take the FILE branch.
+    pub installed_themes: Option<InstalledThemes>,
 }
 
 impl<'a> ParseOptions<'a> {
@@ -265,6 +303,7 @@ impl<'a> ParseOptions<'a> {
             base_dir: None,
             json_loader: None,
             env_lookup: None,
+            installed_themes: None,
         }
     }
 
@@ -277,6 +316,7 @@ impl<'a> ParseOptions<'a> {
             base_dir: Some(base_dir),
             json_loader: None,
             env_lookup: None,
+            installed_themes: None,
         }
     }
 
@@ -289,6 +329,7 @@ impl<'a> ParseOptions<'a> {
             base_dir: None,
             json_loader: None,
             env_lookup: None,
+            installed_themes: None,
         }
     }
 }
@@ -1427,6 +1468,7 @@ impl<'a> Parser<'a> {
                 base_dir: self.opts.base_dir,
                 json_loader: self.opts.json_loader,
                 env_lookup: self.opts.env_lookup.clone(),
+                installed_themes: self.opts.installed_themes.clone(),
             };
             let mut child = Parser::new(child_opts);
             child.parse(&text);
@@ -2020,6 +2062,7 @@ mod tests {
             base_dir: None,
             json_loader: None,
             env_lookup: Some(EnvLookup::new(fake_env)),
+            installed_themes: None,
         };
         let p = Parser::new(opts);
         assert_eq!(p.substitute_strings("${OXZ_SEAM}"), "injected");

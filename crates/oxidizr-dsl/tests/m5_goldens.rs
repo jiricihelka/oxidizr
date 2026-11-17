@@ -46,6 +46,7 @@ fn assert_golden(fixture: &str, golden: &str) {
         base_dir: None,
         json_loader: Some(golden_loader),
         env_lookup: None,
+        installed_themes: None,
     };
     let source = std::fs::read_to_string(&path).unwrap();
     let result = parse_dsl(&source, opts).unwrap();

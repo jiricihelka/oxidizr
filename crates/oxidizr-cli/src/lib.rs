@@ -60,6 +60,16 @@ pub struct Cli {
     /// Disable color output (also honored via `NO_COLOR`).
     #[arg(long, global = true)]
     pub no_color: bool,
+    /// Fetch theme URLs during `export` (D5): without it a theme URL in
+    /// `configuration.themes` fails OXZ-5001 and installed names /
+    /// `--themes-dir` remain the offline path (P2-D3).
+    #[arg(long, global = true)]
+    pub allow_net: bool,
+    /// Highest-priority installed-theme root (`<dir>/<name>/theme.json`);
+    /// the chain continues `OXIDZR_THEMES_DIR` → `<workspace>/themes` →
+    /// `STRUCTURIZR_THEMES` (P2-D3).
+    #[arg(long, global = true, value_name = "DIR")]
+    pub themes_dir: Option<std::path::PathBuf>,
     /// Suppress non-error output.
     #[arg(long, global = true)]
     pub quiet: bool,
@@ -158,6 +168,8 @@ pub fn run() -> anyhow::Result<i32> {
         // Production keeps the V-3 process-env behavior (ApiOptions::env=None).
         env: None,
         stdin: Some(read_stdin),
+        allow_net: cli.allow_net,
+        themes_dir: cli.themes_dir.clone(),
     };
     let outcome = oxidizr_api::execute(to_request(&cli), &options);
     Ok(replay(&renderer, &outcome))
@@ -309,6 +321,18 @@ mod tests {
         ])
         .unwrap();
         Cli::try_parse_from(["oxidizr", "export", "-w", "ws.dsl", "-f", "theme"]).unwrap();
+        Cli::try_parse_from([
+            "oxidizr",
+            "export",
+            "-w",
+            "ws.dsl",
+            "-f",
+            "plantuml",
+            "--allow-net",
+            "--themes-dir",
+            "themes",
+        ])
+        .unwrap();
         Cli::try_parse_from([
             "oxidizr",
             "export",

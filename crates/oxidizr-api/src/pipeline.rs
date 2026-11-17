@@ -99,6 +99,16 @@ pub struct ApiOptions {
     /// `Input::Stdin` resolver; `None` rejects stdin inputs with a clean
     /// OXZ-5006 error (e2e never sends `Stdin`).
     pub stdin: Option<StdinReader>,
+    /// `--allow-net` (D5, ships P2-M1): permits the theme-URL fetch in the
+    /// `export` diagram branch (`ThemeUtils.loadThemes` mirror). Without it
+    /// a `themes` URL fails OXZ-5001; parse-time URL inputs (`!include`,
+    /// `extends`) keep the hardened P1 behavior regardless (`PHASE_2.md`
+    /// P2-D3 item 3 — the flag applies to theme URLs).
+    pub allow_net: bool,
+    /// `--themes-dir <dir>`: highest-priority installed-theme source
+    /// (`<dir>/<name>/theme.json`, P2-D3); `None` starts the chain at
+    /// `OXIDZR_THEMES_DIR`.
+    pub themes_dir: Option<std::path::PathBuf>,
 }
 
 /// `fmt` modes (P1-D8): default prints to stdout (→ [`Outcome::bytes`]),
@@ -315,19 +325,48 @@ fn parse_dsl_input(input: &Source, opts: &ApiOptions) -> Result<ParseResult, Iss
         let map = map.clone();
         EnvLookup::new(move |name| map.get(name).cloned())
     });
+    // M1-d (P2-D3): the installed-theme registry is built BEFORE parsing —
+    // reference `AbstractCommand` order — and injected as the parser's
+    // installed-name check (`ThemeParser.addTheme`).
+    let store = theme_store(input.file.as_deref(), opts);
+    let installed_themes = Some(oxidizr_dsl::engine::InstalledThemes::new(move |name| {
+        store.is_installed(name)
+    }));
     let opts = match &input.file {
         Some(f) => ParseOptions {
             json_loader: Some(json_loader),
             env_lookup,
+            installed_themes,
             ..ParseOptions::file(f)
         },
         None => ParseOptions {
             json_loader: Some(json_loader),
             env_lookup,
+            installed_themes,
             ..ParseOptions::fragment()
         },
     };
     parse_dsl(&input.text, opts).map_err(|e| suggest::decorate(Issue::from_dsl(&e), None))
+}
+
+/// The install-chain of `AbstractCommand.installThemes` + `ThemeUtils`
+/// (P2-D3, catalog `EXPORT-PROPERTIES.md` §6.2): source order
+/// `--themes-dir` → `OXIDZR_THEMES_DIR` → `<workspace-parent>/themes` →
+/// `STRUCTURIZR_THEMES`, first directory wins. The env closure is the
+/// hermetic [`ApiOptions::env`] map when set (in-process runs never leak
+/// the process environment), the process environment otherwise (V-3).
+/// Non-file inputs (`Bytes`/stdin) skip the directory probe — the reference
+/// has no such input flow, and a CWD probe would break hermetic purity.
+fn theme_store(input_file: Option<&str>, opts: &ApiOptions) -> oxidizr_export::ThemeStore {
+    let parent = input_file
+        .map(std::path::Path::new)
+        .and_then(std::path::Path::parent);
+    let env = opts.env.clone();
+    let lookup = move |name: &str| match &env {
+        Some(map) => map.get(name).cloned(),
+        None => std::env::var(name).ok(),
+    };
+    oxidizr_export::ThemeStore::install(opts.themes_dir.as_deref(), parent, &lookup, opts.allow_net)
 }
 
 /// Issues blocking exit 1 (severity vs `--strict`) — the old `emit` decision
@@ -680,8 +719,10 @@ fn load_export_workspace(
 /// `theme` and `json` are implemented (M0); other registry formats are
 /// OXZ-5007 until M1–M4; unknown strings mirror the reference's
 /// class-load miss — `Unknown export format: …`, exit 0. Theme pre-loading
-/// (`ThemeUtils.loadThemes`, only for `DiagramExporter` formats) joins this
-/// dispatch when the diagram exporters land (M1).
+/// (`ThemeUtils.loadThemes`, P2-D3, M1-d) runs for `DiagramExporter`
+/// formats BEFORE the export attempt — exactly the reference order, so a
+/// broken theme (or a URL without `--allow-net`) reports OXZ-5008/OXZ-5001
+/// ahead of the format's OXZ-5007.
 fn export_cmd(
     workspace_file: &Path,
     format: &str,
@@ -689,7 +730,8 @@ fn export_cmd(
     opts: &ApiOptions,
 ) -> Outcome {
     let mut out = Outcome::default();
-    let Some((source, workspace)) = load_export_workspace(workspace_file, opts, &mut out) else {
+    let Some((source, mut workspace)) = load_export_workspace(workspace_file, opts, &mut out)
+    else {
         return out;
     };
 
@@ -724,6 +766,21 @@ fn export_cmd(
             export_format.label()
         )));
         return out;
+    }
+    if export_format.is_diagram() {
+        // `ExportCommand` 222-227: `ThemeUtils.loadThemes` BEFORE the export
+        // — reference order, so theme failures precede the OXZ-5007 an
+        // unlanded diagram format raises. Themes append to the non-serialized
+        // `Styles.themes` (resolution-time only, P2-D2).
+        let store = theme_store(workspace_file.to_str(), opts);
+        if let Err(e) = store.load_themes(&mut workspace) {
+            let code = match &e {
+                oxidizr_export::ThemeError::NetDisabled { .. } => codes::NET_DISABLED,
+                _ => codes::EXPORT_THEME,
+            };
+            out.fail(Issue::error(code, e.to_string()), ExitClass::Diagnostics);
+            return out;
+        }
     }
     let file_name = workspace_file
         .file_name()

@@ -145,6 +145,50 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
 
 ## Milestone log
 
+### P2-M1 — theme infrastructure: styles + ThemeStore + wiring (2026-11-17)
+
+M1-a `199bc70`, M1-b `95130bb`, M1-c `169e685`, M1-d this commit; decomposition
+and decisions (P2-D2/D3/D4/D8 + amendments): `build/PHASE_2.md`. M1-e remains —
+see the probe finding at the end.
+
+- **M1-a** `EXPORT-PROPERTIES.md` catalog: cascade is 2 levels + default (with
+  property literals + per-site match case-sensitivity), view-kind matrix,
+  theme chain §6, style constants §7. P2-V2 (matrix/properties half) and
+  P2-V4 verified from the pinned sources.
+- **M1-b** `oxidizr-core::styles`: `Styles.themes: Vec<Theme>` (NEVER
+  serialized — the Java field has no getter/setter) +
+  `find_element_style`/`find_relationship_style` resolution per catalog §6–§7
+  (tag-composition order, `copyFrom` rules, darker-stroke = f64 `×0.7`
+  truncation formatted `#%06X`, linked-relationship tag chain). 12 tests.
+- **M1-c** `oxidizr-export::themes` `ThemeStore`: install source chain
+  `--themes-dir` > `OXIDZR_THEMES_DIR` > `<ws-parent>/themes` >
+  `STRUCTURIZR_THEMES` (first dir wins, one-level `theme.json` scan, env via
+  injected closure for hermetic runs) + load mirror (URL → fetch; installed →
+  file read with NO icon rewrite — the reference asymmetry; else silent skip)
+  + `paths` (XDG cache dir + hand-rolled FIPS 180-4 SHA-256 cache keys) +
+  diag OXZ-5008 + coverage allow-list entries. The `curl` fetch leg mirrors
+  source (no DNS here; A/B lands with the M2 probes). 19 tests.
+- **M1-d** wiring (this commit): installed-theme registry reaches the DSL
+  parser via `ParseOptions.installed_themes` (Arc-closure newtype — dsl crate
+  stays FS-free, P1-D1), built BEFORE parse (`installThemes` parity);
+  `add_theme` installed-name branch (raw-token registry check, then trim +
+  append WITHOUT dedup — only the URL branch dedups); `export_cmd` runs the
+  `loadThemes` leg for `is_diagram()` formats BEFORE dispatch (reference
+  order — theme failures precede the format's OXZ-5007; `NetDisabled` →
+  5001, else 5008); CLI `--allow-net`/`--themes-dir` globals (D5: the flag
+  gates theme URLs ONLY — `!include`/`extends` stay rejected, DEVIATIONS §D5
+  row updated); `oxidizr-api/tests/export.rs` pins the four legs; README +
+  diagnostics docs rows. Oracle A/B (m1d witness): `themes` arrays
+  byte-identical vs the reference with a `STRUCTURIZR_THEMES` install.
+- **Probe finding → M1-e (new scope, PHASE_2.md)**: the probe also exposed
+  two PRE-EXISTING app-layer load-parity gaps, reproducible on the P1-era
+  dsl2json path and corpus-immune (vendored fixtures define views and end
+  WITHOUT a final newline): (1) the reference CREATES default views on
+  no-views loads (`AbstractCommand` 109-112) — a Locked-list must-fix;
+  (2) its retained `structurizr.dsl` base64 can never carry the file's final
+  newline (`readLine` accumulation) while ours does (`split('\n')` trailing
+  `""`). Fix both before M2.
+
 ### P2-M0 — export scaffold + theme/json dispatch ✅ (2026-11-17)
 
 Commits `6f6cc64` (compat parity fixes) + `ca292e7` (M0 body). Decisions and

@@ -57,6 +57,10 @@ pub fn hermetic_options() -> ApiOptions {
         keep_unknown: false,
         env: Some(BTreeMap::new()),
         stdin: None,
+        // No network in-process; theme dir sources come only from the
+        // hermetic env map above and explicit fixtures.
+        allow_net: false,
+        themes_dir: None,
     }
 }
 

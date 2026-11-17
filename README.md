@@ -42,7 +42,9 @@ oxidizr reconcile --dsl edited.dsl --layout layout.json -o reconciled.json
 ```
 
 Global flags: `--strict` (warnings exit 1), `--quiet`, `--no-color` (also via
-`NO_COLOR`), `--env`, `--version`. Exit codes: `0` success · `1` error
+`NO_COLOR`), `--env`, `--version`, `--allow-net` (fetch theme URLs during
+`export`; default is offline — D5), `--themes-dir <dir>` (installed-theme
+root, `<dir>/<name>/theme.json`). Exit codes: `0` success · `1` error
 diagnostics (or any warning under `--strict`) · `2` usage · `3` I/O failure.
 Diagnostics carry `OXZ-…` codes — see `docs/diagnostics.md`.
 

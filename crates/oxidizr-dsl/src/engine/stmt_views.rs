@@ -1385,13 +1385,27 @@ fn dynamic_element(p: &Parser, identifier: &str, source: bool) -> Result<Id, Dsl
 
 const DEFAULT_THEME_URL: &str = "https://static.structurizr.com/themes/default/theme.json";
 
-/// `ThemeParser.addTheme`. `InstalledThemes` is empty in oxidizr
-/// (agents/plan/PROGRESS.md), so only the URL and file branches exist; the file
-/// branch inlines styles via `ThemeUtils` — Phase 4 (D11).
+/// `ThemeParser.addTheme` — branch order: `default` → URL mapping, then the
+/// installed-name branch (`InstalledThemes`, registry injected by the
+/// pipeline pre-parse, M1-d), then URL, then the FILE form. The file branch
+/// inlines styles via `ThemeUtils` — Phase 4 (D11). Without an injected
+/// registry the installed branch is inert (fragment parses, library use).
 fn add_theme(p: &mut Parser, theme_token: String) -> Result<(), DslError> {
     let mut theme = theme_token;
     if super::eqi(&theme, "default") {
         theme = DEFAULT_THEME_URL.to_string();
+    }
+    if let Some(registry) = &p.opts.installed_themes
+        && registry.is_installed(&theme)
+    {
+        // `Configuration.addTheme`: trim, then `themes.add` — the installed
+        // branch appends WITHOUT dedup (only the URL branch deduplicates).
+        p.builder
+            .views_mut()
+            .configuration
+            .themes
+            .push(java_trim(&theme).to_string());
+        return Ok(());
     }
     if is_url(&theme) {
         // `Configuration.addTheme`: trim, then dedup on the trimmed value.
@@ -1868,7 +1882,7 @@ mod tests {
 
     use oxidizr_core::views::{MetadataSymbols, RankDirection};
 
-    use super::super::{ParseOptions, ParseResult, parse_dsl};
+    use super::super::{InstalledThemes, ParseOptions, ParseResult, parse_dsl};
 
     fn full(dsl: &str) -> ParseResult {
         parse_dsl(dsl, ParseOptions::fragment()).expect("parse")
@@ -2543,6 +2557,38 @@ mod tests {
             first_error(&r),
             "Too many tokens, expected: theme <name|url|file>"
         );
+    }
+
+    #[test]
+    fn theme_installed_name_branch() {
+        // M1-d (P2-D3): with an injected registry, an installed name takes
+        // the `InstalledThemes.isInstalled` branch — stored verbatim (trim,
+        // NO dedup: `Configuration.addTheme`'s installed branch just adds),
+        // never reaching the FILE branch.
+        let opts = ParseOptions {
+            installed_themes: Some(InstalledThemes::new(|name| name == "mine")),
+            ..ParseOptions::fragment()
+        };
+        let r = parse_dsl(
+            "workspace {\n  views {\n    theme mine\n    theme mine\n  }\n}\n",
+            opts,
+        )
+        .expect("parse");
+        assert_clean(&r);
+        assert_eq!(
+            r.workspace.views.configuration.themes,
+            ["mine".to_string(), "mine".to_string()]
+        );
+
+        // Not in the registry → FILE branch (fragment ⇒ reference NPE, the
+        // P1 `themes_arm_and_missing_file` path).
+        let opts = ParseOptions {
+            installed_themes: Some(InstalledThemes::new(|_| false)),
+            ..ParseOptions::fragment()
+        };
+        let r = parse_dsl("workspace {\n  views {\n    theme mine\n  }\n}\n", opts).expect("parse");
+        assert_eq!(errors(&r).len(), 1);
+        assert_eq!(r.workspace.views.configuration.themes, Vec::<String>::new());
     }
 
     #[test]

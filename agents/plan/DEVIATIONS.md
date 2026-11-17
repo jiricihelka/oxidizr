@@ -62,16 +62,19 @@ as a tombstone so old references keep resolving.
 
 - Structurizr: fetches themes from `https://static.structurizr.com/...` during load/
   export; `!include <url>` fetches URLs; offline support is an env-var convention.
-- oxidizr: never touches the network unless explicitly asked. Default theme (and any
-  referenced theme URL needed for diagram export) resolves from a local cache /
-  `--themes-dir` (same layout as `STRUCTURIZR_THEMES`); `!include <url>` requires
-  `--allow-net`. **Phase 1 is stricter: ALL network input is rejected (OXZ-5001);
-  `--allow-net` ships in Phase 2** (`agents/plan/build/PHASE_1.md` P1-D8). JSON output is
+- oxidizr: never touches the network unless explicitly asked. Theme URLs needed for
+  diagram export resolve offline-first: URL cache hit, installed name, or
+  `--themes-dir`/`OXIDZR_THEMES_DIR`/`<ws-parent>/themes`/`STRUCTURIZR_THEMES` (P2-D3
+  source chain); a URL that must be FETCHED requires `--allow-net` (else OXZ-5001).
+  **Shipped as planned at P2-M1** (`agents/plan/build/PHASE_1.md` P1-D8). JSON output is
   unaffected in all cases (theme URLs are stored verbatim; resolution only ever matters
   for diagram rendering/export).
-- `--allow-net` is **one global flag** gating all URL input (theme URLs, `!include
-  <url>`, `workspace extends <url>`); deliberately **no env var** can enable network
-  (agreed 2026-11-14; policy bundle in agents/plan/WORKFLOW.md §Dev environment / §CLI/config policy).
+- `--allow-net` is **one global flag**, and it gates **theme URL fetches only**:
+  `!include <url>` and `workspace extends <url>` stay rejected regardless of the flag
+  (the P1-hardened behavior, `agents/plan/build/PHASE_2.md` P2-D3 item 3 — the
+  reference needs its feature-gate flags for those and the fetch legs are Phase 4
+  material). Deliberately **no env var** can enable network (agreed 2026-11-14; policy
+  bundle in agents/plan/WORKFLOW.md §Dev environment / §CLI/config policy).
 
 ## D6 — Internal quality decisions (no behavioral surface)
 
