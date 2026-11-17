@@ -25,6 +25,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M1 theme infrastructure | **COMPLETE 2026-11-17** (a `199bc70`–e-B `53d2e5e`) — log below |
 | P2 | M2 Structurizr-PlantUML | **COMPLETE 2026-11-17** — M2-a (catalog + `export_property` + D12), M2-b (engine), M2-c (dialect), M2-d (dispatch + oracle A/B fix batch + 30-fixture plantuml golden corpus). Log below (`build/PHASE_2.md`) |
 | P2 | M3 C4-PlantUML | **COMPLETE 2026-11-17** — M3-a (catalog `build/EXPORT-C4-PLANTUML.md` + witness sweep), M3-b (`plantuml::c4` dialect port, 2706209), M3-c (A/B: 30 SAME / 4 design-DIFF / 10 vacuous), M3-d (29-fixture c4 goldens + oracle verify green + P2-D9 comparator `xtask export-verify`). Log below |
+| P2 | M4 Mermaid + theme goldens + CI render + bench | **IN PROGRESS 2026-11-17** — M3-d comparator also landed with M3; M4-a (decomposition + `build/EXPORT-MERMAID.md` + mermaid witness sweep) this commit. Log below |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -146,6 +147,23 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P2-M4 — Mermaid exporter + theme goldens + CI render + bench (2026-11-17, IN PROGRESS)
+
+Decomposition M4-a..d: `build/PHASE_2.md`. THE contract: `build/EXPORT-MERMAID.md`
+(the port mirrors the file, not memory).
+
+- **M4-a** (this commit): catalog from the pinned Java (`MermaidDiagramExporter`
+  402 lines + shared `AbstractDiagramExporter` base — the engine.rs legs are
+  the BASE loops, so the port is a new `Dialect` + two engine deltas:
+  mermaid's sequence form is a standalone document (NOT the PlantUML
+  sequence walk) and the `.mmd` extension must thread the naming). Witness
+  sweep (`/tmp/nix-shell.uni100/opencode/m4/sweep.sh`): 33/44 fixtures wrote
+  ≥1 `.mmd` (10 oracle-load failures = C4 set; `text-block` loads but writes
+  0 mermaid files — vacuous). Witness facts already pinned: no animation
+  frames ever (`isAnimationSupported=false` — custom-view-animation = 2
+  VIEWS, 2 files), no legend files, sequence `box` absent, CustomViews
+  EXPORTED (base class, unlike PlantUML family).
 
 ### P2-M3 — C4-PlantUML exporter (2026-11-17, COMPLETE)
 

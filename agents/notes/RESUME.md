@@ -3,8 +3,8 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = M3-d closeout commit = **P2-M3 COMPLETE** (tip of
-`main`, tag `v0.1.0` far down) · gates green · nothing pushed.
+Updated: 2026-11-17 · HEAD = M4-a plan commit = **P2-M3 COMPLETE, M4-a DONE**
+(tip of `main`, tag `v0.1.0` far down) · gates green · nothing pushed.
 
 - **Done:** **PHASE 1 + 1T COMPLETE** (`v0.1.0`, T0–T6, no tag) · **P2-M0** ·
   **P2-M1 COMPLETE** · **P2-M2 COMPLETE** (`ab5a07b`) · **P2-M3 COMPLETE** —
@@ -25,15 +25,24 @@ Updated: 2026-11-17 · HEAD = M3-d closeout commit = **P2-M3 COMPLETE** (tip of
   (`xtask/src/exportcmp/` + `cargo xtask export-verify`, default corpus = c4
   goldens + `bulk-operations` which it proves SEMANTICALLY EQUAL; needs
   `$OXIDZR_STRUCTURIZR_BIN` + `target/debug/oxidizr`).
-- **Next:** **M4** per `build/PHASE_2.md` — Mermaid exporter (`ExportFormat::
-  Mermaid` → OXZ-5007 today) + `theme` export polish (M0 dispatch exists;
-  re-export a workspace theme), render checks wired in CI (skip loudly when
-  tools absent; `$OXIDZR_PLANTUML_BIN`/`$OXIDZR_MERMAID_BIN` rule in
-  `build/PHASE_2.md` §P2-D9), export-corpus bench baseline
-  (`cargo xtask bench save M4`). Then **M5**: proptest panic suite for
-  exporters, docs (`oxidizr export --help` + errata fold-back), tag `v0.2.0`
-  (local). Vendored default theme still blocked (no DNS) — D3 interim rule
-  until the user supplies `static.structurizr.com/themes/default/theme.json`.
+- **M4-a DONE (plan commit):** decomposition (`build/PHASE_2.md`) + catalog
+  `build/EXPORT-MERMAID.md` + mermaid witness sweep (`ref-mermaid/` +
+  `.status` under the M2-d sweep dirs; 33/44 wrote files, same 10 load
+  failures as C4, `text-block` vacuous-for-mermaid).
+- **Next:** **M4-b** per `build/EXPORT-MERMAID.md` (THE catalog) — port
+  `oxidizr-export::mermaid` as a `Dialect`: §1 property reads (`mermaid.title`/
+  `.icons` case-SENSITIVE equals, `.sequenceDiagram` equalsIgnoreCase), §2
+  header/footer (`graph TB|BT|LR|RL` from automaticLayout ONLY, `linkStyle
+  default`, double-indent `subgraph diagram`), §4-§7 boundaries/elements/
+  rels (lines() 30-col greedy wrap!), §9 standalone sequence document (engine
+  DELTA: `sequence_document` dialect route — the engine's current sequence
+  walk is the AbstractPlantUMLExporter one), `.mmd` extension threading in
+  naming, `exports_custom_views=true`, NO frames ever, flip the OXZ-5007 API
+  tests. Then M4-c byte A/B vs `/tmp/.../m2d/sweep/*/ref-mermaid/` (33
+  witnessed), M4-d goldens (`testdata/golden/mermaid|theme` xtask legs) + CI
+  render checks (loud skip; `mmdc` ABSENT on this machine) + `bench save M4`.
+  Then **M5**: proptest panic suite, docs, tag `v0.2.0` (local). Vendored
+  default theme still blocked (no DNS) — D3 interim rule.
 - **Open questions:** Phase 1T dispatch gate **USER DECLINED push (2026-11-17):
   keep everything local** — do NOT re-ask. Nothing else open for M4.
 - **Don't re-derive (trust):** P2-D1..D13 + decomposition (`build/PHASE_2.md`);

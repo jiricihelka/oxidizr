@@ -376,8 +376,31 @@ one typed function `export_property(view, views, name, default)` in
     sparingly; the P2-D9 harness — macro-call/relationship/directive fact
     model, order-normalized, minimal whitelist; grammar table doubles as the
     P4 importer's macro inventory). Touches: xtask, testdata, api tests.
-- **M4** Mermaid exporter + `theme` export; render checks wired in CI (skipping when
-  tools absent); benches committed (export corpus baseline).
+- **M4** Mermaid exporter + `theme` export goldens; render checks wired in CI
+  (skipping when tools absent); benches committed (export corpus baseline).
+  Decomposed 2026-11-17 (>4 modules; sources at the pin —
+  `build/EXPORT-MERMAID.md` is THE catalog, witness sweep done):
+  - **M4-a** recon + catalog + witnesses: this decomposition +
+    `build/EXPORT-MERMAID.md` (full `MermaidDiagramExporter` fact catalog +
+    engine-reuse map + sweep results) + oracle `--format mermaid` witness
+    sweep of the 44-fixture corpus (`ref-mermaid/` + `.status`). `theme`
+    export itself is DONE (M0 byte-parity) — its goldens ride along in M4-d.
+    Touches: plan docs.
+  - **M4-b** port `oxidizr-export::mermaid` (`MermaidDialect` on the shared
+    `Dialect` trait + engine delta §10: own `sequence_document` route, `.mmd`
+    extension threading, `mermaid.*` property reads with per-property case
+    rules). Dispatch: `ExportFormat::Mermaid` writes files (OXZ-5007 flips);
+    unit + API behavior tests. Touches: export, api.
+  - **M4-c** dispatch + A/B: byte-compare vs the `ref-mermaid` witnesses
+    across the 33-witness corpus, root-cause every DIFF at the pinned Java.
+    Touches: export fixes.
+  - **M4-d** proof: mermaid goldens under `testdata/golden/mermaid/` <!-- refs:ignore planned dir, lands with M4-d --> via
+    `xtask oracle gen --mermaid` + verify leg + Category-A byte-parity test
+    (extend the golden test); `theme` goldens `testdata/golden/theme/` <!-- refs:ignore planned dir, lands with M4-d --> +
+    verify leg + Category-A test; render checks: corpus render leg wired to
+    run where tools exist, skipping LOUDLY when `plantuml`/`mmdc` are absent
+    (P2-D9 rule); export-corpus bench baseline (`cargo xtask bench save M4`).
+    Touches: xtask, testdata, api tests, benches, workflows.
 - **M5** hardening: proptest panic suite, docs (`oxidizr export --help`, agents/plan/errata
   fold-back), tag v0.2.0.
 
