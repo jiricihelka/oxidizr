@@ -267,10 +267,23 @@ fn code_line<'a>(cst: &'a Cst, line: &Node, logical: &Logical) -> CodeLine<'a> {
                 // the same join replays, reproducing x exactly.
                 verbatim = Some(&cst.source[line.range.start as usize..line.range.end as usize]);
             } else if ends_in_magic(&body) {
-                // `"""` body end: one protective space keeps the text-block
-                // trigger silent (the last chunk is necessarily a bare token,
-                // so the space stays out of every value).
-                tail_ws = " ".to_string();
+                if ends_in_magic(&logical.joined(&cst.source)) {
+                    // The source's OWN joined line ends with `"""` too (the
+                    // magic was hidden behind a `\`-join, e.g. `\"""` + a
+                    // whitespace joiner). Bare would open a text block the
+                    // source never opened; a protective space invents a
+                    // whitespace token the source did not have —
+                    // UNREPRESENTABLE, so the original bytes replay verbatim.
+                    verbatim =
+                        Some(&cst.source[line.range.start as usize..line.range.end as usize]);
+                } else {
+                    // `"""` body end, magic NOT in the source line (a hiding
+                    // trailing space was trimmed, or the token juxtaposition
+                    // created it): one protective space keeps the text-block
+                    // trigger silent (the last chunk is necessarily a bare
+                    // token, so the space stays out of every value).
+                    tail_ws = " ".to_string();
+                }
             }
         }
     }

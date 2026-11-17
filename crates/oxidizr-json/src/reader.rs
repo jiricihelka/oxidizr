@@ -34,9 +34,9 @@ use oxidizr_core::views::{
 use oxidizr_core::{DEFAULT_ENVIRONMENT, DEFAULT_INSTANCES};
 use serde_json::{Map, Value};
 
-use crate::colors;
 use crate::error::JsonError;
 use crate::writer::id_ord;
+use oxidizr_core::colors;
 
 /// Deserialize a workspace JSON document (§6 leniency, then `hydrate()`).
 pub fn from_slice(bytes: &[u8]) -> Result<Workspace, JsonError> {

@@ -174,7 +174,7 @@ fn is_hex_color_code(color: &str) -> bool {
 ///
 /// Returns the reference `IllegalArgumentException` text when `color` is
 /// neither a `#rrggbb` code nor an HTML color name.
-pub(crate) fn normalize(color: &str) -> Result<String, String> {
+pub fn normalize(color: &str) -> Result<String, String> {
     if is_hex_color_code(color) {
         return Ok(color.to_lowercase());
     }

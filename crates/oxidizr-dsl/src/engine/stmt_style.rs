@@ -214,12 +214,16 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     }
 
     if let Some(Ctx::ElementStyle { idx }) = top {
-        // background/colour/stroke — plain strings (no validation, Java).
+        // background/colour/stroke go through the Java setters' colour
+        // normalization (`Color`): `#rrggbb` lowercased, HTML names mapped to
+        // hex, anything else a statement error (T4 oracle-verified 2026-11-17
+        // — the DSL importer calls the same validation JSON hydration does).
         // The `colour` and `color` chain arms share `parseColour`, so the
         // grammar text always says `colour`.
         if eqi(&first, tok::ELEMENT_STYLE_BACKGROUND) {
             return (|| {
                 let value = one_token(p, &raw, "background <#rrggbb|color name>")?;
+                let value = style_color(&value)?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.background = Some(value);
                 }
@@ -230,6 +234,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         if eqi(&first, tok::ELEMENT_STYLE_COLOUR) || eqi(&first, tok::ELEMENT_STYLE_COLOR) {
             return (|| {
                 let value = one_token(p, &raw, "colour <#rrggbb|color name>")?;
+                let value = style_color(&value)?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.color = Some(value);
                 }
@@ -240,6 +245,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         if eqi(&first, tok::ELEMENT_STYLE_STROKE) {
             return (|| {
                 let value = one_token(p, &raw, "stroke <#rrggbb|color name>")?;
+                let value = style_color(&value)?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.stroke = Some(value);
                 }
@@ -426,6 +432,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         {
             return (|| {
                 let value = one_token(p, &raw, "colour <#rrggbb|color name>")?;
+                let value = style_color(&value)?;
                 if let Some(s) = relationship_style_mut(p, idx) {
                     s.color = Some(value);
                 }
@@ -638,6 +645,15 @@ fn tri_bool(value: &str, field: &str) -> Result<bool, DslError> {
 /// `Integer.parseInt`.
 fn java_int(value: &str) -> Option<i32> {
     crate::compat::java_parse_int(value)
+}
+
+/// Style colour statements run the `Color` setter normalization the Java DSL
+/// importer also applies (T4 oracle-verified 2026-11-17 — the same validation
+/// JSON hydration does): `#rrggbb` lowercased, HTML name mapped to hex, else
+/// the reference `IllegalArgumentException` text as a statement error.
+fn style_color(value: &str) -> Result<String, DslError> {
+    oxidizr_core::colors::normalize(value)
+        .map_err(|msg| DslError::stmt(msg.trim_end_matches('.').to_owned()))
 }
 
 /// `ElementStyleParser.parseElementStyle` / `RelationshipStyleParser`
@@ -1081,7 +1097,8 @@ workspace {
         assert_eq!(st.width, Some(-3), "width is NOT clamped");
         assert_eq!(st.height, Some(40));
         assert_eq!(st.font_size, Some(0), "fontSize is NOT clamped");
-        assert_eq!(st.color.as_deref(), Some("white"));
+        // `Color` setter normalization (T4 oracle-verified): names map to hex.
+        assert_eq!(st.color.as_deref(), Some("#ffffff"));
         assert_eq!(st.metadata, Some(true));
         assert_eq!(st.description, Some(false));
         assert_eq!(st.icon.as_deref(), Some("http://example.com/icon.png"));
@@ -1115,7 +1132,7 @@ workspace {
         assert_eq!(st.tag, "R");
         assert_eq!(st.color_scheme, None);
         assert_eq!(st.thickness, Some(3));
-        assert_eq!(st.color.as_deref(), Some("green"));
+        assert_eq!(st.color.as_deref(), Some("#008000"), "name → hex");
         assert_eq!(st.dashed, Some(true));
         assert_eq!(st.opacity, Some(100), "clamps to 100");
         assert_eq!(st.width, Some(5));

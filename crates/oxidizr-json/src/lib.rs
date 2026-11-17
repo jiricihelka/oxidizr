@@ -20,7 +20,6 @@
 //! byte-diff tests); the reader tolerates everything the reference reader
 //! tolerates and rejects with the reference's first `hydrate()` message.
 
-mod colors;
 pub mod error;
 mod javahash;
 pub mod keep;

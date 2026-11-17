@@ -9,6 +9,7 @@
 
 pub mod builder;
 pub mod canonical;
+pub mod colors;
 pub mod configuration;
 pub mod docs;
 pub mod error;

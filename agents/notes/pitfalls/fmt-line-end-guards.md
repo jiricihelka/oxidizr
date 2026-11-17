@@ -24,8 +24,14 @@ Confirmed against the reference `StructurizrDslParser.preProcessLines` @ `ad3403
 - Block-comment opener is re-printed through the code-line renderer (token
   identity keeps the trim-based region machine silent); region interior bytes
   are verbatim.
+- T4 proptest extension (`0c3752…` seed): when the JOINED value ends `"""`
+  and the SOURCE joined value ends `"""` too (magic hidden behind a
+  `\`-continuation join, e.g. `\"""` + whitespace joiner), the protective
+  space is WRONG both ways — bare re-opens a text block the source never
+  opened (magic was inert), the space invents a whitespace token. Same
+  UNREPRESENTABLE class as `\`-end → print the logical line verbatim.
 - `structurizr.dsl` (base64 source) and `structurizr.dsl.identifier` UUIDs make
   parse↔fmt(x) JSON comparisons non-deterministic — drop the property line,
   redact UUID shapes (see tests/m6_fmt.rs).
 
-Last useful: 2026-11-16
+Last useful: 2026-11-17
