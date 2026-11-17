@@ -288,7 +288,37 @@ one typed function `export_property(view, views, name, default)` in
        against `m1d/ref`).
 - **M2** Structurizr-PlantUML exporter complete (all supported view types, legend,
   boundaries/groups, properties); Category A goldens + render smoke (comparator comes
-  in P4 — P2-D9).
+  in P4 — P2-D9). Decomposed 2026-11-17 (>4 modules; sources at the pin:
+  `export/plantuml/StructurizrPlantUMLExporter` 757 + `plantuml/
+  AbstractPlantUMLExporter` 408 + `export/AbstractDiagramExporter` 848 +
+  `AbstractExporter` 118 + 8 `PlantUMLStyle` classes):
+  - **M2-a** micro-grammar catalog `EXPORT-PLANTUML.md` (the P2-V2 deferred
+    half, from the sources above; P2-V5/V6 Structurizr-dialect halves get
+    checkboxes + evidence here) + `export_property(view, views, name,
+    default)` typed helper implementing P2-D8's two-level cascade in
+    `oxidizr-export` + DEVIATIONS D-ICON row (P2-V3 decision: scale pinned
+    `0.5`, zero-network). Touches: export (one helper), plan docs.
+  - **M2-b** shared diagram-engine port in `oxidizr-export::plantuml`
+    (`AbstractDiagramExporter` + `AbstractExporter` + `AbstractPlantUML
+    Exporter` helpers): per-view export methods + iteration order,
+    `writeElements` group/boundary nesting, `isVisible` matrix,
+    `getRelationshipsInView`, `typeOf` terminology/metadata-symbols,
+    `idOf` parent-chain + `filter` (Java `(?U)\W`) + instance `_n` ids,
+    skinparam/include writers, sequence-diagram export path skeleton.
+    Touches: export (+core only if terminology lookups are missing).
+  - **M2-c** Structurizr dialect: `PlantUMLStyle` family (root/element/
+    relationship/deploymentNode/boundary/group/legend — class selectors,
+    Java UTF-16 name sort, HashSet dedup per the Java equals/hashCode),
+    header (`title`, direction + ranksep/nodesep math, `hide stereotype`,
+    `<style></style>` placeholder → footer `writeStyles` replace), element/
+    relationship writers incl. the sequence path, legend diagram
+    (`createLegend`). Touches: export.
+  - **M2-d** dispatch + proof: `export_cmd` plantuml leg (per-view files +
+    legend files + `Writing` lines, filenames per `ExportCommand`),
+    Category-A goldens (oracle-generated, normalized), render smoke (skip
+    when plantuml absent), oracle A/B byte compare over the corpus set
+    (no DNS → the icon-scale `0.5` lands identically). Touches: api/cli,
+    testdata, xtask, docs.
 - **M3** C4-PlantUML exporter (light/dark, stdlib property, sequence path); semantic
   comparator built + oracle run green (the phase's reference-facing milestone).
 - **M4** Mermaid exporter + `theme` export; render checks wired in CI (skipping when
@@ -327,8 +357,19 @@ one typed function `export_property(view, views, name, default)` in
   case-sensitivity; the cascade is 2 levels + default, not 3). The **output
   micro-grammar** half is deferred per dialect to its own port (M2/M3/M4) where
   the comparator consumes it — keeping it here would port syntax from memory.
-- [ ] P2-V3 icon/logo URL handling in generated PlantUML/Mermaid (pass-through? fetched?
-  omitted?) — decide mirror behavior, keep export-time zero-network.
+- [x] **P2-V3** icon/logo URL handling — **VERIFIED 2026-11-17** (M2 recon,
+  source): `AbstractPlantUMLExporter.isSupportedIcon` = icon non-empty AND
+  starts with `http` (relative/theme-rewritten-relative icons never render as
+  `<img:>`); `calculateIconScale` = `0.5` default, else
+  `maxIconSize / max(width,height)` from `ImageIO.read(new URL(icon))` —
+  the REFERENCE FETCHES THE IMAGE AT EXPORT TIME (network). Failures:
+  `UnsupportedOperationException | UnsatisfiedLinkError | IIOException` →
+  silent `0.5`; any other exception → `printStackTrace` then `0.5`. This
+  machine has no DNS, so oracle A/B always lands on the reference's `0.5`
+  fallback. DECISION: oxidizr pins `0.5` (export-time zero-network, per this
+  item's wording) — DEVIATIONS row D-ICON: scale is network-dependent in the
+  reference, deterministic-here equal; scale formatting = Java
+  `Double.toString` shortest round-trip when a computed value ever lands.
   (Input side verified at M1-a: `loadThemes` rewrites relative icons to
   `baseUrl + icon` for URL themes only — catalog §6.1-3.)
 - [x] **P2-V4** `STRUCTURIZR_THEMES`/theme dir layout + `theme "<name>"` URL
