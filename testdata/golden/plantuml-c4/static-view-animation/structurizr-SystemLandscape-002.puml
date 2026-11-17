@@ -1,0 +1,24 @@
+@startuml
+title <size:24>System Landscape View</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+System(A, "A", $descr="", $tags="", $link="")
+System(B, "B", $descr="", $tags="", $link="")
+
+Rel(A, B, "", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

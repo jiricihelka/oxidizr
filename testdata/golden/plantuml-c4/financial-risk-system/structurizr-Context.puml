@@ -1,0 +1,39 @@
+@startuml
+title <size:24>System Context View: Financial Risk System</size>\n<size:24>An example System Context diagram for the Financial Risk System architecture kata.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+Person(BusinessUser, "Business User", $descr="A regular business user.", $tags="", $link="")
+Person(ConfigurationUser, "Configuration User", $descr="A regular business user who can also configure the parameters used in the risk calculations.", $tags="", $link="")
+System(FinancialRiskSystem, "Financial Risk System", $descr="Calculates the bank's exposure to risk for product X.", $tags="", $link="")
+System(TradeDataSystem, "Trade Data System", $descr="The system of record for trades of type X.", $tags="", $link="")
+System(ReferenceDataSystem, "Reference Data System", $descr="Manages reference data for all counterparties the bank interacts with.", $tags="", $link="")
+System(ReferenceDataSystemv20, "Reference Data System v2.0", $descr="Manages reference data for all counterparties the bank interacts with.", $tags="", $link="")
+System(Emailsystem, "E-mail system", $descr="The bank's Microsoft Exchange system.", $tags="", $link="")
+System(CentralMonitoringService, "Central Monitoring Service", $descr="The bank's central monitoring and alerting dashboard.", $tags="", $link="")
+System(ActiveDirectory, "Active Directory", $descr="The bank's authentication and authorisation system.", $tags="", $link="")
+
+Rel(BusinessUser, FinancialRiskSystem, "Views reports using", $techn="", $tags="", $link="")
+Rel(FinancialRiskSystem, TradeDataSystem, "Gets trade data from", $techn="", $tags="", $link="")
+Rel(FinancialRiskSystem, ReferenceDataSystem, "Gets counterparty data from", $techn="", $tags="", $link="")
+Rel(FinancialRiskSystem, ReferenceDataSystemv20, "Gets counterparty data from", $techn="", $tags="", $link="")
+Rel(ConfigurationUser, FinancialRiskSystem, "Configures parameters using", $techn="", $tags="", $link="")
+Rel(FinancialRiskSystem, Emailsystem, "Sends a notification that a report is ready to", $techn="", $tags="", $link="")
+Rel(Emailsystem, BusinessUser, "Sends a notification that a report is ready to", $techn="E-mail message", $tags="", $link="")
+Rel(FinancialRiskSystem, CentralMonitoringService, "Sends critical failure alerts to", $techn="SNMP", $tags="", $link="")
+Rel(FinancialRiskSystem, ActiveDirectory, "Uses for user authentication and authorisation", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

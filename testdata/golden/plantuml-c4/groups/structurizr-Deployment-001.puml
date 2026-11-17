@@ -1,0 +1,46 @@
+@startuml
+title <size:24>Deployment View: Software System - Live</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+AddBoundaryTag("Servers", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+Boundary(group_1, "Servers", $tags="Servers") {
+  Deployment_Node(Live.Server2, "Server 2", $type="", $descr="", $tags="", $link="") {
+    AddBoundaryTag("Service 2", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+    Boundary(group_2, "Service 2", $tags="Service 2") {
+      Container(Live.Server2.Service2API_1, "Service 2 API", $techn="", $descr="", $tags="", $link="")
+      Container(Live.Server2.Service2Database_1, "Service 2 Database", $techn="", $descr="", $tags="", $link="")
+    }
+
+  }
+
+  Deployment_Node(Live.Server1, "Server 1", $type="", $descr="", $tags="", $link="") {
+    AddBoundaryTag("Service 1", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+    Boundary(group_3, "Service 1", $tags="Service 1") {
+      Container(Live.Server1.Service1Database_1, "Service 1 Database", $techn="", $descr="", $tags="", $link="")
+      Container(Live.Server1.Service1API_1, "Service 1 API", $techn="", $descr="", $tags="", $link="")
+    }
+
+  }
+
+}
+
+Rel(Live.Server1.Service1API_1, Live.Server1.Service1Database_1, "Reads from and writes to", $techn="", $tags="", $link="")
+Rel(Live.Server2.Service2API_1, Live.Server2.Service2Database_1, "Reads from and writes to", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

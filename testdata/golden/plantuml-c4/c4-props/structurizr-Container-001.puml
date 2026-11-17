@@ -1,0 +1,41 @@
+@startuml
+title <size:24>Container View: System</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+AddElementTag("Element", $bgColor="#ffffff", $borderColor="#444444", $fontColor="#444444", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Primary", $bgColor="#ffffff", $borderColor="#444444", $fontColor="#0000ff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("External", $bgColor="#ff0000", $borderColor="#b20000", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+AddRelTag("Async", $textColor="#00ff00", $lineColor="#00ff00", $lineStyle = DashedLine())
+
+AddBoundaryTag("Element", $bgColor="#ffffff", $borderColor="#444444", $fontColor="#444444", $shadowing="", $borderStyle="solid")
+
+Person(User, "User", $descr="A user", $tags="External", $link="")
+
+System_Boundary("System_boundary", "System", $tags="Element") {
+  WithoutPropertyHeader()
+  AddProperty("owner","team-a")
+  Container(System.Webapp, "Web app", $techn="Rust", $descr="serves the UI", $tags="Primary", $link="")
+  Container(System.Database, "Database", $techn="Postgres", $descr="stores state", $tags="Element", $link="")
+}
+
+Rel(System.Webapp, System.Database, "reads and writes", $techn="SQL", $tags="Async", $link="")
+Rel(User, System.Webapp, "uses", $techn="", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+show stereotypes
+@enduml

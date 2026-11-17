@@ -1,0 +1,36 @@
+@startuml
+title <size:24>Deployment View: Software System - WithoutDeploymentGroups</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+Deployment_Node(WithoutDeploymentGroups.Server1, "Server 1", $type="", $descr="", $tags="", $link="") {
+  Container(WithoutDeploymentGroups.Server1.API_1, "API", $techn="", $descr="", $tags="", $link="")
+  Container(WithoutDeploymentGroups.Server1.DB_1, "DB", $techn="", $descr="", $tags="", $link="")
+}
+
+Deployment_Node(WithoutDeploymentGroups.Server2, "Server 2", $type="", $descr="", $tags="", $link="") {
+  Container(WithoutDeploymentGroups.Server2.API_1, "API", $techn="", $descr="", $tags="", $link="")
+  Container(WithoutDeploymentGroups.Server2.DB_1, "DB", $techn="", $descr="", $tags="", $link="")
+}
+
+Rel(WithoutDeploymentGroups.Server2.API_1, WithoutDeploymentGroups.Server1.DB_1, "Uses", $techn="", $tags="", $link="")
+Rel(WithoutDeploymentGroups.Server1.API_1, WithoutDeploymentGroups.Server2.DB_1, "Uses", $techn="", $tags="", $link="")
+Rel(WithoutDeploymentGroups.Server2.API_1, WithoutDeploymentGroups.Server2.DB_1, "Uses", $techn="", $tags="", $link="")
+Rel(WithoutDeploymentGroups.Server1.API_1, WithoutDeploymentGroups.Server1.DB_1, "Uses", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

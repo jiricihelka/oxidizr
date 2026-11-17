@@ -1,0 +1,27 @@
+@startuml
+title <size:24>System Landscape View</size>\n<size:24>System Landscape, current and future</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+Person(Customer, "Customer", $descr="A description of the user.", $tags="", $link="")
+System(SoftwareSystemA, "Software System A", $descr="A description of software system A.", $tags="", $link="")
+System(SoftwareSystemB, "Software System B", $descr="A description of software system B.", $tags="", $link="")
+
+Rel(Customer, SoftwareSystemA, "Uses for tasks 1 and 2", $techn="", $tags="", $link="")
+Rel(Customer, SoftwareSystemA, "Uses for task 1", $techn="", $tags="", $link="")
+Rel(Customer, SoftwareSystemB, "Uses for task 2", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

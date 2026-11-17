@@ -368,7 +368,7 @@ one typed function `export_property(view, views, name, default)` in
     dialect; files per the shared `ExportCommand` loop), byte-compare vs the
     `ref-c4` witnesses across the corpus, root-cause every DIFF. Touches:
     api/cli.
-  - **M3-d** proof: c4 goldens under `testdata/golden/plantuml-c4/` <!-- refs:ignore planned dir, lands with M3-d --> via
+  - **M3-d** proof: c4 goldens under `testdata/golden/plantuml-c4/` via
     `xtask oracle gen --plantuml --c4` + Category-A byte-parity test (extend
     the M2-d golden test); render smoke (stdlib form renders offline —
     plantuml 1.2026.9 bundles C4 stdlib); **semantic comparator**

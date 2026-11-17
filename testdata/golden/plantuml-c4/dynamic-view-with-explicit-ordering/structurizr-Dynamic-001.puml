@@ -1,0 +1,26 @@
+@startuml
+title <size:24>Dynamic View</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+System(A, "A", $descr="", $tags="", $link="")
+System(B, "B", $descr="", $tags="", $link="")
+System(C, "C", $descr="", $tags="", $link="")
+
+Rel(A, B, "2: ", $techn="", $tags="", $link="")
+Rel(B, C, "3: ", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

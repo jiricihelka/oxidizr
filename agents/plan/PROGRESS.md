@@ -24,6 +24,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M0 export scaffold + theme/json dispatch | **done 2026-11-17** (commits 6f6cc64, ca292e7) — log below |
 | P2 | M1 theme infrastructure | **COMPLETE 2026-11-17** (a `199bc70`–e-B `53d2e5e`) — log below |
 | P2 | M2 Structurizr-PlantUML | **COMPLETE 2026-11-17** — M2-a (catalog + `export_property` + D12), M2-b (engine), M2-c (dialect), M2-d (dispatch + oracle A/B fix batch + 30-fixture plantuml golden corpus). Log below (`build/PHASE_2.md`) |
+| P2 | M3 C4-PlantUML | **COMPLETE 2026-11-17** — M3-a (catalog `build/EXPORT-C4-PLANTUML.md` + witness sweep), M3-b (`plantuml::c4` dialect port, 2706209), M3-c (A/B: 30 SAME / 4 design-DIFF / 10 vacuous), M3-d (29-fixture c4 goldens + oracle verify green + P2-D9 comparator `xtask export-verify`). Log below |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -145,6 +146,57 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P2-M3 — C4-PlantUML exporter (2026-11-17, COMPLETE)
+
+Decomposition M3-a..d + full Java fact catalog: `build/EXPORT-C4-PLANTUML.md`
+(THE contract — the port mirrors that file) + `build/PHASE_2.md`.
+
+- **M3-a** (43a8f79): catalog + C4 oracle witness sweep over the full corpus
+  (44 fixtures; 34 produced witnesses, 10 oracle-load failures share the M2-d
+  exclusions).
+- **M3-b** (2706209): `oxidizr-export::plantuml::c4` — `C4PlantUmlDialect` on
+  the M2-b `Dialect` trait (header with always-`<style>` defaults, `<C4/…>`
+  stdlib includes, HashMap-order tags section via `put_entry`/`javahash`,
+  boundary/group/element/Rel macro legs incl. the `$borderThickness` drop and
+  `#ffffff`-bg-as-font quirks, `(xN)` instance unwrap, sequence box leg);
+  engine hook `Dialect::exports_custom_views` (C4 = false: `export(CustomView)`
+  is null → zero files, and `createLegend` is null → no `-key` legend files);
+  `format.rs` C4 arm; API tests flipped off 5007.
+- **M3-c** (A/B sweep, no commit — witnesses vs our CLI): 30 SAME / 4 DIFF /
+  10 vacuous-skip. All 4 DIFFs are design-excluded fixtures, zero port bugs:
+  `script-inline` + `script-in-dynamic-view` (D2, OXZ-5002), `text-block`
+  (D11, OXZ-5005), `bulk-operations` (D13 `!elements` identity-hash fan-out
+  order, permanent).
+- **M3-d** (this commit, both legs): (1) goldens — `xtask oracle gen
+  --plantuml --c4` + `oracle verify` c4 leg over `testdata/golden/plantuml-c4/`
+  (29 sweep fixtures + the new `probes/c4-props.dsl` probe — the
+  property-driven legs no vendored fixture reaches: `c4plantuml.tags/
+  .stereotypes/.elementProperties/.relationshipProperties/.stdlib=false` +
+  `plantuml.sequenceDiagram` box — BYTE-IDENTICAL to the oracle; RAW bytes
+  throughout; `custom-view-animation` excluded C4-vacuous —
+  CustomView-only workspace → zero C4 files, oracle exit 0). Category-A
+  `c4plantuml_goldens_byte_parity` + C4 render smoke (3 goldens render
+  offline — plantuml 1.2026.9 bundles the C4 stdlib) in
+  `oxidizr-api/tests/export_plantuml_goldens.rs` (generalized to both
+  corpora). `cargo xtask oracle verify` green (2026-11-17): 4 json + 59
+  plantuml golden sets (30 plantuml + 29 plantuml-c4 at that run; the probe
+  golden added after), 0 mismatches. (2) comparator — P2-D9
+  semantic comparator `xtask/src/exportcmp/` (~230-line tolerant
+  line-grammar: macro calls with quote/paren-aware arg split, skinparam /
+  `<style>` / include / direction / box / arrow facts; per-file fact
+  MULTISETS, order-normalized; whitelist = comment + blank lines only;
+  unknown `Name(` lines parse under a `macro?` tag) driving
+  `cargo xtask export-verify`. `C4_MACROS` = the macro inventory the pinned
+  reference emits (Person/System/Container[Db|Queue]/Component[Db|Queue]/
+  Deployment_Node, Boundary/System_Boundary/Container_Boundary, Rel,
+  AddElementTag/AddRelTag/AddBoundaryTag/AddProperty/WithoutPropertyHeader/
+  SHOW_LEGEND) — doubles as the P4 importer's macro inventory. Proof:
+  `bulk-operations` (the D13 byte-DIFF fixture) compares SEMANTICALLY EQUAL;
+  `shapes` / `dynamic` / `groups-nested` green. Plan note: "default-off
+  `reference` feature" realized as a manual xtask subcommand — same intent
+  (Category B, never on PR CI, needs the oracle binary), and xtask is
+  dev-only so no cargo feature is needed.
 
 ### P2-M2 — Structurizr-PlantUML exporter (2026-11-17, COMPLETE)
 

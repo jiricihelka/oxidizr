@@ -1,0 +1,34 @@
+@startuml
+title <size:24>Deployment View: Software System - WithInheritedDeploymentGroups</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+Deployment_Node(WithInheritedDeploymentGroups.Server1, "Server 1", $type="", $descr="", $tags="", $link="") {
+  Container(WithInheritedDeploymentGroups.Server1.API_1, "API", $techn="", $descr="", $tags="", $link="")
+  Container(WithInheritedDeploymentGroups.Server1.DB_1, "DB", $techn="", $descr="", $tags="", $link="")
+}
+
+Deployment_Node(WithInheritedDeploymentGroups.Server2, "Server 2", $type="", $descr="", $tags="", $link="") {
+  Container(WithInheritedDeploymentGroups.Server2.API_1, "API", $techn="", $descr="", $tags="", $link="")
+  Container(WithInheritedDeploymentGroups.Server2.DB_1, "DB", $techn="", $descr="", $tags="", $link="")
+}
+
+Rel(WithInheritedDeploymentGroups.Server1.API_1, WithInheritedDeploymentGroups.Server1.DB_1, "Uses", $techn="", $tags="", $link="")
+Rel(WithInheritedDeploymentGroups.Server2.API_1, WithInheritedDeploymentGroups.Server2.DB_1, "Uses", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

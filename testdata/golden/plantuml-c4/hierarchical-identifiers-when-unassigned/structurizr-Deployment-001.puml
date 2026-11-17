@@ -1,0 +1,24 @@
+@startuml
+title <size:24>Deployment View: Environment</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Deployment>
+
+Deployment_Node(Environment.DeploymentNode, "Deployment Node", $type="", $descr="", $tags="", $link="") {
+  Deployment_Node(Environment.DeploymentNode.InfrastructureNode, "Infrastructure Node", $type="", $descr="", $tags="", $link="")
+}
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

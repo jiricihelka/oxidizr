@@ -1,0 +1,27 @@
+@startuml
+title <size:24>Container View: Software System</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+System_Boundary("SoftwareSystem_boundary", "Software System", $tags="") {
+  Container(SoftwareSystem.UI, "UI", $techn="JavaScript and React", $descr="Description", $tags="", $link="")
+  Container(SoftwareSystem.Backend, "Backend", $techn="Spring Boot", $descr="Description", $tags="", $link="")
+}
+
+Rel(SoftwareSystem.UI, SoftwareSystem.Backend, "Makes API requests to", $techn="JSON/HTTPS", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

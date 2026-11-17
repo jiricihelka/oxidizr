@@ -1,0 +1,39 @@
+@startuml
+title <size:24>Container View: Software System</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+System_Boundary("SoftwareSystem_boundary", "Software System", $tags="") {
+  AddBoundaryTag("Service 1", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+  Boundary(group_1, "Service 1", $tags="Service 1") {
+    Container(SoftwareSystem.Service1API, "Service 1 API", $techn="", $descr="", $tags="", $link="")
+    Container(SoftwareSystem.Service1Database, "Service 1 Database", $techn="", $descr="", $tags="", $link="")
+  }
+
+  AddBoundaryTag("Service 2", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+  Boundary(group_2, "Service 2", $tags="Service 2") {
+    Container(SoftwareSystem.Service2API, "Service 2 API", $techn="", $descr="", $tags="", $link="")
+    Container(SoftwareSystem.Service2Database, "Service 2 Database", $techn="", $descr="", $tags="", $link="")
+  }
+
+}
+
+Rel(SoftwareSystem.Service1API, SoftwareSystem.Service2API, "Uses", $techn="", $tags="", $link="")
+Rel(SoftwareSystem.Service1API, SoftwareSystem.Service1Database, "Reads from and writes to", $techn="", $tags="", $link="")
+Rel(SoftwareSystem.Service2API, SoftwareSystem.Service2Database, "Reads from and writes to", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

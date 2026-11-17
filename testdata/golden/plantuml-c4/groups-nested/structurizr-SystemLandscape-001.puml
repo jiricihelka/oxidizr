@@ -1,0 +1,35 @@
+@startuml
+title <size:24>System Landscape View</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+AddBoundaryTag("Organisation", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+Boundary(group_1, "Organisation", $tags="Organisation") {
+  System(C, "C", $descr="", $tags="", $link="")
+    AddBoundaryTag("Organisation/Department A", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+    Boundary(group_2, "Department A", $tags="Organisation/Department A") {
+      System(A, "A", $descr="", $tags="", $link="")
+    }
+
+    AddBoundaryTag("Organisation/Department B", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+    Boundary(group_3, "Department B", $tags="Organisation/Department B") {
+      System(B, "B", $descr="", $tags="", $link="")
+    }
+
+}
+
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

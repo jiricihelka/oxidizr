@@ -1,0 +1,31 @@
+@startuml
+title <size:24>Deployment View: live</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Deployment>
+
+Deployment_Node(live.Live, "Live", $type="", $descr="", $tags="", $link="") {
+  Deployment_Node(live.Live.DeploymentNode, "Deployment Node", $type="", $descr="", $tags="", $link="") {
+    System(live.Live.DeploymentNode.SoftwareSystem_1, "Software System", $descr="", $tags="", $link="")
+  }
+
+  Deployment_Node(live.Live.InfrastructureNode, "Infrastructure Node", $type="", $descr="", $tags="", $link="")
+}
+
+Rel(live.Live.InfrastructureNode, live.Live.DeploymentNode, "", $techn="", $tags="", $link="")
+Rel(live.Live.InfrastructureNode, live.Live.DeploymentNode.SoftwareSystem_1, "", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

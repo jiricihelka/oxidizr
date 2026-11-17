@@ -1,0 +1,42 @@
+@startuml
+title <size:24>Deployment View: Live</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Deployment>
+
+Deployment_Node(Live.DN2, "DN2", $type="", $descr="", $tags="", $link="") {
+  System(Live.DN2.SoftwareSystem_1, "Software System", $descr="", $tags="", $link="")
+}
+
+Deployment_Node(Live.DN, "DN", $type="", $descr="", $tags="", $link="") {
+  Deployment_Node(Live.DN.DN1, "DN1", $type="", $descr="", $tags="", $link="") {
+    System(Live.DN.DN1.SoftwareSystem_1, "Software System", $descr="", $tags="", $link="")
+  }
+
+  Deployment_Node(Live.DN.DN2, "DN2", $type="", $descr="", $tags="", $link="") {
+    System(Live.DN.DN2.SoftwareSystem_1, "Software System", $descr="", $tags="", $link="")
+  }
+
+}
+
+Deployment_Node(Live.DN1, "DN1", $type="", $descr="", $tags="", $link="") {
+  System(Live.DN1.SoftwareSystem_1, "Software System", $descr="", $tags="", $link="")
+}
+
+Rel(Live.DN1, Live.DN2, "", $techn="", $tags="", $link="")
+Rel(Live.DN.DN1, Live.DN.DN2, "", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

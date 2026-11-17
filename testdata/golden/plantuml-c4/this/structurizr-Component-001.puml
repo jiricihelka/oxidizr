@@ -1,0 +1,29 @@
+@startuml
+title <size:24>Component View: Software System - Container</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+
+System_Boundary("SoftwareSystem_boundary", "Software System", $tags="") {
+  Container_Boundary("SoftwareSystem.Container_boundary", "Container", $tags="") {
+    Component(SoftwareSystem.Container.Component, "Component", $techn="", $descr="", $tags="", $link="")
+  }
+
+}
+
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -1,0 +1,39 @@
+@startuml
+title <size:24>System Landscape View</size>\n<size:24>An example of all shapes available in Structurizr.</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+System(Box, "Box", $descr="", $tags="", $link="")
+System(Folder, "Folder", $descr="", $tags="", $link="")
+System(Pipe, "Pipe", $descr="", $tags="", $link="")
+System(WebBrowser, "Web Browser", $descr="", $tags="", $link="")
+System(Window, "Window", $descr="", $tags="", $link="")
+System(Shell, "Shell", $descr="", $tags="", $link="")
+System(Terminal, "Terminal", $descr="", $tags="", $link="")
+System(MobileDevicePortrait, "Mobile Device Portrait", $descr="", $tags="", $link="")
+System(MobileDeviceLandscape, "Mobile Device Landscape", $descr="", $tags="", $link="")
+Person(Person, "Person", $descr="", $tags="", $link="")
+System(Robot, "Robot", $descr="", $tags="", $link="")
+System(RoundedBox, "Rounded Box", $descr="", $tags="", $link="")
+System(Circle, "Circle", $descr="", $tags="", $link="")
+System(Ellipse, "Ellipse", $descr="", $tags="", $link="")
+System(Hexagon, "Hexagon", $descr="", $tags="", $link="")
+System(Diamond, "Diamond", $descr="", $tags="", $link="")
+System(Component, "Component", $descr="", $tags="", $link="")
+System(Cylinder, "Cylinder", $descr="", $tags="", $link="")
+System(Bucket, "Bucket", $descr="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

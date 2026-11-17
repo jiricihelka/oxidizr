@@ -1,0 +1,39 @@
+@startuml
+title <size:24>Deployment View: Software System - Three</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+Deployment_Node(Three.UsersComputer, "User's Computer", $type="", $descr="", $tags="", $link="") {
+  Deployment_Node(Three.UsersComputer.WebBrowser, "Web Browser", $type="", $descr="", $tags="", $link="") {
+    Container(Three.UsersComputer.WebBrowser.UI_1, "UI", $techn="JavaScript and React", $descr="Description", $tags="", $link="")
+  }
+
+}
+
+Deployment_Node(Three.DataCenter, "Data Center", $type="", $descr="", $tags="", $link="") {
+  Deployment_Node(Three.DataCenter.LoadBalancer, "Load Balancer", $type="", $descr="", $tags="", $link="")
+  Deployment_Node(Three.DataCenter.Server, "Server", $type="", $descr="", $tags="", $link="") {
+    Container(Three.DataCenter.Server.Backend_1, "Backend", $techn="Spring Boot", $descr="Description", $tags="", $link="")
+  }
+
+}
+
+Rel(Three.UsersComputer.WebBrowser.UI_1, Three.DataCenter.LoadBalancer, "Makes API requests to", $techn="JSON/HTTPS", $tags="", $link="")
+Rel(Three.DataCenter.LoadBalancer, Three.DataCenter.Server.Backend_1, "Forwards API requests to", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

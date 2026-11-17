@@ -1,0 +1,34 @@
+@startuml
+title <size:24>Container View: X</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+System(A, "A", $descr="", $tags="", $link="")
+
+System_Boundary("X_boundary", "X", $tags="") {
+  AddBoundaryTag("Customer Service", $borderColor="#cccccc", $fontColor="#cccccc", $borderStyle="dashed")
+  Boundary(group_1, "Customer Service", $tags="Customer Service") {
+    Container(X.Customerdatabase, "Customer database", $techn="", $descr="", $tags="", $link="")
+    Container(X.CustomerAPI, "Customer API", $techn="Spring Boot", $descr="", $tags="", $link="")
+  }
+
+}
+
+Rel(X.CustomerAPI, X.Customerdatabase, "", $techn="", $tags="", $link="")
+Rel(A, X.CustomerAPI, "Makes API calls using", $techn="HTTPS", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

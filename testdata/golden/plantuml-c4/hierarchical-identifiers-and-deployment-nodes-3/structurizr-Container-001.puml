@@ -1,0 +1,24 @@
+@startuml
+title <size:24>Container View: SS</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+System_Boundary("SS_boundary", "SS", $tags="") {
+  Container(SS.C, "C", $techn="", $descr="", $tags="", $link="")
+}
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -13,9 +13,14 @@
 //! `--format plantuml` writes `structurizr-<id>-<key>.puml` (+ `-key` legend) files
 //! into `DIR` instead (M2-d); those goldens land under
 //! `testdata/golden/plantuml/<fixture>/` and need NO normalization.
+//! `--format plantuml/c4plantuml` (M3-d) emits the same file naming, no legend
+//! files, and lands goldens under `testdata/golden/plantuml-c4/<fixture>/`.
+//! `cargo xtask export-verify` (M3-d, P2-D9) semantically compares C4 output
+//! (fact multisets, order-normalized — `exportcmp`) between oracle and
+//! oxidizr; run it sparingly, like the oracle itself.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Path, PathBuf},
     process::Command,
@@ -23,6 +28,7 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 
+mod exportcmp;
 mod refs;
 
 /// Pinned upstream monorepo commit (agents/plan/COMPAT.md).
@@ -88,37 +94,18 @@ fn real_main(args: Vec<String>) -> Result<()> {
             );
             cmd_fuzz(secs)
         }
+        Some("export-verify") => cmd_export_verify(&mut args),
         Some("oracle") => {
             let oracle = find_oracle()?;
             match args.next().as_deref() {
-                Some("gen") => {
-                    let mut fixtures = Vec::new();
-                    let mut plantuml = false;
-                    while let Some(a) = args.next() {
-                        if a == "--plantuml" {
-                            plantuml = true;
-                            continue;
-                        }
-                        ensure!(a == "--fixture", "unexpected argument `{a}`");
-                        let name = args.next().context("--fixture needs a name")?;
-                        fixtures.push(name);
-                    }
-                    if !plantuml && fixtures.is_empty() {
-                        fixtures.push("workspace-properties".into());
-                    }
-                    ensure!(
-                        !plantuml || !fixtures.is_empty(),
-                        "oracle gen --plantuml needs at least one --fixture"
-                    );
-                    cmd_oracle_gen(&oracle, &fixtures, plantuml)
-                }
+                Some("gen") => oracle_gen_args(&oracle, &mut args),
                 Some("verify") => {
                     ensure!(args.next().is_none(), "unexpected argument");
                     cmd_oracle_verify(&oracle)
                 }
                 _ => {
                     bail!(
-                        "usage: cargo xtask oracle gen [--plantuml] [--fixture NAME]… \
+                        "usage: cargo xtask oracle gen [--plantuml [--c4]] [--fixture NAME]… \
                          | verify"
                     )
                 }
@@ -725,15 +712,17 @@ fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Resu
     Ok(produced)
 }
 
-/// Run `structurizr export --format plantuml` and return the `.puml` files the
-/// app wrote (sorted by name). The reference names them
-/// `structurizr-<workspaceId>-<key>.puml` (+ a `-key` legend file per view with
-/// a legend); an empty set is legitimate only for viewless workspaces, which
-/// the golden corpus excludes (nothing to pin).
+/// Run `structurizr export --format <format>` (plantuml or plantuml/c4plantuml)
+/// and return the `.puml` files the app wrote (sorted by name). The reference
+/// names them `structurizr-<workspaceId>-<key>.puml` (+ a `-key` legend file per
+/// view with a legend — the C4 exporter emits none, its `createLegend` is null);
+/// an empty set is legitimate only for viewless workspaces, which the golden
+/// corpus excludes (nothing to pin).
 fn reference_export_plantuml(
     oracle: &Path,
     workspace: &Path,
     outdir: &Path,
+    format: &str,
 ) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(outdir)?;
     let output = Command::new(oracle)
@@ -741,14 +730,14 @@ fn reference_export_plantuml(
         .arg("--workspace")
         .arg(workspace)
         .arg("--format")
-        .arg("plantuml")
+        .arg(format)
         .arg("--output")
         .arg(outdir)
         .output()
         .with_context(|| format!("failed to run {}", oracle.display()))?;
     if !output.status.success() {
         bail!(
-            "structurizr plantuml export failed ({}):\n{}",
+            "structurizr {format} export failed ({}):\n{}",
             workspace.display(),
             String::from_utf8_lossy(&output.stderr)
         );
@@ -1007,15 +996,51 @@ fn scratch(name: &str) -> PathBuf {
     env::temp_dir().join(format!("oxz-oracle-{}-{}", std::process::id(), name))
 }
 
-fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], plantuml: bool) -> Result<()> {
+/// `oracle gen` option parsing: `--fixture NAME` repeats, `--plantuml`
+/// selects the diagram goldens, `--c4` (with `--plantuml`) the
+/// `plantuml/c4plantuml` dialect.
+fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Result<()> {
+    let mut fixtures = Vec::new();
+    let mut plantuml = false;
+    let mut c4 = false;
+    while let Some(a) = args.next() {
+        if a == "--plantuml" {
+            plantuml = true;
+            continue;
+        }
+        if a == "--c4" {
+            c4 = true;
+            continue;
+        }
+        ensure!(a == "--fixture", "unexpected argument `{a}`");
+        let name = args.next().context("--fixture needs a name")?;
+        fixtures.push(name);
+    }
+    ensure!(!c4 || plantuml, "oracle gen --c4 needs --plantuml too");
+    if !plantuml && fixtures.is_empty() {
+        fixtures.push("workspace-properties".into());
+    }
+    ensure!(
+        !plantuml || !fixtures.is_empty(),
+        "oracle gen --plantuml needs at least one --fixture"
+    );
+    cmd_oracle_gen(oracle, &fixtures, plantuml, c4)
+}
+
+fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], plantuml: bool, c4: bool) -> Result<()> {
     let root = repo_root()?;
     let golden_dir = root.join("testdata").join("golden");
     if plantuml {
-        let base = golden_dir.join("plantuml");
+        let base = golden_dir.join(if c4 { "plantuml-c4" } else { "plantuml" });
+        let format = if c4 {
+            "plantuml/c4plantuml"
+        } else {
+            "plantuml"
+        };
         for name in fixtures {
             let dsl = find_fixture(&root, name)?;
             let tmp = scratch(&format!("{name}-puml"));
-            let produced = reference_export_plantuml(oracle, &dsl, &tmp)
+            let produced = reference_export_plantuml(oracle, &dsl, &tmp, format)
                 .with_context(|| format!("oracle gen --plantuml `{name}`"))?;
             ensure!(
                 !produced.is_empty(),
@@ -1073,59 +1098,214 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
             println!("MISMATCH: {name} (reference output drifted from committed golden)");
         }
     }
-    // PlantUML goldens (M2-d): `testdata/golden/plantuml/<fixture>/*.puml`,
-    // byte-exact (no normalization — the diagram writer injects no harness
-    // artifacts). The fixture name is the directory name.
-    let puml_base = root.join("testdata").join("golden").join("plantuml");
-    let mut puml_dirs: Vec<PathBuf> = fs::read_dir(&puml_base)
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.is_dir())
-                .collect()
-        })
-        .unwrap_or_default();
-    puml_dirs.sort();
-    for dir in &puml_dirs {
-        let name = dir
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .context("bad fixture")?;
-        let dsl = find_fixture(&root, name)?;
-        let tmp = scratch(&format!("{name}-puml"));
-        let fresh = reference_export_plantuml(oracle, &dsl, &tmp)
-            .with_context(|| format!("oracle verify `{name}` (plantuml)"))?;
-        let mut fresh_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
-        for path in &fresh {
-            let n = path
-                .file_name()
+    // PlantUML goldens (M2-d, C4 leg M3-d): `testdata/golden/plantuml[-c4]/
+    // <fixture>/*.puml`, byte-exact (no normalization — the diagram writer
+    // injects no harness artifacts). The fixture name is the directory name.
+    let mut puml_sets = 0_usize;
+    for (subdir, format) in [
+        ("plantuml", "plantuml"),
+        ("plantuml-c4", "plantuml/c4plantuml"),
+    ] {
+        let puml_base = root.join("testdata").join("golden").join(subdir);
+        let mut puml_dirs: Vec<PathBuf> = fs::read_dir(&puml_base)
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| p.is_dir())
+                    .collect()
+            })
+            .unwrap_or_default();
+        puml_dirs.sort();
+        for dir in &puml_dirs {
+            let name = dir
+                .file_stem()
                 .and_then(|s| s.to_str())
-                .unwrap_or_default();
-            fresh_files.insert((n.to_owned(), fs::read(path)?));
-        }
-        let _ = fs::remove_dir_all(&tmp);
-        let mut committed_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
-        for path in walk_files(dir, ".puml")? {
-            let n = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or_default();
-            committed_files.insert((n.to_owned(), fs::read(&path)?));
-        }
-        if fresh_files == committed_files {
-            println!("ok: {name} (plantuml, {} files)", fresh_files.len());
-        } else {
-            failures += 1;
-            println!("MISMATCH: {name} (plantuml output drifted from committed goldens)");
+                .context("bad fixture")?;
+            let dsl = find_fixture(&root, name)?;
+            let tmp = scratch(&format!("{name}-{subdir}"));
+            let fresh = reference_export_plantuml(oracle, &dsl, &tmp, format)
+                .with_context(|| format!("oracle verify `{name}` ({subdir})"))?;
+            let mut fresh_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
+            for path in &fresh {
+                let n = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or_default();
+                fresh_files.insert((n.to_owned(), fs::read(path)?));
+            }
+            let _ = fs::remove_dir_all(&tmp);
+            let mut committed_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
+            for path in walk_files(dir, ".puml")? {
+                let n = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or_default();
+                committed_files.insert((n.to_owned(), fs::read(&path)?));
+            }
+            if fresh_files == committed_files {
+                println!("ok: {name} ({subdir}, {} files)", fresh_files.len());
+            } else {
+                failures += 1;
+                println!("MISMATCH: {name} ({subdir} output drifted from committed goldens)");
+            }
+            puml_sets += 1;
         }
     }
     ensure!(failures == 0, "{failures} golden(s) failed verification");
     println!(
-        "oracle verify: {} json + {} plantuml golden set(s) match",
-        goldens.len(),
-        puml_dirs.len()
+        "oracle verify: {} json + {puml_sets} plantuml golden set(s) match",
+        goldens.len()
     );
     Ok(())
+}
+
+/// `cargo xtask export-verify` — P2-D9 semantic comparator (Category B, run
+/// sparingly). Requires `$OXIDZR_STRUCTURIZR_BIN` (or `structurizr` on PATH)
+/// AND a pre-built `oxidizr` binary (`cargo build -p oxidizr-cli`). Runs both
+/// exporters over each fixture, parses both into [`exportcmp`] fact multisets
+/// (order-normalized; whitelist = comment/blank lines only) and diffs.
+/// The C4 macro inventory lives in [`exportcmp::C4_MACROS`].
+fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
+    let oracle = find_oracle()?;
+    let root = repo_root()?;
+    let ours =
+        env::var_os("OXIDZR_BIN").map_or_else(|| root.join("target/debug/oxidizr"), PathBuf::from);
+    ensure!(
+        ours.is_file(),
+        "oxidizr binary not found at {} (set $OXIDZR_BIN or run `cargo build -p oxidizr-cli`)",
+        ours.display()
+    );
+    // Default corpus: all C4 goldens (29 fixtures, already byte-pinned) +
+    // `bulk-operations` (D13: byte-order deviation but semantically equal).
+    let mut fixtures: Vec<String> = Vec::new();
+    let mut explicit = false;
+    while let Some(a) = args.next() {
+        if a == "--fixture" {
+            explicit = true;
+            let name = args.next().context("--fixture needs a name")?;
+            fixtures.push(name);
+        } else {
+            bail!("unexpected argument `{a}`");
+        }
+    }
+    if !explicit {
+        let base = root.join("testdata").join("golden").join("plantuml-c4");
+        if let Ok(entries) = fs::read_dir(&base) {
+            for e in entries.flatten() {
+                if e.path().is_dir() {
+                    if let Some(n) = e.path().file_name().and_then(|n| n.to_str()) {
+                        fixtures.push(n.to_owned());
+                    }
+                }
+            }
+        }
+        if !fixtures.iter().any(|f| f == "bulk-operations") {
+            fixtures.push("bulk-operations".into());
+        }
+        fixtures.sort();
+    }
+    ensure!(!fixtures.is_empty(), "no fixtures to verify");
+    let mut failures = 0_usize;
+    for name in &fixtures {
+        let dsl = find_fixture(&root, name)?;
+        let tmp_ref = scratch(&format!("{name}-ev-ref"));
+        let tmp_our = scratch(&format!("{name}-ev-our"));
+        let ref_files = reference_export_plantuml(&oracle, &dsl, &tmp_ref, "plantuml/c4plantuml")
+            .with_context(|| format!("export-verify `{name}` (oracle)"))?;
+        let our_files = run_oxidizr_export(&ours, &dsl, &tmp_our, "plantuml/c4plantuml")
+            .with_context(|| format!("export-verify `{name}` (oxidizr)"))?;
+        let diffs = compare_export_dirs(&ref_files, &our_files)?;
+        let _ = fs::remove_dir_all(&tmp_ref);
+        let _ = fs::remove_dir_all(&tmp_our);
+        if diffs.is_empty() {
+            println!("ok: {name} (semantic)");
+        } else {
+            failures += 1;
+            println!("MISMATCH: {name}");
+            for d in &diffs {
+                println!("  {d}");
+            }
+        }
+    }
+    ensure!(
+        failures == 0,
+        "{failures} fixture(s) failed semantic comparison"
+    );
+    println!(
+        "export-verify: {} fixture(s) semantically match",
+        fixtures.len()
+    );
+    Ok(())
+}
+
+/// Run `oxidizr export --format plantuml/c4plantuml` over `workspace` and
+/// return the `.puml` files produced (sorted).
+fn run_oxidizr_export(
+    bin: &Path,
+    workspace: &Path,
+    outdir: &Path,
+    format: &str,
+) -> Result<Vec<PathBuf>> {
+    fs::create_dir_all(outdir)?;
+    let output = Command::new(bin)
+        .arg("export")
+        .arg("--workspace")
+        .arg(workspace)
+        .arg("--format")
+        .arg(format)
+        .arg("--output")
+        .arg(outdir)
+        .arg("--quiet")
+        .output()
+        .with_context(|| format!("failed to run {}", bin.display()))?;
+    if !output.status.success() {
+        bail!(
+            "oxidizr export failed ({}):\n{}",
+            workspace.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    walk_files(outdir, ".puml")
+}
+
+/// Semantic (order-insensitive) diff of two `.puml` file sets.
+/// Reports: files only in one side; shared files with non-empty fact diffs.
+fn compare_export_dirs(ref_files: &[PathBuf], our_files: &[PathBuf]) -> Result<Vec<String>> {
+    let mut diffs = Vec::new();
+    let ref_map: BTreeMap<String, PathBuf> = ref_files
+        .iter()
+        .filter_map(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| (n.to_owned(), p.clone()))
+        })
+        .collect();
+    let our_map: BTreeMap<String, PathBuf> = our_files
+        .iter()
+        .filter_map(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| (n.to_owned(), p.clone()))
+        })
+        .collect();
+    for name in ref_map.keys().filter(|n| !our_map.contains_key(*n)) {
+        diffs.push(format!("missing file: {name}"));
+    }
+    for name in our_map.keys().filter(|n| !ref_map.contains_key(*n)) {
+        diffs.push(format!("extra file: {name}"));
+    }
+    for (name, rp) in &ref_map {
+        if let Some(op) = our_map.get(name) {
+            let rtext =
+                fs::read_to_string(rp).with_context(|| format!("reading {}", rp.display()))?;
+            let otext =
+                fs::read_to_string(op).with_context(|| format!("reading {}", op.display()))?;
+            for d in exportcmp::diff_facts(&exportcmp::facts(&rtext), &exportcmp::facts(&otext)) {
+                diffs.push(format!("{name}: {d}"));
+            }
+        }
+    }
+    Ok(diffs)
 }
 
 #[cfg(test)]

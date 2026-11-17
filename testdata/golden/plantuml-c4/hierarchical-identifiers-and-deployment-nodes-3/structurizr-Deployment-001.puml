@@ -1,0 +1,31 @@
+@startuml
+title <size:24>Deployment View: SS - Environment</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+Deployment_Node(Environment.DN1, "DN1", $type="", $descr="", $tags="", $link="") {
+  Deployment_Node(Environment.DN1.DN2, "DN2", $type="", $descr="", $tags="", $link="") {
+    Deployment_Node(Environment.DN1.DN2.DN3, "DN3", $type="", $descr="", $tags="", $link="") {
+      Container(Environment.DN1.DN2.DN3.C_1, "C", $techn="", $descr="", $tags="", $link="")
+    }
+
+  }
+
+}
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

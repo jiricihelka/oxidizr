@@ -15,6 +15,11 @@ the oracle's `structurizr-<id>-<key>.puml` (+ `-key` legend) files, RAW — the
 diagram writer injects no harness artifacts, so nothing is normalized. The
 corpus is the A/B sweep SAME set minus vacuous (viewless) fixtures; compared
 by the Category-A test `crates/oxidizr-api/tests/export_plantuml_goldens.rs`.
+`golden/plantuml-c4/<fixture>/` (M3-d, `cargo xtask oracle gen --plantuml --c4
+--fixture <fixture>`) is the same contract for `plantuml/c4plantuml` — no
+legend files (the C4 exporter's `createLegend` is null), corpus = C4 sweep SAME
+set minus vacuous fixtures (viewless or C4-viewless, e.g. CustomView-only),
+plus the `c4-props` probe (property-driven legs, below).
 * `dsl/` — 107 DSL fixtures (reference test resources; P1 parse corpus).
 * `probes/` — hand-written oracle-probe fixtures (WRITE-CATALOG witnesses; see
   `agents/plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.
@@ -24,7 +29,10 @@ by the Category-A test `crates/oxidizr-api/tests/export_plantuml_goldens.rs`.
   bindings, color normalization). The `m3b-defaults` golden is raw oracle bytes
   minus the `structurizr.inspection.*` counters and the emptied `properties`
   entry; probe inputs must stay re-readable by the reference itself (a
-  healthCheck with a null `name`/`url` NPEs the reference READ).
+  healthCheck with a null `name`/`url` NPEs the reference READ). `c4-props.dsl` (P2-M3-d: the property-driven C4 legs
+   no vendored fixture reaches — `c4plantuml.tags`/`.stereotypes`/
+   `.elementProperties`/`.relationshipProperties`/`.stdlib=false` +
+   `plantuml.sequenceDiagram` box leg; witnessed as a `plantuml-c4` golden).
 * `read-corpus/` + `validation/` — 21 JSON workspaces (back-compat read + validation rules,
   from `structurizr-client/src/test/resources`). In `validation/`, 15 fixtures must fail
   `hydrate()` with the reference message and 1

@@ -1,0 +1,26 @@
+@startuml
+title <size:24>Dynamic View: System</size>\n<size:24>Sequence view</size>
+
+set separator none
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4_Sequence>
+
+Person(User, "User", $descr="A user", $tags="", $link="")
+box "System\n<size:12>[Software System]</size>"
+  Container(System.Webapp, "Web app", $techn="Rust", $descr="serves the UI", $tags="", $link="")
+  Container(System.Database, "Database", $techn="Postgres", $descr="stores state", $tags="", $link="")
+end box
+
+Rel(User, System.Webapp, "1: uses", $techn="", $tags="", $link="")
+Rel(System.Webapp, System.Database, "2: reads and writes", $techn="SQL", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

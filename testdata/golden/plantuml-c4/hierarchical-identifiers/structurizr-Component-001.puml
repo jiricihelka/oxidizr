@@ -1,0 +1,30 @@
+@startuml
+title <size:24>Component View: B - C</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+System_Boundary("B_boundary", "B", $tags="") {
+  Container_Boundary("B.C_boundary", "C", $tags="") {
+    Component(B.C.D, "D", $techn="", $descr="", $tags="", $link="")
+    Component(B.C.A, "A", $techn="", $descr="", $tags="", $link="")
+  }
+
+}
+
+Rel(B.C.D, B.C.A, "", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -1,0 +1,28 @@
+@startuml
+title <size:24>Deployment View: Software System - Live</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+Deployment_Node(Live.DeploymentNode, "Deployment Node", $type="", $descr="", $tags="", $link="") {
+  Container(Live.DeploymentNode.WebApplication_1, "Web Application", $techn="", $descr="", $tags="", $link="")
+  Container(Live.DeploymentNode.DatabaseSchema_1, "Database Schema", $techn="", $descr="", $tags="", $link="")
+}
+
+Rel(Live.DeploymentNode.WebApplication_1, Live.DeploymentNode.DatabaseSchema_1, "", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

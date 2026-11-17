@@ -1,0 +1,21 @@
+@startuml
+title <size:24>System Context View: SS</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+System(SS, "SS", $descr="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

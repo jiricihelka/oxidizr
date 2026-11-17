@@ -1,0 +1,36 @@
+@startuml
+title <size:24>Component View: X - Customer API</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+System(A, "A", $descr="", $tags="", $link="")
+
+System_Boundary("X_boundary", "X", $tags="") {
+  Container_Boundary("X.CustomerAPI_boundary", "Customer API", $tags="") {
+    Component(X.CustomerAPI.CustomerController, "Customer Controller", $techn="Spring MVC REST Controller", $descr="", $tags="", $link="")
+    Component(X.CustomerAPI.CustomerRepository, "Customer Repository", $techn="Spring Data Repository", $descr="", $tags="", $link="")
+  }
+
+  Container(X.Customerdatabase, "Customer database", $techn="", $descr="", $tags="", $link="")
+}
+
+Rel(X.CustomerAPI.CustomerController, X.CustomerAPI.CustomerRepository, "", $techn="", $tags="", $link="")
+Rel(X.CustomerAPI.CustomerRepository, X.Customerdatabase, "", $techn="", $tags="", $link="")
+Rel(A, X.CustomerAPI.CustomerController, "Makes API calls using", $techn="HTTPS", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml
