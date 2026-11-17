@@ -624,6 +624,13 @@ pub struct Styles {
     pub element_styles: Vec<ElementStyle>,
     /// Relationship styles, in reference iteration order (see [`Styles`]).
     pub relationship_styles: Vec<RelationshipStyle>,
+    /// Themes loaded by `ThemeUtils.loadThemes`
+    /// (`Styles.addStylesFromTheme`), in add order. Consulted by the
+    /// resolution engine (`crate::styles`) BEFORE the workspace styles —
+    /// never merged, and NOT serialized: Java's field has no getter/setter,
+    /// so Jackson never sees it (oracle: a `-f json` export after
+    /// `loadThemes` shows no theme content).
+    pub themes: Vec<Theme>,
 }
 
 impl Styles {

@@ -775,6 +775,8 @@ fn read_styles(o: Option<Obj<'_>>) -> Result<Styles, JsonError> {
             .into_iter()
             .map(read_relationship_style)
             .collect::<Result<Vec<RelationshipStyle>, JsonError>>()?,
+        // `Styles.themes` has no JSON representation (no getter/setter).
+        themes: Vec::new(),
     })
 }
 
