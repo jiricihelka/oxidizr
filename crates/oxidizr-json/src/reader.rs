@@ -58,7 +58,7 @@ pub fn from_slice(bytes: &[u8]) -> Result<Workspace, JsonError> {
 // Scalar accessors (Jackson binding semantics)
 // ---------------------------------------------------------------------------
 
-type Obj<'a> = &'a Map<String, Value>;
+pub(crate) type Obj<'a> = &'a Map<String, Value>;
 
 fn read<'a>(o: Obj<'a>, key: &str) -> Option<&'a Value> {
     o.get(key).filter(|v| !v.is_null())
@@ -68,7 +68,7 @@ fn read<'a>(o: Obj<'a>, key: &str) -> Option<&'a Value> {
 /// `asText`); objects/arrays are the hostile-input case and bind as absent.
 /// An empty string binds as `Some("")` — significant for the `NON_NULL`
 /// style fields, byte-invisible for the `NON_EMPTY` ones.
-fn text(o: Obj<'_>, key: &str) -> Option<String> {
+pub(crate) fn text(o: Obj<'_>, key: &str) -> Option<String> {
     match read(o, key)? {
         Value::String(s) => Some(s.clone()),
         Value::Bool(b) => Some(b.to_string()),
@@ -180,7 +180,7 @@ fn parse_enum<E>(o: Obj<'_>, key: &str, parse: fn(&str) -> Option<E>) -> Option<
     text(o, key).as_deref().and_then(parse)
 }
 
-fn objects<'a>(o: Obj<'a>, key: &str) -> Vec<Obj<'a>> {
+pub(crate) fn objects<'a>(o: Obj<'a>, key: &str) -> Vec<Obj<'a>> {
     read(o, key)
         .and_then(Value::as_array)
         .map(|items| items.iter().filter_map(Value::as_object).collect())
@@ -769,54 +769,58 @@ fn read_styles(o: Option<Obj<'_>>) -> Result<Styles, JsonError> {
     Ok(Styles {
         element_styles: objects(o, "elements")
             .into_iter()
-            .map(|s| {
-                Ok(ElementStyle {
-                    tag: text(s, "tag").unwrap_or_default(),
-                    color_scheme: parse_enum(s, "colorScheme", ColorScheme::parse),
-                    width: opt_i32_field(s, "width"),
-                    height: opt_i32_field(s, "height"),
-                    background: style_color(s, "background")?,
-                    stroke: style_color(s, "stroke")?,
-                    stroke_width: clamped_i32(s, "strokeWidth", 1, 10),
-                    color: style_color(s, "color")?,
-                    font_size: opt_i32_field(s, "fontSize"),
-                    shape: parse_enum(s, "shape", Shape::parse),
-                    icon: text(s, "icon"),
-                    icon_position: parse_enum(
-                        s,
-                        "iconPosition",
-                        oxidizr_core::views::IconPosition::parse,
-                    ),
-                    border: parse_enum(s, "border", LineStyle::parse),
-                    opacity: clamped_i32(s, "opacity", 0, 100),
-                    metadata: read(s, "metadata").and_then(Value::as_bool),
-                    description: read(s, "description").and_then(Value::as_bool),
-                    properties: props(s, "properties"),
-                })
-            })
+            .map(read_element_style)
             .collect::<Result<Vec<ElementStyle>, JsonError>>()?,
         relationship_styles: objects(o, "relationships")
             .into_iter()
-            .map(|s| {
-                Ok(RelationshipStyle {
-                    tag: text(s, "tag").unwrap_or_default(),
-                    color_scheme: parse_enum(s, "colorScheme", ColorScheme::parse),
-                    thickness: opt_i32_field(s, "thickness"),
-                    color: style_color(s, "color")?,
-                    font_size: opt_i32_field(s, "fontSize"),
-                    width: opt_i32_field(s, "width"),
-                    dashed: read(s, "dashed").and_then(Value::as_bool),
-                    style: parse_enum(s, "style", LineStyle::parse),
-                    routing: parse_enum(s, "routing", Routing::parse),
-                    jump: read(s, "jump").and_then(Value::as_bool),
-                    position: clamped_i32(s, "position", 0, 100),
-                    opacity: clamped_i32(s, "opacity", 0, 100),
-                    metadata: read(s, "metadata").and_then(Value::as_bool),
-                    description: read(s, "description").and_then(Value::as_bool),
-                    properties: props(s, "properties"),
-                })
-            })
+            .map(read_relationship_style)
             .collect::<Result<Vec<RelationshipStyle>, JsonError>>()?,
+    })
+}
+
+/// One `ElementStyle` bean (workspace `styles.elements[]` and the identical
+/// `theme.json` shape; the setters normalize — see [`clamped_i32`] and
+/// [`style_color`]).
+pub(crate) fn read_element_style(s: Obj<'_>) -> Result<ElementStyle, JsonError> {
+    Ok(ElementStyle {
+        tag: text(s, "tag").unwrap_or_default(),
+        color_scheme: parse_enum(s, "colorScheme", ColorScheme::parse),
+        width: opt_i32_field(s, "width"),
+        height: opt_i32_field(s, "height"),
+        background: style_color(s, "background")?,
+        stroke: style_color(s, "stroke")?,
+        stroke_width: clamped_i32(s, "strokeWidth", 1, 10),
+        color: style_color(s, "color")?,
+        font_size: opt_i32_field(s, "fontSize"),
+        shape: parse_enum(s, "shape", Shape::parse),
+        icon: text(s, "icon"),
+        icon_position: parse_enum(s, "iconPosition", oxidizr_core::views::IconPosition::parse),
+        border: parse_enum(s, "border", LineStyle::parse),
+        opacity: clamped_i32(s, "opacity", 0, 100),
+        metadata: read(s, "metadata").and_then(Value::as_bool),
+        description: read(s, "description").and_then(Value::as_bool),
+        properties: props(s, "properties"),
+    })
+}
+
+/// One `RelationshipStyle` bean (see [`read_element_style`]).
+pub(crate) fn read_relationship_style(s: Obj<'_>) -> Result<RelationshipStyle, JsonError> {
+    Ok(RelationshipStyle {
+        tag: text(s, "tag").unwrap_or_default(),
+        color_scheme: parse_enum(s, "colorScheme", ColorScheme::parse),
+        thickness: opt_i32_field(s, "thickness"),
+        color: style_color(s, "color")?,
+        font_size: opt_i32_field(s, "fontSize"),
+        width: opt_i32_field(s, "width"),
+        dashed: read(s, "dashed").and_then(Value::as_bool),
+        style: parse_enum(s, "style", LineStyle::parse),
+        routing: parse_enum(s, "routing", Routing::parse),
+        jump: read(s, "jump").and_then(Value::as_bool),
+        position: clamped_i32(s, "position", 0, 100),
+        opacity: clamped_i32(s, "opacity", 0, 100),
+        metadata: read(s, "metadata").and_then(Value::as_bool),
+        description: read(s, "description").and_then(Value::as_bool),
+        properties: props(s, "properties"),
     })
 }
 

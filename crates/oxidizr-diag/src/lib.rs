@@ -181,6 +181,12 @@ pub mod codes {
     /// raster/plantuml/mermaid/kroki image-view importers need the
     /// `structurizr-import` stack (D11).
     pub const IMPORT_DEFERRED: Code = Code::new(5005);
+    /// Export format parsed but not implemented yet (Phase 2 M0): the
+    /// reference-registry diagram formats land in M1–M4; `static`/`png`/`svg`
+    /// are reference-CLI branches oxidizr does not target (`PHASE_2.md`).
+    /// Unknown format strings are NOT this code — the reference logs them and
+    /// exits 0 (`ExportCommand`), and oxidizr notes likewise.
+    pub const EXPORT_NOT_IMPLEMENTED: Code = Code::new(5007);
     /// Model/view validation failure — reference `hydrate()`/validate message
     /// verbatim (M6 CLI `validate`).
     pub const VALIDATION: Code = Code::new(3001);

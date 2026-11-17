@@ -769,6 +769,7 @@ dependencies = [
  "oxidizr-core",
  "oxidizr-diag",
  "oxidizr-dsl",
+ "oxidizr-export",
  "oxidizr-json",
 ]
 
@@ -825,6 +826,15 @@ dependencies = [
  "oxidizr-core",
  "oxidizr-json",
  "serde_json",
+]
+
+[[package]]
+name = "oxidizr-export"
+version = "0.1.0"
+dependencies = [
+ "oxidizr-core",
+ "oxidizr-json",
+ "thiserror",
 ]
 
 [[package]]

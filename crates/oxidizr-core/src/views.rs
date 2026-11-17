@@ -671,6 +671,26 @@ fn style_cmp(
     }
 }
 
+/// A `theme.json` document (`view/Theme`) — the theme de/serialization shape
+/// of Phase 2 `export --format theme` (write: name/description from the
+/// workspace, styles the live collections) and of theme loading (M1). Field
+/// order is the Java declaration order, which the plain `ThemeUtils` mapper
+/// serializes as key order (oracle probes 2026-11-17): `name, description,
+/// elements, relationships, license`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Theme {
+    /// Theme name — the workspace name on the export path (`NON_EMPTY`).
+    pub name: Option<String>,
+    /// Theme description (`NON_EMPTY`).
+    pub description: Option<String>,
+    /// Element styles, document order on read.
+    pub elements: Vec<ElementStyle>,
+    /// Relationship styles, document order on read.
+    pub relationships: Vec<RelationshipStyle>,
+    /// `license` — declared last, never set by `ThemeUtils.toJson`.
+    pub license: Option<String>,
+}
+
 /// Terminology overrides (`view/Terminology`); every field defaults to `""`
 /// (`NON_EMPTY` omits unset ones).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

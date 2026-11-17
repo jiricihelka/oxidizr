@@ -152,6 +152,18 @@ pub enum Request {
         /// Output file (`None` = stdout bytes).
         output: Option<PathBuf>,
     },
+    /// Export the workspace (`export`, Phase 2): format strings per the
+    /// reference CLI (`theme`, `json`, `plantuml…`, `mermaid`, …).
+    Export {
+        /// Workspace file (`.dsl` or `.json`) — the reference requires a
+        /// file path (no stdin).
+        workspace: PathBuf,
+        /// Raw `--format` value (lowercased and parsed by `ExportFormat`).
+        format: String,
+        /// Output directory (`None` = the workspace file's directory,
+        /// created as needed — reference `ExportCommand`).
+        output: Option<PathBuf>,
+    },
 }
 
 /// The full result of one [`execute`]: exit class, ordered human log, and
@@ -201,6 +213,11 @@ pub fn execute(request: Request, opts: &ApiOptions) -> Outcome {
             layout,
             output,
         } => reconcile_cmd(&dsl, &layout, output.as_deref(), opts),
+        Request::Export {
+            workspace,
+            format,
+            output,
+        } => export_cmd(&workspace, &format, output.as_deref(), opts),
     }
 }
 
@@ -578,6 +595,176 @@ fn validate(files: &[PathBuf], opts: &ApiOptions) -> Outcome {
     } else {
         ExitClass::Ok
     };
+    out
+}
+
+/// The `export` loader — the `validate` file loader for ONE path: read by
+/// extension (`.dsl` → parse, `.json` → `oxidizr_json::from_slice`),
+/// returning the source (for error spans) plus the workspace. Failures are
+/// recorded into `out` (the caller returns its [`Outcome`]); unblocked DSL
+/// statement errors are pushed there too but do NOT stop the export (D1
+/// recovery carries the repaired workspace, `--strict` blocks).
+fn load_export_workspace(
+    workspace_file: &Path,
+    opts: &ApiOptions,
+    out: &mut Outcome,
+) -> Option<(Source, Workspace)> {
+    let ext = workspace_file
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    let source = if matches!(ext.as_deref(), Some("dsl" | "json")) {
+        match read_input(&Input::File(workspace_file.to_path_buf()), opts) {
+            Ok(s) => s,
+            Err(e) => {
+                out.fail(e, ExitClass::Io);
+                return None;
+            }
+        }
+    } else {
+        out.fail(
+            Issue::error(
+                codes::CLI_IO,
+                format!(
+                    "cannot determine the workspace format of `{}` (expected `.dsl` or `.json`)",
+                    workspace_file.display()
+                ),
+            ),
+            ExitClass::Diagnostics,
+        );
+        return None;
+    };
+    let workspace = if ext.as_deref() == Some("dsl") {
+        match parse_dsl_input(&source, opts) {
+            Ok(r) if r.errors.is_empty() => r.workspace,
+            Ok(r) => {
+                let issues: Vec<Issue> = r
+                    .errors
+                    .iter()
+                    .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&r.workspace)))
+                    .collect();
+                let blocked = blocks(&issues, opts.strict);
+                push_issues(out, issues);
+                if blocked {
+                    out.exit = ExitClass::Diagnostics;
+                    return None;
+                }
+                r.workspace
+            }
+            Err(e) => {
+                out.fail(e, ExitClass::Diagnostics);
+                return None;
+            }
+        }
+    } else {
+        match oxidizr_json::from_slice(source.text.as_bytes()) {
+            Ok(ws) => ws,
+            Err(e) => {
+                out.fail(
+                    Issue::from_json(&e, &source.text, &source.display),
+                    ExitClass::Diagnostics,
+                );
+                return None;
+            }
+        }
+    };
+    Some((source, workspace))
+}
+
+/// `export` (P2-D10, Phase 2 M0): load the workspace by extension (the
+/// `validate` loader), resolve the output directory exactly like
+/// `ExportCommand` (default = the canonicalized workspace parent; `mkdirs`
+/// happens BEFORE format dispatch, so it is created even for formats that
+/// then fail), and write every exported file verbatim, logging a
+/// `Writing <path>` line per file. Dispatch follows the reference registry:
+/// `theme` and `json` are implemented (M0); other registry formats are
+/// OXZ-5007 until M1–M4; unknown strings mirror the reference's
+/// class-load miss — `Unknown export format: …`, exit 0. Theme pre-loading
+/// (`ThemeUtils.loadThemes`, only for `DiagramExporter` formats) joins this
+/// dispatch when the diagram exporters land (M1).
+fn export_cmd(
+    workspace_file: &Path,
+    format: &str,
+    output: Option<&Path>,
+    opts: &ApiOptions,
+) -> Outcome {
+    let mut out = Outcome::default();
+    let Some((source, workspace)) = load_export_workspace(workspace_file, opts, &mut out) else {
+        return out;
+    };
+
+    // `ExportCommand`: canonical parent of the workspace file; `mkdirs`
+    // before the format dispatch (reference does it before `findExporter`).
+    // Canonicalization can only fail for a file we just read — fall back to
+    // the CWD instead of the reference's NPE crash.
+    let out_dir = match output {
+        Some(dir) => dir.to_path_buf(),
+        None => std::fs::canonicalize(workspace_file)
+            .ok()
+            .and_then(|abs| abs.parent().map(std::path::Path::to_path_buf))
+            .unwrap_or_default(),
+    };
+    if let Err(e) = std::fs::create_dir_all(&out_dir) {
+        out.fail(
+            Issue::io(
+                &format!("failed to create output directory `{}`", out_dir.display()),
+                &e,
+            ),
+            ExitClass::Io,
+        );
+        return out;
+    }
+
+    let export_format = oxidizr_export::ExportFormat::parse(format);
+    if !export_format.is_known() {
+        // The reference tries to class-load the format string, logs
+        // `Unknown export format: …` and STILL returns true — exit 0.
+        out.log.push(LogItem::NoteLine(format!(
+            "Unknown export format: {}",
+            export_format.label()
+        )));
+        return out;
+    }
+    let file_name = workspace_file
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or_default();
+    let files = match export_format.export(&workspace, file_name) {
+        Ok(files) => files,
+        Err(e @ oxidizr_export::ExportError::NotImplemented { .. }) => {
+            out.fail(
+                Issue::error(codes::EXPORT_NOT_IMPLEMENTED, e.to_string()),
+                ExitClass::Diagnostics,
+            );
+            return out;
+        }
+        Err(e @ oxidizr_export::ExportError::NoExtension { .. }) => {
+            out.fail(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io);
+            return out;
+        }
+        Err(oxidizr_export::ExportError::Json(je)) => {
+            out.fail(
+                Issue::from_json(&je, &source.text, &source.display),
+                ExitClass::Diagnostics,
+            );
+            return out;
+        }
+    };
+    for file in files {
+        let path = out_dir.join(&file.name);
+        if let Err(e) = std::fs::write(&path, &file.bytes) {
+            out.fail(
+                Issue::io(&format!("failed to write `{}`", path.display()), &e),
+                ExitClass::Io,
+            );
+            return out;
+        }
+        // `writeToFile` logs the canonical path; fall back to the joined
+        // path when canonicalization fails (never right after a write).
+        let shown = std::fs::canonicalize(&path).unwrap_or(path);
+        out.log
+            .push(LogItem::NoteLine(format!("Writing {}", shown.display())));
+    }
     out
 }
 

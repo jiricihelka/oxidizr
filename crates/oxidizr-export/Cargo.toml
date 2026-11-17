@@ -1,0 +1,15 @@
+[package]
+name = "oxidizr-export"
+description = "oxidizr exporters — Phase 2 (agents/plan/build/PHASE_2.md): format dispatch, the IndentingWriter/Diagram export model, reference file naming"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+oxidizr-core = { workspace = true }
+oxidizr-json = { workspace = true }
+thiserror = { workspace = true }

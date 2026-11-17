@@ -25,10 +25,12 @@ mod javahash;
 pub mod keep;
 mod printer;
 mod reader;
+pub mod theme;
 mod writer;
 
 pub use error::JsonError;
 pub use keep::roundtrip_keep_unknown;
+pub use theme::{theme_from_slice, theme_to_vec, theme_write};
 
 use oxidizr_core::Workspace;
 

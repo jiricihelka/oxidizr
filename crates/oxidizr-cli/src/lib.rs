@@ -12,7 +12,11 @@
 //! M6-c landed `reconcile` (the F1 geometry re-attach, [`reconcile`], plus
 //! its OXZ-3002 ambiguity code). Input decoding is UTF-8-only at v0.1
 //! (V-8 resolved: no `--encoding` flag; non-UTF-8 input is an OXZ-5006 exit-3
-//! failure like any other I/O problem).
+//! failure like any other I/O problem). Phase 2 M0 added `export` (reference
+//! `-w/--workspace`, required `-f/--format`, optional `-o/--output`): `theme`
+//! and `json` write through the `oxidizr_export` dispatch; diagram registry
+//! formats raise OXZ-5007 until M1–M4; unknown format strings stay the exit-0
+//! note, mirroring `ExportCommand` (`agents/plan/build/PHASE_2.md`).
 //!
 //! Since Phase 1T T0-d the command bodies live in [`oxidizr_api`]
 //! (`Request → execute() → Outcome`); this crate adds ONLY the argv surface,
@@ -112,6 +116,22 @@ pub enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Export the workspace (Phase 2): `theme` and `json` today; diagram
+    /// formats per the reference CLI land in M1–M4.
+    Export {
+        /// Workspace file (`.dsl` or `.json`) — reference `-w/--workspace`.
+        #[arg(long, short = 'w')]
+        workspace: PathBuf,
+        /// Export format (lowercased): `theme` | `json` |
+        /// `plantuml[/structurizr|/c4plantuml][-light|-dark]` | `mermaid` |
+        /// `websequencediagrams` | `static` | `png` | `svg` — reference `-f/--format`.
+        #[arg(long, short = 'f')]
+        format: String,
+        /// Output directory; default is the workspace file's directory
+        /// (created if missing) — reference `-o/--output`.
+        #[arg(long, short = 'o')]
+        output: Option<PathBuf>,
+    },
 }
 
 /// Run the CLI. Returns the process exit code (usage errors exit via clap with `2`).
@@ -187,6 +207,15 @@ fn to_request(cli: &Cli) -> Request {
             layout: input_of(Some(layout)),
             output: output.clone(),
         },
+        Command::Export {
+            workspace,
+            format,
+            output,
+        } => Request::Export {
+            workspace: workspace.clone(),
+            format: format.clone(),
+            output: output.clone(),
+        },
     }
 }
 
@@ -259,6 +288,7 @@ mod tests {
             Command::Validate { .. } => "validate",
             Command::Fmt { .. } => "fmt",
             Command::Reconcile { .. } => "reconcile",
+            Command::Export { .. } => "export",
         }
     }
 
@@ -278,6 +308,21 @@ mod tests {
             "l.json",
         ])
         .unwrap();
+        Cli::try_parse_from(["oxidizr", "export", "-w", "ws.dsl", "-f", "theme"]).unwrap();
+        Cli::try_parse_from([
+            "oxidizr",
+            "export",
+            "--workspace",
+            "ws.json",
+            "--format",
+            "plantuml/c4plantuml-dark",
+            "--output",
+            "out/",
+        ])
+        .unwrap();
+        // `--format` is required (reference parity: the option is REQUIRED);
+        // missing it is a clap usage error, exit 2.
+        assert!(Cli::try_parse_from(["oxidizr", "export", "-w", "ws.dsl"]).is_err());
         assert!(Cli::try_parse_from(["oxidizr", "merge"]).is_err());
         // `validate` needs at least one file (clap usage error, exit 2).
         assert!(Cli::try_parse_from(["oxidizr", "validate"]).is_err());

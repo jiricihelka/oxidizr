@@ -165,7 +165,7 @@ fn insert_sorted(
 
 /// `NON_NULL` string: a `Some` value is written even when empty (style fields
 /// carry `@JsonInclude(NON_NULL)`, V-2 note).
-fn opt_nnn(s: Option<&str>) -> Option<Json> {
+pub(crate) fn opt_nnn(s: Option<&str>) -> Option<Json> {
     s.map(|t| Json::Str(t.to_string()))
 }
 

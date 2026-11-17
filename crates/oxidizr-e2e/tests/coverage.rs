@@ -25,6 +25,7 @@ const REGISTRY: &[(u16, &str)] = &[
     (5003, "DOCS_DEFERRED"),
     (5005, "IMPORT_DEFERRED"),
     (5006, "CLI_IO"),
+    (5007, "EXPORT_NOT_IMPLEMENTED"),
     (9001, "TOO_MANY_ERRORS"),
 ];
 
@@ -39,6 +40,12 @@ const ALLOWLIST: &[(u16, &str)] = &[
         "unreachable via the corpus: every workspace shape the writer refuses (filtered \
          view without base, dangling view links) is rejected earlier by the JSON hydrate \
          gate as OXZ-4001, and DSL parsing cannot build one — T3 researched",
+    ),
+    (
+        5007,
+        "export dispatch landed at M0 with `theme`/`json` only — the diagram \
+         formats (M2–M4) make the code corpus-reachable; remove this entry \
+         when an export manifest covers it (PHASE_2.md)",
     ),
     (
         9001,
