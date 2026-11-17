@@ -611,13 +611,64 @@ pub struct RelationshipStyle {
     pub properties: crate::properties::Properties,
 }
 
-/// Element + relationship styles (`view/Styles`).
+/// Element + relationship styles (`view/Styles`). The vectors mirror the
+/// reference collections' iteration order: the DSL builder inserts through
+/// [`Styles::insert_element_style`] (the Java fields default to `TreeSet`s),
+/// while the JSON reader appends in document order (Jackson binds
+/// `Styles.elements`/`relationships` by FIELD — there is no setter, so unlike
+/// `Model.setPeople` the `TreeSet` is replaced by an ordered list; oracle
+/// probes 2026-11-17, WRITE-CATALOG §5).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Styles {
-    /// Element styles, definition order.
+    /// Element styles, in reference iteration order (see [`Styles`]).
     pub element_styles: Vec<ElementStyle>,
-    /// Relationship styles, definition order.
+    /// Relationship styles, in reference iteration order (see [`Styles`]).
     pub relationship_styles: Vec<RelationshipStyle>,
+}
+
+impl Styles {
+    /// Insert `style` at its `AbstractStyle.compareTo` position — the
+    /// `TreeSet<ElementStyle>` the reference adds into on the DSL path. The
+    /// ordering key (`colorScheme`, `tag`) is fixed at construction, so sorted
+    /// insertion reproduces `TreeSet` iteration exactly. Returns the index.
+    pub fn insert_element_style(&mut self, style: ElementStyle) -> usize {
+        let pos = self.element_styles.partition_point(|s| {
+            style_cmp(s.color_scheme, &s.tag, style.color_scheme, &style.tag).is_lt()
+        });
+        self.element_styles.insert(pos, style);
+        pos
+    }
+
+    /// [`Styles::insert_element_style`] for relationship styles.
+    pub fn insert_relationship_style(&mut self, style: RelationshipStyle) -> usize {
+        let pos = self.relationship_styles.partition_point(|s| {
+            style_cmp(s.color_scheme, &s.tag, style.color_scheme, &style.tag).is_lt()
+        });
+        self.relationship_styles.insert(pos, style);
+        pos
+    }
+}
+
+/// `AbstractStyle.compareTo` (`view/AbstractStyle`): null `colorScheme` sorts
+/// before non-null; both null → `tag`, both set → `colorScheme + "/" + tag` —
+/// always UTF-16 code-unit order (`String.compareTo`).
+fn style_cmp(
+    a_scheme: Option<ColorScheme>,
+    a_tag: &str,
+    b_scheme: Option<ColorScheme>,
+    b_tag: &str,
+) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a_scheme, b_scheme) {
+        (None, None) => a_tag.encode_utf16().cmp(b_tag.encode_utf16()),
+        (None, Some(_)) => Ordering::Less,
+        (Some(_), None) => Ordering::Greater,
+        (Some(a), Some(b)) => {
+            let x = format!("{}/{a_tag}", a.as_str());
+            let y = format!("{}/{b_tag}", b.as_str());
+            x.encode_utf16().cmp(y.encode_utf16())
+        }
+    }
 }
 
 /// Terminology overrides (`view/Terminology`); every field defaults to `""`

@@ -753,6 +753,15 @@ fn style_color(o: Obj<'_>, key: &str) -> Result<Option<String>, JsonError> {
     colors::normalize(&color).map(Some).map_err(JsonError::Read)
 }
 
+/// `opt_i32_field` with the `JavaBean` setter clamps applied — Jackson binds
+/// style numbers THROUGH the setters (WRITE-CATALOG §6 "read normalizes"):
+/// `ElementStyle.setStrokeWidth` pins to [1, 10]; `setOpacity` (both styles)
+/// and `RelationshipStyle.setPosition` pin to [0, 100]; null leaves the
+/// field untouched (oracle probes 2026-11-17: `strokeWidth 0` reads back 1).
+fn clamped_i32(o: Obj<'_>, key: &str, low: i32, high: i32) -> Option<i32> {
+    opt_i32_field(o, key).map(|n| n.clamp(low, high))
+}
+
 fn read_styles(o: Option<Obj<'_>>) -> Result<Styles, JsonError> {
     let Some(o) = o else {
         return Ok(Styles::default());
@@ -768,7 +777,7 @@ fn read_styles(o: Option<Obj<'_>>) -> Result<Styles, JsonError> {
                     height: opt_i32_field(s, "height"),
                     background: style_color(s, "background")?,
                     stroke: style_color(s, "stroke")?,
-                    stroke_width: opt_i32_field(s, "strokeWidth"),
+                    stroke_width: clamped_i32(s, "strokeWidth", 1, 10),
                     color: style_color(s, "color")?,
                     font_size: opt_i32_field(s, "fontSize"),
                     shape: parse_enum(s, "shape", Shape::parse),
@@ -779,7 +788,7 @@ fn read_styles(o: Option<Obj<'_>>) -> Result<Styles, JsonError> {
                         oxidizr_core::views::IconPosition::parse,
                     ),
                     border: parse_enum(s, "border", LineStyle::parse),
-                    opacity: opt_i32_field(s, "opacity"),
+                    opacity: clamped_i32(s, "opacity", 0, 100),
                     metadata: read(s, "metadata").and_then(Value::as_bool),
                     description: read(s, "description").and_then(Value::as_bool),
                     properties: props(s, "properties"),
@@ -800,8 +809,8 @@ fn read_styles(o: Option<Obj<'_>>) -> Result<Styles, JsonError> {
                     style: parse_enum(s, "style", LineStyle::parse),
                     routing: parse_enum(s, "routing", Routing::parse),
                     jump: read(s, "jump").and_then(Value::as_bool),
-                    position: opt_i32_field(s, "position"),
-                    opacity: opt_i32_field(s, "opacity"),
+                    position: clamped_i32(s, "position", 0, 100),
+                    opacity: clamped_i32(s, "opacity", 0, 100),
                     metadata: read(s, "metadata").and_then(Value::as_bool),
                     description: read(s, "description").and_then(Value::as_bool),
                     properties: props(s, "properties"),

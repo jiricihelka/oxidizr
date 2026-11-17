@@ -270,14 +270,21 @@ fn probe_workspace() -> Workspace {
         views.deployment_views[0].base.description = Some("Deployment desc".into());
         views.deployment_views[0].content.elements = vec![el("10"), el("11"), el("14")];
 
-        // Styles (DSL order; the writer re-sorts by `AbstractStyle.compareTo`).
-        views.configuration.styles.element_styles = vec![
-            ElementStyle {
+        // Styles — declared in DSL order, inserted through the sorted
+        // `TreeSet` inserts (the reference `Styles` fields); the writer emits
+        // model order (P2-V1 oracle probes, WRITE-CATALOG §5).
+        views
+            .configuration
+            .styles
+            .insert_element_style(ElementStyle {
                 tag: "Tag B".into(),
                 color: Some("#ff0000".into()),
                 ..Default::default()
-            },
-            ElementStyle {
+            });
+        views
+            .configuration
+            .styles
+            .insert_element_style(ElementStyle {
                 tag: "Element".into(),
                 background: Some("#eeeeee".into()),
                 stroke: Some("#000000".into()),
@@ -291,19 +298,21 @@ fn probe_workspace() -> Workspace {
                 width: Some(100),
                 height: Some(80),
                 ..Default::default()
-            },
-        ];
-        views.configuration.styles.relationship_styles = vec![RelationshipStyle {
-            tag: "Relationship".into(),
-            color: Some("#123456".into()),
-            thickness: Some(3),
-            dashed: Some(true),
-            routing: Some(Routing::Orthogonal),
-            jump: Some(true),
-            style: Some(LineStyle::Dotted),
-            font_size: Some(11),
-            ..Default::default()
-        }];
+            });
+        views
+            .configuration
+            .styles
+            .insert_relationship_style(RelationshipStyle {
+                tag: "Relationship".into(),
+                color: Some("#123456".into()),
+                thickness: Some(3),
+                dashed: Some(true),
+                routing: Some(Routing::Orthogonal),
+                jump: Some(true),
+                style: Some(LineStyle::Dotted),
+                font_size: Some(11),
+                ..Default::default()
+            });
     }
 
     // Workspace properties: the DSL `configuration { properties { ... } }`

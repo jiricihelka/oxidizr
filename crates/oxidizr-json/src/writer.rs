@@ -21,10 +21,10 @@ use oxidizr_core::model::{
 };
 use oxidizr_core::tags::{TagKind, relationship_defaults};
 use oxidizr_core::views::{
-    Animation, AutomaticLayout, ColorScheme, ComponentView, ContainerView, CustomView,
-    DeploymentView, Dimensions, DynamicView, ElementStyle, ElementView, FilteredView, ImageView,
-    RelationshipStyle, RelationshipView, Styles, SystemContextView, SystemLandscapeView,
-    Terminology, View, ViewBase, ViewConfiguration, ViewContent, ViewSet,
+    Animation, AutomaticLayout, ComponentView, ContainerView, CustomView, DeploymentView,
+    Dimensions, DynamicView, ElementStyle, ElementView, FilteredView, ImageView, RelationshipStyle,
+    RelationshipView, Styles, SystemContextView, SystemLandscapeView, Terminology, View, ViewBase,
+    ViewConfiguration, ViewContent, ViewSet,
 };
 
 use crate::error::JsonError;
@@ -91,17 +91,6 @@ pub(crate) fn id_ord(a: &Id, b: &Id) -> Ordering {
     }
 }
 
-/// `AbstractStyle.compareTo` (§5): null `colorScheme` sorts first, both-set
-/// compares `"scheme/tag"`.
-fn style_ord(cs_a: Option<&str>, tag_a: &str, cs_b: Option<&str>, tag_b: &str) -> Ordering {
-    match (cs_a, cs_b) {
-        (None, None) => java_ord(tag_a, tag_b),
-        (None, Some(_)) => Ordering::Less,
-        (Some(_), None) => Ordering::Greater,
-        (Some(x), Some(y)) => java_ord(&format!("{x}/{tag_a}"), &format!("{y}/{tag_b}")),
-    }
-}
-
 /// `(order, key-ignore-case)` — the `View.compareTo` `TreeSet` order (§5).
 fn view_cmp(a: View<'_>, b: View<'_>) -> Ordering {
     a.order()
@@ -124,6 +113,25 @@ where
     sorted
         .iter()
         .map(|item| render(item))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|arr| Some(Json::Arr(arr)))
+}
+
+/// Render a stored-order list, `None` when empty (`NON_EMPTY`). Styles keep
+/// their loaded order: the reference JSON reader field-binds `Styles.elements`
+/// (no setter — the `TreeSet` is replaced, document order survives), while the
+/// DSL path adds into the `TreeSet` and the engine inserts sorted (§5, P2
+/// oracle probes 2026-11-17).
+fn list<T, R>(items: &[T], mut render: R) -> Result<Option<Json>, JsonError>
+where
+    R: FnMut(&T) -> Result<Json, JsonError>,
+{
+    if items.is_empty() {
+        return Ok(None);
+    }
+    items
+        .iter()
+        .map(&mut render)
         .collect::<Result<Vec<_>, _>>()
         .map(|arr| Some(Json::Arr(arr)))
 }
@@ -1393,35 +1401,11 @@ fn styles(styles: &Styles) -> Json {
     Json::obj(vec![
         (
             "elements",
-            set_list(
-                &styles.element_styles,
-                |a, b| {
-                    style_ord(
-                        a.color_scheme.map(ColorScheme::as_str),
-                        &a.tag,
-                        b.color_scheme.map(ColorScheme::as_str),
-                        &b.tag,
-                    )
-                },
-                |s| Ok(element_style(s)),
-            )
-            .unwrap_or(None),
+            list(&styles.element_styles, |s| Ok(element_style(s))).unwrap_or(None),
         ),
         (
             "relationships",
-            set_list(
-                &styles.relationship_styles,
-                |a, b| {
-                    style_ord(
-                        a.color_scheme.map(ColorScheme::as_str),
-                        &a.tag,
-                        b.color_scheme.map(ColorScheme::as_str),
-                        &b.tag,
-                    )
-                },
-                |s| Ok(relationship_style(s)),
-            )
-            .unwrap_or(None),
+            list(&styles.relationship_styles, |s| Ok(relationship_style(s))).unwrap_or(None),
         ),
     ])
 }

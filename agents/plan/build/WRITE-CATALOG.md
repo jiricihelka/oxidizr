@@ -184,7 +184,7 @@ write only what was read.
 | view lists (each kind) | `order` asc, then `key` case-insensitive (Java `compareToIgnoreCase` = UTF-16 units lowercased) |
 | view `elements[]` | numeric id ascending (same parseInt fallback) |
 | view `relationships[]` | text `id + "/" + order` UTF-16 ascending; null order concatenates as the literal string `null` |
-| styles `elements[]` / `relationships[]` | Java `AbstractStyle.compareTo`: tag UTF-16 ascending, UNLESS both sides carry `colorScheme` — then `colorScheme + "/" + tag` |
+| styles `elements[]` / `relationships[]` | **load order, not re-sorted**: the DSL/builder path inserts in `AbstractStyle.compareTo` order (null `colorScheme` first, then `tag`; both schemes → `colorScheme + "/" + tag` — the Java fields are `TreeSet`s; `Styles::insert_element_style`/`insert_relationship_style`), while the JSON reader keeps **document order** — Jackson binds these two by FIELD (`Styles` has NO setter, so unlike every `setX` above the `TreeSet` is replaced; oracle probes 2026-11-17, `testdata/golden/m3-order.json` + `/tmp/nix-shell.uni100/p2/v1/out5`). The writer replays model order |
 | filtered `tags`, animation id sets, `deploymentGroups`, perspectives (by name), healthChecks (by name, then url) | Java `String.compareTo` = **UTF-16 code-unit** lexicographic (≠ Rust `str::cmp` for non-BMP vs U+E000-class keys — implement a `java_ord` comparator) |
 | headers map | **HashMap bucket order** replayed from UTF-16-sorted (`TreeMap`) insertion — `new HashMap<>(TreeMap)` copy in `getHeaders()` (writer: `javahash::entry_order`) |
 | themes / vertices / sections / animation steps | insertion / definition order |
@@ -219,7 +219,12 @@ Jackson binding additionally gives:
   DSL colors in M4/M5. `themes[]`: trim, skip empty, dedupe URLs
   (`addTheme`); "installed" bare-name themes are filesystem-dependent in the
   reference — oxidizr keeps every name (D3). `lastModifiedDate`: ISO text or
-  epoch millis (number/all-digit string) → epoch seconds.
+  epoch millis (number/all-digit string) → epoch seconds. Style NUMBERS bind
+  through their setters: `strokeWidth` pins to [1, 10], `opacity` (element and
+  relationship) and relationship `position` pin to [0, 100] — null leaves the
+  field unset; `width`/`height`/`fontSize`/`thickness` are NOT normalized
+  (oracle probes 2026-11-17: `strokeWidth 0` reads back `1`, `position 150`
+  reads back `100`).
 - **Read requires**: healthCheck `name` + `url` non-null (§2 row — the
   reference's own read NPEs; oxidizr surfaces `JsonError::Read`);
   `automaticLayout.rankDirection` present ⇒ must parse (guarded setter, §3).

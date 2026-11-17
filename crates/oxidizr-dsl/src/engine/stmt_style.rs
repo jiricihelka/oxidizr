@@ -703,7 +703,8 @@ fn relationship_style_mut<'a>(
 
 /// `Styles.getElementStyle(tag, scheme)` … `addElementStyle(tag, scheme)` —
 /// reuse the style with the SAME tag and SAME scheme (a scheme-less `styles`
-/// block and a `light`/`dark` one are different objects).
+/// block and a `light`/`dark` one are different objects). New styles enter at
+/// their `compareTo` position (the reference `TreeSet`, §5).
 fn get_or_add_element_style(p: &mut Parser<'_>, tag: &str, scheme: Option<ColorScheme>) -> usize {
     let styles = &mut p.builder.views_mut().configuration.styles;
     if let Some(i) = styles
@@ -713,12 +714,11 @@ fn get_or_add_element_style(p: &mut Parser<'_>, tag: &str, scheme: Option<ColorS
     {
         return i;
     }
-    styles.element_styles.push(ElementStyle {
+    styles.insert_element_style(ElementStyle {
         tag: tag.to_string(),
         color_scheme: scheme,
         ..Default::default()
-    });
-    styles.element_styles.len() - 1
+    })
 }
 
 fn get_or_add_relationship_style(
@@ -734,14 +734,11 @@ fn get_or_add_relationship_style(
     {
         return i;
     }
-    styles
-        .relationship_styles
-        .push(oxidizr_core::views::RelationshipStyle {
-            tag: tag.to_string(),
-            color_scheme: scheme,
-            ..Default::default()
-        });
-    styles.relationship_styles.len() - 1
+    styles.insert_relationship_style(oxidizr_core::views::RelationshipStyle {
+        tag: tag.to_string(),
+        color_scheme: scheme,
+        ..Default::default()
+    })
 }
 
 /// `ElementStyleParser.parseIcon` (see D10 for the raster-file rejection):
@@ -1176,10 +1173,51 @@ workspace {
             Some("#444444"),
             "the second scheme-less `element T` REUSES and overwrites"
         );
-        assert_eq!(s.element_styles[1].color_scheme, Some(ColorScheme::Light));
-        assert_eq!(s.element_styles[1].background.as_deref(), Some("#222222"));
-        assert_eq!(s.element_styles[2].color_scheme, Some(ColorScheme::Dark));
-        assert_eq!(s.element_styles[2].stroke.as_deref(), Some("#333333"));
+        // `TreeSet` order: null scheme first, then `"scheme/tag"` UTF-16 —
+        // so `Dark/T` precedes `Light/T`.
+        assert_eq!(s.element_styles[1].color_scheme, Some(ColorScheme::Dark));
+        assert_eq!(s.element_styles[1].stroke.as_deref(), Some("#333333"));
+        assert_eq!(s.element_styles[2].color_scheme, Some(ColorScheme::Light));
+        assert_eq!(s.element_styles[2].background.as_deref(), Some("#222222"));
+    }
+
+    #[test]
+    fn styles_storage_is_sorted_like_the_reference_treeset() {
+        // Reference `Styles` fields are `TreeSet`s: DSL declaration order is
+        // replaced by `AbstractStyle.compareTo` (null scheme first, then tag;
+        // both-scheme compares `"scheme/tag"`).
+        let r = styles(
+            r##"
+      element Zeta {
+        background "#000000"
+      }
+      element Alpha {
+        background "#111111"
+      }
+      element Mid {
+      }
+      light {
+        element Aardvark {
+        }
+      }
+    "##,
+        );
+        assert_clean(&r);
+        let s = &r.workspace.views.configuration.styles;
+        let keys: Vec<(&str, Option<ColorScheme>)> = s
+            .element_styles
+            .iter()
+            .map(|x| (x.tag.as_str(), x.color_scheme))
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                ("Alpha", None),
+                ("Mid", None),
+                ("Zeta", None),
+                ("Aardvark", Some(ColorScheme::Light)),
+            ]
+        );
     }
 
     #[test]
