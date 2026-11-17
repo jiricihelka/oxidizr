@@ -107,20 +107,7 @@ fn real_main(args: Vec<String>) -> Result<()> {
                 _ => bail!("usage: cargo xtask oracle gen [--fixture NAME]… | verify"),
             }
         }
-        Some("e2e") => match args.next().as_deref() {
-            Some("bless") => {
-                let filter = args.next();
-                ensure!(
-                    args.next().is_none(),
-                    "usage: cargo xtask e2e bless [FILTER]"
-                );
-                cmd_e2e_bless(filter.as_deref())
-            }
-            Some("mutate") => {
-                bail!("e2e mutate lands with T3 (agents/plan/build/PHASE_1T.md §P1T-D4)")
-            }
-            _ => bail!("usage: cargo xtask e2e bless [FILTER]"),
-        },
+        Some("e2e") => cmd_e2e(&mut args),
         Some("-h" | "--help" | "help") => {
             print_help();
             Ok(())
@@ -157,6 +144,7 @@ fn print_help() {
          \n\
          cargo xtask vendor --src <clone>     vendor reference fixtures into testdata/\n\
          cargo xtask e2e bless [FILTER]       regenerate e2e/corpus sidecars (Phase 1T);\n\
+         cargo xtask e2e mutate [SEED]        generate e2e/corpus/mutated fixtures\n\
          \x20              FILTER matches `<kind>/<name>` substrings; review the diff\n\
          cargo xtask oracle gen [--fixture N]…  generate goldens via the reference binary\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
@@ -188,11 +176,49 @@ fn repo_root() -> Result<PathBuf> {
 /// `cargo xtask e2e bless [FILTER]` — regenerate the `workspace.e2e.json`
 /// sidecars from observed behavior (Phase 1T, P1T-D3). The resulting git
 /// diff is the review artifact.
+/// `cargo xtask e2e …` — bless / mutate dispatch (Phase 1T).
+fn cmd_e2e(args: &mut impl Iterator<Item = String>) -> Result<()> {
+    match args.next().as_deref() {
+        Some("bless") => {
+            let filter = args.next();
+            ensure!(
+                args.next().is_none(),
+                "usage: cargo xtask e2e bless [FILTER]"
+            );
+            cmd_e2e_bless(filter.as_deref())
+        }
+        Some("mutate") => {
+            let seed = match args.next() {
+                None => 7,
+                Some(s) => s
+                    .parse::<u64>()
+                    .with_context(|| format!("seed `{s}` is not a u64"))?,
+            };
+            ensure!(
+                args.next().is_none(),
+                "usage: cargo xtask e2e mutate [SEED]"
+            );
+            cmd_e2e_mutate(seed)
+        }
+        _ => bail!("usage: cargo xtask e2e bless [FILTER] | mutate [SEED]"),
+    }
+}
+
 fn cmd_e2e_bless(filter: Option<&str>) -> Result<()> {
     let reports = oxidizr_e2e::bless::bless(filter).map_err(anyhow::Error::msg)?;
     for line in reports {
         println!("{line}");
     }
+    Ok(())
+}
+
+fn cmd_e2e_mutate(seed: u64) -> Result<()> {
+    let reports = oxidizr_e2e::mutate::write_corpus(seed).map_err(anyhow::Error::msg)?;
+    let count = reports.len();
+    for line in reports {
+        println!("{line}");
+    }
+    println!("{count} mutations written (seed {seed}) — bless to generate sidecars");
     Ok(())
 }
 

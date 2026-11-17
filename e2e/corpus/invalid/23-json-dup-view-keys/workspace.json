@@ -1,0 +1,77 @@
+{
+    "configuration": {},
+    "description": "Description",
+    "documentation": {},
+    "id": 0,
+    "model": {
+        "people": [
+            {
+                "id": "2",
+                "name": "P",
+                "properties": {
+                    "structurizr.dsl.identifier": "p"
+                },
+                "tags": "Element,Person"
+            }
+        ],
+        "softwareSystems": [
+            {
+                "documentation": {},
+                "id": "1",
+                "name": "A",
+                "properties": {
+                    "structurizr.dsl.identifier": "a"
+                },
+                "tags": "Element,Software System"
+            }
+        ]
+    },
+    "name": "V",
+    "properties": {
+        "structurizr.dsl": "d29ya3NwYWNlICJWIiB7CiAgICBtb2RlbCB7CiAgICAgICAgYSA9IHNvZnR3YXJlU3lzdGVtICJBIgogICAgICAgIHAgPSBwZXJzb24gIlAiCiAgICB9CiAgICB2aWV3cyB7CiAgICAgICAgc3lzdGVtTGFuZHNjYXBlICJsIiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgIH0KICAgIH0KfQo="
+    },
+    "views": {
+        "configuration": {
+            "styles": {},
+            "terminology": {}
+        },
+        "systemLandscapeViews": [
+            {
+                "elements": [
+                    {
+                        "id": "1",
+                        "x": 0,
+                        "y": 0
+                    },
+                    {
+                        "id": "2",
+                        "x": 0,
+                        "y": 0
+                    }
+                ],
+                "enterpriseBoundaryVisible": true,
+                "key": "l",
+                "name": "System Landscape View",
+                "order": 1
+            },
+            {
+                "elements": [
+                    {
+                        "id": "1",
+                        "x": 0,
+                        "y": 0
+                    },
+                    {
+                        "id": "2",
+                        "x": 0,
+                        "y": 0
+                    }
+                ],
+                "enterpriseBoundaryVisible": true,
+                "key": "l",
+                "name": "System Landscape View",
+                "order": 1
+            }
+        ]
+    }
+}

@@ -1,0 +1,35 @@
+{
+  "configuration" : { },
+  "description" : "Description",
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "description" : "first",
+      "id" : "1",
+      "name" : "Foo",
+      "properties" : {
+        "structurizr.dsl.identifier" : "x"
+      },
+      "tags" : "Element,Person"
+    }, {
+      "description" : "second",
+      "id" : "2",
+      "name" : "Bar",
+      "properties" : {
+        "structurizr.dsl.identifier" : "y"
+      },
+      "tags" : "Element,Person"
+    } ]
+  },
+  "name" : "Name",
+  "properties" : {
+    "structurizr.dsl" : "d29ya3NwYWNlIHsKICAgIG1vZGVsIHsKICAgICAgICB4ID0gcGVyc29uICJGb28iICJmaXJzdCIKICAgICAgICB5ID0gcGVyc29uICJCYXIiICJzZWNvbmQiCiAgICB9Cn0K"
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    }
+  }
+}

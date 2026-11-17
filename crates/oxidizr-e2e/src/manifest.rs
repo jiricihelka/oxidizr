@@ -106,6 +106,9 @@ pub struct Manifest {
     pub json2json: Option<CommandReport>,
     /// `validate` block.
     pub validate: Option<CommandReport>,
+    /// `reconcile` block (T3): applies when the entry carries BOTH inputs —
+    /// `workspace.dsl` as the edited model, `workspace.json` as the layout.
+    pub reconcile: Option<CommandReport>,
     /// `fmt` block.
     pub fmt: Option<FmtReport>,
 }
@@ -124,6 +127,9 @@ impl Manifest {
         }
         if let Some(r) = &self.validate {
             map.insert("validate".into(), command_to_value(r));
+        }
+        if let Some(r) = &self.reconcile {
+            map.insert("reconcile".into(), command_to_value(r));
         }
         if let Some(r) = &self.fmt {
             let mut m = Map::new();
@@ -156,6 +162,9 @@ impl Manifest {
                 }
                 "validate" => {
                     out.validate = Some(command_from_value(val, &format!("{at}.validate"))?);
+                }
+                "reconcile" => {
+                    out.reconcile = Some(command_from_value(val, &format!("{at}.reconcile"))?);
                 }
                 "fmt" => {
                     let f = val
@@ -211,6 +220,7 @@ impl Manifest {
             ("dsl2json", &self.dsl2json, &observed.dsl2json),
             ("json2json", &self.json2json, &observed.json2json),
             ("validate", &self.validate, &observed.validate),
+            ("reconcile", &self.reconcile, &observed.reconcile),
         ] {
             match (exp, obs) {
                 (None, None) => {}
@@ -370,12 +380,29 @@ mod tests {
                 idempotent: true,
             }),
             json2json: None,
+            reconcile: None,
         };
         let v = m.to_value();
         assert_eq!(Manifest::from_value(&v, "t").unwrap(), m);
         // Key order is deterministic (dsl2json, validate, fmt):
         let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
         assert_eq!(keys, ["dsl2json", "validate", "fmt"]);
+    }
+
+    #[test]
+    fn reconcile_section_round_trip() {
+        let m = Manifest {
+            reconcile: Some(CommandReport {
+                exit: Exit::Error,
+                codes: vec![3002],
+                counts: None,
+            }),
+            ..Manifest::default()
+        };
+        let v = m.to_value();
+        assert_eq!(Manifest::from_value(&v, "t").unwrap(), m);
+        let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["reconcile"]);
     }
 
     #[test]
@@ -402,6 +429,7 @@ mod tests {
                 counts: None,
             }),
             validate: None,
+            reconcile: None,
             fmt: None,
         };
         let observed = Manifest {
@@ -416,6 +444,7 @@ mod tests {
                 codes: vec![],
                 counts: None,
             }),
+            reconcile: None,
             fmt: None,
         };
         let d = expected.diff(&observed);

@@ -74,20 +74,14 @@ pub fn observe(entry: &Entry) -> Manifest {
 
     // validate (extension-detected): the DSL entry when it has one, else
     // the JSON fixture.
-    let validate_file = entry.dsl.as_ref().or(entry.json.as_ref());
-    let validate = validate_file.map(|file| {
-        let out = execute(
-            Request::Validate {
-                files: vec![file.clone()],
-            },
-            &opts,
-        );
-        CommandReport {
-            exit: Exit::from_class(out.exit),
-            codes: codes_of(&out),
-            counts: None,
-        }
-    });
+    let validate = entry
+        .dsl
+        .as_ref()
+        .or(entry.json.as_ref())
+        .map(|file| observe_validate(file, &opts));
+
+    // reconcile (T3): applies when the entry carries BOTH inputs.
+    let reconcile = observe_reconcile(entry, &opts);
 
     // fmt: fixed-point property over the entry text (P1T-D3/D6 seed).
     let fmt = entry.dsl.as_ref().map(|dsl| {
@@ -123,8 +117,44 @@ pub fn observe(entry: &Entry) -> Manifest {
         dsl2json,
         json2json,
         validate,
+        reconcile,
         fmt,
     }
+}
+
+/// `validate` over whichever input the entry offers (DSL first).
+fn observe_validate(file: &std::path::Path, opts: &oxidizr_api::ApiOptions) -> CommandReport {
+    let out = execute(
+        Request::Validate {
+            files: vec![file.to_path_buf()],
+        },
+        opts,
+    );
+    CommandReport {
+        exit: Exit::from_class(out.exit),
+        codes: codes_of(&out),
+        counts: None,
+    }
+}
+
+/// `reconcile` (T3): applies when the entry carries BOTH inputs — the DSL is
+/// the (edited) model, the JSON its layout export. The contested-claim shape
+/// is the way OXZ-3002 enters the corpus.
+fn observe_reconcile(entry: &Entry, opts: &oxidizr_api::ApiOptions) -> Option<CommandReport> {
+    let (dsl, json) = entry.dsl.as_ref().zip(entry.json.as_ref())?;
+    let out = execute(
+        Request::Reconcile {
+            dsl: Input::File(dsl.clone()),
+            layout: Input::File(json.clone()),
+            output: None,
+        },
+        opts,
+    );
+    Some(CommandReport {
+        exit: Exit::from_class(out.exit),
+        codes: codes_of(&out),
+        counts: None,
+    })
 }
 
 /// Check one entry against its blessed sidecar; empty vec = green.

@@ -13,3 +13,4 @@ tools, not guessed.
 | [fmt-line-end-guards.md](fmt-line-end-guards.md) | `split("\\r?\\n")` contract; `\`/`"""` line-end guards; joiner-only `stripLeading` |
 | [reconcile-ambiguity-fixtures.md](reconcile-ambiguity-fixtures.md) | duplicate names die at parse/hydrate; contest needs identifier-vs-canonical on one new id |
 | [dsl-corpus-grammar-gotchas.md](dsl-corpus-grammar-gotchas.md) | T2 e2e-corpus grammar traps: own-line comments only, identifier charsets, context-statement tables, hierarchical dotted scopes, extends-env via `!element` |
+| [t3-invalid-corpus-probes.md](t3-invalid-corpus-probes.md) | T3 debt-code verdicts (3001/3002 reachable, 4002/9001 unreachable, 5001/5005 shapes), mutation-op rules, mutate-then-rebless |

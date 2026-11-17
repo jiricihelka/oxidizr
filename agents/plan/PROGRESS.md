@@ -20,7 +20,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
 | P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
 | P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
-| P1T | e2e suite (interlude) | **T2 done 2026-11-17** — valid corpus 156 entries (D2 axes incl. multi-file composites), all manifests green, V-T2 36 ms; T3 next: ≥120 invalid + `xtask e2e mutate` (`build/PHASE_1T.md`) |
+| P1T | e2e suite (interlude) | **T3 done 2026-11-17** — invalid corpus 24 authored + 120 mutated (`xtask e2e mutate`, V-T3 byte-stable), coverage gate 11/14 codes + allow-list {1001,4002,9001}; T4 next: invariants + `e2e.yml` (`build/PHASE_1T.md`) |
 | P2 | exporters | pending — after P1T (plan per `agents/plan/README.md`) |
 | P3 | viewer+layout | pending |
 

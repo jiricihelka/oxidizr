@@ -20,6 +20,7 @@
 pub mod bless;
 pub mod corpus;
 pub mod manifest;
+pub mod mutate;
 pub mod runner;
 
 use std::collections::BTreeMap;

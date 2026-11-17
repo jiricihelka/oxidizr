@@ -1,0 +1,20 @@
+{
+  "dsl2json": {
+    "exit": "error",
+    "codes": [
+      5002
+    ],
+    "counts": null
+  },
+  "validate": {
+    "exit": "error",
+    "codes": [
+      5002
+    ],
+    "counts": null
+  },
+  "fmt": {
+    "exit": "ok",
+    "idempotent": true
+  }
+}

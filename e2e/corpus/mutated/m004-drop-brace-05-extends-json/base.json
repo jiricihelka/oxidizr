@@ -1,0 +1,59 @@
+{
+  "configuration" : { },
+  "description" : "Base workspace for the extends-json e2e entry",
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "description" : "Back-office clerk",
+      "id" : "1",
+      "name" : "Clerk",
+      "properties" : {
+        "structurizr.dsl.identifier" : "Clerk"
+      },
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "description" : "Keeps balances",
+      "documentation" : { },
+      "id" : "2",
+      "name" : "Ledger",
+      "properties" : {
+        "structurizr.dsl.identifier" : "Ledger"
+      },
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "Clerk Workbase",
+  "properties" : {
+    "structurizr.dsl" : "d29ya3NwYWNlICJDbGVyayBXb3JrYmFzZSIgIkJhc2Ugd29ya3NwYWNlIGZvciB0aGUgZXh0ZW5kcy1qc29uIGUyZSBlbnRyeSIgewoKICAgIG1vZGVsIHsKICAgICAgICBDbGVyayA9IHBlcnNvbiAiQ2xlcmsiICJCYWNrLW9mZmljZSBjbGVyayIKCiAgICAgICAgTGVkZ2VyID0gc29mdHdhcmVTeXN0ZW0gIkxlZGdlciIgIktlZXBzIGJhbGFuY2VzIgogICAgfQoKICAgIHZpZXdzIHsKICAgICAgICBzeXN0ZW1MYW5kc2NhcGUgImJhc2UtbGFuZHNjYXBlIiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvTGF5b3V0CiAgICAgICAgfQogICAgfQoKfQo="
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    },
+    "systemLandscapeViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "base-landscape",
+      "name" : "System Landscape View",
+      "order" : 1
+    } ]
+  }
+}

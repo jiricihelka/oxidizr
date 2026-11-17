@@ -35,28 +35,16 @@ const ALLOWLIST: &[(u16, &str)] = &[
         "bug-compat: never emitted by default (reserved for --strict linting) — permanent",
     ),
     (
-        5001,
-        "D5: URL input needs --allow-net, which no P1 command has — permanent until net lands",
-    ),
-    (
-        3001,
-        "corpus debt: a parse-clean-but-invalid workspace needs a catalog-violating fixture — T3",
-    ),
-    (
-        3002,
-        "corpus debt: ambiguous reconcile pairs need a reconcile-mode entry — T3",
-    ),
-    (
         4002,
-        "corpus debt: needs an unwritable-by-shape workspace — investigate at T3",
-    ),
-    (
-        5005,
-        "corpus debt: file-based theme inlining / importer fixtures — T3",
+        "unreachable via the corpus: every workspace shape the writer refuses (filtered \
+         view without base, dangling view links) is rejected earlier by the JSON hydrate \
+         gate as OXZ-4001, and DSL parsing cannot build one — T3 researched",
     ),
     (
         9001,
-        "corpus debt: >100-error fixture to trip the collector cap — T3",
+        "unreachable via the corpus: the Collector cap (oxidizr-diag, CAP=100 + overflow \
+         note) is not wired into the pipeline — 120 broken lines emit 120 errors, no note \
+         (T3 probed); register the wiring decision before any fixture can cover it",
     ),
 ];
 
@@ -67,9 +55,14 @@ fn manifest_codes() -> Vec<u16> {
         let sidecar = entry.dir.join(oxidizr_e2e::manifest::FILE_NAME);
         let manifest = oxidizr_e2e::manifest::Manifest::read(&sidecar)
             .unwrap_or_else(|e| panic!("sidecar unreadable: {e}"));
-        for report in [manifest.dsl2json, manifest.json2json, manifest.validate]
-            .into_iter()
-            .flatten()
+        for report in [
+            manifest.dsl2json,
+            manifest.json2json,
+            manifest.validate,
+            manifest.reconcile,
+        ]
+        .into_iter()
+        .flatten()
         {
             codes.extend(report.codes);
         }

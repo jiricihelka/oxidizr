@@ -164,6 +164,33 @@ crates/
 - **Coverage gate** (`#[test]`): every `Code` const the CLI can emit appears in
   ≥1 manifest; an explicit allow-list registers genuinely CLI-unreachable codes
   (with a reason). The catalog — not strings — is the contract.
+- **T3 landed 2026-11-17** — refinements from reality:
+  - Mutation ops: `break ${` DROPPED — unresolved placeholders pass through
+    raw (a blessed T1 fact: hermetic empty env ⇒ valid workspace, V-T3 run
+    proved one such mutant parsed clean). Final op set: `drop-brace` (→2003),
+    `dup-brace` (→2001), `drop-equals` (→2001/2002), `ghost-rel` (→2002),
+    `dup-name` (→2002). `write_corpus` VERIFIES each mutation fails
+    `dsl2json` in-process and errors the tool if one parses clean.
+  - `reconcile` manifest section: applies when an entry carries BOTH
+    `workspace.dsl` (edited model) + `workspace.json` (layout) — the way
+    OXZ-3002 enters the corpus (`invalid/09-reconcile-contested`).
+  - Allow-list verdicts (all probed): **3001** reachable via person-vs-system
+    name clash (`invalid/08`); **3002** via the contested reconcile pair;
+    **5001** via `!include https://…` (clean) and `extends <url>`
+    ([2002,5001]) — NOT net-flag-gated, the policy error surfaces as coded
+    `DslError`; **5005** via `theme <existing-file>`; **4002 unreachable** —
+    the JSON hydrate gate rejects every writer-failing shape at READ time
+    (4001 fires first; probes p3/p4/p5/p6 confirmed); **9001 unreachable** —
+    `Collector` (CAP=100 + overflow note) is not wired into the pipeline
+    (120 junk lines emit 120 errors, no note). Remaining: {1001 (bug-compat),
+    4002, 9001}, reasons registered in `tests/coverage.rs`.
+  - Grammar probes locked: `!plugin` → clean 5002; `!adrs <dir>`/`!docs` →
+    clean 5003; dup container/deploymentNode names → parse-time 2002;
+    `filtered <ghost>` → [2001,2002]; `include <ghost>` in a view → 2002;
+    `workspace extends <dir>` → 2002; `theme <url>` → parses CLEAN (URL
+    themes are just data until rendering); `plantuml <file>` → 2001 (grammar
+    rejects the file form before the deferred importer); unterminated quote →
+    consumes to EOL, parses clean (why 1001 stays allow-listed).
 
 ## P1T-D5 Runner crate `oxidizr-e2e` + tiers (all Category A, in-process)
 
@@ -234,7 +261,7 @@ own JSON export ⇒ zero ambiguity, zero element graft).
 | **T0** | **DONE 2026-11-17** (`5eedf99`/`52a83c1`/`075cb90`/`2d2e159`) — `oxidizr-api` extraction; `run()` shim; F9 registered; crate docs; refinements recorded in D1 | quartet green; **all existing tests unmodified** (byte-proof); V-T1 closed |
 | **T1** | **DONE 2026-11-17** — `oxidizr-e2e` crate (corpus/manifest/runner/bless); sidecar reader/writer + both-ways compare; `xtask e2e bless [FILTER]`; 14 seed entries (7 valid incl. a JSON-only + deployment, 7 invalid: 2003/2002/2001/5002+5003/extends-json/5006/4001); quick fan-out (`thread::scope`); coverage gate w/ registry + reasoned allow-list; subprocess smoke (binary resolution refined in D5) | bless round-trips byte-stably (2nd bless: all unchanged); quick tier green; V-T2 closed (10 ms/14 entries) |
 | **T2** | **DONE 2026-11-17** — valid corpus 156 entries across the D2 axes: basics/hierarchy/relationships (08–35), groups (36–44), deployment (48–61), views all kinds + filtered + dynamic + animation (62–75), styles (76–85), perspectives/properties (86–95), finders (96–105), extends chains incl. JSON base (106–113), include trees dirs/nested (114–123), vars/consts (124–133), quoting/comments (134–143), archetypes (144–151), big composites (152–159) | all manifests green (audit: every valid sidecar exit-ok + fmt idempotent); V-T2 re-measured — 163 entries in 36 ms single-threaded |
-| **T3** | invalid corpus to ≥120 total + `xtask e2e mutate`; every emitted `Code` covered (allow-list registered with reasons) | coverage gate green; mutate determinism V-T3 closed |
+| **T3** | **DONE 2026-11-17** — invalid corpus 24 authored + 120 mutated = 144 (≥120); `xtask e2e mutate [SEED]` = splitmix64 walk, 5 ops (drop/dup-brace, drop-equals, ghost-rel, dup-name), every mutation verified-failing at generation; `reconcile` manifest section (entries with BOTH inputs); allow-list shrunk 7→3 ({1001, 4002, 9001}, reasons researched — see D4 landed) | coverage gate green (11/14 codes covered); mutate determinism V-T3 closed |
 | **T4** | invariant tier behind `OXIDZR_E2E_FULL` + `e2e.yml` nightly + V-T4 ignore inventory | full tier green locally + in a dispatched run |
 | **T5** | `e2e_` benches (+ `e2e-bench` feature gate), `1T` baseline saved, TESTING.md §Benchmarks + WORKFLOW.md command table + `cargo xtask --help` updated | baseline committed; `bench cmp 1T` works; CI bench job still passes WITHOUT the feature |
 | **T6** | close-out: add an e2e-suite section to TESTING.md, PROGRESS board+log, PHASE_1T DONE entries, notes, README.md (root) dev-section mention | quartet + actionlint green; **no tag** (user decision) |
@@ -253,6 +280,10 @@ Size-gate honored: >4 modules (cli, new api + e2e crates, xtask, corpus, docs)
   fixtures) run the whole manifest check in 10 ms single-threaded
   (~0.7 ms/entry) ⇒ ×25 ≈ 350 entries ≈ 0.3 s — no batching needed.
 - **V-T3** (T3) — `xtask e2e mutate 7` twice ⇒ byte-identical corpus.
+  **CLOSED 2026-11-17 (T3):** two full `mutate 7` runs + a post-refactor
+  re-run ⇒ `sha256sum` over all 120 mutation trees byte-identical
+  (`/tmp/mut-{a,b,c}.txt`). Note: `mutate` REPLACES `corpus/mutated/`
+  wholesale (sidecars included) — re-bless after every mutate run.
 - **V-T4** (T4) — inventory today's `#[ignore]`d tests (expect-test gaps seen
   in M7 runs); confirm the env-gate choice beats `--include-ignored`.
 - **V-T5** (T5) — CI bench job (`cargo bench --workspace`, no feature) still

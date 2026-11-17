@@ -1,0 +1,2 @@
+workspace extends adir {
+}

@@ -1,0 +1,22 @@
+{
+  "configuration" : { },
+  "description" : "JSON base",
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ ],
+    "relationships" : [ ],
+    "softwareSystems" : [ {
+      "description" : "From JSON",
+      "id" : "314bc2f6-8b7b-460a-a467-0901596055d4",
+      "location" : "Unspecified",
+      "name" : "JSON Sys",
+      "properties" : {
+        "structurizr.dsl.id" : "YnK-c"
+      }
+    } ]
+  },
+  "name" : "JSON Base",
+  "properties" : { },
+  "views" : { }
+}
