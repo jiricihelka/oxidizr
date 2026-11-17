@@ -1,0 +1,28 @@
+name: E2E full tier
+
+# P1T-D5/T4 (agents/plan/build/PHASE_1T.md): the invariant tier behind
+# `OXIDZR_E2E_FULL=1` — parse determinism, writer stability, fmt fixpoint +
+# semantics, self-reconcile identity — nightly over the whole corpus.
+# Separate from ci.yml so its weekly Category-B schedule stays weekly
+# (fuzz.yml precedent); the quick tier rides `cargo test --workspace`
+# inside ci.yml on every PR.
+on:
+  schedule:
+    - cron: '37 2 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  OXIDZR_E2E_FULL: "1"
+
+jobs:
+  full:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/toolchain-cache
+      - uses: Swatinem/rust-cache@v2
+      # Same command as the local full tier; the env gate above activates
+      # tests/full.rs (crates/oxidizr-e2e). Builds the CLI binary too, which
+      # the subprocess smoke anchors to.
+      - run: cargo test --workspace

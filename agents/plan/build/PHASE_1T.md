@@ -239,6 +239,32 @@ divergence): parse determinism (two runs → same counts + same codes);
 consistency, not parity); `fmt` idempotence + `parse(fmt(x)) ≡ parse(x)`
 (established M6-b technique: UUID line filter); self-`reconcile` (layout =
 own JSON export ⇒ zero ambiguity, zero element graft).
+- **T4 landed 2026-11-17** — refinements from reality:
+  - Mask = drop the `structurizr.dsl` property line (base64 source legitimately
+    differs across `x`/`fmt(x)`) + `<uuid>` redaction (M6-b technique); masked
+    bytes, code sets compared. Fan-out shares `fan_out` (`thread::scope`).
+  - The `fmt` semantic half replays `fmt(x)` from a SCRATCH COPY of the entry
+    dir (children copied, `Input::File`): `!include`/`extends` resolve relative
+    to the input file — bytes-input would break multi-file entries by design.
+  - The net caught TWO real engine bugs at first run:
+    1. **Style colors are normalized on the DSL path too.** The invariant
+       `json2json(dsl2json(x))` was byte-unstable on uppercase hex: JSON read
+       lowercased (Java `Color` setter port, `colors.rs`), DSL stored raw.
+       Oracle verdict (structurizr 2026.10.26): `background #23A2D9` exports
+       `#23a2d9`; `DarkSlateGray` → `#2f4f4f`; bogus →
+       `StructurizrDslParserException` (statement error). Fix: the DSL engine
+       runs `background`/`colour`/`stroke` (element + relationship) through the
+       same `Color` setter port — which moved to `oxidizr-core::colors`
+       (domain logic, both front-ends call it; topology P1-D1 unchanged).
+       M4's "plain strings (no validation, Java)" reading was WRONG.
+    2. **`fmt` verbatim for source-magic line ends.** A logical line whose
+       JOINED value ends `"""` already had the text-block magic in the source
+       (hidden behind a `\`-join): bare re-print opens a block the source never
+       opened, a protective space invents a whitespace token — UNREPRESENTABLE,
+       now verbatim bytes like the `\`-end case (found by proptest seed
+       `m6_fmt.proptest-regressions` `0c3752…`; proven pre-existing at HEAD).
+  - Sidecars never change from these fixes (they record exit/codes/counts —
+    the byte-level change moves the invariant, not the manifest).
 
 ## P1T-D7 Benchmarks — same corpus, local-first
 
@@ -262,7 +288,7 @@ own JSON export ⇒ zero ambiguity, zero element graft).
 | **T1** | **DONE 2026-11-17** — `oxidizr-e2e` crate (corpus/manifest/runner/bless); sidecar reader/writer + both-ways compare; `xtask e2e bless [FILTER]`; 14 seed entries (7 valid incl. a JSON-only + deployment, 7 invalid: 2003/2002/2001/5002+5003/extends-json/5006/4001); quick fan-out (`thread::scope`); coverage gate w/ registry + reasoned allow-list; subprocess smoke (binary resolution refined in D5) | bless round-trips byte-stably (2nd bless: all unchanged); quick tier green; V-T2 closed (10 ms/14 entries) |
 | **T2** | **DONE 2026-11-17** — valid corpus 156 entries across the D2 axes: basics/hierarchy/relationships (08–35), groups (36–44), deployment (48–61), views all kinds + filtered + dynamic + animation (62–75), styles (76–85), perspectives/properties (86–95), finders (96–105), extends chains incl. JSON base (106–113), include trees dirs/nested (114–123), vars/consts (124–133), quoting/comments (134–143), archetypes (144–151), big composites (152–159) | all manifests green (audit: every valid sidecar exit-ok + fmt idempotent); V-T2 re-measured — 163 entries in 36 ms single-threaded |
 | **T3** | **DONE 2026-11-17** — invalid corpus 24 authored + 120 mutated = 144 (≥120); `xtask e2e mutate [SEED]` = splitmix64 walk, 5 ops (drop/dup-brace, drop-equals, ghost-rel, dup-name), every mutation verified-failing at generation; `reconcile` manifest section (entries with BOTH inputs); allow-list shrunk 7→3 ({1001, 4002, 9001}, reasons researched — see D4 landed) | coverage gate green (11/14 codes covered); mutate determinism V-T3 closed |
-| **T4** | invariant tier behind `OXIDZR_E2E_FULL` + `e2e.yml` nightly + V-T4 ignore inventory | full tier green locally + in a dispatched run |
+| **T4** | **DONE 2026-11-17** — `tests/full.rs`: 4 invariants (parse determinism, json round-trip byte-stability, fmt fixpoint+semantic via scratch-dir context replay, self-reconcile identity) behind `OXIDZR_E2E_FULL=1`; `.github/workflows/e2e.yml` nightly + dispatch; V-T4 closed (zero ignores). Caught two REAL engine bugs, both fixed with oracle verdicts: style-color normalization on the DSL path (see D6 landed), `fmt` verbatim replay for source-magic line ends (note `pitfalls/fmt-line-end-guards.md`) | full tier green locally + in a dispatched run |
 | **T5** | `e2e_` benches (+ `e2e-bench` feature gate), `1T` baseline saved, TESTING.md §Benchmarks + WORKFLOW.md command table + `cargo xtask --help` updated | baseline committed; `bench cmp 1T` works; CI bench job still passes WITHOUT the feature |
 | **T6** | close-out: add an e2e-suite section to TESTING.md, PROGRESS board+log, PHASE_1T DONE entries, notes, README.md (root) dev-section mention | quartet + actionlint green; **no tag** (user decision) |
 
@@ -286,6 +312,10 @@ Size-gate honored: >4 modules (cli, new api + e2e crates, xtask, corpus, docs)
   wholesale (sidecars included) — re-bless after every mutate run.
 - **V-T4** (T4) — inventory today's `#[ignore]`d tests (expect-test gaps seen
   in M7 runs); confirm the env-gate choice beats `--include-ignored`.
+  **CLOSED 2026-11-17 (T4):** inventory = ZERO `#[ignore]`d tests workspace-wide
+  (the M7 "gaps" were expect-test DIFF failures, never ignores). Env gate
+  stands on its merits: `--include-ignored` would silently drag in any future
+  ignore, `OXIDZR_E2E_FULL=1` can only ever run the suite that exists.
 - **V-T5** (T5) — CI bench job (`cargo bench --workspace`, no feature) still
   green and FAST: feature-gated benches are listed-but-skipped, not compiled.
 
