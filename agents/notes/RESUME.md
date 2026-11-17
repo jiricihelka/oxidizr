@@ -3,8 +3,8 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = P2-M1-e commit (tip of `main`, tag `v0.1.0` far
-down) · gates green · nothing pushed.
+Updated: 2026-11-17 · HEAD = M2-decomposition plan commit `5826c03` (tip of
+`main`, tag `v0.1.0` far down) · gates green · nothing pushed.
 
 - **Done:** **PHASE 1 + 1T COMPLETE** (`v0.1.0`, T0–T6, no tag) · **P2-M0**
   theme/json export byte-parity · **P2-M1 COMPLETE** — a `199bc70` catalog,
@@ -20,11 +20,14 @@ down) · gates green · nothing pushed.
   (views included), m1e DSL-leg + JSON-leg byte-identical modulo the
   per-process UUIDs + `inspection.*`. 65 e2e manifests re-blessed (views
   counts only).
-- **Next:** **M2** Structurizr-PlantUML exporter (`AbstractPlantUMLExporter`
-  + `StructurizrPlantUMLExporter` port; `export_property` one-helper rule
-  P2-D8; Category-A goldens + render smoke + oracle A/B byte compare).
-  Decompose in `build/PHASE_2.md` first if >4 modules (likely: export, core
-  read helpers?, cli, diag, tests).
+- **Next:** **M2-a** — `EXPORT-PLANTUML.md` micro-grammar catalog (P2-V2
+  deferred half + V5/V6 Structurizr checkboxes, from `StructurizrPlantUML
+  Exporter`/`AbstractPlantUMLExporter`/`AbstractDiagramExporter` at the pin)
+  + `export_property` typed helper (P2-D8 cascade, in `oxidizr-export`) +
+  DEVIATIONS D-ICON row (V3: scale pinned `0.5`, zero-network). THEN M2-b
+  (engine port), M2-c (Structurizr dialect + styles + legend), M2-d (dispatch
+  + goldens + render smoke + oracle A/B) — decomposition + source inventory
+  in `build/PHASE_2.md`. Read `AbstractDiagramExporter` (848) fully IN M2-b.
 - **Open questions:** T4 exit gate's *dispatched CI run* of `e2e.yml` needs a
   push — ask the user before any push (all P1/P1T/P2 commits sit unpushed).
   Consider registering the 9001 Collector-wiring decision. Vendored default
@@ -32,7 +35,9 @@ down) · gates green · nothing pushed.
   unresolved styles) until the user supplies
   `static.structurizr.com/themes/default/theme.json`.
 - **Don't re-derive (trust):** P2-D1..D11 + M1 decomposition + M1-e closure
-  (`build/PHASE_2.md`, read fully before M2 code); default views are APP-
+  + M2 decomposition M2-a..d (`build/PHASE_2.md`, read fully before M2 code);
+  P2-V3 settled (icon scale `0.5`, http-prefix gate — do not re-investigate);
+  default views are APP-
   LAYER pipeline behavior (core = factory only, Locked list holds); Java name
   sorts = UTF-16 code units (`viewops::java_cmp_str` precedent); `ViewSet.
   isEmpty` = all nine collections, `Model.isEmpty` = people+systems+top-level
