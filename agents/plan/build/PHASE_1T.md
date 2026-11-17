@@ -289,7 +289,7 @@ own JSON export ⇒ zero ambiguity, zero element graft).
 | **T2** | **DONE 2026-11-17** — valid corpus 156 entries across the D2 axes: basics/hierarchy/relationships (08–35), groups (36–44), deployment (48–61), views all kinds + filtered + dynamic + animation (62–75), styles (76–85), perspectives/properties (86–95), finders (96–105), extends chains incl. JSON base (106–113), include trees dirs/nested (114–123), vars/consts (124–133), quoting/comments (134–143), archetypes (144–151), big composites (152–159) | all manifests green (audit: every valid sidecar exit-ok + fmt idempotent); V-T2 re-measured — 163 entries in 36 ms single-threaded |
 | **T3** | **DONE 2026-11-17** — invalid corpus 24 authored + 120 mutated = 144 (≥120); `xtask e2e mutate [SEED]` = splitmix64 walk, 5 ops (drop/dup-brace, drop-equals, ghost-rel, dup-name), every mutation verified-failing at generation; `reconcile` manifest section (entries with BOTH inputs); allow-list shrunk 7→3 ({1001, 4002, 9001}, reasons researched — see D4 landed) | coverage gate green (11/14 codes covered); mutate determinism V-T3 closed |
 | **T4** | **DONE 2026-11-17** — `tests/full.rs`: 4 invariants (parse determinism, json round-trip byte-stability, fmt fixpoint+semantic via scratch-dir context replay, self-reconcile identity) behind `OXIDZR_E2E_FULL=1`; `.github/workflows/e2e.yml` nightly + dispatch; V-T4 closed (zero ignores). Caught two REAL engine bugs, both fixed with oracle verdicts: style-color normalization on the DSL path (see D6 landed), `fmt` verbatim replay for source-magic line ends (note `pitfalls/fmt-line-end-guards.md`) | full tier green locally + in a dispatched run |
-| **T5** | `e2e_` benches (+ `e2e-bench` feature gate), `1T` baseline saved, TESTING.md §Benchmarks + WORKFLOW.md command table + `cargo xtask --help` updated | baseline committed; `bench cmp 1T` works; CI bench job still passes WITHOUT the feature |
+| **T5** | **DONE 2026-11-17** — `crates/oxidizr-e2e/benches/e2e.rs`: six `e2e_` corpus benches (`dsl2json_all` + biggest, `json2json_all`, `fmt_all`, `validate_all`, `reconcile`) behind feature `e2e-bench` (`required-features` → CI's plain `cargo bench` skips the target); `cargo xtask bench` passes `--features oxidizr-e2e/e2e-bench`; `1T` baseline committed (60 files); `cmp` verified; V-T5 closed | baseline committed; `bench cmp 1T` works; CI bench job still passes WITHOUT the feature |
 | **T6** | close-out: add an e2e-suite section to TESTING.md, PROGRESS board+log, PHASE_1T DONE entries, notes, README.md (root) dev-section mention | quartet + actionlint green; **no tag** (user decision) |
 
 Size-gate honored: >4 modules (cli, new api + e2e crates, xtask, corpus, docs)
@@ -318,6 +318,9 @@ Size-gate honored: >4 modules (cli, new api + e2e crates, xtask, corpus, docs)
   ignore, `OXIDZR_E2E_FULL=1` can only ever run the suite that exists.
 - **V-T5** (T5) — CI bench job (`cargo bench --workspace`, no feature) still
   green and FAST: feature-gated benches are listed-but-skipped, not compiled.
+  **CLOSED 2026-11-17 (T5):** `cargo bench --workspace --no-run` completes
+  without building `benches/e2e.rs` (required-features skips the target);
+  `--features oxidizr-e2e/e2e-bench` builds it. CI workflow untouched.
 
 ## Risks
 

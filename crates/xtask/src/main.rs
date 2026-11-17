@@ -135,7 +135,8 @@ fn print_help() {
          \x20              linker and libpthread stub; the macOS leg stays CI-only)\n\
          cargo xtask refs                     check doc path & §section references only\n\
          cargo xtask lint                     actionlint only (skips if not installed)\n\
-         cargo xtask bench                    cargo bench --workspace (reports: target/criterion)\n\
+         cargo xtask bench                    cargo bench --workspace --features \\\n\
+         \"                                      oxidizr-e2e/e2e-bench (target/criterion)\n\
          cargo xtask bench save <LABEL>       snapshot criterion results into bench-baseline/<LABEL>/\n\
          cargo xtask bench cmp <LABEL>        critcmp bench-baseline/<LABEL> vs target/criterion\n\
          cargo xtask cov                      cargo llvm-cov --workspace --summary-only (report only)\n\
@@ -351,10 +352,17 @@ fn cmd_ci(steps: Vec<Step>) -> Result<()> {
 }
 
 /// Bench job mirror: no trailing args (they would hit the libtest harnesses —
-/// see ci.yml note), criterion defaults to `target/criterion` anyway.
+/// see ci.yml note), criterion defaults to `target/criterion` anyway. Unlike
+/// CI, the local mirror passes `--features e2e-bench` so the whole-corpus
+/// benches are always measured (P1T-D7: CI skips them, they are local dev).
 fn cmd_bench() -> Result<()> {
     let status = cargo_cmd()
-        .args(["bench", "--workspace"])
+        .args([
+            "bench",
+            "--workspace",
+            "--features",
+            "oxidizr-e2e/e2e-bench",
+        ])
         .status()
         .context("failed to run cargo bench")?;
     ensure!(status.success(), "cargo bench failed ({status})");

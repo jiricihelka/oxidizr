@@ -33,12 +33,14 @@ cargo fmt --all                            # format
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                     # Category A only (no structurizr bin needed)
 cargo test --workspace --features reference  # + Category B (slow — run sparingly)
-cargo bench --workspace                    # criterion benches (no arg forwarding!)
+cargo bench --workspace                    # criterion benches (no arg forwarding!) — skips
+                                           # the e2e corpus benches (feature-gated, local-only)
 cargo xtask ci                             # the commit gates locally: fmt + clippy + test + refs
 cargo xtask ci windows                     # + the Wine windows-gnu leg (nix dev shell)
 cargo xtask refs                           # doc path & §section reference integrity only
 cargo xtask ci lint                        # actionlint on .github/ (CI's lint job is authoritative)
-cargo xtask bench                          # bench job mirror (reports: target/criterion)
+cargo xtask bench                          # bench job mirror + e2e corpus benches
+                                           # (--features oxidizr-e2e/e2e-bench; reports: target/criterion)
 cargo xtask bench save <LABEL>             # snapshot criterion JSONs into bench-baseline/<LABEL>/
 cargo xtask bench cmp <LABEL>              # critcmp baseline vs target/criterion
 cargo xtask cov                            # coverage job mirror (summary, report only)

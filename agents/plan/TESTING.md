@@ -53,3 +53,13 @@ optimization is accepted only with before/after numbers; >~10% regression agains
 committed baseline is flagged by the CI bench job for human review (no auto-fail).
 Run via `cargo xtask bench` — never forward args into `cargo bench --workspace --`
 (`agents/notes/pitfalls/cargo-bench-args.md`).
+
+**1T corpus benches** (`oxidizr-e2e/benches/e2e.rs`, P1T-D7): whole-corpus
+`e2e_dsl2json_all` (+ biggest-entry worst case), `e2e_json2json_all`, `e2e_fmt_all`,
+`e2e_validate_all` and a realistic `e2e_reconcile` pair, measured in-process through
+`oxidizr-api::execute` over the e2e corpus (the realistic workspaces, not the
+vendored fixtures). They are gated by cargo feature `e2e-bench` (`required-features`
+on the bench target), so CI's `cargo bench --workspace` lists-but-skips them — they
+are local-dev numbers (user decision: no new CI load). `cargo xtask bench` always
+opts in (`--features oxidizr-e2e/e2e-bench`); the `1T` baseline under
+`bench-baseline/` includes them and `cargo xtask bench cmp 1T` compares.

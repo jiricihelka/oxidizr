@@ -17,6 +17,18 @@ oxidizr-core = { workspace = true }
 oxidizr-json = { workspace = true }
 serde_json = { workspace = true }
 
+[features]
+# Heavy whole-corpus benches (P1T-D7): local dev only. CI's
+# `cargo bench --workspace` skips the target (required-features);
+# `cargo xtask bench` opts in explicitly.
+e2e-bench = []
+
+[[bench]]
+name = "e2e"
+harness = false
+required-features = ["e2e-bench"]
+
 [dev-dependencies]
 # Binary for the subprocess smoke test (CARGO_BIN_EXE_oxidizr).
 oxidizr-cli = { path = "../oxidizr-cli" }
+criterion = { workspace = true }

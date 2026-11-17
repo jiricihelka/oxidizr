@@ -20,7 +20,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-c reconcile + validate polish | **done 2026-11-16** (commit 7351db1 + log below) |
 | P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
 | P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
-| P1T | e2e suite (interlude) | **T4 done 2026-11-17** — full-tier invariants (`tests/full.rs`, env `OXIDZR_E2E_FULL`) + nightly `e2e.yml`; net caught 2 real bugs, fixed with oracle verdicts (DSL-path color normalization via `oxidizr-core::colors`; `fmt` verbatim magic-ends); V-T4 closed (zero ignores). T5 next: `e2e_` benches + `bench save 1T` (`build/PHASE_1T.md`) |
+| P1T | e2e suite (interlude) | **T5 done 2026-11-17** — six `e2e_` corpus benches (`oxidizr-e2e/benches/e2e.rs`) behind feature `e2e-bench` (CI skips, `xtask bench` opts in), `1T` baseline committed, V-T5 closed; T6 close-out next (`build/PHASE_1T.md`) |
 | P2 | exporters | pending — after P1T (plan per `agents/plan/README.md`) |
 | P3 | viewer+layout | pending |
 

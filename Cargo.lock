@@ -819,6 +819,7 @@ dependencies = [
 name = "oxidizr-e2e"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "oxidizr-api",
  "oxidizr-cli",
  "oxidizr-core",
