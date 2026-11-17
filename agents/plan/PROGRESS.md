@@ -151,7 +151,28 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
 Decomposition M2-a..d + recon inventory: `build/PHASE_2.md`. P2-V3 settled
 during recon (icon scale pin → DEVIATIONS D12).
 
-- **M2-a** (this commit, 3 pieces): D12 row `be26b56` (reference
+- **M2-b** (this commit): `oxidizr-export::plantuml` — the shared
+  diagram-engine port (`AbstractDiagramExporter` + `AbstractExporter` +
+  `AbstractPlantUMLExporter` helpers). `Engine<'a>{workspace, color_scheme,
+  frame}` drives a `Dialect` trait; `model.rs` is the `ElemRef` model
+  adapter (+ `element_by_id`, `owner_system_id`, canonical names); `mod.rs`
+  the property constants, PlantUML shape maps and `java_cmp_str`. Ported:
+  the §14 order contracts (numeric-id element `TreeSet`, `id/order`
+  relationship set, name-sorted legs), per-kind bodies with the nested-group
+  context-tracking quirks (1-char-context no-close, shallow-move ends AT the
+  current indent) and the NO-blank deployment leg, animation frames + legend
+  lifecycle (legend LAST), the dynamic sequence path (canonical-name sibling
+  insertion), `is_visible` matrix, `type_of` terminology/metadata symbols,
+  `break_text`. The Java cast/NPE aborts surface as
+  `ExportError::ReferenceAbort` → **new OXZ-5009 EXPORT_ABORT** (registry +
+  docs row + pipeline arm + coverage allow-list entry, unreachable via the
+  corpus until export manifests exist). Two engine-ordering contracts were
+  corrected by the pinned Java during testing — `findGroups` sorts elements
+  IN PLACE by id STRING (the numeric `TreeSet` order never survives:
+  `"10" < "2" < "9" < "abc"`), and the shallow-move leg writes
+  `endGroupBoundary` before outdenting. 31 tests (8 MockDialect engine
+  scenarios: exact hook sequences, quirk output, frame visibility, abort).
+- **M2-a** (3 pieces: `be26b56` + `d179653` + `a12bd29`): D12 row `be26b56` (reference
   `calculateIconScale` FETCHES the icon at export time — `ImageIO.read(new
   URL(…))` — every failure path lands on `0.5`; oxidizr pins `0.5`,
   zero-network); `oxidizr-export::property::export_property` `d179653` —

@@ -30,6 +30,7 @@ pub mod format;
 pub mod indent;
 pub mod naming;
 pub mod paths;
+pub mod plantuml;
 pub mod property;
 pub mod themes;
 

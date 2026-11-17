@@ -310,7 +310,20 @@ one typed function `export_property(view, views, name, default)` in
     `getRelationshipsInView`, `typeOf` terminology/metadata-symbols,
     `idOf` parent-chain + `filter` (Java `(?U)\W`) + instance `_n` ids,
     skinparam/include writers, sequence-diagram export path skeleton.
-    Touches: export (+core only if terminology lookups are missing).
+    Touches: export (+core only if terminology lookups are missing). **DONE
+    2026-11-17** — `oxidizr-export::plantuml` = [`Engine`] (workspace +
+    color scheme + untyped `frame` as `Frame::Step`/`Frame::Order`) driving
+    a [`Dialect`] trait; per-kind bodies incl. the nested-group
+    context-tracking quirks and the NO-blank-line deployment leg, frames +
+    legend lifecycle (legend LAST, §14), dynamic sequence path with the
+    canonical-name sibling insertion, `is_visible` matrix (CustomView
+    always visible; kind-mismatched frame → `ExportError::ReferenceAbort`
+    = new OXZ-5009, registered with the §14 cast-aborts); `type_of`,
+    `break_text`, canonical names (`CanonicalNameGenerator`) and the
+    `ElemRef` model adapter. Engine iteration contracts appended as catalog
+    §14. Java reference identity mirrored by id equality (no `equals`
+    overrides). MockDialect tests ×8 pin orders, quirk output, frame
+    visibility and the abort message.
   - **M2-c** Structurizr dialect: `PlantUMLStyle` family (root/element/
     relationship/deploymentNode/boundary/group/legend — class selectors,
     Java UTF-16 name sort, HashSet dedup per the Java equals/hashCode),

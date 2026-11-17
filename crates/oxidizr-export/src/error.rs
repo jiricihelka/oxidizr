@@ -27,4 +27,12 @@ pub enum ExportError {
     /// The workspace cannot be serialized (delegated JSON layer).
     #[error(transparent)]
     Json(#[from] oxidizr_json::JsonError),
+
+    /// The reference JVM ABORTS the whole export on these (a failed cast
+    /// of the untyped `frame`, a `ClassCastException` from a foreign
+    /// element kind in a view, a dangling id dereferenced mid-write);
+    /// oxidizr surfaces the abort as an error value instead of panicking
+    /// (`EXPORT-PLANTUML.md` §14 cast-aborts).
+    #[error("cannot export: {0}")]
+    ReferenceAbort(&'static str),
 }

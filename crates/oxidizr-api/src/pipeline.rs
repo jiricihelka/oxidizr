@@ -869,6 +869,13 @@ fn export_cmd(
             );
             return out;
         }
+        Err(e @ oxidizr_export::ExportError::ReferenceAbort(_)) => {
+            out.fail(
+                Issue::error(codes::EXPORT_ABORT, e.to_string()),
+                ExitClass::Diagnostics,
+            );
+            return out;
+        }
     };
     for file in files {
         let path = out_dir.join(&file.name);

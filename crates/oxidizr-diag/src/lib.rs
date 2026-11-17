@@ -193,6 +193,12 @@ pub mod codes {
     /// failed (including no system `curl` to perform it with `--allow-net`).
     /// URL-without-`--allow-net` is NOT this code — that is `OXZ-5001` (D5).
     pub const EXPORT_THEME: Code = Code::new(5008);
+    /// The reference ABORTS the whole export (its JVM throws — the shared
+    /// diagram engine's cast/NPE paths of `EXPORT-PLANTUML.md` §14: a
+    /// view-kind cast mismatch, a dangling id dereferenced mid-write);
+    /// oxidizr surfaces the abort as this diagnostic instead of a panic
+    /// (Phase 2 M2).
+    pub const EXPORT_ABORT: Code = Code::new(5009);
     /// Model/view validation failure — reference `hydrate()`/validate message
     /// verbatim (M6 CLI `validate`).
     pub const VALIDATION: Code = Code::new(3001);

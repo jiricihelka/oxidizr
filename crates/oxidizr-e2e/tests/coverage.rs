@@ -27,6 +27,7 @@ const REGISTRY: &[(u16, &str)] = &[
     (5006, "CLI_IO"),
     (5007, "EXPORT_NOT_IMPLEMENTED"),
     (5008, "EXPORT_THEME"),
+    (5009, "EXPORT_ABORT"),
     (9001, "TOO_MANY_ERRORS"),
 ];
 
@@ -53,6 +54,14 @@ const ALLOWLIST: &[(u16, &str)] = &[
         "theme loading (P2-D3) landed at M1 — no corpus manifest emits it yet \
          (manifests cover dsl2json/json2json/validate/reconcile, not export); \
          remove when an export manifest covers it (PHASE_2.md)",
+    ),
+    (
+        5009,
+        "export abort (M2, EXPORT-PLANTUML.md §14) needs a corrupt-diagram \
+         workspace (dangling id / view-kind cast mismatch) through a diagram \
+         export — the corpus runs no diagram exports and the reference would \
+         abort on the same input; remove when an export manifest covers it \
+         (PHASE_2.md)",
     ),
     (
         9001,

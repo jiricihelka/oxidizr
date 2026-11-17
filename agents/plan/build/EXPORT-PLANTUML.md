@@ -318,3 +318,101 @@ ports the suffix in `format.rs`). Mermaid/C4 legs land with M3/M4.
 * Base64 = RFC 4648 standard alphabet WITH `=` padding, UTF-8 bytes.
 * `(x<instances>)`: string compare `!"1".equals(instances)` — `"01"` would
   suffix too.
+
+## §14 Engine iteration (`export/AbstractDiagramExporter` 848 +
+`AbstractExporter` 118) — appended with the M2-b port, 2026-11-17
+
+**Order contracts** (every iteration leg in the engine):
+
+* `view.getElements()` = Java `TreeSet<ElementView>`: **numeric** element-id
+  ascending (`Integer.parseInt` subtraction), string fallback when either id
+  is non-numeric (`ElementView` 104-111). Our `ViewContent.elements` is
+  insertion order → the engine must sort on read.
+* `view.getRelationships()` = `TreeSet<RelationshipView>`: `id + "/" + order`
+  string compare — a null `order` joins as the literal `"null"`
+  (`RelationshipView` 312-316).
+* `getXxx` lists (custom/people/systems/boundary-containers/containers) and
+  `getBoundarySoftwareSystems`: `Comparator.comparing(Element::getId)` =
+  **id STRING** order (NOT numeric) after `distinct()` (first occurrence kept);
+  `findGroups` sorts the element list **in place** by id string (the ungrouped
+  pass below sees the sorted list).
+* Deployment-node children / infra / instances: sorted by NAME (UTF-16) per
+  kind, concatenated children → infra → systemInstances → containerInstances,
+  each filtered `view.isElementInView`.
+* Group display order: `Collections.sort` natural String (UTF-16).
+
+**Per-view bodies** (`export(view)` = `export(view, null)`; then animation
+frames if `isAnimationSupported` and — static/deployment/custom — animations
+non-empty, one frame export per animation in list order; DynamicView instead
+iterates `LinkedHashSet` of relationship-view ORDERS (TreeSet traversal,
+deduped); `diagram.setLegend(createLegend(view))` LAST — for the Structurizr
+dialect the legend's style set is whatever the LAST body export (last frame,
+or the main diagram) left — mirror).
+
+* custom/landscape/context: header → `writeElements(getGroupableElements
+  (view, null))` → blank line IF elements list non-empty → relationships →
+  footer.
+* container: (1) non-container view elements flat in view order + blank iff
+  written; (2) per boundary software system (owner of each container in view,
+  id-string sorted): `startSoftwareSystemBoundary` → writeElements(the view's
+  containers with parent == system) → `end…`; (3) relationships; footer. No
+  blank line between legs 1/2 beyond the legs' own.
+* component: custom-, people-, systems-legs each + blank iff non-empty; then
+  per boundary software system (LinkedHashSet over the id-sorted boundary
+  containers): `startSS` → per boundary container of that system
+  `startContainerBoundary` → writeElements(its components) → `endContainer` →
+  then ALL view containers of that system written flat → `endSS`;
+  relationships; footer.
+* dynamic (scope from `element_id`): no scope → writeElements(all elements);
+  system scope → boundary legs (as container-view leg 2) then the
+  parent-less elements flat; container scope → the full component-view
+  sequence then the elements whose parent is NOT a container flat. The
+  "blank line" leg is governed by the LAST leg's `elementsWritten` (no-scope:
+  the elements list).
+* deployment: header → writeElements(TOP-LEVEL deployment nodes in view) →
+  relationships → footer — NO blank-line leg between (506-510).
+* `write(deploymentNode)` recursion: boundary → children/infra/instances
+  sorted-by-name → `writeElements` (which sorts THAT combined list in place
+  by id string; groups honored per node) → end boundary.
+
+**`writeElements`** (`findGroups` first): grouped pass — flat mode =
+per group `startGroupBoundary`/members/`endGroupBoundary`; **nested mode**
+(model property `structurizr.groupSeparator` non-empty): per sorted group
+compare `group.split(sep).length` vs `context.split(sep).length` (Java split:
+trailing empties dropped; `"".split` → length 1): deeper → `indent()`; equal
+→ `endGroupBoundary` **only when `context.length() > 1`** (a ONE-CHARACTER
+context never closes — upstream quirk, mirror byte-exactly); shallower →
+`contextCount-groupCount` × (end + outdent) **plus one MORE end** without
+outdent; every pass starts its own group; tail closes `contextCount` groups
+outdenting all but the last. Ungrouped pass afterwards in the (id-sorted)
+list order.
+
+**`getRelationshipsInView`**: DynamicView → view order (TreeSet); else sorted
+by relationship-id STRING. `writeRelationships` writes ALL of them (the
+`isVisible(view, rv)` helper is never consulted here — frames show every
+relationship) + trailing blank iff non-empty.
+
+**`getGroupableElements(view, parent)`** matrix: custom→all (cast, abort on
+non-custom); landscape/context→all (`GroupableElement` — ClassCastException =
+reference abort on deployment-y elements); container→containers only;
+component→components only; dynamic→ by scope: none→all, system→containers,
+container→components; deployment→deployment nodes with `parent == null`;
+`parent != null` filters `parent ==` reference-equality (Id equality in Rust).
+
+**Animation `isVisible(view, element)`** (frame state): static/deployment
+with step > 0 → element in union of animation steps ≤ step; dynamic → frame
+order equals an rv order (endpoint of it); `frame == null` or step ≤ 0 →
+true. (`ElementView.visible` JSON flag: never consulted.)
+
+**Terminology** (`AbstractExporter.typeOf` 48-105): per-kind
+`Terminology.findTerminology` (instances resolve to their element; defaults
+`Person`/`Software System`/`Container`/`Component`/`Deployment Node`/
+`Infrastructure Node`; custom → `metadata` else `"Element"`; trim-check), +
+`: <technology>` suffix (trim-check `hasValue`) for container/component/
+deploymentNode/infrastructureNode ONLY; custom-element type = `metadata`
+directly (never via terminology); empty → returned bare (no symbols);
+else wrapped per `configuration.metadataSymbols` (NULL → mutated to
+SquareBrackets): `[…]`/`(…)`/`{…}`/`<…>`/`<<…>>`/none. `breakText`:
+`maxCharacters = (int)(maxWidth/(fontSize×0.6))`, `s.length() < maxCharacters`
+→ unchanged; word-wrap with `"<br />"` joins; empty/null → `""`.
+`StringUtils.isNullOrEmpty` = null || TRIM empty (every gate in the engine).
