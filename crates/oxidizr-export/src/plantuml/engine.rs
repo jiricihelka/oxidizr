@@ -46,34 +46,63 @@ pub enum Frame {
 /// (`type_of`/`canonical_name`/`property`) with the element they are
 /// handed.
 pub trait Dialect {
-    /// `writeHeader`.
-    fn write_header<'a>(&mut self, e: &Engine<'a>, view: View<'a>, w: &mut IndentingWriter);
+    /// `writeHeader`. `Result` because the Structurizr header's title
+    /// fallback (`view.getName()`) NPEs on a dangling view scope.
+    ///
+    /// # Errors
+    ///
+    /// [`ExportError::ReferenceAbort`] on the Java NPE/cast paths reached
+    /// while writing the header (e.g. a dangling view scope).
+    fn write_header<'a>(
+        &mut self,
+        e: &Engine<'a>,
+        view: View<'a>,
+        w: &mut IndentingWriter,
+    ) -> Result<(), ExportError>;
     /// `writeFooter`.
     fn write_footer<'a>(&mut self, e: &Engine<'a>, view: View<'a>, w: &mut IndentingWriter);
-    /// `writeElement`.
+    /// `writeElement`. `Result` because it consults `isVisible` (the Java
+    /// untyped-`frame` cast) — the `hide <id>` leg.
+    ///
+    /// # Errors
+    ///
+    /// [`ExportError::ReferenceAbort`] on the Java NPE/cast paths reached
+    /// while writing the element (e.g. the frame-mismatch cast).
     fn write_element<'a>(
         &mut self,
         e: &Engine<'a>,
         view: View<'a>,
         element: ElemRef<'a>,
         w: &mut IndentingWriter,
-    );
-    /// `writeRelationship`.
+    ) -> Result<(), ExportError>;
+    /// `writeRelationship`. `Result` because the model relationship behind
+    /// the view must resolve (the reference would NPE).
+    ///
+    /// # Errors
+    ///
+    /// [`ExportError::ReferenceAbort`] when the relationship view
+    /// references a missing model relationship.
     fn write_relationship<'a>(
         &mut self,
         e: &Engine<'a>,
         view: View<'a>,
         relationship_view: &'a RelationshipView,
         w: &mut IndentingWriter,
-    );
-    /// `startGroupBoundary`.
+    ) -> Result<(), ExportError>;
+    /// `startGroupBoundary`. `Result` because the Structurizr dialect's
+    /// group-separator cut is a Java `substring` abort path.
+    ///
+    /// # Errors
+    ///
+    /// [`ExportError::ReferenceAbort`] when the group-separator cut falls
+    /// outside the group name (the Java `substring` bounds check).
     fn start_group_boundary<'a>(
         &mut self,
         e: &Engine<'a>,
         view: View<'a>,
         group: &str,
         w: &mut IndentingWriter,
-    );
+    ) -> Result<(), ExportError>;
     /// `endGroupBoundary`.
     fn end_group_boundary<'a>(&mut self, e: &Engine<'a>, view: View<'a>, w: &mut IndentingWriter);
     /// `startSoftwareSystemBoundary`.
@@ -106,14 +135,20 @@ pub trait Dialect {
         view: View<'a>,
         w: &mut IndentingWriter,
     );
-    /// `startDeploymentNodeBoundary`.
+    /// `startDeploymentNodeBoundary`. `Result` because the writer emits the
+    /// `hide <id>` leg (the `isVisible` cast).
+    ///
+    /// # Errors
+    ///
+    /// [`ExportError::ReferenceAbort`] on the Java NPE/cast paths reached
+    /// while opening the node boundary (e.g. the frame-mismatch cast).
     fn start_deployment_node_boundary<'a>(
         &mut self,
         e: &Engine<'a>,
         view: View<'a>,
         node: ElemRef<'a>,
         w: &mut IndentingWriter,
-    );
+    ) -> Result<(), ExportError>;
     /// `endDeploymentNodeBoundary`.
     fn end_deployment_node_boundary<'a>(
         &mut self,
@@ -132,13 +167,14 @@ pub trait Dialect {
     /// `AbstractPlantUMLExporter.endBoundary`.
     fn end_boundary<'a>(&mut self, e: &Engine<'a>, view: View<'a>, w: &mut IndentingWriter);
     /// `isAnimationSupported` (base `false`; the `PlantUML` dialects read
-    /// the `plantuml.animation` property).
-    fn is_animation_supported(&self, _e: &Engine, _view: View<'_>) -> bool {
+    /// the `plantuml.animation` property). The tied `'a` lets a dialect
+    /// call `e.property(view.base(), …)` (needs `&'a ViewBase`).
+    fn is_animation_supported<'a>(&self, _e: &Engine<'a>, _view: View<'a>) -> bool {
         false
     }
     /// `renderAsSequenceDiagram` (base `false`; the `PlantUML` dialects
     /// gate dynamic views on `plantuml.sequenceDiagram`).
-    fn render_as_sequence_diagram(&self, _e: &Engine, _view: View<'_>) -> bool {
+    fn render_as_sequence_diagram<'a>(&self, _e: &Engine<'a>, _view: View<'a>) -> bool {
         false
     }
     /// `createDiagram`.
@@ -290,21 +326,21 @@ impl<'a> Engine<'a> {
     #[allow(clippy::too_many_lines)] // one leg per reference `export(view)` overload
     fn body<D: Dialect>(&mut self, d: &mut D, view: View<'a>) -> Result<Diagram, ExportError> {
         let mut w = IndentingWriter::new();
-        d.write_header(self, view, &mut w);
+        d.write_header(self, view, &mut w)?;
         match view {
             View::Custom(_) | View::Landscape(_) | View::Context(_) => {
                 let mut elements = self.get_groupable_elements(view, None)?;
-                self.write_elements(d, view, &mut elements, &mut w);
+                self.write_elements(d, view, &mut elements, &mut w)?;
                 if !elements.is_empty() {
                     w.write_line(None);
                 }
-                self.write_relationships(d, view, &mut w);
+                self.write_relationships(d, view, &mut w)?;
             }
             View::Container(_) => {
                 let mut elements_written = false;
                 for element in self.view_elements(view) {
                     if element.kind() != oxidizr_core::validate::ElementKind::Container {
-                        d.write_element(self, view, element, &mut w);
+                        d.write_element(self, view, element, &mut w)?;
                         elements_written = true;
                     }
                 }
@@ -314,20 +350,20 @@ impl<'a> Engine<'a> {
                 for system in self.get_boundary_systems(view) {
                     d.start_software_system_boundary(self, view, system, &mut w);
                     let mut scoped = self.get_groupable_elements(view, Some(system.id()))?;
-                    self.write_elements(d, view, &mut scoped, &mut w);
+                    self.write_elements(d, view, &mut scoped, &mut w)?;
                     d.end_software_system_boundary(self, view, &mut w);
                 }
-                self.write_relationships(d, view, &mut w);
+                self.write_relationships(d, view, &mut w)?;
             }
             View::Component(_) => {
                 let customs = self.get_custom_elements(view);
-                self.write_flat_leg(d, view, &customs, &mut w);
+                self.write_flat_leg(d, view, &customs, &mut w)?;
                 let people = self.get_people(view);
-                self.write_flat_leg(d, view, &people, &mut w);
+                self.write_flat_leg(d, view, &people, &mut w)?;
                 let systems = self.get_systems(view);
-                self.write_flat_leg(d, view, &systems, &mut w);
+                self.write_flat_leg(d, view, &systems, &mut w)?;
                 self.write_boundary_container_legs(d, view, &mut w)?;
-                self.write_relationships(d, view, &mut w);
+                self.write_relationships(d, view, &mut w)?;
             }
             View::Dynamic(dv) => {
                 let mut elements_written = false;
@@ -338,7 +374,7 @@ impl<'a> Engine<'a> {
                 match scope.map(ElemRef::kind) {
                     None => {
                         let mut elements = self.get_groupable_elements(view, None)?;
-                        self.write_elements(d, view, &mut elements, &mut w);
+                        self.write_elements(d, view, &mut elements, &mut w)?;
                         elements_written = !elements.is_empty();
                     }
                     Some(oxidizr_core::validate::ElementKind::SoftwareSystem) => {
@@ -346,29 +382,29 @@ impl<'a> Engine<'a> {
                             d.start_software_system_boundary(self, view, system, &mut w);
                             let mut scoped =
                                 self.get_groupable_elements(view, Some(system.id()))?;
-                            self.write_elements(d, view, &mut scoped, &mut w);
+                            self.write_elements(d, view, &mut scoped, &mut w)?;
                             d.end_software_system_boundary(self, view, &mut w);
                         }
                         for element in self.view_elements(view) {
                             if element.parent_id().is_none() {
-                                d.write_element(self, view, element, &mut w);
+                                d.write_element(self, view, element, &mut w)?;
                                 elements_written = true;
                             }
                         }
                     }
                     Some(oxidizr_core::validate::ElementKind::Container) => {
                         let customs = self.get_custom_elements(view);
-                        self.write_flat_leg(d, view, &customs, &mut w);
+                        self.write_flat_leg(d, view, &customs, &mut w)?;
                         let people = self.get_people(view);
-                        self.write_flat_leg(d, view, &people, &mut w);
+                        self.write_flat_leg(d, view, &people, &mut w)?;
                         let systems = self.get_systems(view);
-                        self.write_flat_leg(d, view, &systems, &mut w);
+                        self.write_flat_leg(d, view, &systems, &mut w)?;
                         self.write_boundary_container_legs(d, view, &mut w)?;
                         for element in self.view_elements(view) {
                             // Java: `!(parent instanceof Container)` — the
                             // kinds with a Container parent are components.
                             if element.kind() != oxidizr_core::validate::ElementKind::Component {
-                                d.write_element(self, view, element, &mut w);
+                                d.write_element(self, view, element, &mut w)?;
                                 elements_written = true;
                             }
                         }
@@ -378,13 +414,13 @@ impl<'a> Engine<'a> {
                 if elements_written {
                     w.write_line(None);
                 }
-                self.write_relationships(d, view, &mut w);
+                self.write_relationships(d, view, &mut w)?;
             }
             View::Deployment(_) => {
                 // NO blank-line leg between elements and relationships.
                 let mut elements = self.get_groupable_elements(view, None)?;
-                self.write_elements(d, view, &mut elements, &mut w);
-                self.write_relationships(d, view, &mut w);
+                self.write_elements(d, view, &mut elements, &mut w)?;
+                self.write_relationships(d, view, &mut w)?;
             }
             View::Filtered(_) | View::Image(_) => {
                 return Err(ExportError::ReferenceAbort(
@@ -404,13 +440,14 @@ impl<'a> Engine<'a> {
         view: View<'a>,
         elements: &[ElemRef<'a>],
         w: &mut IndentingWriter,
-    ) {
+    ) -> Result<(), ExportError> {
         for element in elements {
-            d.write_element(self, view, *element, w);
+            d.write_element(self, view, *element, w)?;
         }
         if !elements.is_empty() {
             w.write_line(None);
         }
+        Ok(())
     }
 
     /// The component-view boundary sequence (also the container-scoped
@@ -440,13 +477,13 @@ impl<'a> Engine<'a> {
                 if container.owner_system_id() == owner {
                     d.start_container_boundary(self, view, *container, w);
                     let mut scoped = self.get_groupable_elements(view, Some(container.id()))?;
-                    self.write_elements(d, view, &mut scoped, w);
+                    self.write_elements(d, view, &mut scoped, w)?;
                     d.end_container_boundary(self, view, w);
                 }
             }
             for container in &containers {
                 if container.owner_system_id() == owner {
-                    d.write_element(self, view, *container, w);
+                    d.write_element(self, view, *container, w)?;
                 }
             }
             d.end_software_system_boundary(self, view, w);
@@ -466,7 +503,7 @@ impl<'a> Engine<'a> {
         dv: &'a DynamicView,
     ) -> Result<Diagram, ExportError> {
         let mut w = IndentingWriter::new();
-        d.write_header(self, view, &mut w);
+        d.write_header(self, view, &mut w)?;
 
         // LinkedHashSet: source-then-destination per TreeSet relationship.
         let mut elements: Vec<ElemRef<'a>> = Vec::new();
@@ -547,13 +584,13 @@ impl<'a> Engine<'a> {
                 };
                 if elements.iter().any(|e| e.id() == element.id()) {
                     if stack.is_empty() || at_parent(&stack) {
-                        d.write_element(self, view, *element, &mut w);
+                        d.write_element(self, view, *element, &mut w)?;
                     } else {
                         while !stack.is_empty() && !at_parent(&stack) {
                             stack.pop();
                             d.end_boundary(self, view, &mut w);
                         }
-                        d.write_element(self, view, *element, &mut w);
+                        d.write_element(self, view, *element, &mut w)?;
                     }
                 } else {
                     while !stack.is_empty() && !at_parent(&stack) {
@@ -569,14 +606,14 @@ impl<'a> Engine<'a> {
             }
         } else {
             for element in &elements {
-                d.write_element(self, view, *element, &mut w);
+                d.write_element(self, view, *element, &mut w)?;
             }
         }
 
         if !elements.is_empty() {
             w.write_line(None);
         }
-        self.write_relationships(d, view, &mut w);
+        self.write_relationships(d, view, &mut w)?;
         d.write_footer(self, view, &mut w);
         let mut diagram = d.create_diagram(self, view, w.to_string());
         if let Some(legend) = d.create_legend(self, view) {
@@ -594,7 +631,7 @@ impl<'a> Engine<'a> {
         view: View<'a>,
         elements: &mut Vec<ElemRef<'a>>,
         w: &mut IndentingWriter,
-    ) {
+    ) -> Result<(), ExportError> {
         let groups = self.find_groups(elements);
         if !groups.is_empty() {
             let separator = self.group_separator();
@@ -622,10 +659,10 @@ impl<'a> Engine<'a> {
                             d.end_group_boundary(self, view, w);
                         }
                     }
-                    d.start_group_boundary(self, view, group, w);
+                    d.start_group_boundary(self, view, group, w)?;
                     for element in elements.iter().copied() {
                         if element.group() == Some(group.as_str()) {
-                            self.write(d, view, element, w);
+                            self.write(d, view, element, w)?;
                         }
                     }
                     context.clone_from(group);
@@ -639,10 +676,10 @@ impl<'a> Engine<'a> {
                 }
             } else {
                 for group in &groups {
-                    d.start_group_boundary(self, view, group, w);
+                    d.start_group_boundary(self, view, group, w)?;
                     for element in elements.iter().copied() {
                         if element.group() == Some(group.as_str()) {
-                            self.write(d, view, element, w);
+                            self.write(d, view, element, w)?;
                         }
                     }
                     d.end_group_boundary(self, view, w);
@@ -652,9 +689,10 @@ impl<'a> Engine<'a> {
 
         for element in elements.iter().copied() {
             if is_null_or_empty(element.group()) {
-                self.write(d, view, element, w);
+                self.write(d, view, element, w)?;
             }
         }
+        Ok(())
     }
 
     /// The private `write`: deployment nodes recurse their boundary.
@@ -664,14 +702,15 @@ impl<'a> Engine<'a> {
         view: View<'a>,
         element: ElemRef<'a>,
         w: &mut IndentingWriter,
-    ) {
+    ) -> Result<(), ExportError> {
         if matches!(view, View::Deployment(_))
             && element.kind() == oxidizr_core::validate::ElementKind::DeploymentNode
         {
-            self.write_deployment_node(d, view, element, w);
+            self.write_deployment_node(d, view, element, w)?;
         } else {
-            d.write_element(self, view, element, w);
+            d.write_element(self, view, element, w)?;
         }
+        Ok(())
     }
 
     /// The `writeDeploymentNode` recursion: children/infrastructure/
@@ -684,8 +723,8 @@ impl<'a> Engine<'a> {
         view: View<'a>,
         node: ElemRef<'a>,
         w: &mut IndentingWriter,
-    ) {
-        d.start_deployment_node_boundary(self, view, node, w);
+    ) -> Result<(), ExportError> {
+        d.start_deployment_node_boundary(self, view, node, w)?;
         let mut elements: Vec<ElemRef<'a>> = Vec::new();
         if let ElemRef::DeploymentNode { elem, .. } = node {
             let mut children: Vec<ElemRef<'a>> = elem
@@ -745,7 +784,9 @@ impl<'a> Engine<'a> {
                     .filter(|e| self.is_element_in_view(view, e.id())),
             );
         }
-        self.write_elements(d, view, &mut elements, w);
+        self.write_elements(d, view, &mut elements, w)?;
+        d.end_deployment_node_boundary(self, view, w);
+        Ok(())
     }
 
     /// `findGroups`: sorts `elements` in place by id STRING; collects the
@@ -808,14 +849,15 @@ impl<'a> Engine<'a> {
         d: &mut D,
         view: View<'a>,
         w: &mut IndentingWriter,
-    ) {
+    ) -> Result<(), ExportError> {
         let rels = self.get_relationships_in_view(view);
         for rv in rels.clone() {
-            d.write_relationship(self, view, rv, w);
+            d.write_relationship(self, view, rv, w)?;
         }
         if !rels.is_empty() {
             w.write_line(None);
         }
+        Ok(())
     }
 
     /// `getGroupableElements(view, parent)` — the per-kind matrix
@@ -1416,8 +1458,14 @@ mod tests {
     }
 
     impl Dialect for MockDialect {
-        fn write_header<'a>(&mut self, _e: &Engine<'a>, _view: View<'a>, w: &mut IndentingWriter) {
+        fn write_header<'a>(
+            &mut self,
+            _e: &Engine<'a>,
+            _view: View<'a>,
+            w: &mut IndentingWriter,
+        ) -> Result<(), ExportError> {
             w.write_line(Some("HDR"));
+            Ok(())
         }
         fn write_footer<'a>(&mut self, _e: &Engine<'a>, _view: View<'a>, w: &mut IndentingWriter) {
             w.write_line(Some("FTR"));
@@ -1428,10 +1476,11 @@ mod tests {
             view: View<'a>,
             element: ElemRef<'a>,
             w: &mut IndentingWriter,
-        ) {
+        ) -> Result<(), ExportError> {
             let visible = e.is_visible(view, element).unwrap_or(true);
             let marker = if visible { "E" } else { "x" };
             w.write_line(Some(&format!("{marker} {}", element.id())));
+            Ok(())
         }
         fn write_relationship<'a>(
             &mut self,
@@ -1439,8 +1488,9 @@ mod tests {
             _view: View<'a>,
             rv: &'a RelationshipView,
             w: &mut IndentingWriter,
-        ) {
+        ) -> Result<(), ExportError> {
             w.write_line(Some(&format!("R {}", rv.id)));
+            Ok(())
         }
         fn start_group_boundary<'a>(
             &mut self,
@@ -1448,8 +1498,9 @@ mod tests {
             _view: View<'a>,
             group: &str,
             w: &mut IndentingWriter,
-        ) {
+        ) -> Result<(), ExportError> {
             w.write_line(Some(&format!("G+ {group}")));
+            Ok(())
         }
         fn end_group_boundary<'a>(
             &mut self,
@@ -1499,8 +1550,9 @@ mod tests {
             _view: View<'a>,
             node: ElemRef<'a>,
             w: &mut IndentingWriter,
-        ) {
+        ) -> Result<(), ExportError> {
             w.write_line(Some(&format!("N+ {}", node.name())));
+            Ok(())
         }
         fn end_deployment_node_boundary<'a>(
             &mut self,
@@ -1524,10 +1576,10 @@ mod tests {
             w.outdent();
             w.write_line(Some("end box"));
         }
-        fn is_animation_supported(&self, _e: &Engine, _view: View<'_>) -> bool {
+        fn is_animation_supported<'a>(&self, _e: &Engine<'a>, _view: View<'a>) -> bool {
             self.animation
         }
-        fn render_as_sequence_diagram(&self, _e: &Engine, _view: View<'_>) -> bool {
+        fn render_as_sequence_diagram<'a>(&self, _e: &Engine<'a>, _view: View<'a>) -> bool {
             self.sequence
         }
         fn create_diagram(&self, _e: &Engine, view: View<'_>, definition: String) -> Diagram {

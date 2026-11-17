@@ -7,9 +7,11 @@
 
 pub mod engine;
 pub mod model;
+pub mod structurizr;
 
 pub use engine::{Dialect, Engine, Frame};
 pub use model::ElemRef;
+pub use structurizr::StructurizrDialect;
 
 use oxidizr_core::views::Shape;
 

@@ -3,7 +3,7 @@
 Rewritten at every green commit (ritual: `process/resume-ritual.md`). Newest wins;
 never archive — history is git's job.
 
-Updated: 2026-11-17 · HEAD = M2-b engine-port commit (tip of `main`, tag
+Updated: 2026-11-17 · HEAD = M2-c dialect commit (tip of `main`, tag
 `v0.1.0` far down) · gates green · nothing pushed.
 
 - **Done:** **PHASE 1 + 1T COMPLETE** (`v0.1.0`, T0–T6, no tag) · **P2-M0**
@@ -18,19 +18,27 @@ Updated: 2026-11-17 · HEAD = M2-b engine-port commit (tip of `main`, tag
   `type_of`, `break_text`. Java abort paths → `ExportError::ReferenceAbort`
   = **new OXZ-5009 EXPORT_ABORT** (diag const + docs row + pipeline arm +
   coverage REGISTRY + allow-list). 31 tests, MockDialect pins hook sequences.
-- **Next:** **M2-c** Structurizr dialect (`build/PHASE_2.md` spec):
-  `StructurizrPlantUMLExporter` 757 + `plantuml/AbstractPlantUMLExporter`
-  464 writers — `PlantUMLStyle` family (base64 selectors, name-sorted
-  `HashSet`, per-class field order), header/boundary writers, `writeStyles`
-  7-pass footer replace, `createLegend`, `idOf`/`filter` `(?U)\W`; green
-  commit. THEN **M2-d**: `export_cmd` plantuml dispatch leg, Category-A
-  goldens, render smoke, oracle A/B over corpus. Then M3 (C4-PlantUML +
-  `xtask export-verify` semantic comparator), M4 (Mermaid), M5 (docs,
-  proptest, tag `v0.2.0`).
+  **P2-M2-c COMPLETE** (this commit): `plantuml/structurizr.rs` =
+  `StructurizrDialect` — `StructurizrPlantUMLExporter` 757 +
+  `plantuml/AbstractPlantUMLExporter` 464 writers ported: header (title/skinparams/
+  includes/direction/teoz legs), `PlantUMLStyle` enum (base64 selectors,
+  name-sorted class-pass `writeStyles` footer replace, per-class `toString`
+  field orders), boundary/group/DN writers (synthesized `ElementStyle("")` →
+  shadow ALWAYS false; line-711 icon→color bug mirrored), `createLegend`
+  (width-200 rewrite, transparent rel lines, appended Legend style),
+  `idOf`/`filter` `(?U)\W`, Java-substring group cuts. Engine fixes carried
+  here: Result-converted body hooks + the MISSING `end_deployment_node_boundary`
+  call (ref `AbstractDiagramExporter` 702, found via DN dump). 42 tests — 11
+  pinned full-document/legend assertions + leg asserts.
+- **Next:** **M2-d**: `export_cmd` plantuml dispatch leg, per-view + legend
+  files, Category-A goldens, render smoke, oracle A/B over corpus
+  (`build/PHASE_2.md` spec). Then M3 (C4-PlantUML + `xtask export-verify`
+  semantic comparator), M4 (Mermaid), M5 (docs, proptest, tag `v0.2.0`).
 - **Open questions:** T4 exit gate's *dispatched CI run* of `e2e.yml` needs a
-  push — ask the user before any push (all P1/P1T/P2 commits sit unpushed).
-  Vendored default theme still blocked (no DNS) — D3 interim rule (unknown
-  name = keep working, unresolved styles) until the user supplies
+  push — **USER DECLINED (2026-11-17): keep everything local**; the gate is
+  documented push-pending, T0–T6 stay code-complete, do NOT re-ask. Vendored
+  default theme still blocked (no DNS) — D3 interim rule (unknown name = keep
+  working, unresolved styles) until the user supplies
   `static.structurizr.com/themes/default/theme.json`.
 - **Don't re-derive (trust):** P2-D1..D11 + M1/M2 decomposition + M2-b
   closure notes (`build/PHASE_2.md`); **`build/EXPORT-PLANTUML.md` §§1–14 is
@@ -39,7 +47,9 @@ Updated: 2026-11-17 · HEAD = M2-b engine-port commit (tip of `main`, tag
   STRING (numeric `TreeSet` order never survives: `"10"<"2"<"9"<"abc"`), and
   the shallow-move leg writes `endGroupBoundary` AT the current indent first
   (first `G-` gets 2 spaces). `Dialect` hooks all tie engine/view/element to
-  one `'a`; write-chain is non-Result; Java reference identity = id equality.
+  one `'a`; hooks reaching Java abort paths (`write_header`/`write_element`/
+  `write_relationship`/`start_group_boundary`/`start_deployment_node_boundary`)
+  are `Result`, the rest infallible; Java reference identity = id equality.
   MockDialect tokens: `HDR`/`FTR`, `E id`/`x id`, `G+`/`G-`, `S+`/`S-`,
   `C+`/`C-`, `N+`/`N-`, `B+ name`+indent / `end box`+outdent. Null frame =
   everything visible, no NPE; frames write ALL relationships; legend created
