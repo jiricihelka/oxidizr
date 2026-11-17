@@ -147,9 +147,9 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
 
 ### P2-M1 — theme infrastructure: styles + ThemeStore + wiring (2026-11-17)
 
-M1-a `199bc70`, M1-b `95130bb`, M1-c `169e685`, M1-d this commit; decomposition
-and decisions (P2-D2/D3/D4/D8 + amendments): `build/PHASE_2.md`. M1-e remains —
-see the probe finding at the end.
+M1-a `199bc70`, M1-b `95130bb`, M1-c `169e685`, M1-d `eadf24b`, M1-e-A
+`0759f96`, M1-e-B this commit — M1 complete; decomposition and decisions
+(P2-D2/D3/D4/D8 + amendments): `build/PHASE_2.md`.
 
 - **M1-a** `EXPORT-PROPERTIES.md` catalog: cascade is 2 levels + default (with
   property literals + per-site match case-sensitivity), view-kind matrix,
@@ -168,7 +168,7 @@ see the probe finding at the end.
   + `paths` (XDG cache dir + hand-rolled FIPS 180-4 SHA-256 cache keys) +
   diag OXZ-5008 + coverage allow-list entries. The `curl` fetch leg mirrors
   source (no DNS here; A/B lands with the M2 probes). 19 tests.
-- **M1-d** wiring (this commit): installed-theme registry reaches the DSL
+- **M1-d** wiring (`eadf24b`): installed-theme registry reaches the DSL
   parser via `ParseOptions.installed_themes` (Arc-closure newtype — dsl crate
   stays FS-free, P1-D1), built BEFORE parse (`installThemes` parity);
   `add_theme` installed-name branch (raw-token registry check, then trim +
@@ -188,6 +188,38 @@ see the probe finding at the end.
   (2) its retained `structurizr.dsl` base64 can never carry the file's final
   newline (`readLine` accumulation) while ours does (`split('\n')` trailing
   `""`). Fix both before M2.
+- **M1-e-A** retained-DSL split (`0759f96`): `compat::java_split_dsl_lines`
+  mirrors the reference entry `parse(String)` — `split("\\r?\\n")` consumes
+  one CR per separator and drops ALL trailing empties — so the retained
+  `structurizr.dsl` base64 never carries the file's final newline. Helper
+  unit matrix + end-to-end retention test; m1d re-probe: base64
+  byte-identical.
+- **M1-e-B** default views (this commit): core
+  `WorkspaceBuilder::create_default_views` (viewops) ports
+  `ViewSet.createDefaultViews` (`ViewSet` 1191-1264): landscape view first;
+  per software system sorted by Java UTF-16 name order (stable) a context
+  view, a container view with `enableAutomaticLayout(TopBottom)` +
+  `AutomaticLayout.DEFAULT_*` (100/50/50/true) when it has containers, and a
+  component view per name-sorted container with components; per deployment
+  environment (deduped first-seen from the top-level nodes, then sorted)
+  scoped deployment views per software system holding CONTAINER instances
+  (name-sorted — `softwareSystemInstance`s do NOT scope), or one unscoped
+  view when the environment holds only infrastructure nodes. Pipeline
+  `apply_default_views` mirrors the `AbstractCommand.loadWorkspace` tail
+  (`!model.isEmpty() && views.isEmpty()` — model = people + systems +
+  top-level nodes; views = all nine collections) via a `WorkspaceBuilder::
+  adopt` round-trip, applied on the dsl2json serialize, the json2json parity
+  leg and the export loader. NOT hooked: `validate` (its violations mirror
+  the reference steps running BEFORE the tail; reference `ValidateCommand`
+  never serializes views) and `keep_unknown` (D3, documented non-parity);
+  no `reconcile` hook (no reference command). Oracle A/B (m1e witnesses):
+  DSL leg (`workspace2.dsl` — name-disordered systems, containers/
+  components, containerInstance + softwareSystemInstance subtlety, scoped +
+  infra-only environments) and JSON leg (`noviews-base.json`) both
+  byte-identical to the reference modulo the per-process identifier UUIDs
+  and `structurizr.inspection.*`; the m1d witness is now FULLY closed
+  (views included). E2E: 65 corpus manifests re-blessed (`xtask e2e bless`,
+  views counts only — the drift IS the reference parity).
 
 ### P2-M0 — export scaffold + theme/json dispatch ✅ (2026-11-17)
 

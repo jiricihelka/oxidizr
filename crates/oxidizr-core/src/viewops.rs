@@ -14,11 +14,13 @@
 // [`CoreError`] enum rather than repeated per method.
 #![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
+use std::collections::HashMap;
+
 use crate::builder::WorkspaceBuilder;
 use crate::error::CoreError;
 use crate::ids::Id;
 use crate::validate::ElementKind;
-use crate::views::{Animation, ElementView, RelationshipView};
+use crate::views::{Animation, AutomaticLayout, ElementView, RankDirection, RelationshipView};
 
 /// A view slot, handed out by the `create_*_view` builders and used by every
 /// content operation. The payload is the index inside the matching
@@ -950,6 +952,153 @@ impl WorkspaceBuilder {
     }
 
     // ------------------------------------------------------------------
+    // default views (`ViewSet.createDefaultViews`)
+    // ------------------------------------------------------------------
+
+    /// `ViewSet.createDefaultViews` (`ViewSet` 1191-1264, pinned `ad34036`):
+    /// the app-layer generation `AbstractCommand.loadWorkspace` runs when the
+    /// model is non-empty but the view set is empty — the pipeline applies it
+    /// where the reference's shared load tail sits (M1-e-B). Mirrors the
+    /// reference exactly: one landscape view; per software system (stable
+    /// sort by Java UTF-16 name order) a context view, plus a container view
+    /// with `enableAutomaticLayout(TopBottom)` when the system has
+    /// containers, plus a component view per name-sorted container that has
+    /// components; then per deployment environment (deduped first-seen from
+    /// the top-level nodes, then sorted) one scoped deployment view per
+    /// software system holding container instances in the environment
+    /// (name-sorted), or one unscoped view when the environment holds only
+    /// infrastructure nodes. The `Err` arms are the reference's unguarded
+    /// throws (duplicate keys / not-permitted adds) — unreachable on the
+    /// empty view set this factory is called with, but propagated so a
+    /// surprise fails the load like the reference's abort.
+    #[allow(clippy::too_many_lines)] // one leg per reference `createDefaultViews`
+    pub fn create_default_views(&mut self) -> Result<(), CoreError> {
+        // a single System Landscape view with all people and software systems
+        let landscape = self.create_landscape_view("")?;
+        self.view_add_default_elements(landscape, true)?;
+
+        // per software system (Java name order): a context view, plus a
+        // container view and component views
+        let mut systems: Vec<SystemPlan> = self
+            .workspace()
+            .model
+            .software_systems
+            .iter()
+            .map(|s| {
+                (
+                    s.item.id.clone(),
+                    s.item.name.clone(),
+                    s.containers
+                        .iter()
+                        .map(|c| {
+                            (
+                                c.item.id.clone(),
+                                c.item.name.clone(),
+                                !c.components.is_empty(),
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+        systems.sort_by(|a, b| java_cmp_str(&a.1, &b.1));
+        for (system_id, _, mut containers) in systems {
+            let context = self.create_context_view(&system_id, "")?;
+            self.view_add_default_elements(context, true)?;
+            if containers.is_empty() {
+                continue;
+            }
+            containers.sort_by(|a, b| java_cmp_str(&a.1, &b.1));
+            let container_view = self.create_container_view(&system_id, "")?;
+            self.view_add_default_elements(container_view, true)?;
+            // `enableAutomaticLayout(TopBottom)`: the `AutomaticLayout.
+            // DEFAULT_*` separation/vertices defaults (100/50/50/true).
+            if let Some(content) = self.content_mut(container_view) {
+                content.automatic_layout = Some(AutomaticLayout {
+                    rank_direction: Some(RankDirection::TopBottom),
+                    rank_separation: 100,
+                    node_separation: 50,
+                    edge_separation: 50,
+                    vertices: true,
+                });
+            }
+            for (container_id, _, has_components) in containers {
+                if has_components {
+                    let component_view = self.create_component_view(&container_id, "")?;
+                    self.view_add_default_elements(component_view, true)?;
+                }
+            }
+        }
+
+        // deployment views for each environment and software system pair:
+        // plan from the (still unmutated) model, then create
+        let mut environments: Vec<String> = Vec::new();
+        for node in &self.workspace().model.deployment_nodes {
+            if !environments.contains(&node.environment) {
+                environments.push(node.environment.clone());
+            }
+        }
+        environments.sort_by(|a, b| java_cmp_str(a, b));
+        let owner: HashMap<Id, SystemRef> = self
+            .workspace()
+            .model
+            .software_systems
+            .iter()
+            .flat_map(|s| {
+                s.containers
+                    .iter()
+                    .map(|c| (c.item.id.clone(), (s.item.id.clone(), s.item.name.clone())))
+            })
+            .collect();
+        let plans: Vec<EnvironmentPlan> = environments
+            .into_iter()
+            .map(|environment| {
+                let mut systems_in_env: Vec<SystemRef> = Vec::new();
+                for node in self
+                    .workspace()
+                    .model
+                    .deployment_nodes
+                    .iter()
+                    .filter(|n| n.environment == environment)
+                {
+                    collect_instance_systems(node, &owner, &mut systems_in_env);
+                }
+                let infrastructure = self
+                    .workspace()
+                    .model
+                    .deployment_nodes
+                    .iter()
+                    .any(|n| has_infrastructure_in_subtree(n, &environment));
+                (environment, systems_in_env, infrastructure)
+            })
+            .collect();
+        for (environment, mut systems_in_env, infrastructure) in plans {
+            if systems_in_env.is_empty() {
+                // no container instances: an unscoped view only when the
+                // environment holds infrastructure nodes
+                if infrastructure {
+                    let view = self.create_deployment_view(&environment, "")?;
+                    self.view_add_default_elements(view, true)?;
+                }
+            } else {
+                systems_in_env.sort_by(|a, b| java_cmp_str(&a.1, &b.1));
+                for (system_id, _) in systems_in_env {
+                    let view = self.create_deployment_view(&environment, "")?;
+                    if let ViewRef::Deployment(index) = view {
+                        // `createDeploymentView(softwareSystem, ...)`: the
+                        // scope must be set BEFORE `addDefaultElements` (the
+                        // instance-cascading add filters on it).
+                        self.workspace_mut().views.deployment_views[index].software_system_id =
+                            Some(system_id);
+                    }
+                    self.view_add_default_elements(view, true)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // ------------------------------------------------------------------
     // animation steps
     // ------------------------------------------------------------------
 
@@ -1309,6 +1458,23 @@ struct RelInfo {
     technology: Option<String>,
 }
 
+/// `(id, name)` of a software system, as planned by `create_default_views`.
+type SystemRef = (Id, String);
+
+/// `(id, name, has_components)` of a container, as planned by
+/// `create_default_views` (the component-view leg skips the false entries).
+type ContainerPlan = (Id, String, bool);
+
+/// `(id, name, containers)` per software system — `create_default_views`'
+/// pre-mutation plan (the model is fully planned before any view is added).
+type SystemPlan = (Id, String, Vec<ContainerPlan>);
+
+/// `(environment, software systems with container instances, infrastructure
+/// present)` per deployment environment — `create_default_views`'s plan for
+/// the deployment leg (scoped views when systems is non-empty, else one
+/// unscoped view iff infrastructure).
+type EnvironmentPlan = (String, Vec<SystemRef>, bool);
+
 /// One directional relationship lookup: exact normalized description when
 /// `Some`, any description when `None`; exact technology when non-empty.
 fn find_rel(
@@ -1400,11 +1566,55 @@ fn collect_deployment_subtree(builder: &WorkspaceBuilder, node: &Id, out: &mut V
     out.push(node.clone());
 }
 
+/// Java `String.compareTo`: UTF-16 code-unit order (`Comparator.comparing
+/// (Element::getName)` / `String::compareTo` in `createDefaultViews`) —
+/// differs from Rust's UTF-8 byte order where supplementary characters
+/// compare against `U+E000..U+FFFF` (same precedent as `views::style_cmp`).
+fn java_cmp_str(a: &str, b: &str) -> std::cmp::Ordering {
+    a.encode_utf16().cmp(b.encode_utf16())
+}
+
+/// `ViewSet.createDefaultViews`' `getContainerInstances` recursion, mapping
+/// each container instance to its owning software system and keeping the
+/// first-seen order (the reference dedupes the system list as it walks; the
+/// result is name-sorted afterwards anyway, but stable-sort ties follow the
+/// reference's traversal).
+fn collect_instance_systems(
+    node: &crate::model::DeploymentNode,
+    owner: &HashMap<Id, SystemRef>,
+    out: &mut Vec<SystemRef>,
+) {
+    for instance in &node.container_instances {
+        if let Some(system) = owner.get(&instance.container_id)
+            && !out.iter().any(|(id, _)| id == &system.0)
+        {
+            out.push(system.clone());
+        }
+    }
+    for child in &node.children {
+        collect_instance_systems(child, owner, out);
+    }
+}
+
+/// The `createDefaultViews` infrastructure probe (`model.getElements().
+/// anyMatch(instanceof InfrastructureNode && environment equals)`) over one
+/// top-level node's subtree; infrastructure nodes inherit the environment.
+fn has_infrastructure_in_subtree(node: &crate::model::DeploymentNode, environment: &str) -> bool {
+    node.infrastructure_nodes
+        .iter()
+        .any(|i| i.environment == environment)
+        || node
+            .children
+            .iter()
+            .any(|c| has_infrastructure_in_subtree(c, environment))
+}
+
 #[cfg(test)]
 mod tests {
     // dense element fixtures mirror the reference's one-letter DSL test names
     #![allow(clippy::many_single_char_names)]
 
+    use super::ViewRef;
     use crate::builder::{ImpliedRelationshipsStrategy, WorkspaceBuilder};
 
     fn rel<'a>(
@@ -1853,5 +2063,96 @@ mod tests {
             .unwrap();
         b.dynamic_add_element_pair(v, &c, "", "", &s2, "1").unwrap();
         assert!(b.view_contains_element(v, &c));
+    }
+
+    #[test]
+    fn create_default_views_mirrors_reference_legs() {
+        // M1-e-B (`ViewSet.createDefaultViews`): name-sorted systems drive
+        // context/container/component views; environments (UTF-16 sorted)
+        // drive scoped deployment views, infrastructure-only environments
+        // an unscoped one.
+        let mut b = WorkspaceBuilder::new();
+        let a = b.add_software_system("B", None, None).unwrap();
+        let p = b.add_person("P", None, None).unwrap();
+        let z = b.add_software_system("A", None, None).unwrap();
+        b.add_relationship(&p, &z, None, None, None).unwrap();
+        // only B has structure: container "c" (definition order before "a"
+        // — the sort must reorder) with a component; container "a" none.
+        let c = b.add_container(&a, "c", None, None, None).unwrap();
+        let ca = b.add_container(&a, "a", None, None, None).unwrap();
+        b.add_component(&c, "k", None, None, None).unwrap();
+        // environments sort "Default" < "prod" (UTF-16); "prod" holds only
+        // infrastructure.
+        let n1 = b
+            .add_deployment_node("Default", "n", None, None, None)
+            .unwrap();
+        b.add_container_instance(&n1, &c, None, Vec::new()).unwrap();
+        let n2 = b
+            .add_deployment_node("prod", "n", None, None, None)
+            .unwrap();
+        b.add_infrastructure_node(&n2, "lb", None, None, None)
+            .unwrap();
+
+        b.create_default_views().unwrap();
+
+        let views = &b.workspace().views;
+        let keys: Vec<(String, i32, bool)> = views
+            .all_views()
+            .iter()
+            .map(|v| (v.key().to_string(), v.order(), v.base().generated_key))
+            .collect();
+        // name order A(z) before B(a); per-system context -> container ->
+        // components; "Default" environment before "prod"
+        assert_eq!(
+            keys,
+            vec![
+                ("SystemLandscape-001".to_string(), 1, true),
+                ("SystemContext-001".to_string(), 2, true), // A
+                ("SystemContext-002".to_string(), 3, true), // B
+                ("Container-001".to_string(), 4, true),     // B
+                ("Component-001".to_string(), 5, true),     // B:c
+                ("Deployment-001".to_string(), 6, true),    // Default/B
+                ("Deployment-002".to_string(), 7, true),    // prod/unscoped
+            ]
+        );
+        // the landscape view holds all people and software systems
+        let landscape = views.system_landscape_views.first().unwrap();
+        assert_eq!(landscape.content.elements.len(), 3);
+        // the context view is scoped to A (first by name)
+        assert_eq!(views.system_context_views[0].software_system_id, z);
+        // the container view is scoped to B and carries the TopBottom
+        // automatic layout with the `AutomaticLayout.DEFAULT_*` settings
+        let container_view = views.container_views.first().unwrap();
+        assert_eq!(container_view.software_system_id, a);
+        assert_eq!(
+            container_view.content.automatic_layout,
+            Some(crate::views::AutomaticLayout {
+                rank_direction: Some(crate::views::RankDirection::TopBottom),
+                rank_separation: 100,
+                node_separation: 50,
+                edge_separation: 50,
+                vertices: true,
+            })
+        );
+        // the component view is scoped to container "c" (the only one with
+        // components); "a" gets none
+        assert_eq!(views.component_views.first().unwrap().container_id, c);
+        assert_eq!(views.component_views.len(), 1);
+        // deployment: "Default" scoped to B, "prod" unscoped; each view
+        // holds its environment's top-level nodes
+        assert_eq!(
+            views.deployment_views[0].software_system_id.as_ref(),
+            Some(&a)
+        );
+        assert_eq!(views.deployment_views[0].environment, "Default");
+        assert_eq!(views.deployment_views[1].software_system_id, None);
+        assert_eq!(views.deployment_views[1].environment, "prod");
+        assert!(b.view_contains_element(ViewRef::Deployment(0), &n1));
+        assert!(!b.view_contains_element(ViewRef::Deployment(0), &n2));
+        assert!(b.view_contains_element(ViewRef::Deployment(1), &n2));
+        // the container view holds BOTH of B's containers (name-sorted add,
+        // `addAllContainers`) — only "c" got a component view
+        assert!(b.view_contains_element(ViewRef::Container(0), &ca));
+        assert!(b.view_contains_element(ViewRef::Container(0), &c));
     }
 }

@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oxidizr_core::Workspace;
+use oxidizr_core::{Workspace, WorkspaceBuilder};
 use oxidizr_diag::codes;
 use oxidizr_dsl::engine::{EnvLookup, ParseOptions, ParseResult, parse_dsl};
 
@@ -349,6 +349,34 @@ fn parse_dsl_input(input: &Source, opts: &ApiOptions) -> Result<ParseResult, Iss
     parse_dsl(&input.text, opts).map_err(|e| suggest::decorate(Issue::from_dsl(&e), None))
 }
 
+/// `AbstractCommand.loadWorkspace`'s tail (M1-e-B): after the shared load —
+/// DSL and JSON legs alike — the reference creates default views when the
+/// model is non-empty but the view set is empty (`!model.isEmpty() &&
+/// views.isEmpty()`; `Model.isEmpty` covers people + software systems +
+/// deployment nodes only, `ViewSet.isEmpty` all nine collections), before
+/// the workspace reaches the command. Applied where the load result becomes
+/// observable: `dsl2json`/`json2json` serialization and the `export` loader.
+/// `validate` deliberately does NOT hook: its violations mirror the
+/// reference steps that run BEFORE this tail (`WorkspaceScopeValidator`,
+/// `DefaultInspector`), and the reference `ValidateCommand` never serializes
+/// the views — creating them could only add noise to our added-feature
+/// diagnostics. `create_default_views` mirrors `ViewSet.createDefaultViews`;
+/// its `Err` is the reference's unguarded throw (aborts the command there),
+/// so the workspace is restored and the failure surfaces as exit 1.
+fn apply_default_views(workspace: &mut Workspace) -> Result<(), Issue> {
+    let model_empty = workspace.model.people.is_empty()
+        && workspace.model.software_systems.is_empty()
+        && workspace.model.deployment_nodes.is_empty();
+    if model_empty || !workspace.views.all_views().is_empty() {
+        return Ok(());
+    }
+    let mut builder = WorkspaceBuilder::new();
+    builder.adopt(std::mem::take(workspace));
+    let created = builder.create_default_views();
+    *workspace = builder.build();
+    created.map_err(|e| Issue::validation(format!("could not create default views: {e}")))
+}
+
 /// The install-chain of `AbstractCommand.installThemes` + `ThemeUtils`
 /// (P2-D3, catalog `EXPORT-PROPERTIES.md` §6.2): source order
 /// `--themes-dir` → `OXIDZR_THEMES_DIR` → `<workspace-parent>/themes` →
@@ -423,7 +451,12 @@ fn dsl2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Outcome 
         out.exit = ExitClass::Diagnostics;
         return out;
     }
-    let bytes = match oxidizr_json::to_vec(&result.workspace) {
+    let mut workspace = result.workspace;
+    if let Err(e) = apply_default_views(&mut workspace) {
+        out.fail(e, ExitClass::Diagnostics);
+        return out;
+    }
+    let bytes = match oxidizr_json::to_vec(&workspace) {
         Ok(b) => b,
         Err(e) => {
             out.fail(
@@ -449,28 +482,54 @@ fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Outcome
         }
     };
     let bytes = source.text.as_bytes();
-    let produced = if opts.keep_unknown {
+    if opts.keep_unknown {
         // D3 superset mode: unknown / legacy / writer-omitted members ride
-        // through verbatim (output intentionally non-parity).
-        oxidizr_json::roundtrip_keep_unknown(bytes)
-    } else {
-        oxidizr_json::from_slice(bytes).and_then(|ws| oxidizr_json::to_vec(&ws))
+        // through verbatim (output intentionally non-parity — the reference
+        // load tail, default views included, is part of the parity contract
+        // only).
+        match oxidizr_json::roundtrip_keep_unknown(bytes) {
+            Ok(b) => {
+                if let Err(e) = emit_bytes(&mut out, b, output) {
+                    out.fail(e, ExitClass::Io);
+                }
+            }
+            Err(e) => {
+                out.fail(
+                    Issue::from_json(&e, &source.text, &source.display),
+                    ExitClass::Diagnostics,
+                );
+            }
+        }
+        return out;
+    }
+    let mut workspace = match oxidizr_json::from_slice(bytes) {
+        Ok(ws) => ws,
+        Err(e) => {
+            out.fail(
+                Issue::from_json(&e, &source.text, &source.display),
+                ExitClass::Diagnostics,
+            );
+            return out;
+        }
     };
-    match produced {
+    if let Err(e) = apply_default_views(&mut workspace) {
+        out.fail(e, ExitClass::Diagnostics);
+        return out;
+    }
+    match oxidizr_json::to_vec(&workspace) {
         Ok(b) => {
             if let Err(e) = emit_bytes(&mut out, b, output) {
                 out.fail(e, ExitClass::Io);
             }
-            out
         }
         Err(e) => {
             out.fail(
                 Issue::from_json(&e, &source.text, &source.display),
                 ExitClass::Diagnostics,
             );
-            out
         }
     }
+    out
 }
 
 /// `reconcile` (F1, P1-D8): re-parse the edited DSL (the model authority),
@@ -673,7 +732,7 @@ fn load_export_workspace(
         );
         return None;
     };
-    let workspace = if ext.as_deref() == Some("dsl") {
+    let mut workspace = if ext.as_deref() == Some("dsl") {
         match parse_dsl_input(&source, opts) {
             Ok(r) if r.errors.is_empty() => r.workspace,
             Ok(r) => {
@@ -707,6 +766,10 @@ fn load_export_workspace(
             }
         }
     };
+    if let Err(e) = apply_default_views(&mut workspace) {
+        out.fail(e, ExitClass::Diagnostics);
+        return None;
+    }
     Some((source, workspace))
 }
 

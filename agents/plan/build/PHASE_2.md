@@ -249,8 +249,8 @@ one typed function `export_property(view, views, name, default)` in
     path, corpus-immune because vendored fixtures define views and end without
     a final newline) → **M1-e**.
   - **M1-e** load-path parity, found by the M1-d oracle probe 2026-11-17 — the
-    shared `AbstractCommand.loadWorkspace` mirror (dsl2json/json2json/validate/
-    export all go through it):
+    shared `AbstractCommand.loadWorkspace` mirror (dsl2json/json2json/export
+    all go through it):
     1. **default views**: the reference creates them at the app layer when the
        workspace defines none (`AbstractCommand` 109-112 → `Views.
        createDefaultViews`); oxidizr creates none anywhere (Locked list: "default
@@ -258,14 +258,34 @@ one typed function `export_property(view, views, name, default)` in
        a must-fix). Port needs the generation order/keys (`SystemLandscape-001`
        order 1, `SystemContext-NNN` per software system order 2, … witness in
        `m1d/ref/workspace.json`) + per-load call site + oracle A/B on a
-       no-views workspace.
+       no-views workspace. **DONE 2026-11-17 (this commit)** — core
+       `WorkspaceBuilder::create_default_views` (viewops, mirroring
+       `ViewSet.createDefaultViews` 1191-1264: Java UTF-16 stable name sorts;
+       container views get `TopBottom` auto-layout 100/50/50/vertices;
+       deployment environments deduped first-seen then sorted, scoped per
+       container-instance system, unscoped only for infrastructure-only
+       environments); pipeline `apply_default_views` (`adopt`-round-trip,
+       condition `!model.isEmpty() && views.isEmpty()` verbatim) on the dsl2json
+       serialize, json2json parity leg and export loader. `validate` is NOT
+       hooked: its violations mirror the reference steps that run BEFORE the
+       load tail (`WorkspaceScopeValidator`, `DefaultInspector`) and the
+       reference `ValidateCommand` never serializes views; the `keep_unknown`
+       D3 leg stays verbatim (documented non-parity). A/B: `m1e/ws/
+       workspace2.dsl` (name-disordered systems, containers/components,
+       containerInstance + softwareSystemInstance subtlety, scoped +
+       infra-only environments) and the `m1d` witness — both byte-identical to
+       the reference modulo the per-process identifier UUIDs and the
+       `structurizr.inspection.*` properties.
     2. **retained `structurizr.dsl` trailing newline**: the reference appends
        RAW lines as `readLine` yields them (a final file newline can never
        enter the retained source); oxidizr joins `source.split('\n')` — the
        trailing `""` survives, so files ending with `\n` get base64 `…Cg==`
        where the reference has `…fQ==`. Vendored fixtures end `\n}` (no final
        newline) so no gate could ever catch it. Mirror `readLine` semantics in
-       `dsl_source_lines` (engine/mod.rs 1218).
+       `dsl_source_lines` (engine/mod.rs 1218). **DONE 2026-11-17** (`0759f96`:
+       `compat::java_split_dsl_lines` mirrors Java `split("\\r?\\n")` — one CR
+       per separator, ALL trailing empties dropped; base64 delta closed
+       against `m1d/ref`).
 - **M2** Structurizr-PlantUML exporter complete (all supported view types, legend,
   boundaries/groups, properties); Category A goldens + render smoke (comparator comes
   in P4 — P2-D9).
