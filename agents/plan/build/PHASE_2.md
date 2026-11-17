@@ -339,6 +339,43 @@ one typed function `export_property(view, views, name, default)` in
     testdata, xtask, docs.
 - **M3** C4-PlantUML exporter (light/dark, stdlib property, sequence path); semantic
   comparator built + oracle run green (the phase's reference-facing milestone).
+  Decomposed 2026-11-17 (milestone spans > 4 modules):
+  - **M3-a** recon + witness sweep: full-corpus oracle run `--format
+    plantuml/c4plantuml` over the 43-fixture sweep set (witnesses
+    `/tmp/nix-shell.uni100/opencode/m2d/sweep/*/ref-c4/`); source pinning of
+    `C4PlantUMLExporter` at the pin (header: direction from autoLayout
+    rankDirection, shared skinparams, ALWAYS the `<style>` root block with
+    P2-V5 constants, include accumulation `C4`+`C4_Context` (+`C4_Container`
+    iff containers/instances, +`C4_Component` iff components, +`C4_Deployment`
+    iff deployment view; sequence → `C4_Sequence` only), the `c4plantuml.*`
+    property register (legend=true, stereotypes=false, tags=false,
+    stdlib=true, elementProperties/relationshipProperties=false, per-style
+    sprite/shadow), footer `SHOW_LEGEND(…)` + `show|hide stereotypes`;
+    base `createLegend` = null → NO `-key` files (witness-confirmed);
+    `export(CustomView)` = null → custom views skipped. Touches: plan docs.
+  - **M3-b** dialect port `oxidizr-export::plantuml::c4` (`C4PlantUmlDialect`
+    on the M2-b `Dialect` trait): header legs + tags-section (when
+    `c4plantuml.tags`: `AddElementTag`/`AddRelTag`/`AddBoundaryTag` with the
+    Java `HashMap<String,…>` iteration order — String `hashCode`, portable,
+    `javahash` pattern), boundary macros (`Boundary(group_N…`,
+    `System_Boundary(<id>_boundary…`, `Deployment_Node(… (xN))` incl. the
+    `", $borderThickness=\"1\")"` replace quirk), element macros (instances
+    unwrap + `$tags` from the instance, `Container/Component{Db|Queue}`
+    shape verbs, CustomElement skip), `Rel(…` with the `<order>: ` prefix,
+    sequence `box "…\n<size:12>…` leg, `hide stereotypes`/`SHOW_LEGEND`
+    footer, and the engine hook for the CustomView skip. Touches: export.
+  - **M3-c** dispatch + A/B: `ExportFormat::C4PlantUml` arm (Engine +
+    dialect; files per the shared `ExportCommand` loop), byte-compare vs the
+    `ref-c4` witnesses across the corpus, root-cause every DIFF. Touches:
+    api/cli.
+  - **M3-d** proof: c4 goldens under `testdata/golden/plantuml-c4/` <!-- refs:ignore planned dir, lands with M3-d --> via
+    `xtask oracle gen --plantuml --c4` + Category-A byte-parity test (extend
+    the M2-d golden test); render smoke (stdlib form renders offline —
+    plantuml 1.2026.9 bundles C4 stdlib); **semantic comparator**
+    `xtask/src/exportcmp/` + `cargo xtask export-verify` (Category B,
+    sparingly; the P2-D9 harness — macro-call/relationship/directive fact
+    model, order-normalized, minimal whitelist; grammar table doubles as the
+    P4 importer's macro inventory). Touches: xtask, testdata, api tests.
 - **M4** Mermaid exporter + `theme` export; render checks wired in CI (skipping when
   tools absent); benches committed (export corpus baseline).
 - **M5** hardening: proptest panic suite, docs (`oxidizr export --help`, agents/plan/errata
