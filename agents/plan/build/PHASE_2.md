@@ -83,20 +83,35 @@ Relative `icon`/`logoUrl` resolution against the theme's base URL/dir per refere
 
 ## P2-D4 CLI surface (`oxidizr export`)
 
-- `oxidizr export <WORKSPACE> --format <F> [-o <dir>] [--light|--dark]
-  [--themes-dir <dir>] [--allow-net] [--prefix <p>] [--view <key>]…`
-- Format strings **mirror the reference CLI exactly**: `theme`, `plantuml`,
-  `plantuml/structurizr`, `plantuml/c4plantuml`, each with `-light|-dark` suffix
-  (`plantuml` alone = structurizr dialect); `mermaid`. Unknown format = diagnostic with
-  the valid list (D1). `--view` restricts export to given view keys (additive filter,
-  default: all views, like reference).
-- **Output file naming matches the reference** (agreed):
-  `structurizr-<workspaceId>-<viewKey>.<ext>`, legend `…-key.<ext>`, animation frames
-  `…-<n>.<ext>`; `--prefix` overrides the literal `structurizr-` prefix. Rationale:
-  drop-in for CI pipelines that glob the reference names; branding stays in content.
-- `theme` format writes a single `theme.json` into `-o` dir. Workspace load reuses the
-  P1 pipeline (extension auto-detect); theme pre-load happens before diagram export
-  exactly where the reference does it (so a missing theme fails identically early).
+- **Reference behavior (monorepo source + oracle, verified at M0 2026-11-17):**
+  `structurizr export --workspace <file> --format <F> [--output <dir>]` — there is
+  NO `--prefix` (the prefix is `structurizr-<id>` via `ExportCommand.prefix`, bare
+  `structurizr` when the id is not positive), no `--view`, no `--light|--dark` flags
+  (color is a `-light|-dark` **suffix** on the format string). Format strings are
+  lowercased and matched against the registry: `json`, `theme`,
+  `plantuml[/structurizr|/c4plantuml][-light|-dark]`, `mermaid`,
+  `websequencediagrams`, plus the `static` branch and the `png`/`svg` branches
+  (rejected: the reference build ships no Playwright). An unresolvable string takes
+  the class-load attempt: logs `Unknown export format: <f>` and the command
+  **exits 0**. The output directory defaults to the canonicalized workspace parent
+  and is created **before** format dispatch. `ThemeUtils.loadThemes` runs only for
+  `DiagramExporter` formats (the json/theme exports do NOT pre-load themes).
+- oxidizr surface as landed (M0): `oxidizr export -w/--workspace <file>
+  -f/--format <F> [-o/--output <dir>]` (format required — clap usage error, exit
+  2). Unknown format mirrors the reference: `Unknown export format: <f>` note on
+  stderr, exit 0 (the earlier "diagnostic with the valid list" is superseded — the
+  reference decides). Known-but-unlanded exporters = OXZ-5007, exit 1.
+  `--allow-net` / `--themes-dir` join at M1 with the `ThemeStore` (P2-D3).
+- **Output file naming matches the reference** (verified):
+  diagrams `structurizr-<workspaceId>-<viewKey>.<ext>`, legend `…-key.<ext>`,
+  animation frames `…-<n>.<ext>` (frames carry the PARENT key); workspace exports
+  (json/theme) write `<stem>[-theme].json` — the workspace file name up to its
+  LAST `.`, `-theme` appended for the theme format only (supersedes the earlier
+  "single `theme.json`" wording; a `.`-less file name is the reference's
+  `StringIndexOutOfBoundsException` — oxidizr reports an I/O error instead).
+  Rationale: drop-in for CI pipelines that glob the reference names.
+- Workspace load reuses the P1 pipeline (extension auto-detect); theme pre-load
+  happens before diagram export exactly where the reference does it (M1).
 - Exit codes unchanged from P1-D8. `export` added to the mandated criterion bench list.
 
 ## P2-D5 Structurizr-PlantUML dialect (`plantuml/structurizr`)
@@ -179,7 +194,11 @@ scattered `properties.get("…")` calls.
 
 - **M0** `oxidizr-export` scaffold, `IndentingWriter`, `Diagram` types, CLI `export`
   command skeleton with format dispatch + file naming; theme.json de/ser in `json`;
-  default theme vendored.
+  default theme vendored. **DONE 2026-11-17 (commit ca292e7)** — one deferral: the
+  vendored default theme needs `static.structurizr.com` (no DNS on this machine)
+  and the file is NOT in the pinned monorepo; the vendoring joins M1 with the
+  `ThemeStore` (P2-D3 item 4), the P2-D3 D3 rule (keep every theme name) covers the
+  interim.
 - **M1** `core::styles` resolution engine + `ThemeStore` (offline dirs, cache,
   `--allow-net`, error UX) with full unit suites. EXPORT-PROPERTIES.md catalog first
   (P2-D8), P2-V1/V2 verifications recorded.
@@ -195,15 +214,34 @@ scattered `properties.get("…")` calls.
 
 ## P2-D11 Verification list (empirical, before dependent code)
 
-- P2-V1 `ThemeUtils.toJson` exact output semantics (what feeds the `theme` export).
-- P2-V2 per-exporter supported view-kind matrix + full property-name list + output
+- [x] **P2-V1** `ThemeUtils.toJson` exact output semantics — **VERIFIED
+  2026-11-17** (M0; oracle witnesses `/tmp/nix-shell.uni100/p2/v1/out1,out3,
+  out5,out6` + monorepo `ThemeUtils`/`Theme`/style sources at the pin):
+  plain mapper (NOT the workspace one), `NON_NULL`→`NON_EMPTY` global
+  inclusion (theme fields + empty style arrays hidden; empty theme = `{ }`),
+  per-field `NON_NULL` on style fields; key order = Java declaration order
+  (`name, description, elements, relationships, license`; style: `tag`,
+  `colorScheme`, `properties` — the parent-field keys first — then the
+  declared fields); name/description from `workspace.getName()/
+  getDescription()`; `license` never set; `DefaultIndenter("  ", "\n")`
+  pretty print, no trailing newline. Theme content = the LIVE style
+  collections in storage order (sorted for DSL-built workspaces, DOCUMENT
+  order for JSON-read ones — Jackson binds `Styles.elements` by FIELD; the
+  TreeSet-replacing setter that sorts every other collection does not exist
+  here). Style numbers pass through the JavaBean setters on read and CLAMP:
+  `strokeWidth`→[1,10], `opacity`→[0,100] (both styles), relationship
+  `position`→[0,100]. Pinned by `oxidizr-json/tests/theme_json.rs`
+  (byte-exact witnesses) + `styles_parity.rs`; CLI `export -f theme`
+  reproduces out1/out6 byte-for-byte. Spin-offs folded into WRITE-CATALOG
+  §5/§6 (commit 6f6cc64).
+- [ ] P2-V2 per-exporter supported view-kind matrix + full property-name list + output
   micro-grammar (drives comparator design) — from source at pinned commit.
-- P2-V3 icon/logo URL handling in generated PlantUML/Mermaid (pass-through? fetched?
+- [ ] P2-V3 icon/logo URL handling in generated PlantUML/Mermaid (pass-through? fetched?
   omitted?) — decide mirror behavior, keep export-time zero-network.
-- P2-V4 `STRUCTURIZR_THEMES`/theme dir layout + `theme "<name>"` URL mapping
+- [ ] P2-V4 `STRUCTURIZR_THEMES`/theme dir layout + `theme "<name>"` URL mapping
   (`static.structurizr.com/themes/<name>/`) — mirror lookup semantics.
-- P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
-- P2-V6 legend diagram generation rules (when emitted, content per dialect).
+- [ ] P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
+- [ ] P2-V6 legend diagram generation rules (when emitted, content per dialect).
 Each gets a checkbox + evidence in the implementing PR; surprises fold into `agents/plan/`
 (errata process), per AGENTS.md working style.
 

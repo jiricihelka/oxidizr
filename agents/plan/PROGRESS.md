@@ -21,7 +21,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P1 | M6-d fuzz + CI nightlies | **done 2026-11-16** (log below) |
 | P1 | M7 | **done 2026-11-16** (log below) — **Phase 1 complete, tagged v0.1.0 (local)** |
 | P1T | e2e suite (interlude) | **COMPLETE 2026-11-17** — T0–T6 all done: API + harness + 300-entry corpus + full-tier invariants + `e2e_` benches + `1T` baseline + docs. Net caught 2 real bugs (oracle-fixed). No tag (user decision). Log below (`build/PHASE_1T.md`) |
-| P2 | exporters | **next** — M0 scaffold per `build/PHASE_2.md` |
+| P2 | M0 export scaffold + theme/json dispatch | **done 2026-11-17** (commits 6f6cc64, ca292e7) — log below |
+| P2 | exporters (M1–M5) | **next** — M1 `core::styles` + `ThemeStore` per `build/PHASE_2.md` |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -143,6 +144,39 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P2-M0 — export scaffold + theme/json dispatch ✅ (2026-11-17)
+
+Commits `6f6cc64` (compat parity fixes) + `ca292e7` (M0 body). Decisions and
+P2-V1 verdict: `build/PHASE_2.md`.
+
+- **P2-V1 VERIFIED** at the oracle (witnesses `/tmp/nix-shell.uni100/p2/v1/`):
+  `ThemeUtils.toJson` = plain mapper, `NON_EMPTY` globals vs per-field
+  `NON_NULL` style fields, declaration-order keys, workspace name/description,
+  live style collections (DSL-sorted / JSON-document-order), setter clamps on
+  read (`strokeWidth` [1,10], `opacity` [0,100], rel `position` [0,100]).
+  Two read-path parity fixes fell out (style doc-order + clamps — 6f6cc64,
+  WRITE-CATALOG §5/§6).
+- `oxidizr-export` crate (P2-D1): `IndentingWriter` (reference defaults: 2
+  spaces; bare `writeLine()`; `toString` drops ONE trailing newline; negative
+  indent pads nothing), `Diagram`/`Legend`/`WorkspaceExport` beans +
+  exporter traits, `ExportFormat` registry (exact `ExportCommand` keys,
+  lowercased; color suffix only on the `plantuml*` families) and `naming`
+  (workspace stem + `-theme`; `structurizr-<id>` diagram prefix, `-key`
+  legends, numbered frames). 11 unit tests.
+- `oxidizr-json::theme`: `theme_from_slice`/`theme_write`/`theme_to_vec`,
+  byte-exact vs the out3/out6 witnesses (`theme_json.rs`).
+- api `Request::Export` + `export_cmd` mirroring `ExportCommand` (load by
+  extension, dir default = canonical workspace parent, mkdirs BEFORE dispatch,
+  `Writing <path>` notes, unknown format → note + exit 0, unimplemented
+  registry format → OXZ-5007); cli `export -w/-f/-o`; diag 5007 + docs row +
+  coverage REGISTRY/allow-list.
+- A/B evidence: `export -f theme` of `big-bank-plc.dsl` and of the
+  document-order `order.json` probe are BYTE-IDENTICAL to the oracle
+  witnesses; `-f json` output is a JSON read/write fixed point.
+- Deferral: default-theme vendoring (needs network for
+  `static.structurizr.com/themes/default/theme.json`; absent from the pinned
+  monorepo) → joins M1 with the `ThemeStore`.
 
 ### P1T — e2e regression + benchmark suite (interlude) ✅ (2026-11-17)
 
