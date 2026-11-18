@@ -110,7 +110,7 @@ file before starting.
 | MS | Deliverable | Exit gate |
 |---|---|---|
 | **PR0** | **DONE 2026-11-18** — register populated from all four crate sweeps (65 rows incl. perimeter), dispositions complete (SW 32 / JU 22 / KC 9 / DF 1 + SW/DF 1); survey premise corrections recorded above (lint bar `all+pedantic` — §D4 rewritten; ast `RefCell` claim FALSE; naive brace-tool long-fn measurements wrong — real targets listed). The surveys' verdict: crates are far more idiomatic than feared — real prey = the dsl dispatch-clone family (R-dsl-01/02, the crate's entire perf gap), core method-body habits (clones/`expect` panics/duplicated lookups), export write-loop clones + the cited decompositions, and the api `Outcome` plumbing shape | register + dispositions 100 %; quartet green (docs commit) |
-| PR1 | `oxidizr-core` wave (model/builder/viewops — biggest clone + accessor cluster; P3 builds directly on it) | green + `bench cmp 2T` reviewed |
+| PR1 | `oxidizr-core` wave — **DONE 2026-11-18**, 4 commits: PR1-a `2359084` clone waste (R-core-01/02/04), PR1-b `cb9cbdd` shared lookup helpers + borrowed flatten + single-pass view keys (R-core-03/09/10/11), PR1-c `2b8d43a` `expect`-panic elimination (R-core-07), PR1-d `1b90568` parity annotation + pub shrink + snapshot-clone removal + rename + keep-markers (R-core-05/06/08/13/14/15). Every commit: quartet + full tier 8/8 + bless no-op. `bench cmp 2T` (pinned worktree at `1b90568`, uncontended): ALL groups faster-or-equal — `m7_dsl_parse_big-bank-plc` 3.0→1.22 ms, `m7_reconcile_cross_corpus` 441→182 µs, `m7_reconcile_matched_big_bank` 692→312 µs, `e2e_reconcile_166` 1146→665 µs, `m7_dsl_parse_corpus` 13.7→9.2 ms, `m7_json_write_corpus` 2.3→1.85 ms, export/e2e legs 1.1–1.5× | green + `bench cmp 2T` reviewed ✓ |
 | PR2 | `oxidizr-dsl` wave (lexer/parser/fmt — BYTE-PATH heavy: bless no-op + goldens are the boss) | green + `bench cmp 2T` reviewed |
 | PR3 | `oxidizr-export` wave (plantuml/mermaid/theme engines; decomposition with citations per D2) | green + `bench cmp 2T` reviewed |
 | PR4 | `oxidizr-json` + `oxidizr-api` + `oxidizr-diag` + `oxidizr-ast` + `oxidizr-cli` wave | green (byte-path: json writer per D2 cite rule) |
@@ -190,21 +190,21 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 
 | ID | finding (file:line) | dis | wv |
 |---|---|---|---|
-| R-core-01 | waste clones: `&id.clone()` (`builder.rs:1452`), loop clones ×3 (`:791,800-805`) | SW | 1 |
-| R-core-02 | 7 element constructors clone the whole item to return its id (`:254,272,301,338,376,411,483`) — clone `Id` (Arc bump) once, move item | SW | 1 |
-| R-core-03 | `has_element`/`element_kind` re-run cloning `flattened()` per call (`:2259-2272`) — borrowed twin `flattened_ids` (`validate.rs:328`) → `pub(crate)`, reuse (DRY + gate-path allocation storm) | SW | 1 |
-| R-core-04 | `.to_string()` inside `.filter()` per rel-view (`viewops.rs:1223-24`) — membership on `Vec<&Id>` | SW | 1 |
-| R-core-05 | snapshot-clone habits (`viewops.rs:835-841` endpoints, `:1305-1317` RelInfo) | JU | 1 |
-| R-core-06 | pub shrink: dead parity API (`element_tag_defaults:1339`, `relationship_technology:1212`, `add_tags:1920`, `efferent_relationships:1053`, `implied_strategy:103`, `set_workspace_id:168`) → keep + `#[allow(dead_code)]` + "Java parity surface" comment; internal-only (`has_element`, viewops trio, `item_mut`, ref/mut getters) → `pub(crate)`; `found:126` → private | JU | 1 |
-| R-core-07 | `expect("checked")` library panics (CHARTER violation): `viewops.rs:430,451` + check-then-mutate `.expect("checked above")` ×~10 (`builder.rs:335,373,443,480,508,554,780,859,891,1447`, `viewops.rs expect_content:1563`) — single-lookup Result with identical messages | JU | 1 |
-| R-core-08 | out-param closure with stop-signal (`element_technology`, `builder.rs:1169-1208`) | JU | 1 |
-| R-core-09 | 16× `find(\|r\| &r.id == id)` — add borrowed `relationship()` twin of `relationship_mut`, rewrite sites | SW | 1 |
-| R-core-10 | instance lookups rebuild full `flatten_nodes` (clones group Vecs) per gate call (`viewops.rs:503-544`) — recursive `find_env`/`find_instance`, no group data needed | SW | 1 |
-| R-core-11 | `new_view_base`/`generate_view_key` double `all_views()` O(n²) (`builder.rs:2161-2208`) — one collected pass; `ViewRef::slot` helper kills 9 copy-paste tails | SW | 1 |
+| R-core-01 | waste clones: `&id.clone()` (`builder.rs:1452`), loop clones ×3 (`:791,800-805`) — **DONE PR1-a** `2359084` | SW | 1 |
+| R-core-02 | 7 element constructors clone the whole item to return its id (`:254,272,301,338,376,411,483`) — clone `Id` (Arc bump) once, move item — **DONE PR1-a** `2359084` | SW | 1 |
+| R-core-03 | `has_element`/`element_kind` re-run cloning `flattened()` per call (`:2259-2272`) — borrowed twin `flattened_ids` (`validate.rs:328`) → `pub(crate)`, reuse (DRY + gate-path allocation storm) — **DONE PR1-b** `cb9cbdd` | SW | 1 |
+| R-core-04 | `.to_string()` inside `.filter()` per rel-view (`viewops.rs:1223-24`) — membership on `Vec<&Id>` — **DONE PR1-a** `2359084` | SW | 1 |
+| R-core-05 | snapshot-clone habits (`viewops.rs:835-841` endpoints, `:1305-1317` RelInfo) — **DONE PR1-d** `1b90568` (collect-then-add; `RelInfo` deleted, borrows `&[Relationship]`) | JU | 1 |
+| R-core-06 | pub shrink: dead parity API (`element_tag_defaults:1339`, `relationship_technology:1212`, `add_tags:1920`, `efferent_relationships:1053`, `implied_strategy:103`, `set_workspace_id:168`) → keep + `#[allow(dead_code)]` + "Java parity surface" comment; internal-only (`has_element`, viewops trio, `item_mut`, ref/mut getters) → `pub(crate)`; `found:126` → private — **DONE PR1-d** `1b90568` (all verified workspace-wide; `found` kept `pub` + allow: it is the `IdGeneratorStrategy` parity surface, used by ids tests) | JU | 1 |
+| R-core-07 | `expect("checked")` library panics (CHARTER violation): `viewops.rs:430,451` + check-then-mutate `.expect("checked above")` ×~10 (`builder.rs:335,373,443,480,508,554,780,859,891,1447`, `viewops.rs expect_content:1563`) — single-lookup Result with identical messages — **DONE PR1-c** `2b8d43a` (`expect_content` → `model_content_mut` + additive `CoreError::NoViewContent`) | JU | 1 |
+| R-core-08 | out-param closure with stop-signal (`element_technology`, `builder.rs:1169-1208`) — **DONE PR1-d** `1b90568` (returns through the walk's own `Option<T>`) | JU | 1 |
+| R-core-09 | 16× `find(\|r\| &r.id == id)` — add borrowed `relationship()` twin of `relationship_mut`, rewrite sites — **DONE PR1-b** `cb9cbdd` | SW | 1 |
+| R-core-10 | instance lookups rebuild full `flatten_nodes` (clones group Vecs) per gate call (`viewops.rs:503-544`) — recursive `find_env`/`find_instance`, no group data needed — **DONE PR1-b** `cb9cbdd` | SW | 1 |
+| R-core-11 | `new_view_base`/`generate_view_key` double `all_views()` O(n²) (`builder.rs:2161-2208`) — one collected pass; `ViewRef::slot` helper kills 9 copy-paste tails — **DONE PR1-b** `cb9cbdd` | SW | 1 |
 | R-core-12 | **DO-NOT-TOUCH order perimeter** (0 violations found): `partition_point`+`style_cmp` (`views.rs:641-679`), `id_sort_key`, `java_cmp_str`, custom-elements reverse-insert, keep-first-users, hydrate-order sort, writer-sorted notes — WRITE-CATALOG §5 | KC | — |
 | R-core-13 | allow hygiene: `#![allow(unwrap_used)]` in `url.rs:113` **KEPT** (implemented 2026-11-18: it matches the workspace-wide test-module convention — 28 files carry the identical allow as the charter's `unwrap`-only-in-tests guard; the survey's "no-op outlier" read was wrong). Module-scope `missing_errors_doc/missing_panics_doc` allows (`builder.rs:14`, `viewops.rs:15`) KEPT as a recorded crate convention — note both in WORKFLOW §Code style at PR6 | KC | — |
-| R-core-14 | `Tags::set_from_csv` is a constructor in setter clothing (`tags.rs:117`, one json-reader caller) → honest name | JU | 1 |
-| R-core-15 | keep markers + doc promotes: `styles.rs` copyFrom ×26 "do not fold" marker; `check_element_can_be_added`/`animation_step_relationships` rustdoc cites; `let _ = name;` destructure; validate HashMap-vs-quadratic style unify → DF (byte-adjacent, low value) | JU | 1 |
+| R-core-14 | `Tags::set_from_csv` is a constructor in setter clothing (`tags.rs:117`, one json-reader caller) → honest name — **DONE PR1-d** `1b90568` (→ `from_json_csv`) | JU | 1 |
+| R-core-15 | keep markers + doc promotes: `styles.rs` copyFrom ×26 "do not fold" marker; `check_element_can_be_added`/`animation_step_relationships` rustdoc cites; `let _ = name;` destructure; validate HashMap-vs-quadratic style unify → DF (byte-adjacent, low value) — **DONE PR1-d** `1b90568` (markers + rustdoc promotes; the validate unify taken as DF) | JU | 1 |
 
 ### oxidizr-export
 
