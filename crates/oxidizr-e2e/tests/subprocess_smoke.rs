@@ -16,10 +16,13 @@ use oxidizr_e2e::manifest::Exit;
 /// 2. `$CARGO_BIN_EXE_oxidizr` if the toolchain exports it (cargo only
 ///    guarantees that variable for a bin of the tested package itself, and
 ///    this bin lives in `oxidizr-cli` — verified absent here at runtime);
-/// 3. walking up from the test executable for a sibling `oxidizr` — this
+/// 3. walking up from the test executable for a sibling binary — this
 ///    repo places test binaries under `target/<profile>/build/<pkg>/<hash>/
 ///    out/`, but the walk finds `target/<profile>/oxidizr` in any cargo
-///    layout.
+///    layout. BOTH spellings (`oxidizr` and `oxidizr.exe`) are tried on
+///    every platform, cfg-free: native Windows CI runs this test where the
+///    bin is `oxidizr.exe` (2026-11-18 red leg — the Linux-only name could
+///    never resolve), and a stray `<name>.exe` file on Linux is a non-event.
 ///
 /// `cargo test --workspace` (the quartet) always builds the bin; a bare
 /// `cargo test -p oxidizr-e2e` on a cold cache must build it first
@@ -32,13 +35,15 @@ fn binary() -> PathBuf {
     }
     let exe = std::env::current_exe().expect("test executable");
     for dir in exe.ancestors() {
-        let candidate = dir.join("oxidizr");
-        if candidate.is_file() {
-            return candidate;
+        for name in ["oxidizr", "oxidizr.exe"] {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return candidate;
+            }
         }
     }
     panic!(
-        "oxidizr binary not found near {} — build it with \
+        "oxidizr(.exe) binary not found near {} — build it with \
          `cargo build -p oxidizr-cli --bin oxidizr` (the workspace test \
          quartet builds it automatically)",
         exe.display()
