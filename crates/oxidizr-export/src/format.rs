@@ -122,10 +122,11 @@ impl ExportFormat {
     /// run the `DiagramExporter` branch — the engine + `StructurizrDialect`,
     /// one file per diagram plus `-key` legend and numbered frame files, the
     /// id-keyed names of the reference write loop. `json` and `theme` are the
-    /// implemented `WorkspaceExporter` pair (M0). The remaining registry
-    /// formats report [`ExportError::NotImplemented`] (`plantuml/c4plantuml`
-    /// until M3, `mermaid` until M4); [`ExportFormat::Unknown`] is the
-    /// CALLER's exit-0 note path (the reference never gets here).
+    /// implemented `WorkspaceExporter` pair (M0); `plantuml`/`structurizr`,
+    /// `plantuml/c4plantuml` and `mermaid` are the implemented
+    /// `DiagramExporter` trio (M2–M4). The remaining registry formats
+    /// report [`ExportError::NotImplemented`]; [`ExportFormat::Unknown`] is
+    /// the CALLER's exit-0 note path (the reference never gets here).
     ///
     /// # Errors
     ///
@@ -148,6 +149,15 @@ impl ExportFormat {
                 Self::C4PlantUml(_) => engine.export_all(&mut C4PlantUmlDialect::new())?,
                 _ => engine.export_all(&mut StructurizrDialect::new())?,
             };
+            return Ok(diagram_files(&diagram_prefix(workspace.id), &diagrams));
+        }
+        if matches!(self, Self::Mermaid) {
+            // `MermaidDiagramExporter` has no color-scheme constructor: the
+            // no-arg export is `this(ColorScheme.Light)`. The `.mmd`
+            // extension rides each `Diagram` (`diagram_files` threads
+            // `file_extension`).
+            let mut engine = Engine::new(workspace, ColorScheme::Light);
+            let diagrams = engine.export_all(&mut crate::mermaid::MermaidDialect::new())?;
             return Ok(diagram_files(&diagram_prefix(workspace.id), &diagrams));
         }
         let (export, theme) = match self {
@@ -325,7 +335,10 @@ mod tests {
 
     #[test]
     fn other_registry_formats_stay_not_implemented() {
-        for raw in ["mermaid", "websequencediagrams", "static"] {
+        // `mermaid` landed at M4-b (see the Mermaid arm tests + the
+        // `export_mermaid` API suite); these two are the registry's last
+        // unlanded entries.
+        for raw in ["websequencediagrams", "static"] {
             let err = ExportFormat::parse(raw)
                 .export(&workspace(), "ws.dsl")
                 .expect_err("unlanded format");
@@ -334,6 +347,24 @@ mod tests {
                 "{raw}: {err}"
             );
         }
+    }
+
+    /// M4-b: `mermaid` exports through `MermaidDialect` — `.mmd` files
+    /// with the `graph TB` header (no `automaticLayout` on this view), the
+    /// `subgraph diagram` wrapper and the div-label element legs.
+    #[test]
+    fn mermaid_lands_the_mermaid_dialect() {
+        let files = ExportFormat::parse("mermaid")
+            .export(&workspace(), "ws.dsl")
+            .expect("mermaid export");
+        assert_eq!(files.len(), 1, "{files:?}"); // never a legend file
+        assert_eq!(files[0].name, "structurizr-7-SystemLandscape-001.mmd");
+        let definition = String::from_utf8(files[0].bytes.clone()).expect("utf-8");
+        assert!(definition.starts_with("graph TB\n"), "{definition}");
+        assert!(
+            definition.contains("subgraph diagram [\"System Landscape View\"]"),
+            "{definition}"
+        );
     }
 
     /// M3-b: `plantuml/c4plantuml` exports through `C4PlantUmlDialect` —

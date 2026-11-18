@@ -25,7 +25,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M1 theme infrastructure | **COMPLETE 2026-11-17** (a `199bc70`–e-B `53d2e5e`) — log below |
 | P2 | M2 Structurizr-PlantUML | **COMPLETE 2026-11-17** — M2-a (catalog + `export_property` + D12), M2-b (engine), M2-c (dialect), M2-d (dispatch + oracle A/B fix batch + 30-fixture plantuml golden corpus). Log below (`build/PHASE_2.md`) |
 | P2 | M3 C4-PlantUML | **COMPLETE 2026-11-17** — M3-a (catalog `build/EXPORT-C4-PLANTUML.md` + witness sweep), M3-b (`plantuml::c4` dialect port, 2706209), M3-c (A/B: 30 SAME / 4 design-DIFF / 10 vacuous), M3-d (29-fixture c4 goldens + oracle verify green + P2-D9 comparator `xtask export-verify`). Log below |
-| P2 | M4 Mermaid + theme goldens + CI render + bench | **IN PROGRESS 2026-11-17** — M3-d comparator also landed with M3; M4-a (decomposition + `build/EXPORT-MERMAID.md` + mermaid witness sweep) this commit. Log below |
+| P2 | M4 Mermaid + theme goldens + CI render + bench | **IN PROGRESS 2026-11-18** — M4-a/M4-b/M4-c done (port + dispatch + tests, byte sweep 30 SAME / 3 known-DIFF); M4-d goldens + render checks + bench remain. Log below |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -164,6 +164,22 @@ Decomposition M4-a..d: `build/PHASE_2.md`. THE contract: `build/EXPORT-MERMAID.m
   frames ever (`isAnimationSupported=false` — custom-view-animation = 2
   VIEWS, 2 files), no legend files, sequence `box` absent, CustomViews
   EXPORTED (base class, unlike PlantUML family).
+- **M4-b + M4-c** (this commit): `oxidizr-export::mermaid` — full
+  `MermaidDialect` port of the catalog (§1 case-sensitive property gates,
+  §2 header with the null-rank-direction abort, §4–§7 boundaries/elements/
+  rels incl. the 30-column `lines()` wrap and the DN-endpoint edge kill,
+  §9 owned standalone `sequenceDiagram` via the new engine `Dialect` hooks
+  `owns_sequence_document`/`sequence_document`, `mmd` extension through
+  `create_diagram`). Dispatch: `ExportFormat::Mermaid` arm (Light scheme —
+  the Java exporter has no scheme constructor); the two stale OXZ-5007 doc
+  notes updated (`websequencediagrams`/`static` are the last unlanded).
+  Tests: 10 unit (mermaid.rs) + 4 API (`export_mermaid.rs`: `.mmd` names,
+  sequence gate, custom views exported, viewless exit-0) + format.rs arm.
+  **M4-c byte sweep** (`/tmp/nix-shell.uni100/opencode/m4/sweep-ab.sh` vs
+  the `ref-mermaid/` witnesses): **30 SAME / 3 DIFF / 11 vacuous-skipped** —
+  the DIFFs are `bulk-operations` (D13 identity-hash rel-id fan-out, catalog
+  §11, excluded from goldens) and the two D2 script fixtures (loader exit 1);
+  ZERO port bugs — sequence fixtures (`dynamic`) byte-identical too.
 
 ### P2-M3 — C4-PlantUML exporter (2026-11-17, COMPLETE)
 

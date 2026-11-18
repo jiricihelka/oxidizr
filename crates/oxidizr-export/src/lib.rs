@@ -28,6 +28,7 @@ pub mod diagram;
 pub mod error;
 pub mod format;
 pub mod indent;
+pub mod mermaid;
 pub mod naming;
 pub mod paths;
 pub mod plantuml;

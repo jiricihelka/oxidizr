@@ -781,9 +781,11 @@ fn load_export_workspace(
 /// `Writing <path>` line per file. Dispatch follows the reference registry:
 /// `theme` and `json` are implemented (M0) with the Structurizr `plantuml`
 /// diagram leg (M2-d — id-keyed per-view, `-key` legend and numbered frame
-/// files, and the reference's viewless `log.error` branch) and the C4
-/// dialect (M3-b — no legend files, custom views skipped); the unlanded
-/// diagram formats raise OXZ-5007 until M4; unknown strings mirror the
+/// files, and the reference's viewless `log.error` branch), the C4
+/// dialect (M3-b — no legend files, custom views skipped) and the Mermaid
+/// exporter (M4-b — `.mmd` files, custom views exported, the standalone
+/// `sequenceDiagram` form); the one unlanded registry format
+/// (`websequencediagrams`) raises OXZ-5007; unknown strings mirror the
 /// reference's class-load miss — `Unknown export format: …`, exit 0. Theme
 /// pre-loading (`ThemeUtils.loadThemes`, P2-D3, M1-d) runs for
 /// `DiagramExporter` formats BEFORE the export attempt — exactly the

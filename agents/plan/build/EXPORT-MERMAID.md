@@ -165,8 +165,11 @@ Sweep: `/tmp/nix-shell.uni100/opencode/m4/sweep.sh` → witness dirs
 wrote ZERO files (oracle exit 0 — mermaid-vacuous, ungoldenable).
 
 Golden corpus (planned M4-d): the 33 witnesses MINUS the D2 loader rejects
-(`script-inline`, `script-in-dynamic-view`) — `bulk-operations` is IN until a
-byte DIFF says otherwise (Mermaid never iterates properties, so the D13
-identity-hash order may not bite: `findGroups` sorts elements by id).
+(`script-inline`, `script-in-dynamic-view`) MINUS `bulk-operations` — the
+M4-c byte sweep (2026-11-17) shows its only DIFF is the D13 `!elements`
+identity-hash FAN-OUT ORDER (relationship ids assigned in Java identity
+order → the relationship-id-string sort legs emit in a different order;
+`findGroups` sorting by element id cannot mask it). Byte result: 30 SAME /
+3 DIFF / 11 skipped — zero port bugs.
 The `custom-view-animation` witness (2 files: `Custom-001`, `Custom-002` =
 TWO views, not frames) proves §1 "never emits frames".

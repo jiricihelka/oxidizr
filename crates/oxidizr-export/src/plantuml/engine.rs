@@ -177,6 +177,37 @@ pub trait Dialect {
     fn render_as_sequence_diagram<'a>(&self, _e: &Engine<'a>, _view: View<'a>) -> bool {
         false
     }
+    /// Whether the dialect owns its sequence syntax: the engine's
+    /// `export_dynamic_sequence` is the `AbstractPlantUMLExporter` walk
+    /// (`plantuml.boundaries` + the `box` stack), but a dialect that
+    /// overrides `export(DynamicView)` wholesale — the Mermaid exporter,
+    /// catalog `EXPORT-MERMAID.md` §9 — emits a standalone document with
+    /// its own grammar and NO header/footer/legend/frames. When this is
+    /// `true`, `render_as_sequence_diagram` routes to
+    /// [`Dialect::sequence_document`] instead (M4).
+    fn owns_sequence_document(&self) -> bool {
+        false
+    }
+    /// The dialect-owned sequence document, consulted only when
+    /// [`Dialect::owns_sequence_document`] is `true`; the default body is
+    /// an abort, never reached (non-owning dialects route to the engine
+    /// walk).
+    ///
+    /// # Errors
+    ///
+    /// [`ExportError::ReferenceAbort`] on the Java NPE paths of the owned
+    /// walk (dangling relationship endpoints, a null-null description on
+    /// the Mermaid sequence leg).
+    fn sequence_document<'a>(
+        &mut self,
+        _e: &Engine<'a>,
+        _view: View<'a>,
+        _dv: &'a DynamicView,
+    ) -> Result<Diagram, ExportError> {
+        Err(ExportError::ReferenceAbort(
+            "dialect claims its own sequence document but implements none",
+        ))
+    }
     /// Whether the dialect emits `CustomView` diagrams at all: the Java
     /// `C4PlantUMLExporter.export(CustomView)` overload returns `null`, and
     /// the `export(Workspace)` loop then skips the view entirely (M3;
@@ -287,6 +318,9 @@ impl<'a> Engine<'a> {
     ) -> Result<Diagram, ExportError> {
         if let View::Dynamic(dv) = view {
             if d.render_as_sequence_diagram(self, view) {
+                if d.owns_sequence_document() {
+                    return d.sequence_document(self, view, dv);
+                }
                 return self.export_dynamic_sequence(d, view, dv);
             }
             let mut diagram = self.body(d, view)?;
@@ -1432,7 +1466,7 @@ fn java_split_len(s: &str, sep: &str) -> usize {
 
 /// UTF-16 `String.length()`.
 #[must_use]
-fn utf16_len(s: &str) -> i64 {
+pub(crate) fn utf16_len(s: &str) -> i64 {
     // A UTF-16 length cannot realistically exceed i64::MAX; saturating
     // keeps the comparison well-defined without a panic path.
     i64::try_from(s.encode_utf16().count()).unwrap_or(i64::MAX)
