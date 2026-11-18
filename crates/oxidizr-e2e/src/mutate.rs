@@ -62,16 +62,34 @@ const OPS: &[(&str, Op)] = &[
     ("dup-name", op_dup_name),
 ];
 
-/// Remove one `}` — the context it closed stays open ⇒ OXZ-2003 at EOF.
-fn op_drop_brace(text: &str, rng: &mut Rng) -> Option<String> {
-    let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
-    let cands: Vec<usize> = (0..lines.len())
-        .filter(|&i| lines[i].trim_end().ends_with('}'))
-        .collect();
+/// The candidate pick every op ends with (2R R-tool-04): an EMPTY list draws
+/// NOTHING, a non-empty one exactly one `rng.below` — the same draw sequence
+/// the five inline prologues made, so every seeded mutation (the blessed
+/// `m<i>-<label>-…` corpus dirs) stays bit-identical.
+fn pick_index(cands: &[usize], rng: &mut Rng) -> Option<usize> {
     if cands.is_empty() {
         return None;
     }
-    let i = cands[rng.below(cands.len())];
+    Some(cands[rng.below(cands.len())])
+}
+
+/// The line-scanning ops' shared prologue (2R R-tool-04): split to lines,
+/// collect the indices `pred` accepts, pick one — the preds are pure, so the
+/// filter never touches the rng state. Each op keeps only its mutation tail.
+fn pick_line(
+    text: &str,
+    rng: &mut Rng,
+    pred: impl Fn(&str) -> bool,
+) -> Option<(Vec<String>, usize)> {
+    let lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
+    let cands: Vec<usize> = (0..lines.len()).filter(|&i| pred(&lines[i])).collect();
+    let i = pick_index(&cands, rng)?;
+    Some((lines, i))
+}
+
+/// Remove one `}` — the context it closed stays open ⇒ OXZ-2003 at EOF.
+fn op_drop_brace(text: &str, rng: &mut Rng) -> Option<String> {
+    let (mut lines, i) = pick_line(text, rng, |l| l.trim_end().ends_with('}'))?;
     let pos = lines[i].rfind('}')?;
     lines[i].remove(pos);
     Some(lines.join("\n"))
@@ -79,14 +97,7 @@ fn op_drop_brace(text: &str, rng: &mut Rng) -> Option<String> {
 
 /// Duplicate one `}` line — one closing brace too many ⇒ OXZ-2001.
 fn op_dup_brace(text: &str, rng: &mut Rng) -> Option<String> {
-    let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
-    let cands: Vec<usize> = (0..lines.len())
-        .filter(|&i| lines[i].trim_end().ends_with('}'))
-        .collect();
-    if cands.is_empty() {
-        return None;
-    }
-    let i = cands[rng.below(cands.len())];
+    let (mut lines, i) = pick_line(text, rng, |l| l.trim_end().ends_with('}'))?;
     lines.insert(i + 1, lines[i].clone());
     Some(lines.join("\n"))
 }
@@ -94,17 +105,9 @@ fn op_dup_brace(text: &str, rng: &mut Rng) -> Option<String> {
 /// Delete the top-level ` = ` of a definition — the identifier and keyword
 /// run on unparsed ⇒ statement/lexer-class failure.
 fn op_drop_equals(text: &str, rng: &mut Rng) -> Option<String> {
-    let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
-    let cands: Vec<usize> = (0..lines.len())
-        .filter(|&i| {
-            let l = &lines[i];
-            !l.trim_start().starts_with('!') && equals_outside_quotes(l).is_some()
-        })
-        .collect();
-    if cands.is_empty() {
-        return None;
-    }
-    let i = cands[rng.below(cands.len())];
+    let (mut lines, i) = pick_line(text, rng, |l| {
+        !l.trim_start().starts_with('!') && equals_outside_quotes(l).is_some()
+    })?;
     let pos = equals_outside_quotes(&lines[i])?;
     lines[i].replace_range(pos..=pos, "");
     Some(lines.join("\n"))
@@ -113,19 +116,12 @@ fn op_drop_equals(text: &str, rng: &mut Rng) -> Option<String> {
 /// Rename one relationship endpoint to a never-defined identifier — the
 /// reference's unknown-reference failure (OXZ-2002 class).
 fn op_ghost_rel(text: &str, rng: &mut Rng) -> Option<String> {
-    let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
-    let cands: Vec<usize> = (0..lines.len())
-        .filter(|&i| {
-            let toks: Vec<&str> = lines[i].split_whitespace().collect();
-            toks.contains(&"->")
-                && toks.first().is_some_and(|t| is_bare_ident(t))
-                && toks.last().is_some_and(|t| t.contains('"'))
-        })
-        .collect();
-    if cands.is_empty() {
-        return None;
-    }
-    let i = cands[rng.below(cands.len())];
+    let (mut lines, i) = pick_line(text, rng, |l| {
+        let toks: Vec<&str> = l.split_whitespace().collect();
+        toks.contains(&"->")
+            && toks.first().is_some_and(|t| is_bare_ident(t))
+            && toks.last().is_some_and(|t| t.contains('"'))
+    })?;
     let mut ghosted = false;
     let toks: Vec<String> = lines[i]
         .split_whitespace()
@@ -166,10 +162,7 @@ fn op_dup_name(text: &str, rng: &mut Rng) -> Option<String> {
         }
         depth = delta_depth(l, depth);
     }
-    if cands.is_empty() {
-        return None;
-    }
-    let i = cands[rng.below(cands.len())];
+    let i = pick_index(&cands, rng)?; // 2R R-tool-04 (depth scan stays op-local)
     // `person "Name" "desc"` (or without desc) — re-issue it with a fresh
     // (never-taken) identifier and the SAME name.
     let indent: String = lines[i].chars().take_while(|c| c.is_whitespace()).collect();

@@ -392,13 +392,11 @@ fn command_to_value(r: &CommandReport) -> Value {
     Value::Object(m)
 }
 
-fn command_from_value(value: &Value, at: &str) -> Result<CommandReport, String> {
-    let obj = value
-        .as_object()
-        .ok_or_else(|| format!("{at}: must be an object"))?;
-    let exit = Exit::parse(exit_str(obj.get("exit"), at)?, at)?;
-    let codes = obj
-        .get("codes")
+/// The `codes` member — an array of u16 diagnostic code numbers
+/// (2R R-tool-04: the parse leg `command_from_value` and `export_from_value`
+/// duplicated verbatim; the error strings are unchanged).
+fn codes_from_value(obj: &Map<String, Value>, at: &str) -> Result<Vec<u16>, String> {
+    obj.get("codes")
         .and_then(Value::as_array)
         .ok_or_else(|| format!("{at}.codes: missing array"))?
         .iter()
@@ -407,7 +405,15 @@ fn command_from_value(value: &Value, at: &str) -> Result<CommandReport, String> 
                 .and_then(|n| u16::try_from(n).ok())
                 .ok_or_else(|| format!("{at}.codes: not a code number: {v}"))
         })
-        .collect::<Result<Vec<u16>, String>>()?;
+        .collect::<Result<Vec<u16>, String>>()
+}
+
+fn command_from_value(value: &Value, at: &str) -> Result<CommandReport, String> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| format!("{at}: must be an object"))?;
+    let exit = Exit::parse(exit_str(obj.get("exit"), at)?, at)?;
+    let codes = codes_from_value(obj, at)?;
     let counts = match obj.get("counts") {
         None | Some(Value::Null) => None,
         Some(v) => {
@@ -459,17 +465,7 @@ fn export_from_value(value: &Value, at: &str) -> Result<ExportReport, String> {
         .as_object()
         .ok_or_else(|| format!("{at}: must be an object"))?;
     let exit = Exit::parse(exit_str(obj.get("exit"), at)?, at)?;
-    let codes = obj
-        .get("codes")
-        .and_then(Value::as_array)
-        .ok_or_else(|| format!("{at}.codes: missing array"))?
-        .iter()
-        .map(|v| {
-            v.as_u64()
-                .and_then(|n| u16::try_from(n).ok())
-                .ok_or_else(|| format!("{at}.codes: not a code number: {v}"))
-        })
-        .collect::<Result<Vec<u16>, String>>()?;
+    let codes = codes_from_value(obj, at)?;
     let files = obj
         .get("files")
         .and_then(Value::as_u64)

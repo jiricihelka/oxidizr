@@ -58,9 +58,14 @@ pub fn observe(entry: &Entry) -> Manifest {
             counts: None,
         })
     } else if dsl2json.as_ref().is_some_and(|r| r.exit == Exit::Ok) {
+        // 2R R-tool-04: the guard already proves `dsl_out` is the SUCCESSFUL
+        // dsl2json, so its bytes ARE the feed — one explicit empty-bytes
+        // fallback (the value the old double `unwrap_or_default` smuggled for
+        // the legs the guard makes unreachable) instead of nested swallowers.
+        let feed = dsl_out.and_then(|out| out.bytes).unwrap_or_default();
         let out = execute(
             Request::Json2Json {
-                input: Input::Bytes(dsl_out.unwrap_or_default().bytes.unwrap_or_default()),
+                input: Input::Bytes(feed),
                 output: None,
             },
             &opts,
