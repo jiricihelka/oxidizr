@@ -250,12 +250,13 @@ impl WorkspaceBuilder {
         check_name(name)?;
         self.check_top_level_name(name, ElementKind::Person)?;
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.workspace.model.people.push(Person {
-            item: item.clone(),
+            item,
             group: None,
             relationships: Vec::new(),
         });
-        Ok(item.id)
+        Ok(id)
     }
 
     /// `softwareSystem "Name" ["Desc"] ["Tags"]`.
@@ -268,14 +269,15 @@ impl WorkspaceBuilder {
         check_name(name)?;
         self.check_top_level_name(name, ElementKind::SoftwareSystem)?;
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.workspace.model.software_systems.push(SoftwareSystem {
-            item: item.clone(),
+            item,
             group: None,
             containers: Vec::new(),
             documentation: crate::docs::Documentation::default(),
             relationships: Vec::new(),
         });
-        Ok(item.id)
+        Ok(id)
     }
 
     /// `element "Name" ["metadata"] ["Desc"] ["Tags"]` — custom element.
@@ -295,16 +297,17 @@ impl WorkspaceBuilder {
         check_name(name)?;
         self.check_top_level_name(name, ElementKind::CustomElement)?;
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.workspace.model.custom_elements.insert(
             0,
             CustomElement {
-                item: item.clone(),
+                item,
                 group: None,
                 metadata: None,
                 relationships: Vec::new(),
             },
         );
-        Ok(item.id)
+        Ok(id)
     }
 
     /// `container "Name" ["Desc"] ["Tech"] ["Tags"]` in `system`.
@@ -331,18 +334,19 @@ impl WorkspaceBuilder {
             });
         }
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.system_mut(system)
             .expect("checked above")
             .containers
             .push(Container {
-                item: item.clone(),
+                item,
                 group: None,
                 technology,
                 components: Vec::new(),
                 documentation: crate::docs::Documentation::default(),
                 relationships: Vec::new(),
             });
-        Ok(item.id)
+        Ok(id)
     }
 
     /// `component "Name" ["Desc"] ["Tech"] ["Tags"]` in `container`.
@@ -369,17 +373,18 @@ impl WorkspaceBuilder {
             });
         }
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.container_mut(container)
             .expect("checked above")
             .components
             .push(Component {
-                item: item.clone(),
+                item,
                 group: None,
                 technology,
                 documentation: crate::docs::Documentation::default(),
                 relationships: Vec::new(),
             });
-        Ok(item.id)
+        Ok(id)
     }
 
     /// `deploymentNode "Name" …` as a top-level node in `environment`.
@@ -405,11 +410,12 @@ impl WorkspaceBuilder {
             });
         }
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.workspace
             .model
             .deployment_nodes
-            .push(new_node(&item, environment, technology));
-        Ok(item.id)
+            .push(new_node(item, environment, technology));
+        Ok(id)
     }
 
     /// A child `deploymentNode` under `parent`.
@@ -439,11 +445,12 @@ impl WorkspaceBuilder {
             p.environment.clone()
         };
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.node_mut(parent)
             .expect("just found")
             .children
-            .push(new_node(&item, &env, technology));
-        Ok(item.id)
+            .push(new_node(item, &env, technology));
+        Ok(id)
     }
 
     /// `infrastructureNode "Name" ["Desc"] ["Tech"] ["Tags"]` under `node`.
@@ -476,17 +483,18 @@ impl WorkspaceBuilder {
             parent.environment.clone()
         };
         let item = self.new_item(name, description, tags_csv);
+        let id = item.id.clone();
         self.node_mut(node)
             .expect("checked above")
             .infrastructure_nodes
             .push(InfrastructureNode {
-                item: item.clone(),
+                item,
                 group: None,
                 environment,
                 technology,
                 relationships: Vec::new(),
             });
-        Ok(item.id)
+        Ok(id)
     }
 
     /// `softwareSystemInstance <systemId> …` under `node`.
@@ -797,14 +805,13 @@ impl WorkspaceBuilder {
                         !self.has_any_efferent(&s, &d)
                     };
                     if create {
-                        let base_id = base_id.clone();
                         self.insert_relationship(
                             &s,
                             &d,
                             desc.clone(),
                             tech.clone(),
                             Tags::new(),
-                            Some(&base_id),
+                            Some(base_id),
                         );
                     }
                 }
@@ -1449,7 +1456,7 @@ impl WorkspaceBuilder {
             && is_implied_kind(self.element_kind(&source))
             && is_implied_kind(self.element_kind(&destination))
         {
-            self.create_implied_relationships(&id.clone());
+            self.create_implied_relationships(id);
         }
     }
 
@@ -2706,9 +2713,9 @@ fn clean_groups(groups: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-fn new_node(item: &ModelItem, environment: &str, technology: Option<String>) -> DeploymentNode {
+fn new_node(item: ModelItem, environment: &str, technology: Option<String>) -> DeploymentNode {
     DeploymentNode {
-        item: item.clone(),
+        item,
         group: None,
         environment: if environment.is_empty() {
             crate::DEFAULT_ENVIRONMENT.to_string()

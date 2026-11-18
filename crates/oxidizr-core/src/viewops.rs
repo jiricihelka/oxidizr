@@ -1220,8 +1220,11 @@ impl WorkspaceBuilder {
                         };
                         let src_now = this_step.contains(&model.source);
                         let dst_now = this_step.contains(&model.destination);
-                        let src_prev = previous.contains(&model.source.as_str().to_string());
-                        let dst_prev = previous.contains(&model.destination.as_str().to_string());
+                        // membership by `&str` — `previous` holds the id
+                        // spellings, so no per-comparison String is needed
+                        // (2R R-core-04).
+                        let src_prev = previous.iter().any(|p| p == model.source.as_str());
+                        let dst_prev = previous.iter().any(|p| p == model.destination.as_str());
                         (src_now && dst_prev) || (src_prev && dst_now)
                     })
                     .map(|rv| rv.id.as_str().to_string())

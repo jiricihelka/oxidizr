@@ -141,8 +141,7 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
     // 1. Unique ids across BOTH element and relationship spaces
     // (`addElementToInternalStructures` / `addRelationshipToInternalStructures`).
     let mut ids: HashMap<&Id, &'static str> = HashMap::new();
-    for (id, kind, name) in flattened_ids(model) {
-        let _ = name;
+    for (id, kind, _) in flattened_ids(model) {
         let label = match kind {
             ElementKind::CustomElement
             | ElementKind::Person
