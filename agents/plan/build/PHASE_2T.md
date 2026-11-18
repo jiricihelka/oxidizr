@@ -105,7 +105,7 @@ stay — corpus benches add the 156-workspace breadth).
 | **PT3** | **DONE 2026-11-18** — `tests/full_export.rs` (full tier): determinism (double capture), **path parity** `export(dsl) ≡ export(json2json(dsl))`, fmt-fixpoint parity `export(fmt(x)) ≡ export(x)` — per entry × landed format over all 163 export-applicable valid entries; replays run from a scratch COPY of the entry dir (children + `themes/` — theme chain + include/extends see what the original input sees; unit-tested). **V-T8 CLOSED pre-wiring: 9/9 probes byte-exact parity** (166 + 03 + 95 × 3 formats) — no P2 bug, invariant landed green as required; vacuity guard (`!entries.is_empty()`) | full tier green locally; windows leg green (PT3b); dispatched `e2e.yml` run queued for PT5 |
 | **PT3b** | **DONE 2026-11-18** — Windows CI fix (user-reported): `subprocess_smoke::binary()` walked ancestors for `oxidizr` only — native `windows-latest` ci.yml leg (P1T-era latent red, surfaced when the 2T CI ran): the bin there is `oxidizr.exe`, so resolution failed regardless of the build. Fix cfg-free: every ancestor tries BOTH `oxidizr` and `oxidizr.exe` (charter: no `#[cfg]` without need); `$OXIDZR_BIN` precedence unchanged | windows leg green (CI re-run); Linux quartet green |
 | **PT4** | **DONE 2026-11-18** — `benches/e2e.rs`: `bench_export` grows the c4 format (`e2e_export_plantuml_c4_all`; matrix = plantuml/c4/mermaid `_all` over the whole corpus) + new `bench_export_biggest` = per-format worst case on the **manifest-selected biggest export surface** (`*_biggest_166-export-all-kinds`, 14 plantuml files; the DSL-text "biggest" of the P1T pattern can be an error-export entry). Baseline `2T` committed (92 files, all 23 groups incl. the renamed `*_biggest_*` — corpus growth re-names those ids by design). CI bench job stays feature-free (`required-features` skips these there) | `bench cmp 2T` exit 0 (1.00x); CI bench command unchanged |
-| PT5  | Close-out: TESTING.md §E2E (manifest v2 + export matrix), e2e/README, PROGRESS board + log, this file's DONE entries | quartet + actionlint green; **no tag** |
+| **PT5** | **DONE 2026-11-18** — close-out: TESTING.md §E2E rewritten for manifest v2 (export matrix, quick+full tiers, 12 benches; stale `expected.toml` name fixed → `workspace.e2e.json`); e2e/README gains the `themes/` child + export-section rules; PROGRESS board row + P2T milestone-log entry; this file's DONE rows complete | quartet green; **no tag** (1T precedent); windows + nightly `e2e.yml` full-tier legs verify on the next push (local quartet + full tier green) |
 
 Size gate: 4 modules (oxidizr-e2e, xtask, e2e/corpus, docs) — this file is the
 decomposition regardless.
@@ -132,7 +132,8 @@ contract.
 - **V-T8** (before PT3) — path parity pre-probe on 3 diverse entries (views + styles
   + properties): if `export(dsl) ≠ export(json2json(dsl))` anywhere, that is a P2 bug
   → witness verdict → fix before wiring the invariant (an invariant must land green
-  or not at all).
+  or not at all). **CLOSED 2026-11-18: 9/9 probes byte-exact** (166 + 03 + 95 ×
+  plantuml/c4/mermaid) — no bug, `full_export.rs` landed green (PT3 row).
 
 ## Risks
 

@@ -44,29 +44,45 @@ only** — no percentage gate. Dev-only deps: `proptest`/`arbitrary`, `criterion
 - Round-trip tests: JSON → model → JSON must be lossless for the fields Structurizr
   itself preserves (see DEVIATIONS.md D3 for the reference-exact default).
 
-## E2E suite (`oxidizr-e2e`, Phase 1T interlude)
+## E2E suite (`oxidizr-e2e`, Phase 1T interlude; export matrix at 2T)
 
 End-to-end regression over a purpose-built corpus in `e2e/corpus/` — entries assert
 **use-cases** (exit class + OXZ code set + shape counts), never bytes, never message
 text; the JSON byte contract stays with the Category-A goldens. In-process via
-`oxidizr-api::execute` (subprocess smoke anchors the real CLI once); entries fan out
-on `thread::scope`. Plan and all decisions: `build/PHASE_1T.md`.
+`oxidizr-api::execute` (subprocess smoke anchors the real CLI once — it resolves
+`oxidizr` **and** `oxidizr.exe` so the Windows CI leg works); entries fan out on
+`thread::scope`. Plans and all decisions: `build/PHASE_1T.md`, `build/PHASE_2T.md`.
 
-- **Quick tier** (rides `cargo test --workspace`, every PR): sidecar expectations per
-  entry (`expected.toml`: exit class, codes, counts) + manifest coverage gate (≥150
-  valid / ≥120 invalid, code coverage floor with allow-list). Corpus tooling:
-  `cargo xtask e2e bless` (re-record sidecars; byte-stability is asserted, goldens
-  untouched) and `cargo xtask e2e mutate` (seeded mutation generator — REPLACES
-  `corpus/mutated/` wholesale, always re-bless after;
-  `agents/notes/pitfalls/t3-invalid-corpus-probes.md`).
+- **Quick tier** (rides `cargo test --workspace`, every PR): blessed sidecars per
+  entry (`workspace.e2e.json`: exit class, codes, counts) for
+  `dsl2json`/`json2json`/`validate`/`reconcile`/`fmt` **plus the export matrix**
+  (P2T-D2): `export.{plantuml,plantuml-c4,mermaid,websequencediagrams}` blocks
+  (exit, codes, files written) whenever the entry's input parses with ≥ 1 view —
+  fan-out through `Request::Export` into per-entry scratch dirs, hermetic options
+  (`allow_net` false; theme fixtures ride a `themes/` dir inside the entry via the
+  reference `<workspace-parent>/themes` source). Also permanent: `path_leakage`
+  (V-T7 — export bytes never embed the scratch path) and the manifest coverage
+  gate (≥150 valid / ≥120 invalid, code coverage floor with a shrinking
+  allow-list). Corpus tooling: `cargo xtask e2e bless` (re-record sidecars;
+  byte-stability is asserted, goldens untouched) and `cargo xtask e2e mutate`
+  (seeded mutation generator — REPLACES `corpus/mutated/` wholesale, always
+  re-bless after; `agents/notes/pitfalls/t3-invalid-corpus-probes.md`).
 - **Full tier** (nightly `.github/workflows/e2e.yml`, local:
-  `OXIDZR_E2E_FULL=1 cargo test -p oxidizr-e2e --test full`): self-consistency
-  invariants over every valid entry — parse determinism, `dsl2json`→`json2json`
-  byte-stability, `fmt` fixpoint + `parse(fmt(x)) ≡ parse(x)` (scratch-dir replay so
-  relative `!include`/`extends` resolve), self-`reconcile` identity. Env-gated
-  instead of `#[ignore]` (V-T4: an env gate can never drag in future ignores).
-  The net caught two real engine bugs at first run — see P1T-D6 landed block.
-- **Benches**: six `e2e_` corpus benches, feature-gated, local-only — §Benchmarks.
+  `OXIDZR_E2E_FULL=1 cargo test -p oxidizr-e2e`): self-consistency invariants
+  over every valid entry — parse determinism, `dsl2json`→`json2json` byte
+  **fixpoint** (`out₃ == out₂`; the first pass may re-sort per the reader's
+  `TreeSet` rebuild — WRITE-CATALOG §5), `fmt` fixpoint + `parse(fmt(x)) ≡
+  parse(x)` (scratch-dir replay so relative `!include`/`extends` resolve),
+  self-`reconcile` identity; and the 2T export invariants (`--test full_export`):
+  export determinism, **path parity** `export(dsl) ≡ export(json2json(dsl))` and
+  `export(fmt(x)) ≡ export(x)` per output file (replays from a scratch copy of
+  the entry dir keep the theme chain + children honest). Env-gated instead of
+  `#[ignore]` (V-T4: an env gate can never drag in future ignores). The nets
+  caught two real engine bugs at P1T first run (P1T-D6 landed block) and two
+  more pre-P2 regressions at 2T (PHASE_2T.md catch report).
+- **Benches**: twelve `e2e_` corpus benches since 2T (parse/round-trip/fmt/
+  validate/reconcile + export × 3 dialects, whole-corpus and biggest-entry),
+  feature-gated, local-only — §Benchmarks.
 
 ## Benchmarks
 

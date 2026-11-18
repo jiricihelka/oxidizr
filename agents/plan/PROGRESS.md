@@ -27,6 +27,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M3 C4-PlantUML | **COMPLETE 2026-11-17** — M3-a (catalog `build/EXPORT-C4-PLANTUML.md` + witness sweep), M3-b (`plantuml::c4` dialect port, 2706209), M3-c (A/B: 30 SAME / 4 design-DIFF / 10 vacuous), M3-d (29-fixture c4 goldens + oracle verify green + P2-D9 comparator `xtask export-verify`). Log below |
 | P2 | M4 Mermaid + theme goldens + CI render + bench | **M4 COMPLETE 2026-11-18** (M4-d: goldens + oracle legs + golden tests + render smokes + bench). Log below |
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
+| P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -148,6 +149,42 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P2T — e2e export-coverage interlude ✅ (2026-11-18, COMPLETE)
+
+Give the P1T corpus what it never had: a run `export`. The P2 byte gates cover
+the *selected* fixture matrix, not corpus breadth; 2T wires the three landed
+diagram formats into the P1T net (API seam, bless, tiers, benches) with no
+behavior change and no `testdata/` touch. Plan + all decisions:
+`build/PHASE_2T.md`. No tag (1T precedent).
+
+- **PT1** — manifest schema v2: per-entry `export` block (plantuml / plantuml-c4
+  / mermaid + a `websequencediagrams` compat probe: exit + codes + `files`),
+  bless fan-out into per-entry scratch dirs (`Request::Export`), runner + coverage
+  gate collect export codes. Full bless: **157 sidecars gain export sections**;
+  **5007 leaves the allow-list** (its registry note anticipated this). V-T6 quick
+  tier ~0.1 s (budget 60 s); V-T7 path-leakage test permanent. `9b1e7f4`.
+  Two PRE-EXISTING P2 regressions caught on the full tier, bisected to `cc243a0`
+  and fixed per the faithful-port rules: reconcile missing the default-views load
+  tail (`726a724`) and the json2json byte-stability invariant, redefined as the
+  byte **fixpoint** `out₃==out₂` per WRITE-CATALOG §5 (`2cb3215`).
+- **PT2** — 7 authored fixtures 160–166: installed theme via the reference
+  `<workspace-parent>/themes` default (no runner hook needed), broken theme → 5008
+  ahead of 5007, unknown theme skipped (JSON-only — the skip branch is
+  DSL-unreachable), terminology, autoLayout `tb|bt|lr|rl` variants, CJK/quote
+  escapes, all-8-view-kinds + 2 deployment envs. **5008 leaves the allow-list**;
+  5009 verdict = permanent (hydrate/validate reject the corrupt shapes OXZ-4001
+  pre-dispatch). `ffc3011` (+ repo litter removal `161abfe`).
+- **PT3** — `tests/full_export.rs` (full tier): determinism, **path parity**
+  `export(dsl) ≡ export(json2json(dsl))`, fmt-fixpoint parity, per entry × format
+  over all 163 export-applicable entries from a scratch COPY of the entry dir.
+  V-T8 pre-probed 9/9 byte-exact BEFORE wiring (`12ad7d0`).
+- **PT3b** — Windows CI unblock (user-reported): `subprocess_smoke` now resolves
+  `oxidizr.exe` too; the `windows-latest` leg was latently red since P1T
+  (`37fca46`).
+- **PT4** — corpus export benches (c4 format + per-format biggest-entry worst
+  case) behind `e2e-bench`; `2T` baseline committed (`7296929`). CI bench stays
+  feature-free.
 
 ### P2-M5 — hardening + v0.2.0 (2026-11-18, COMPLETE)
 
