@@ -172,28 +172,28 @@ pub fn run() -> anyhow::Result<i32> {
         env: None,
         stdin: Some(read_stdin),
         allow_net: cli.allow_net,
-        themes_dir: cli.themes_dir.clone(),
+        themes_dir: cli.themes_dir,
     };
-    let outcome = oxidizr_api::execute(to_request(&cli), &options);
-    Ok(replay(&renderer, &outcome))
+    let outcome = oxidizr_api::execute(to_request(cli.command), &options);
+    Ok(replay(&renderer, outcome))
 }
 
 /// argv → Request mapping: `-`/omitted paths become the lazy [`Input::Stdin`]
 /// variant (nothing is read before `execute` decides — a `fmt --write -`
-/// usage exit must not block on an open pipe).
-fn to_request(cli: &Cli) -> Request {
-    match &cli.command {
+/// usage exit must not block on an open pipe). 2R R-mis-10: the `Command`
+/// MOVES into the [`Request`] — the old `&Cli` leg cloned every path the
+/// caller was about to drop anyway.
+fn to_request(command: Command) -> Request {
+    match command {
         Command::Dsl2Json { dsl, output } => Request::Dsl2Json {
             input: input_of(dsl.as_deref()),
-            output: output.clone(),
+            output,
         },
         Command::Json2Json { json, output } => Request::Json2Json {
             input: input_of(json.as_deref()),
-            output: output.clone(),
+            output,
         },
-        Command::Validate { files } => Request::Validate {
-            files: files.clone(),
-        },
+        Command::Validate { files } => Request::Validate { files },
         Command::Fmt {
             files,
             write,
@@ -205,9 +205,9 @@ fn to_request(cli: &Cli) -> Request {
             } else {
                 files.iter().map(|p| input_of(Some(p))).collect()
             },
-            mode: if *check {
+            mode: if check {
                 FmtMode::Check
-            } else if *write {
+            } else if write {
                 FmtMode::Write
             } else {
                 FmtMode::Print
@@ -218,18 +218,18 @@ fn to_request(cli: &Cli) -> Request {
             layout,
             output,
         } => Request::Reconcile {
-            dsl: input_of(Some(dsl)),
-            layout: input_of(Some(layout)),
-            output: output.clone(),
+            dsl: input_of(Some(&dsl)),
+            layout: input_of(Some(&layout)),
+            output,
         },
         Command::Export {
             workspace,
             format,
             output,
         } => Request::Export {
-            workspace: workspace.clone(),
-            format: format.clone(),
-            output: output.clone(),
+            workspace,
+            format,
+            output,
         },
     }
 }
@@ -255,8 +255,10 @@ fn read_stdin() -> Result<Vec<u8>, Issue> {
 /// Replay an [`Outcome`] onto the process streams: stdout payload first (a
 /// write failure is the old `write_output` exit 3 and suppresses the log —
 /// the extracted contract), then the ordered log. Consecutive issues render
-/// as one batch (single stderr write, as before).
-fn replay(renderer: &Renderer, outcome: &Outcome) -> i32 {
+/// as one batch (single stderr write, as before). 2R R-mis-10: the outcome
+/// MOVES in — issues step into the render batch instead of being cloned
+/// item by item.
+fn replay(renderer: &Renderer, outcome: Outcome) -> i32 {
     if let Some(bytes) = &outcome.bytes {
         let mut stdout = std::io::stdout().lock();
         if let Err(e) = stdout.write_all(bytes).and_then(|()| stdout.flush()) {
@@ -268,16 +270,16 @@ fn replay(renderer: &Renderer, outcome: &Outcome) -> i32 {
         }
     }
     let mut batch: Vec<Issue> = Vec::new();
-    for item in &outcome.log {
+    for item in outcome.log {
         match item {
-            LogItem::Issue(issue) => batch.push(issue.clone()),
+            LogItem::Issue(issue) => batch.push(issue),
             LogItem::OkLine(line) => {
                 flush(renderer, &mut batch);
-                renderer.ok(line);
+                renderer.ok(&line);
             }
             LogItem::NoteLine(line) => {
                 flush(renderer, &mut batch);
-                renderer.note(line);
+                renderer.note(&line);
             }
         }
     }

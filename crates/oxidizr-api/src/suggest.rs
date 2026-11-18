@@ -117,13 +117,16 @@ pub fn decorate(issue: Issue, ws: Option<&Workspace>) -> Issue {
     if issue.help.is_some() {
         return issue;
     }
-    let help = if let (_, Some(list)) = (
-        issue.message.contains("Unexpected tokens (expected: "),
-        issue
+    // 2R R-mis-04: plain `&&` let-chain — the old `(bool, Option)` tuple
+    // pattern smuggled this exact guard (message contains the prefix AND
+    // the `(expected: ` list is extractable); both legs are pure string
+    // ops, so the short-circuit changes nothing observable.
+    let help = if issue.message.contains("Unexpected tokens (expected: ")
+        && let Some(list) = issue
             .message
             .split_once(" (expected: ")
-            .map(|(_, rest)| rest.split(')').next().unwrap_or(rest)),
-    ) {
+            .map(|(_, rest)| rest.split(')').next().unwrap_or(rest))
+    {
         let candidates: Vec<&str> = list
             .split(", ")
             .map(|c| c.split(' ').next().unwrap_or(c))
