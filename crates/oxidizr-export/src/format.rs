@@ -140,42 +140,44 @@ impl ExportFormat {
         workspace: &Workspace,
         workspace_file_name: &str,
     ) -> Result<Vec<ExportedFile>, ExportError> {
-        if let Self::StructurizrPlantUml(mode) | Self::C4PlantUml(mode) = self {
+        // 2R R-exp-18: ONE dispatch — the old shape matched `self` twice
+        // for the plantuml pair and used a separate `matches!` for mermaid.
+        let diagrams = match self {
             // The `DiagramExporter` branch of `ExportCommand.run`: the
             // workspace file name plays no role (names key on the workspace
             // ID — `prefix(workspaceId)`).
-            let mut engine = Engine::new(workspace, mode.color_scheme());
-            let diagrams = match self {
-                Self::C4PlantUml(_) => engine.export_all(&mut C4PlantUmlDialect::new())?,
-                _ => engine.export_all(&mut StructurizrDialect::new())?,
-            };
-            return Ok(diagram_files(&diagram_prefix(workspace.id), &diagrams));
-        }
-        if matches!(self, Self::Mermaid) {
+            Self::StructurizrPlantUml(mode) => {
+                let mut engine = Engine::new(workspace, mode.color_scheme());
+                engine.export_all(&mut StructurizrDialect::new())?
+            }
+            Self::C4PlantUml(mode) => {
+                let mut engine = Engine::new(workspace, mode.color_scheme());
+                engine.export_all(&mut C4PlantUmlDialect::new())?
+            }
             // `MermaidDiagramExporter` has no color-scheme constructor: the
             // no-arg export is `this(ColorScheme.Light)`. The `.mmd`
             // extension rides each `Diagram` (`diagram_files` threads
             // `file_extension`).
-            let mut engine = Engine::new(workspace, ColorScheme::Light);
-            let diagrams = engine.export_all(&mut crate::mermaid::MermaidDialect::new())?;
-            return Ok(diagram_files(&diagram_prefix(workspace.id), &diagrams));
-        }
-        let (export, theme) = match self {
-            Self::Json => (
-                WorkspaceExport::new(oxidizr_json::to_vec(workspace)?, "json".into()),
-                false,
-            ),
-            Self::Theme => (
-                WorkspaceExport::new(oxidizr_json::theme_to_vec(workspace), "json".into()),
-                true,
-            ),
+            Self::Mermaid => {
+                let mut engine = Engine::new(workspace, ColorScheme::Light);
+                engine.export_all(&mut crate::mermaid::MermaidDialect::new())?
+            }
+            Self::Json => {
+                let export = WorkspaceExport::new(oxidizr_json::to_vec(workspace)?, "json".into());
+                return workspace_export_files(&export, false, workspace_file_name);
+            }
+            Self::Theme => {
+                let export =
+                    WorkspaceExport::new(oxidizr_json::theme_to_vec(workspace), "json".into());
+                return workspace_export_files(&export, true, workspace_file_name);
+            }
             other => {
                 return Err(ExportError::NotImplemented {
                     format: other.label(),
                 });
             }
         };
-        workspace_export_files(&export, theme, workspace_file_name)
+        Ok(diagram_files(&diagram_prefix(workspace.id), &diagrams))
     }
 }
 

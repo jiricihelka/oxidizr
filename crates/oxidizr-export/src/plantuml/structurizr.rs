@@ -69,10 +69,15 @@ impl StructurizrDialect {
     /// class selector, except the root (class only) and the legend (its
     /// selector is constant, so effectively class only).
     fn add_style(&mut self, style: PlantUMLStyle) {
+        // 2R R-exp-18: the new style's tag/selector/class-only test are loop
+        // invariants — computed once, not per stored-style comparison
+        // (`selector()` re-runs the b64 encode on every call).
+        let target_tag = style.class_tag();
+        let target_selector = style.selector();
         let dup = self.styles.iter().any(|s| {
-            s.class_tag() == style.class_tag()
+            s.class_tag() == target_tag
                 && (matches!(style, PlantUMLStyle::Root { .. } | PlantUMLStyle::Legend)
-                    || s.selector() == style.selector())
+                    || s.selector() == target_selector)
         });
         if !dup {
             self.styles.push(style);
@@ -1551,15 +1556,18 @@ fn b64(input: &str) -> String {
         let mut b = [0u8; 3];
         b[..chunk.len()].copy_from_slice(chunk);
         let n = u32::from_be_bytes([0, b[0], b[1], b[2]]);
-        out.push(TABLE[usize::try_from(n >> 18).unwrap_or(0) & 63] as char);
-        out.push(TABLE[usize::try_from(n >> 12).unwrap_or(0) & 63] as char);
+        // 2R R-exp-17: one index shape for all four sextets — the old mix
+        // of `usize::try_from(…).unwrap_or(0)` and `as usize` was
+        // inconsistent; each value is masked to its 6 bits before indexing.
+        out.push(char::from(TABLE[((n >> 18) & 63) as usize]));
+        out.push(char::from(TABLE[((n >> 12) & 63) as usize]));
         out.push(if chunk.len() > 1 {
-            TABLE[(n >> 6) as usize & 63] as char
+            char::from(TABLE[((n >> 6) & 63) as usize])
         } else {
             '='
         });
         out.push(if chunk.len() > 2 {
-            TABLE[n as usize & 63] as char
+            char::from(TABLE[(n & 63) as usize])
         } else {
             '='
         });

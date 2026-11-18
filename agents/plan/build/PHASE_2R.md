@@ -223,11 +223,11 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 | R-exp-11 | `body` (107 ln) split per view-kind leg citing Java overloads; `export_dynamic_sequence` inner blocks split (sibling-insert + boundary-stack = "Rust glue"); **keep fn names** — cited at `EXPORT-MERMAID.md:141,146`, `PHASE_2.md:321-322`; catalog refs same-commit | JU | 3 |
 | R-exp-12 | `type_of(_, include_metadata_symbols: bool)` — mirrors Java overload, doc-cited; prod calls all-`true` | KC | — |
 | R-exp-13 | `canonical_name` reverse+push join (`engine.rs:1367-82`) → `chain.join("/")` w/ trailing-slash care; golden-verify — **DONE PR3-a** (slash keyed on `chain.is_empty()`; bless no-op = the golden verify) | SW | 3 |
-| R-exp-14 | c4 color cascades ×4 near-identical (`c4.rs:582-603`) → `cascade_color` (two calls = the two Java cascades); drop `let element_to_write = element;`; `_view` param | SW | 3 |
+| R-exp-14 | c4 color cascades ×4 near-identical (`c4.rs:582-603`) → `cascade_color` (two calls = the two Java cascades); drop `let element_to_write = element;`; `_view` param — **DONE PR3-c** (helper + alias gone + `_view`) | SW | 3 |
 | R-exp-15 | `unwrap_or_default` on "unreachable" abort paths (`c4.rs:642,677`, `mermaid.rs:128`) — behavior is the contract; keep + cite | KC | — |
 | R-exp-16 | themes: 2-var env loop stringly branch; `load_themes` clone iteration; silent-skips need EXPORT-PROPERTIES §6 cites where missing | JU | 3 |
-| R-exp-17 | stale/dead attrs: `paths.rs:49` `items_after_statements` allow (verify at implementation — it's a *style* lint under `all`, so re-check before deleting); `b64` inconsistent `try_from` vs `as usize`; unimplemented `WorkspaceExporter`/`DiagramExporter` traits = pub API → DF | SW/DF | 3 |
-| R-exp-18 | below-cut cluster: add_style clone-then-discard, `engine.rs:348` collect-then-loop, `format.rs:143` double-dispatch collapse, `selector()` b64 recompute | SW | 3 |
+| R-exp-17 | stale/dead attrs: `paths.rs:49` `items_after_statements` allow (verify at implementation — it's a *style* lint under `all`, so re-check before deleting); `b64` inconsistent `try_from` vs `as usize`; unimplemented `WorkspaceExporter`/`DiagramExporter` traits = pub API → DF — **DONE PR3-c** (allow verified stale — clippy clean without it, deleted; b64 unified to mask-then-index; the trait stubs stay DF: pub API, no code) | SW/DF | 3 |
+| R-exp-18 | below-cut cluster: add_style clone-then-discard, `engine.rs:348` collect-then-loop, `format.rs:143` double-dispatch collapse, `selector()` b64 recompute — **DONE PR3-c** (export() one match; add_style hoists tag/selector out of the dup closure — the by-value construct-then-drop on a dup mirrors the reference `HashSet.add`, kept; steps loop iterates directly) | SW | 3 |
 
 ### oxidizr-json / api / cli (+ diag, ast, e2e src)
 

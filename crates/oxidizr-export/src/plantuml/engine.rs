@@ -356,8 +356,10 @@ impl<'a> Engine<'a> {
         };
         let mut diagram = self.body(d, view)?;
         if d.is_animation_supported(self, view) && !animations.is_empty() {
-            let steps: Vec<i32> = animations.iter().map(|a| a.order).collect();
-            for step in steps {
+            // 2R R-exp-18: iterate directly — `animations` borrows the
+            // workspace (`'a`), not the engine, so the collect-then-loop
+            // bought nothing.
+            for step in animations.iter().map(|a| a.order) {
                 self.frame = Some(Frame::Step(step));
                 diagram.add_frame(self.body(d, view)?);
             }

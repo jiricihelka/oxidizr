@@ -16,7 +16,7 @@
 
 use oxidizr_core::properties::Properties;
 use oxidizr_core::validate::ElementKind;
-use oxidizr_core::views::{LineStyle, RelationshipStyle, Shape, View};
+use oxidizr_core::views::{ElementStyle, LineStyle, RelationshipStyle, Shape, View};
 use oxidizr_json::javahash::entry_order;
 
 use crate::diagram::Diagram;
@@ -74,6 +74,20 @@ fn border_lower(border: Option<LineStyle>) -> &'static str {
 /// `addProperties`: drop `structurizr.` keys; when any remain, the
 /// `WithoutPropertyHeader()` marker then `AddProperty` per key in SORTED
 /// order (the Java `stream().sorted()` — `String` natural order).
+/// One Java color cascade: the `Group:{name}` style wins over the `Group`
+/// style, null/empty values skipped; first valid hit wins, `None` keeps the
+/// caller's current value (2R R-exp-14 — `start_group_boundary` spelled this
+/// cascade four times as inline `to_string()` copies).
+fn cascade_color<'s>(
+    group: Option<&'s ElementStyle>,
+    all: Option<&'s ElementStyle>,
+    pick: impl Fn(&'s ElementStyle) -> Option<&'s str>,
+) -> Option<&'s str> {
+    group
+        .and_then(|s| pick(s).filter(|c| !is_null_or_empty(Some(c))))
+        .or_else(|| all.and_then(|s| pick(s).filter(|c| !is_null_or_empty(Some(c)))))
+}
+
 fn add_properties(w: &mut IndentingWriter, properties: &Properties) {
     let mut entries: Vec<(&str, &str)> = properties
         .iter()
@@ -428,7 +442,6 @@ impl Dialect for C4PlantUmlDialect {
             return Ok(());
         }
 
-        let element_to_write = element;
         let style = element_style_of(e, element)?;
         let id = id_of(e, element)?;
 
@@ -440,7 +453,7 @@ impl Dialect for C4PlantUmlDialect {
 
         // `StaticStructureElementInstance` macros describe the TARGET
         // element (its name/description/technology/url); `$tags` stay the
-        // INSTANCE's resolved style (`element_to_write`).
+        // INSTANCE's resolved style (`element`).
         let is_instance = matches!(
             element.kind(),
             ElementKind::SoftwareSystemInstance | ElementKind::ContainerInstance
@@ -461,7 +474,7 @@ impl Dialect for C4PlantUmlDialect {
 
         let name = written.name();
         let description = written.description().unwrap_or("");
-        let tags = Self::element_tags_of(e, view, element_to_write)?;
+        let tags = Self::element_tags_of(e, view, element)?;
 
         match written.kind() {
             ElementKind::Person => w.write_line(Some(&format!(
@@ -495,7 +508,7 @@ impl Dialect for C4PlantUmlDialect {
             _ => {}
         }
 
-        if !e.is_visible(view, element_to_write)? {
+        if !e.is_visible(view, element)? {
             w.write_line(Some(&format!("hide {id}")));
         }
         Ok(())
@@ -560,7 +573,7 @@ impl Dialect for C4PlantUmlDialect {
     fn start_group_boundary<'a>(
         &mut self,
         e: &Engine<'a>,
-        view: View<'a>,
+        _view: View<'a>,
         group: &str,
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError> {
@@ -578,28 +591,15 @@ impl Dialect for C4PlantUmlDialect {
 
         // `#cccccc` default; the Group style COLOR, then the STROKE
         // overrides it (two independent Java cascades), then the width.
-        let mut color = "#cccccc".to_string();
-        if let Some(c) = g
-            .and_then(|s| s.color.as_deref())
-            .filter(|c| !is_null_or_empty(Some(c)))
-        {
-            color = c.to_string();
-        } else if let Some(c) = a
-            .and_then(|s| s.color.as_deref())
-            .filter(|c| !is_null_or_empty(Some(c)))
-        {
-            color = c.to_string();
+        // 2R R-exp-14: one helper call per Java cascade — the old shape
+        // spelled the group-over-all null/empty filter four times inline,
+        // copying a String each leg.
+        let mut color = "#cccccc";
+        if let Some(c) = cascade_color(g, a, |s| s.color.as_deref()) {
+            color = c;
         }
-        if let Some(c) = g
-            .and_then(|s| s.stroke.as_deref())
-            .filter(|c| !is_null_or_empty(Some(c)))
-        {
-            color = c.to_string();
-        } else if let Some(c) = a
-            .and_then(|s| s.stroke.as_deref())
-            .filter(|c| !is_null_or_empty(Some(c)))
-        {
-            color = c.to_string();
+        if let Some(c) = cascade_color(g, a, |s| s.stroke.as_deref()) {
+            color = c;
         }
         let thickness = g
             .and_then(|s| s.stroke_width)
@@ -614,7 +614,6 @@ impl Dialect for C4PlantUmlDialect {
             "Boundary(group_{}, \"{group_name}\", $tags=\"{group}\") {{",
             self.group_id
         )));
-        let _ = view;
         w.indent();
         Ok(())
     }
