@@ -1032,181 +1032,223 @@ impl PlantUMLStyle {
 
     /// `toString()` — a fresh writer per style: `indent`, the comment,
     /// the selector line, indented fields, `outdent`, `}`, `outdent`,
-    /// blank line.
-    #[allow(clippy::too_many_lines)] // one leg per reference `toString()`
+    /// blank line. 2R R-exp-10: one `render_*` fn per Java
+    /// `PlantUML*Style#toString` — the old shape was a single 174-line
+    /// match behind a `too_many_lines` allow.
     fn render(&self) -> String {
         let mut w = IndentingWriter::new();
         w.indent();
         match self {
-            Self::Root { background, color } => {
-                // The root class selector renders WITHOUT a dot.
-                w.write_line(Some("root {"));
-                w.indent();
-                w.write_line(Some(&format!("BackgroundColor: {background};")));
-                w.write_line(Some(&format!("FontColor: {color};")));
-            }
-            Self::Legend => {
-                w.write_line(Some("// transparent element for relationships in legend"));
-                w.write_line(Some(".Element-Transparent {"));
-                w.indent();
-                w.write_line(Some("BackgroundColor: transparent;"));
-                w.write_line(Some("LineColor: transparent;"));
-                w.write_line(Some("FontColor: transparent;"));
-            }
-            Self::Element {
-                name,
-                shape,
-                width,
-                background,
-                color,
-                stroke,
-                stroke_width,
-                line_style,
-                font_size,
-                shadow,
-                ..
-            } => {
-                w.write_line(Some(&format!("// {name}")));
-                w.write_line(Some(&format!(".{} {{", self.selector())));
-                w.indent();
-                w.write_line(Some(&format!(
-                    "BackgroundColor: {};",
-                    color_or_null(background.as_deref())
-                )));
-                w.write_line(Some(&format!(
-                    "LineColor: {};",
-                    color_or_null(stroke.as_deref())
-                )));
-                w.write_line(Some(&format!("LineStyle: {line_style};")));
-                w.write_line(Some(&format!("LineThickness: {stroke_width};")));
-                if *shape == Some(Shape::RoundedBox) {
-                    w.write_line(Some("RoundCorner: 20;"));
-                }
-                w.write_line(Some(&format!(
-                    "FontColor: {};",
-                    color_or_null(color.as_deref())
-                )));
-                w.write_line(Some(&format!("FontSize: {font_size};")));
-                w.write_line(Some("HorizontalAlignment: center;"));
-                w.write_line(Some(&format!(
-                    "Shadowing: {};",
-                    if *shadow { SHADOW_DISTANCE } else { 0 }
-                )));
-                w.write_line(Some(&format!("MaximumWidth: {width};")));
-            }
-            Self::Relationship {
-                name,
-                color,
-                line_style,
-                thickness,
-                font_size,
-                width,
-            } => {
-                w.write_line(Some(&format!("// {name}")));
-                w.write_line(Some(&format!(".{} {{", self.selector())));
-                w.indent();
-                w.write_line(Some(&format!("LineThickness: {thickness};")));
-                w.write_line(Some(&format!("LineStyle: {line_style};")));
-                w.write_line(Some(&format!(
-                    "LineColor: {};",
-                    color_or_null(color.as_deref())
-                )));
-                w.write_line(Some(&format!(
-                    "FontColor: {};",
-                    color_or_null(color.as_deref())
-                )));
-                w.write_line(Some(&format!("FontSize: {font_size};")));
-                w.write_line(Some(&format!("MaximumWidth: {width};")));
-            }
-            Self::DeploymentNode {
-                name,
-                background,
-                color,
-                stroke,
-                stroke_width,
-                line_style,
-                font_size,
-                shadow,
-                width,
-                icon: _,
-            } => {
-                w.write_line(Some(&format!("// {name}")));
-                w.write_line(Some(&format!(".{} {{", self.selector())));
-                w.indent();
-                w.write_line(Some(&format!(
-                    "BackgroundColor: {};",
-                    color_or_null(background.as_deref())
-                )));
-                w.write_line(Some(&format!(
-                    "LineColor: {};",
-                    color_or_null(stroke.as_deref())
-                )));
-                w.write_line(Some(&format!("LineStyle: {line_style};")));
-                w.write_line(Some(&format!("LineThickness: {stroke_width};")));
-                w.write_line(Some(&format!(
-                    "FontColor: {};",
-                    color_or_null(color.as_deref())
-                )));
-                w.write_line(Some(&format!("FontSize: {font_size};")));
-                w.write_line(Some("HorizontalAlignment: center;"));
-                w.write_line(Some(&format!(
-                    "Shadowing: {};",
-                    if *shadow { SHADOW_DISTANCE } else { 0 }
-                )));
-                if let Some(width) = width {
-                    w.write_line(Some(&format!("MaximumWidth: {width};")));
-                }
-            }
-            Self::Boundary {
-                name,
-                background,
-                color,
-                stroke,
-                stroke_width,
-                line_style,
-                font_size,
-                shadow,
-            }
-            | Self::Group {
-                name,
-                background,
-                color,
-                stroke,
-                stroke_width,
-                line_style,
-                font_size,
-                shadow,
-            } => {
-                w.write_line(Some(&format!("// {name}")));
-                w.write_line(Some(&format!(".{} {{", self.selector())));
-                w.indent();
-                w.write_line(Some(&format!(
-                    "BackgroundColor: {};",
-                    color_or_null(background.as_deref())
-                )));
-                w.write_line(Some(&format!(
-                    "LineColor: {};",
-                    color_or_null(stroke.as_deref())
-                )));
-                w.write_line(Some(&format!("LineStyle: {line_style};")));
-                w.write_line(Some(&format!("LineThickness: {stroke_width};")));
-                w.write_line(Some(&format!(
-                    "FontColor: {};",
-                    color_or_null(color.as_deref())
-                )));
-                w.write_line(Some(&format!("FontSize: {font_size};")));
-                w.write_line(Some("HorizontalAlignment: center;"));
-                w.write_line(Some(&format!(
-                    "Shadowing: {};",
-                    if *shadow { SHADOW_DISTANCE } else { 0 }
-                )));
-            }
+            Self::Root { .. } => self.render_root(&mut w),
+            Self::Legend => Self::render_legend(&mut w),
+            Self::Element { .. } => self.render_element(&mut w),
+            Self::Relationship { .. } => self.render_relationship(&mut w),
+            Self::DeploymentNode { .. } => self.render_deployment_node(&mut w),
+            Self::Boundary { .. } | Self::Group { .. } => self.render_boundary_or_group(&mut w),
         }
         w.outdent();
         w.write_line(Some("}"));
         w.outdent();
         w.write_line(None);
         w.to_string()
+    }
+
+    /// `PlantUMLRootStyle#toString` — the root class selector renders
+    /// WITHOUT a dot.
+    fn render_root(&self, w: &mut IndentingWriter) {
+        let Self::Root { background, color } = self else {
+            return; // only reachable from `render`'s Root arm
+        };
+        w.write_line(Some("root {"));
+        w.indent();
+        w.write_line(Some(&format!("BackgroundColor: {background};")));
+        w.write_line(Some(&format!("FontColor: {color};")));
+    }
+
+    /// `PlantUMLLegendStyle#toString` — the transparent legend element.
+    fn render_legend(w: &mut IndentingWriter) {
+        w.write_line(Some("// transparent element for relationships in legend"));
+        w.write_line(Some(".Element-Transparent {"));
+        w.indent();
+        w.write_line(Some("BackgroundColor: transparent;"));
+        w.write_line(Some("LineColor: transparent;"));
+        w.write_line(Some("FontColor: transparent;"));
+    }
+
+    /// `PlantUMLElementStyle#toString`.
+    fn render_element(&self, w: &mut IndentingWriter) {
+        let Self::Element {
+            name,
+            shape,
+            width,
+            background,
+            color,
+            stroke,
+            stroke_width,
+            line_style,
+            font_size,
+            shadow,
+            ..
+        } = self
+        else {
+            return; // only reachable from `render`'s Element arm
+        };
+        w.write_line(Some(&format!("// {name}")));
+        w.write_line(Some(&format!(".{} {{", self.selector())));
+        w.indent();
+        w.write_line(Some(&format!(
+            "BackgroundColor: {};",
+            color_or_null(background.as_deref())
+        )));
+        w.write_line(Some(&format!(
+            "LineColor: {};",
+            color_or_null(stroke.as_deref())
+        )));
+        w.write_line(Some(&format!("LineStyle: {line_style};")));
+        w.write_line(Some(&format!("LineThickness: {stroke_width};")));
+        if *shape == Some(Shape::RoundedBox) {
+            w.write_line(Some("RoundCorner: 20;"));
+        }
+        w.write_line(Some(&format!(
+            "FontColor: {};",
+            color_or_null(color.as_deref())
+        )));
+        w.write_line(Some(&format!("FontSize: {font_size};")));
+        w.write_line(Some("HorizontalAlignment: center;"));
+        w.write_line(Some(&format!(
+            "Shadowing: {};",
+            if *shadow { SHADOW_DISTANCE } else { 0 }
+        )));
+        w.write_line(Some(&format!("MaximumWidth: {width};")));
+    }
+
+    /// `PlantUMLRelationshipStyle#toString` — `FontColor` mirrors the line
+    /// COLOR (one `color` field for both).
+    fn render_relationship(&self, w: &mut IndentingWriter) {
+        let Self::Relationship {
+            name,
+            color,
+            line_style,
+            thickness,
+            font_size,
+            width,
+        } = self
+        else {
+            return; // only reachable from `render`'s Relationship arm
+        };
+        w.write_line(Some(&format!("// {name}")));
+        w.write_line(Some(&format!(".{} {{", self.selector())));
+        w.indent();
+        w.write_line(Some(&format!("LineThickness: {thickness};")));
+        w.write_line(Some(&format!("LineStyle: {line_style};")));
+        w.write_line(Some(&format!(
+            "LineColor: {};",
+            color_or_null(color.as_deref())
+        )));
+        w.write_line(Some(&format!(
+            "FontColor: {};",
+            color_or_null(color.as_deref())
+        )));
+        w.write_line(Some(&format!("FontSize: {font_size};")));
+        w.write_line(Some(&format!("MaximumWidth: {width};")));
+    }
+
+    /// `PlantUMLDeploymentNodeStyle#toString` — `MaximumWidth` ONLY when
+    /// the legend path set it (`Some`).
+    fn render_deployment_node(&self, w: &mut IndentingWriter) {
+        let Self::DeploymentNode {
+            name,
+            background,
+            color,
+            stroke,
+            stroke_width,
+            line_style,
+            font_size,
+            shadow,
+            width,
+            ..
+        } = self
+        else {
+            return; // only reachable from `render`'s DeploymentNode arm
+        };
+        w.write_line(Some(&format!("// {name}")));
+        w.write_line(Some(&format!(".{} {{", self.selector())));
+        w.indent();
+        w.write_line(Some(&format!(
+            "BackgroundColor: {};",
+            color_or_null(background.as_deref())
+        )));
+        w.write_line(Some(&format!(
+            "LineColor: {};",
+            color_or_null(stroke.as_deref())
+        )));
+        w.write_line(Some(&format!("LineStyle: {line_style};")));
+        w.write_line(Some(&format!("LineThickness: {stroke_width};")));
+        w.write_line(Some(&format!(
+            "FontColor: {};",
+            color_or_null(color.as_deref())
+        )));
+        w.write_line(Some(&format!("FontSize: {font_size};")));
+        w.write_line(Some("HorizontalAlignment: center;"));
+        w.write_line(Some(&format!(
+            "Shadowing: {};",
+            if *shadow { SHADOW_DISTANCE } else { 0 }
+        )));
+        if let Some(width) = width {
+            w.write_line(Some(&format!("MaximumWidth: {width};")));
+        }
+    }
+
+    /// `PlantUMLBoundaryStyle#toString` and `PlantUMLGroupStyle#toString` —
+    /// the two Java classes render the same field set (the old single
+    /// or-pattern arm), only the selector differs.
+    fn render_boundary_or_group(&self, w: &mut IndentingWriter) {
+        let (Self::Boundary {
+            name,
+            background,
+            color,
+            stroke,
+            stroke_width,
+            line_style,
+            font_size,
+            shadow,
+        }
+        | Self::Group {
+            name,
+            background,
+            color,
+            stroke,
+            stroke_width,
+            line_style,
+            font_size,
+            shadow,
+        }) = self
+        else {
+            return; // only reachable from `render`'s Boundary|Group arm
+        };
+        w.write_line(Some(&format!("// {name}")));
+        w.write_line(Some(&format!(".{} {{", self.selector())));
+        w.indent();
+        w.write_line(Some(&format!(
+            "BackgroundColor: {};",
+            color_or_null(background.as_deref())
+        )));
+        w.write_line(Some(&format!(
+            "LineColor: {};",
+            color_or_null(stroke.as_deref())
+        )));
+        w.write_line(Some(&format!("LineStyle: {line_style};")));
+        w.write_line(Some(&format!("LineThickness: {stroke_width};")));
+        w.write_line(Some(&format!(
+            "FontColor: {};",
+            color_or_null(color.as_deref())
+        )));
+        w.write_line(Some(&format!("FontSize: {font_size};")));
+        w.write_line(Some("HorizontalAlignment: center;"));
+        w.write_line(Some(&format!(
+            "Shadowing: {};",
+            if *shadow { SHADOW_DISTANCE } else { 0 }
+        )));
     }
 }
 
