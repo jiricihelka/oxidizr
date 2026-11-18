@@ -128,8 +128,9 @@ pub enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// Export the workspace (Phase 2): `theme` and `json` today; diagram
-    /// formats per the reference CLI land in M1–M4.
+    /// Export the workspace (Phase 2): `theme`/`json` and the diagram
+    /// formats `plantuml`/`c4plantuml`/`mermaid`; `websequencediagrams` and
+    /// `static` raise OXZ-5007, `png`/`svg` are unknown exit-0 formats.
     Export {
         /// Workspace file (`.dsl` or `.json`) — reference `-w/--workspace`.
         #[arg(long, short = 'w')]

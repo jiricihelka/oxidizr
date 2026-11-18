@@ -6,9 +6,12 @@ Core promise: full compatibility with the Structurizr DSL (`.dsl`) and JSON
 (`.json`) workspace formats, consumable by the official tooling and back
 (byte-comparable JSON where the format defines it).
 
-Status: **Phase 1 complete (v0.1.0)** — the conversion/validation/formatting
-CLI plus the `reconcile` geometry re-attach. Rendering and extra backends are
-later phases (`agents/plan/README.md` is the roadmap index).
+Status: **Phase 2 complete (v0.2.0)** — the conversion/validation/formatting
+CLI, the `reconcile` geometry re-attach, and the exporters: `theme`/`json`
+plus the diagram formats `plantuml`, `plantuml/c4plantuml` (light/dark) and
+`mermaid`, byte-parity against the pinned reference where the format defines
+it. Rendering (viewer) and extra backends are later phases
+(`agents/plan/README.md` is the roadmap index).
 
 ## Build
 
@@ -39,6 +42,12 @@ oxidizr fmt --check '*.dsl'
 # Geometry-preserving edit loop: re-parse the edited DSL and re-attach the
 # layout JSON (ids from the pre-edit export) onto it
 oxidizr reconcile --dsl edited.dsl --layout layout.json -o reconciled.json
+
+# Export: theme JSON, or diagrams per-view (reference -f/--format naming;
+# `oxidizr export --help` lists the registry, incl. the -light/-dark suffixes)
+oxidizr export -w workspace.dsl -f theme -o out/
+oxidizr export -w workspace.dsl -f plantuml/c4plantuml -o out/
+oxidizr export -w workspace.dsl -f mermaid -o out/
 ```
 
 Global flags: `--strict` (warnings exit 1), `--quiet`, `--no-color` (also via

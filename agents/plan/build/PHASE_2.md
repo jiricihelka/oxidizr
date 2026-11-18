@@ -402,7 +402,11 @@ one typed function `export_property(view, views, name, default)` in
     (P2-D9 rule); export-corpus bench baseline (`cargo xtask bench save M4`).
     Touches: xtask, testdata, api tests, benches, workflows.
 - **M5** hardening: proptest panic suite, docs (`oxidizr export --help`, agents/plan/errata
-  fold-back), tag v0.2.0.
+  fold-back), tag v0.2.0. **DONE 2026-11-18** — `export_never_panics.rs` (256 generated
+  valid workspaces × every landed format), docs refresh (CLI help notes, README,
+  diagnostics OXZ-5007), P2-V5/V6 closed, full `oracle verify` green
+  (4 json + 90 diagram + 6 theme), `bench save M4`, tag `v0.2.0` (local).
+  **Phase 2 COMPLETE.**
 
 ## P2-D11 Verification list (empirical, before dependent code)
 
@@ -462,18 +466,23 @@ one typed function `export_property(view, views, name, default)` in
   `themes` arrays byte-identical ref-vs-oxidizr (witness
   `/tmp/nix-shell.uni100/p2/m1d`); the URL-fetch leg is not
   observable on this machine (no DNS) and is mirrored from source.
-- [ ] P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
+- [x] P2-V5 color-scheme defaults (light/dark constant values) in each dialect.
   **Structurizr half VERIFIED 2026-11-17** (M2-a): `Styles.DEFAULT_*` =
   `#ffffff`/`#444444` light, `#111111`/`#cccccc` dark (`EXPORT-PLANTUML.md`
-  §12). C4/Mermaid halves land with M3/M4. (Core-level constants pinned at
-  M1-a — catalog §7; the per-dialect skinparam / `$`-default colors come with
-  the M2/M3 ports.)
-- [ ] P2-V6 legend diagram generation rules (when emitted, content per dialect).
+  §12). **C4 half VERIFIED 2026-11-17** (M3-a catalog, byte-confirmed by the
+  M3-c 30-SAME sweep): the C4-stdlib `$`-defaults per `EXPORT-C4-PLANTUML.md`.
+  **Mermaid half VERIFIED 2026-11-18** (M4-a catalog §3, byte-confirmed by the
+  M4-c 30-SAME sweep): `MermaidDiagramExporter` always constructs the **Light**
+  scheme (`#ffffff`/`#444444`) — the class has no scheme constructor.
+  (Core-level constants pinned at M1-a — catalog §7.)
+- [x] P2-V6 legend diagram generation rules (when emitted, content per dialect).
   **Structurizr half VERIFIED 2026-11-17** (M2-a): emitted for EVERY view of
   the dialect (override never returns null; base does), content per
   `EXPORT-PLANTUML.md` §10 (DeploymentNode/Element/Relationship style passes,
-  width 200, transparent self-loops, own `<style>` replace). C4/Mermaid halves
-  land with M3/M4.
+  width 200, transparent self-loops, own `<style>` replace). **C4 and Mermaid
+  halves VERIFIED 2026-11-17/18** (M3-a/M4-a catalogs; byte-confirmed by both
+  witness sweeps): `createLegend` returns **null** in both — NO legend files
+  ever (`EXPORT-C4-PLANTUML.md`, `EXPORT-MERMAID.md`).
 Each gets a checkbox + evidence in the implementing PR; surprises fold into `agents/plan/`
 (errata process), per AGENTS.md working style.
 

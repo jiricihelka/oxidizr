@@ -25,7 +25,8 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M1 theme infrastructure | **COMPLETE 2026-11-17** (a `199bc70`–e-B `53d2e5e`) — log below |
 | P2 | M2 Structurizr-PlantUML | **COMPLETE 2026-11-17** — M2-a (catalog + `export_property` + D12), M2-b (engine), M2-c (dialect), M2-d (dispatch + oracle A/B fix batch + 30-fixture plantuml golden corpus). Log below (`build/PHASE_2.md`) |
 | P2 | M3 C4-PlantUML | **COMPLETE 2026-11-17** — M3-a (catalog `build/EXPORT-C4-PLANTUML.md` + witness sweep), M3-b (`plantuml::c4` dialect port, 2706209), M3-c (A/B: 30 SAME / 4 design-DIFF / 10 vacuous), M3-d (29-fixture c4 goldens + oracle verify green + P2-D9 comparator `xtask export-verify`). Log below |
-| P2 | M4 Mermaid + theme goldens + CI render + bench | **M4 COMPLETE 2026-11-18** (M4-d: goldens + oracle legs + golden tests + render smokes + bench) — M5 remains. Log below |
+| P2 | M4 Mermaid + theme goldens + CI render + bench | **M4 COMPLETE 2026-11-18** (M4-d: goldens + oracle legs + golden tests + render smokes + bench). Log below |
+| P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -148,7 +149,37 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
 
 ## Milestone log
 
-### P2-M4 — Mermaid exporter + theme goldens + CI render + bench (2026-11-17, IN PROGRESS)
+### P2-M5 — hardening + v0.2.0 (2026-11-18, COMPLETE)
+
+Proptest panic suite, docs refresh, verification close-out and the Phase 2
+tag. Decomposition: `build/PHASE_2.md` M5.
+
+- **Panic suite**: `crates/oxidizr-export/tests/export_never_panics.rs` — 256
+  proptest cases drive `WorkspaceBuilder` (valid by construction) through
+  hostile names/titles, every view kind, group separators, styles, the
+  `mermaid.*` gates and the autoLayout legs incl. the null-rank-direction
+  abort; every landed format must never panic, `theme`/`json` additionally
+  never error, and every `Ok` file set carries the naming invariants (no
+  path separators, correct extension, unique).
+- **Docs**: the stale `export --help` notes refreshed (CLI doc comments now
+  say what landed when — only `websequencediagrams`/`static` raise
+  OXZ-5007; `png`/`svg` are the build-rejected strings), `docs/diagnostics.md`
+  OXZ-5007 row likewise, README status → Phase 2 complete + export
+  quickstart lines. Plan errata checked — no open P2 fold-backs (the WSD
+  errata row already reflects the Phase 4 deferral).
+- **Verification**: P2-V5 (per-dialect color-scheme constants — C4
+  `$`-defaults M3-a/`EXPORT-C4-PLANTUML.md`, Mermaid ALWAYS-Light M4-a §3)
+  and P2-V6 (legend rules — C4/Mermaid `createLegend` = null, byte-confirmed
+  by both sweeps) closed with evidence in `build/PHASE_2.md`.
+- **Gates**: full `cargo xtask oracle verify` green before the tag —
+  **4 json + 90 diagram + 6 theme golden set(s) match** (mermaid + theme
+  legs included); `cargo xtask bench save M4` committed (17 dirs, the two
+  `e2e_export_*` legs).
+- **Tag**: `v0.2.0` (local only — never push, per the standing decision).
+  Vendored default theme remains the only Phase 2 item deferred by
+  environment (no DNS; D3 interim rule; `build/PHASE_2.md` M1 amendment).
+
+### P2-M4 — Mermaid exporter + theme goldens + CI render + bench (2026-11-17/18, COMPLETE)
 
 Decomposition M4-a..d: `build/PHASE_2.md`. THE contract: `build/EXPORT-MERMAID.md`
 (the port mirrors the file, not memory).
