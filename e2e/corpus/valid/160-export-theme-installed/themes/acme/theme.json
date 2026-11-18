@@ -1,0 +1,31 @@
+{
+  "name": "acme",
+  "description": "Installed theme for the 2T export fixture",
+  "elements": [
+    {
+      "tag": "Gateway",
+      "background": "#EDF1F3",
+      "color": "#10365C",
+      "stroke": "#10365C",
+      "strokeWidth": 2,
+      "shape": "RoundedBox",
+      "fontSize": 24,
+      "icon": "gateway.png"
+    },
+    {
+      "tag": "Database",
+      "background": "#D2E7D6",
+      "color": "#1E4620",
+      "stroke": "#1E4620",
+      "shape": "Cylinder"
+    }
+  ],
+  "relationships": [
+    {
+      "tag": "Relationship",
+      "thickness": 2,
+      "color": "#10365C",
+      "fontSize": 20
+    }
+  ]
+}

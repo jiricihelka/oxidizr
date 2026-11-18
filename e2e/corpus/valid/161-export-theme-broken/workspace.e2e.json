@@ -1,0 +1,55 @@
+{
+  "dsl2json": {
+    "exit": "ok",
+    "codes": [],
+    "counts": {
+      "elements": 2,
+      "relationships": 1,
+      "views": 1
+    }
+  },
+  "json2json": {
+    "exit": "ok",
+    "codes": [],
+    "counts": null
+  },
+  "validate": {
+    "exit": "ok",
+    "codes": [],
+    "counts": null
+  },
+  "export": {
+    "plantuml": {
+      "exit": "error",
+      "codes": [
+        5008
+      ],
+      "files": 0
+    },
+    "plantuml-c4": {
+      "exit": "error",
+      "codes": [
+        5008
+      ],
+      "files": 0
+    },
+    "mermaid": {
+      "exit": "error",
+      "codes": [
+        5008
+      ],
+      "files": 0
+    },
+    "websequencediagrams": {
+      "exit": "error",
+      "codes": [
+        5008
+      ],
+      "files": 0
+    }
+  },
+  "fmt": {
+    "exit": "ok",
+    "idempotent": true
+  }
+}

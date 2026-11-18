@@ -44,19 +44,14 @@ const ALLOWLIST: &[(u16, &str)] = &[
          gate as OXZ-4001, and DSL parsing cannot build one — T3 researched",
     ),
     (
-        5008,
-        "theme loading (P2-D3) landed at M1; the 2T export matrix runs themes on \
-         every applicable entry (5001 fires for URL themes offline) — 5008 needs a \
-         broken theme FILE, the 2T fixtures add one; remove when covered \
-         (PHASE_2T.md)",
-    ),
-    (
         5009,
         "export abort (M2, EXPORT-PLANTUML.md §14) needs a corrupt-diagram \
          workspace (dangling id / view-kind cast mismatch) through a diagram \
-         export — the hydrate gate blocks such fixtures at read (T3-era probe); \
-         2T probes the reachable shapes, else this stays permanent \
-         (PHASE_2T.md)",
+         export — PT2 probed all three shapes on JSON feeds (dangling elementView \
+         id, empty dynamic, kind-mismatched container/component view targets): \
+         the load-time hydrate/validate gate rejects them as OXZ-4001 before \
+         dispatch, and the DSL path mints views only from resolved symbols — \
+         permanent (PHASE_2T.md)",
     ),
     (
         9001,

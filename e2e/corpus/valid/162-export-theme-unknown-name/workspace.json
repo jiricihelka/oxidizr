@@ -1,0 +1,83 @@
+{
+  "configuration": {},
+  "description": "A theme name that no themes dir provides (skipped at load)",
+  "documentation": {},
+  "id": 0,
+  "model": {
+    "people": [
+      {
+        "id": "1",
+        "name": "User",
+        "properties": {
+          "structurizr.dsl.identifier": "user"
+        },
+        "relationships": [
+          {
+            "description": "uses",
+            "destinationId": "2",
+            "id": "3",
+            "sourceId": "1",
+            "tags": "Relationship"
+          }
+        ],
+        "tags": "Element,Person"
+      }
+    ],
+    "softwareSystems": [
+      {
+        "documentation": {},
+        "id": "2",
+        "name": "System",
+        "properties": {
+          "structurizr.dsl.identifier": "sys"
+        },
+        "tags": "Element,Software System"
+      }
+    ]
+  },
+  "name": "Unknown Theme Name",
+  "properties": {
+    "structurizr.dsl": "d29ya3NwYWNlICJVbmtub3duIFRoZW1lIE5hbWUiICJBIHRoZW1lIG5hbWUgdGhhdCBubyB0aGVtZXMgZGlyIHByb3ZpZGVzIChza2lwcGVkIGF0IGxvYWQpIiB7CgogICAgbW9kZWwgewogICAgICAgIHVzZXIgPSBwZXJzb24gIlVzZXIiCiAgICAgICAgc3lzID0gc29mdHdhcmVTeXN0ZW0gIlN5c3RlbSIKCiAgICAgICAgdXNlciAtPiBzeXMgInVzZXMiCiAgICB9CgogICAgdmlld3MgewogICAgICAgIHN5c3RlbUxhbmRzY2FwZSAibGFuZHNjYXBlIiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvTGF5b3V0CiAgICAgICAgfQogICAgfQoKfQ=="
+  },
+  "views": {
+    "configuration": {
+      "styles": {},
+      "terminology": {},
+      "themes": [
+        "nosuchtheme"
+      ]
+    },
+    "systemLandscapeViews": [
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "elements": [
+          {
+            "id": "1",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "2",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "enterpriseBoundaryVisible": true,
+        "key": "landscape",
+        "name": "System Landscape View",
+        "order": 1,
+        "relationships": [
+          {
+            "id": "3"
+          }
+        ]
+      }
+    ]
+  }
+}
