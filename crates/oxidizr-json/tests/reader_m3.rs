@@ -22,6 +22,19 @@ const GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../testdata/go
 const CORPUS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../testdata/read-corpus");
 const VALIDATION_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../testdata/validation");
 
+/// Workspace goldens are the TOP-LEVEL `testdata/golden/*.json` files —
+/// the subdirectories are the diagram corpora (`plantuml[-c4]/`, `mermaid/`)
+/// and the theme corpus (`theme/`, M4-d), none of which are workspaces.
+fn golden_json_files() -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = std::fs::read_dir(GOLDEN_DIR)
+        .expect("golden dir readable")
+        .map(|e| e.expect("dir entry").path())
+        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "json"))
+        .collect();
+    out.sort();
+    out
+}
+
 fn json_files(dir: &str) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![PathBuf::from(dir)];
@@ -45,7 +58,7 @@ fn read_file(path: &Path) -> Vec<u8> {
 
 #[test]
 fn goldens_round_trip_byte_identical() {
-    let files = json_files(GOLDEN_DIR);
+    let files = golden_json_files();
     assert!(!files.is_empty(), "golden corpus present");
     for path in files {
         let bytes = read_file(&path);
@@ -73,7 +86,7 @@ fn goldens_round_trip_byte_identical() {
 fn goldens_are_model_stable_under_repeated_reads() {
     // read → write → read must land on an equal model (no drift through the
     // defaults/derivation paths — the property that makes JSON↔JSON lossless).
-    for path in json_files(GOLDEN_DIR) {
+    for path in golden_json_files() {
         let first: Workspace = from_slice(&read_file(&path)).expect("golden loads");
         let second: Workspace = from_slice(&to_vec(&first).unwrap()).expect("re-write loads");
         assert_eq!(

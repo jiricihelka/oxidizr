@@ -1,0 +1,30 @@
+graph TB
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: Software System - WithoutDeploymentGroups"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["Server 1"]
+      style 5 fill:#ffffff,stroke:#444444,color:#444444
+
+      6["<div style='font-weight: bold'>API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 6 fill:#ffffff,stroke:#444444,color:#444444
+      7["<div style='font-weight: bold'>DB</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 7 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    subgraph 9 ["Server 2"]
+      style 9 fill:#ffffff,stroke:#444444,color:#444444
+
+      10["<div style='font-weight: bold'>API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 10 fill:#ffffff,stroke:#444444,color:#444444
+      12["<div style='font-weight: bold'>DB</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 12 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    10-. "<div>Uses</div><div style='font-size: 70%'></div>" .->7
+    6-. "<div>Uses</div><div style='font-size: 70%'></div>" .->12
+    10-. "<div>Uses</div><div style='font-size: 70%'></div>" .->12
+    6-. "<div>Uses</div><div style='font-size: 70%'></div>" .->7
+
+  end

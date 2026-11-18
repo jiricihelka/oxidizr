@@ -1,0 +1,28 @@
+{
+  "name" : "Name",
+  "description" : "Description",
+  "elements" : [ {
+    "tag" : "Element",
+    "shape" : "RoundedBox"
+  }, {
+    "tag" : "Element",
+    "colorScheme" : "Dark",
+    "color" : "#ffffff"
+  }, {
+    "tag" : "Element",
+    "colorScheme" : "Light",
+    "color" : "#000000"
+  } ],
+  "relationships" : [ {
+    "tag" : "Relationship",
+    "style" : "Solid"
+  }, {
+    "tag" : "Relationship",
+    "colorScheme" : "Dark",
+    "color" : "#ffffff"
+  }, {
+    "tag" : "Relationship",
+    "colorScheme" : "Light",
+    "color" : "#000000"
+  } ]
+}

@@ -1,0 +1,11 @@
+{
+  "name" : "Name",
+  "description" : "Description",
+  "relationships" : [ {
+    "tag" : "Async",
+    "style" : "Dashed"
+  }, {
+    "tag" : "Sync",
+    "style" : "Solid"
+  } ]
+}

@@ -173,12 +173,43 @@ fn bench_reconcile(c: &mut Criterion) {
     });
 }
 
+/// Whole-corpus diagram `export` (Phase 2 M4-d): load + dialect export +
+/// the reference write loop, per format. Output goes to a scratch dir
+/// outside the measurement setup; file names collide across iterations on
+/// purpose (the workspace-id prefix is stable) — each pass overwrites.
+fn bench_export(c: &mut Criterion) {
+    let entries = valid_entries();
+    let dir = std::env::temp_dir().join(format!("oxidizr-bench-export-{}", std::process::id()));
+    for format in ["plantuml", "mermaid"] {
+        let id = format!("e2e_export_{format}_all");
+        c.bench_function(&id, |b| {
+            b.iter(|| {
+                let mut notes = 0_usize;
+                for (entry, _) in &entries {
+                    let out = execute(
+                        Request::Export {
+                            workspace: dsl_file(entry),
+                            format: black_box(format).to_owned(),
+                            output: Some(dir.clone()),
+                        },
+                        &oxidizr_e2e::hermetic_options(),
+                    );
+                    notes += out.log.len();
+                }
+                black_box(notes)
+            });
+        });
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
+
 criterion_group!(
     benches,
     bench_dsl2json,
     bench_json2json,
     bench_fmt,
     bench_validate,
-    bench_reconcile
+    bench_reconcile,
+    bench_export
 );
 criterion_main!(benches);

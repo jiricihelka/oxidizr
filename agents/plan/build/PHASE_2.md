@@ -394,9 +394,9 @@ one typed function `export_property(view, views, name, default)` in
   - **M4-c** dispatch + A/B: byte-compare vs the `ref-mermaid` witnesses
     across the 33-witness corpus, root-cause every DIFF at the pinned Java.
     Touches: export fixes.
-  - **M4-d** proof: mermaid goldens under `testdata/golden/mermaid/` <!-- refs:ignore planned dir, lands with M4-d --> via
+  - **M4-d** proof: mermaid goldens under `testdata/golden/mermaid/` via
     `xtask oracle gen --mermaid` + verify leg + Category-A byte-parity test
-    (extend the golden test); `theme` goldens `testdata/golden/theme/` <!-- refs:ignore planned dir, lands with M4-d --> +
+    (extend the golden test); `theme` goldens `testdata/golden/theme/` +
     verify leg + Category-A test; render checks: corpus render leg wired to
     run where tools exist, skipping LOUDLY when `plantuml`/`mmdc` are absent
     (P2-D9 rule); export-corpus bench baseline (`cargo xtask bench save M4`).

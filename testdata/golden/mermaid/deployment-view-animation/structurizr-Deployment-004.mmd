@@ -1,0 +1,18 @@
+graph TB
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: Software System - Live"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["Deployment Node"]
+      style 5 fill:#ffffff,stroke:#444444,color:#444444
+
+      6["<div style='font-weight: bold'>Web Application</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 6 fill:#ffffff,stroke:#444444,color:#444444
+      7["<div style='font-weight: bold'>Database Schema</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 7 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    6-. "<div></div><div style='font-size: 70%'></div>" .->7
+
+  end

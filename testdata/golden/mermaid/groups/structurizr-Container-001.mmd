@@ -1,0 +1,34 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Software System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 1 ["Software System"]
+      style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph group1 ["Service 1"]
+        style group1 fill:#ffffff,stroke:#cccccc,color:#cccccc,stroke-dasharray:5
+
+        2["<div style='font-weight: bold'>Service 1 API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+        style 2 fill:#ffffff,stroke:#444444,color:#444444
+        3["<div style='font-weight: bold'>Service 1 Database</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+        style 3 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+      subgraph group2 ["Service 2"]
+        style group2 fill:#ffffff,stroke:#cccccc,color:#cccccc,stroke-dasharray:5
+
+        5["<div style='font-weight: bold'>Service 2 API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+        style 5 fill:#ffffff,stroke:#444444,color:#444444
+        6["<div style='font-weight: bold'>Service 2 Database</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+        style 6 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+    2-. "<div>Uses</div><div style='font-size: 70%'></div>" .->5
+    2-. "<div>Reads from and writes to</div><div style='font-size: 70%'></div>" .->3
+    5-. "<div>Reads from and writes to</div><div style='font-size: 70%'></div>" .->6
+
+  end

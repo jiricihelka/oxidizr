@@ -105,8 +105,8 @@ fn real_main(args: Vec<String>) -> Result<()> {
                 }
                 _ => {
                     bail!(
-                        "usage: cargo xtask oracle gen [--plantuml [--c4]] [--fixture NAME]… \
-                         | verify"
+                        "usage: cargo xtask oracle gen [--plantuml [--c4] | --mermaid | --theme] \
+                         [--fixture NAME]… | verify"
                     )
                 }
             }
@@ -152,7 +152,9 @@ fn print_help() {
          cargo xtask e2e mutate [SEED]        generate e2e/corpus/mutated fixtures\n\
          \x20              FILTER matches `<kind>/<name>` substrings; review the diff\n\
          cargo xtask oracle gen [--fixture N]…  generate JSON goldens via the reference binary\n\
-         \x20   [--plantuml] + --fixture N…    generate plantuml goldens (golden/plantuml/<N>/)\n\
+         \x20   [--plantuml|--mermaid|--theme] + --fixture N…\n\
+         \x20     generate diagram (golden/plantuml[-c4|mermaid]/<N>/) or theme\n\
+         \x20     (golden/theme/<N>.json) goldens\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
          \n\
          pinned reference: commit {REFERENCE_COMMIT}, app release {REFERENCE_APP_VERSION}\n\
@@ -712,17 +714,19 @@ fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Resu
     Ok(produced)
 }
 
-/// Run `structurizr export --format <format>` (plantuml or plantuml/c4plantuml)
-/// and return the `.puml` files the app wrote (sorted by name). The reference
-/// names them `structurizr-<workspaceId>-<key>.puml` (+ a `-key` legend file per
-/// view with a legend — the C4 exporter emits none, its `createLegend` is null);
-/// an empty set is legitimate only for viewless workspaces, which the golden
-/// corpus excludes (nothing to pin).
+/// Run `structurizr export --format <format>` (plantuml, plantuml/c4plantuml
+/// or mermaid) and return the `<ext>` files the app wrote (sorted by name).
+/// The reference names diagram files `structurizr-<workspaceId>-<key><ext>`
+/// (+ a `-key` legend file per view with a legend — the C4 and Mermaid
+/// exporters emit none, their `createLegend` is null); an empty set is
+/// legitimate only for viewless workspaces, which the golden corpus excludes
+/// (nothing to pin).
 fn reference_export_plantuml(
     oracle: &Path,
     workspace: &Path,
     outdir: &Path,
     format: &str,
+    ext: &str,
 ) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(outdir)?;
     let output = Command::new(oracle)
@@ -742,7 +746,41 @@ fn reference_export_plantuml(
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    walk_files(outdir, ".puml")
+    walk_files(outdir, ext)
+}
+
+/// Run `structurizr export --format theme` and return the single
+/// `<stem>-theme.json` the reference wrote (workspace-stem naming, M0).
+fn reference_export_theme(oracle: &Path, workspace: &Path, outdir: &Path) -> Result<PathBuf> {
+    fs::create_dir_all(outdir)?;
+    let output = Command::new(oracle)
+        .arg("export")
+        .arg("--workspace")
+        .arg(workspace)
+        .arg("--format")
+        .arg("theme")
+        .arg("--output")
+        .arg(outdir)
+        .output()
+        .with_context(|| format!("failed to run {}", oracle.display()))?;
+    if !output.status.success() {
+        bail!(
+            "structurizr theme export failed ({}):\n{}",
+            workspace.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let stem = workspace
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .context("fixture without usable file stem")?;
+    let produced = outdir.join(format!("{stem}-theme.json"));
+    ensure!(
+        produced.is_file(),
+        "expected output missing: {}",
+        produced.display()
+    );
+    Ok(produced)
 }
 
 /// Golden normalization: drop the four violation-counter properties the reference
@@ -996,13 +1034,29 @@ fn scratch(name: &str) -> PathBuf {
     env::temp_dir().join(format!("oxz-oracle-{}-{}", std::process::id(), name))
 }
 
+/// The `oracle gen` golden mode — the mutually exclusive flag combination
+/// (JSON workspace goldens by default; diagram corpora per dialect; the
+/// theme corpus from M4-d).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GenMode {
+    Json,
+    Plantuml,
+    C4,
+    Mermaid,
+    Theme,
+}
+
 /// `oracle gen` option parsing: `--fixture NAME` repeats, `--plantuml`
 /// selects the diagram goldens, `--c4` (with `--plantuml`) the
-/// `plantuml/c4plantuml` dialect.
+/// `plantuml/c4plantuml` dialect, `--mermaid` the Mermaid goldens
+/// (`golden/mermaid/`, M4-d) and `--theme` the theme goldens
+/// (`golden/theme/`, also M4-d).
 fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Result<()> {
     let mut fixtures = Vec::new();
     let mut plantuml = false;
     let mut c4 = false;
+    let mut mermaid = false;
+    let mut theme = false;
     while let Some(a) = args.next() {
         if a == "--plantuml" {
             plantuml = true;
@@ -1012,50 +1066,89 @@ fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Re
             c4 = true;
             continue;
         }
+        if a == "--mermaid" {
+            mermaid = true;
+            continue;
+        }
+        if a == "--theme" {
+            theme = true;
+            continue;
+        }
         ensure!(a == "--fixture", "unexpected argument `{a}`");
         let name = args.next().context("--fixture needs a name")?;
         fixtures.push(name);
     }
     ensure!(!c4 || plantuml, "oracle gen --c4 needs --plantuml too");
-    if !plantuml && fixtures.is_empty() {
+    ensure!(
+        usize::from(plantuml) + usize::from(mermaid) + usize::from(theme) <= 1,
+        "oracle gen: --plantuml, --mermaid and --theme are mutually exclusive"
+    );
+    let mode = if plantuml && c4 {
+        GenMode::C4
+    } else if plantuml {
+        GenMode::Plantuml
+    } else if mermaid {
+        GenMode::Mermaid
+    } else if theme {
+        GenMode::Theme
+    } else {
+        GenMode::Json
+    };
+    if mode == GenMode::Json && fixtures.is_empty() {
         fixtures.push("workspace-properties".into());
     }
     ensure!(
-        !plantuml || !fixtures.is_empty(),
-        "oracle gen --plantuml needs at least one --fixture"
+        mode == GenMode::Json || !fixtures.is_empty(),
+        "oracle gen --plantuml/--mermaid/--theme needs at least one --fixture"
     );
-    cmd_oracle_gen(oracle, &fixtures, plantuml, c4)
+    cmd_oracle_gen(oracle, &fixtures, mode)
 }
 
-fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], plantuml: bool, c4: bool) -> Result<()> {
+fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], mode: GenMode) -> Result<()> {
     let root = repo_root()?;
     let golden_dir = root.join("testdata").join("golden");
-    if plantuml {
-        let base = golden_dir.join(if c4 { "plantuml-c4" } else { "plantuml" });
-        let format = if c4 {
-            "plantuml/c4plantuml"
-        } else {
-            "plantuml"
+    if mode == GenMode::Plantuml || mode == GenMode::C4 || mode == GenMode::Mermaid {
+        let (subdir, format, ext) = match mode {
+            GenMode::Mermaid => ("mermaid", "mermaid", ".mmd"),
+            GenMode::C4 => ("plantuml-c4", "plantuml/c4plantuml", ".puml"),
+            _ => ("plantuml", "plantuml", ".puml"),
         };
+        let base = golden_dir.join(subdir);
         for name in fixtures {
             let dsl = find_fixture(&root, name)?;
-            let tmp = scratch(&format!("{name}-puml"));
-            let produced = reference_export_plantuml(oracle, &dsl, &tmp, format)
-                .with_context(|| format!("oracle gen --plantuml `{name}`"))?;
+            let tmp = scratch(&format!("{name}-{subdir}"));
+            let produced = reference_export_plantuml(oracle, &dsl, &tmp, format, ext)
+                .with_context(|| format!("oracle gen --{subdir} `{name}`"))?;
             ensure!(
                 !produced.is_empty(),
-                "oracle gen --plantuml `{name}`: reference produced no .puml files \
+                "oracle gen --{subdir} `{name}`: reference produced no {ext} files \
                  (viewless workspace — nothing to pin)"
             );
             let out = base.join(name);
             let _ = fs::remove_dir_all(&out);
             fs::create_dir_all(&out)?;
             for path in &produced {
-                let file = path.file_name().context("bad puml file name")?;
+                let file = path.file_name().context("bad diagram file name")?;
                 fs::copy(path, out.join(file))?;
             }
             let _ = fs::remove_dir_all(&tmp);
-            println!("golden: {}/ ({} .puml)", out.display(), produced.len());
+            println!("golden: {}/ ({} {ext})", out.display(), produced.len());
+        }
+        return Ok(());
+    }
+    if mode == GenMode::Theme {
+        let base = golden_dir.join("theme");
+        fs::create_dir_all(&base)?;
+        for name in fixtures {
+            let dsl = find_fixture(&root, name)?;
+            let tmp = scratch(&format!("{name}-theme"));
+            let produced = reference_export_theme(oracle, &dsl, &tmp)
+                .with_context(|| format!("oracle gen --theme `{name}`"))?;
+            let golden = fs::read(&produced)?;
+            let _ = fs::remove_dir_all(&tmp);
+            let out = base.join(format!("{name}.json"));
+            fs::write(&out, &golden)?;
+            println!("golden: {} ({} bytes)", out.display(), golden.len());
         }
         return Ok(());
     }
@@ -1076,15 +1169,33 @@ fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], plantuml: bool, c4: bool) 
 
 fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
     let root = repo_root()?;
-    let goldens = walk_files(&root.join("testdata").join("golden"), ".json")?;
-    ensure!(!goldens.is_empty(), "no committed goldens to verify");
     let mut failures = 0_usize;
+    let goldens = verify_json_legs(oracle, &root, &mut failures)?;
+    let diagram_sets = verify_diagram_legs(oracle, &root, &mut failures)?;
+    let theme_sets = verify_theme_legs(oracle, &root, &mut failures)?;
+    ensure!(failures == 0, "{failures} golden(s) failed verification");
+    println!(
+        "oracle verify: {} json + {diagram_sets} diagram + {theme_sets} theme golden set(s) match",
+        goldens.len()
+    );
+    Ok(())
+}
+
+/// Top-level `golden/*.json` only — the subdirectories are the diagram
+/// (plantuml[-c4], mermaid) and theme corpora, verified by their legs.
+fn verify_json_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result<Vec<PathBuf>> {
+    let mut goldens: Vec<PathBuf> = fs::read_dir(root.join("testdata").join("golden"))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "json"))
+        .collect();
+    goldens.sort();
+    ensure!(!goldens.is_empty(), "no committed goldens to verify");
     for golden_path in &goldens {
         let name = golden_path
             .file_stem()
             .and_then(|s| s.to_str())
             .context("bad golden name")?;
-        let dsl = find_fixture(&root, name)?;
+        let dsl = find_fixture(root, name)?;
         let tmp = scratch(name);
         let produced = reference_export_json(oracle, &dsl, &tmp)
             .with_context(|| format!("oracle verify `{name}`"))?;
@@ -1094,17 +1205,23 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
         if fresh == committed {
             println!("ok: {name}");
         } else {
-            failures += 1;
+            *failures += 1;
             println!("MISMATCH: {name} (reference output drifted from committed golden)");
         }
     }
-    // PlantUML goldens (M2-d, C4 leg M3-d): `testdata/golden/plantuml[-c4]/
-    // <fixture>/*.puml`, byte-exact (no normalization — the diagram writer
-    // injects no harness artifacts). The fixture name is the directory name.
-    let mut puml_sets = 0_usize;
-    for (subdir, format) in [
-        ("plantuml", "plantuml"),
-        ("plantuml-c4", "plantuml/c4plantuml"),
+    Ok(goldens)
+}
+
+/// Diagram goldens (M2-d, C4 leg M3-d, Mermaid leg M4-d):
+/// `testdata/golden/<subdir>/<fixture>/*<ext>`, byte-exact (no
+/// normalization — the diagram writer injects no harness artifacts).
+/// The fixture name is the directory name.
+fn verify_diagram_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result<usize> {
+    let mut diagram_sets = 0_usize;
+    for (subdir, format, ext) in [
+        ("plantuml", "plantuml", ".puml"),
+        ("plantuml-c4", "plantuml/c4plantuml", ".puml"),
+        ("mermaid", "mermaid", ".mmd"),
     ] {
         let puml_base = root.join("testdata").join("golden").join(subdir);
         let mut puml_dirs: Vec<PathBuf> = fs::read_dir(&puml_base)
@@ -1121,9 +1238,9 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .context("bad fixture")?;
-            let dsl = find_fixture(&root, name)?;
+            let dsl = find_fixture(root, name)?;
             let tmp = scratch(&format!("{name}-{subdir}"));
-            let fresh = reference_export_plantuml(oracle, &dsl, &tmp, format)
+            let fresh = reference_export_plantuml(oracle, &dsl, &tmp, format, ext)
                 .with_context(|| format!("oracle verify `{name}` ({subdir})"))?;
             let mut fresh_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
             for path in &fresh {
@@ -1135,7 +1252,7 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
             }
             let _ = fs::remove_dir_all(&tmp);
             let mut committed_files: BTreeSet<(String, Vec<u8>)> = BTreeSet::new();
-            for path in walk_files(dir, ".puml")? {
+            for path in walk_files(dir, ext)? {
                 let n = path
                     .file_name()
                     .and_then(|s| s.to_str())
@@ -1145,18 +1262,51 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
             if fresh_files == committed_files {
                 println!("ok: {name} ({subdir}, {} files)", fresh_files.len());
             } else {
-                failures += 1;
+                *failures += 1;
                 println!("MISMATCH: {name} ({subdir} output drifted from committed goldens)");
             }
-            puml_sets += 1;
+            diagram_sets += 1;
         }
     }
-    ensure!(failures == 0, "{failures} golden(s) failed verification");
-    println!(
-        "oracle verify: {} json + {puml_sets} plantuml golden set(s) match",
-        goldens.len()
-    );
-    Ok(())
+    Ok(diagram_sets)
+}
+
+/// Theme goldens (M4-d): `testdata/golden/theme/<fixture>.json`, the raw
+/// `--format theme` output (`ThemeUtils.toJson`, P2-V1 — no harness
+/// artifacts), byte-exact.
+fn verify_theme_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result<usize> {
+    let mut theme_sets = 0_usize;
+    let mut theme_goldens: Vec<PathBuf> =
+        fs::read_dir(root.join("testdata").join("golden").join("theme"))
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "json"))
+                    .collect()
+            })
+            .unwrap_or_default();
+    theme_goldens.sort();
+    for golden_path in &theme_goldens {
+        let name = golden_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .context("bad theme golden name")?;
+        let dsl = find_fixture(root, name)?;
+        let tmp = scratch(&format!("{name}-theme"));
+        let produced = reference_export_theme(oracle, &dsl, &tmp)
+            .with_context(|| format!("oracle verify `{name}` (theme)"))?;
+        let fresh = fs::read(&produced)?;
+        let _ = fs::remove_dir_all(&tmp);
+        let committed = fs::read(golden_path)?;
+        if fresh == committed {
+            println!("ok: {name} (theme)");
+        } else {
+            *failures += 1;
+            println!("MISMATCH: {name} (theme output drifted from committed golden)");
+        }
+        theme_sets += 1;
+    }
+    Ok(theme_sets)
 }
 
 /// `cargo xtask export-verify` — P2-D9 semantic comparator (Category B, run
@@ -1210,8 +1360,9 @@ fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
         let dsl = find_fixture(&root, name)?;
         let tmp_ref = scratch(&format!("{name}-ev-ref"));
         let tmp_our = scratch(&format!("{name}-ev-our"));
-        let ref_files = reference_export_plantuml(&oracle, &dsl, &tmp_ref, "plantuml/c4plantuml")
-            .with_context(|| format!("export-verify `{name}` (oracle)"))?;
+        let ref_files =
+            reference_export_plantuml(&oracle, &dsl, &tmp_ref, "plantuml/c4plantuml", ".puml")
+                .with_context(|| format!("export-verify `{name}` (oracle)"))?;
         let our_files = run_oxidizr_export(&ours, &dsl, &tmp_our, "plantuml/c4plantuml")
             .with_context(|| format!("export-verify `{name}` (oxidizr)"))?;
         let diffs = compare_export_dirs(&ref_files, &our_files)?;

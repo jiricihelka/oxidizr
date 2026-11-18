@@ -1,0 +1,19 @@
+graph TB
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Component View: A - B"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 1 ["A"]
+      style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 2 ["B"]
+        style 2 fill:#ffffff,stroke:#444444,color:#444444
+
+        3["<div style='font-weight: bold'>C</div><div style='font-size: 70%; margin-top: 0px'>[Component]</div>"]
+        style 3 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+  end

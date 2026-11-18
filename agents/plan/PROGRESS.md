@@ -25,7 +25,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M1 theme infrastructure | **COMPLETE 2026-11-17** (a `199bc70`–e-B `53d2e5e`) — log below |
 | P2 | M2 Structurizr-PlantUML | **COMPLETE 2026-11-17** — M2-a (catalog + `export_property` + D12), M2-b (engine), M2-c (dialect), M2-d (dispatch + oracle A/B fix batch + 30-fixture plantuml golden corpus). Log below (`build/PHASE_2.md`) |
 | P2 | M3 C4-PlantUML | **COMPLETE 2026-11-17** — M3-a (catalog `build/EXPORT-C4-PLANTUML.md` + witness sweep), M3-b (`plantuml::c4` dialect port, 2706209), M3-c (A/B: 30 SAME / 4 design-DIFF / 10 vacuous), M3-d (29-fixture c4 goldens + oracle verify green + P2-D9 comparator `xtask export-verify`). Log below |
-| P2 | M4 Mermaid + theme goldens + CI render + bench | **IN PROGRESS 2026-11-18** — M4-a/M4-b/M4-c done (port + dispatch + tests, byte sweep 30 SAME / 3 known-DIFF); M4-d goldens + render checks + bench remain. Log below |
+| P2 | M4 Mermaid + theme goldens + CI render + bench | **M4 COMPLETE 2026-11-18** (M4-d: goldens + oracle legs + golden tests + render smokes + bench) — M5 remains. Log below |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -180,6 +180,23 @@ Decomposition M4-a..d: `build/PHASE_2.md`. THE contract: `build/EXPORT-MERMAID.m
   the DIFFs are `bulk-operations` (D13 identity-hash rel-id fan-out, catalog
   §11, excluded from goldens) and the two D2 script fixtures (loader exit 1);
   ZERO port bugs — sequence fixtures (`dynamic`) byte-identical too.
+- **M4-d** (this commit): proof corpus + tooling. `testdata/golden/mermaid/`
+  = the 30 SAME fixtures copied byte-exact from the `ref-mermaid/` witnesses
+  (raw oracle output — no needless oracle re-run); `testdata/golden/theme/`
+  = 6 style-bearing fixtures (no theme URLs — D3) generated live with the
+  new `xtask oracle gen --theme` leg and verified SAME against our binary
+  (M0's theme export, now golden-pinned). xtask: `--mermaid`/`--theme` gen
+  modes (a `GenMode` enum), `reference_export_plantuml` gains the extension
+  parameter, verify gains the mermaid (`.mmd`) + theme legs plus a
+  top-level-only JSON walk (the `theme/` subdir must not leak into it —
+  same fix as `reader_m3`'s golden walk, which is contractually
+  top-level); leg smoke: `gen --mermaid getting-started-short` regenerated
+  the golden byte-identically (oracle determinism). Category-A:
+  `export_mermaid_goldens.rs` (mermaid byte-parity ≥30 + theme byte-parity
+  + `mmdc` render smoke with the P2-D9 LOUD skip — `mmdc` absent here).
+  Benches: `e2e_export_plantuml_all`/`e2e_export_mermaid_all` (whole-corpus
+  export through `execute`); baseline snapshot `bench save M4` follows.
+  `PHASE_2.md` M4-d `refs:ignore` markers dropped (dirs exist).
 
 ### P2-M3 — C4-PlantUML exporter (2026-11-17, COMPLETE)
 

@@ -1,0 +1,23 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: Software System - One"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["Developer's Computer"]
+      style 5 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 6 ["Web Browser"]
+        style 6 fill:#ffffff,stroke:#444444,color:#444444
+
+        7["<div style='font-weight: bold'>UI</div><div style='font-size: 70%; margin-top: 0px'>[Container: JavaScript and React]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
+        style 7 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+      8["<div style='font-weight: bold'>Backend</div><div style='font-size: 70%; margin-top: 0px'>[Container: Spring Boot]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
+      style 8 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    7-. "<div>Makes API requests to</div><div style='font-size: 70%'>[JSON/HTTPS]</div>" .->8
+
+  end

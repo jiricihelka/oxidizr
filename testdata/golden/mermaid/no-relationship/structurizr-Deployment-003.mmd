@@ -1,0 +1,36 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: Software System - Three"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 20 ["User's Computer"]
+      style 20 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 21 ["Web Browser"]
+        style 21 fill:#ffffff,stroke:#444444,color:#444444
+
+        22["<div style='font-weight: bold'>UI</div><div style='font-size: 70%; margin-top: 0px'>[Container: JavaScript and React]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
+        style 22 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+    subgraph 23 ["Data Center"]
+      style 23 fill:#ffffff,stroke:#444444,color:#444444
+
+      24["<div style='font-weight: bold'>Load Balancer</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node]</div>"]
+      style 24 fill:#ffffff,stroke:#444444,color:#444444
+      subgraph 25 ["Server"]
+        style 25 fill:#ffffff,stroke:#444444,color:#444444
+
+        26["<div style='font-weight: bold'>Backend</div><div style='font-size: 70%; margin-top: 0px'>[Container: Spring Boot]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
+        style 26 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+    22-. "<div>Makes API requests to</div><div style='font-size: 70%'>[JSON/HTTPS]</div>" .->24
+    24-. "<div>Forwards API requests to</div><div style='font-size: 70%'></div>" .->26
+
+  end

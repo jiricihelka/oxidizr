@@ -1,0 +1,13 @@
+{
+  "name" : "FilteredDemo",
+  "description" : "This is an example of Filtered views",
+  "elements" : [ {
+    "tag" : "Person",
+    "background" : "#6a7b15",
+    "shape" : "Person"
+  }, {
+    "tag" : "Software System",
+    "background" : "#91a437",
+    "shape" : "RoundedBox"
+  } ]
+}

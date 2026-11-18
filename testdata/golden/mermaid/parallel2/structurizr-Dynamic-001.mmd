@@ -1,0 +1,23 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>A</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 1 fill:#ffffff,stroke:#444444,color:#444444
+    2["<div style='font-weight: bold'>B</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 2 fill:#ffffff,stroke:#444444,color:#444444
+    3["<div style='font-weight: bold'>C</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 3 fill:#ffffff,stroke:#444444,color:#444444
+    4["<div style='font-weight: bold'>D</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 4 fill:#ffffff,stroke:#444444,color:#444444
+    5["<div style='font-weight: bold'>E</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 5 fill:#ffffff,stroke:#444444,color:#444444
+
+    1-. "<div>1. Makes a request to</div><div style='font-size: 70%'></div>" .->2
+    2-. "<div>2. Gets data from</div><div style='font-size: 70%'></div>" .->3
+    2-. "<div>2. Gets data from</div><div style='font-size: 70%'></div>" .->4
+    2-. "<div>3. Sends data to</div><div style='font-size: 70%'></div>" .->5
+
+  end

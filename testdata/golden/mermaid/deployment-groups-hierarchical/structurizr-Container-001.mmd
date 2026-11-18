@@ -1,0 +1,18 @@
+graph TB
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Software System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 1 ["Software System"]
+      style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+      2["<div style='font-weight: bold'>DB</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 2 fill:#ffffff,stroke:#444444,color:#444444
+      3["<div style='font-weight: bold'>API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 3 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    3-. "<div>Uses</div><div style='font-size: 70%'></div>" .->2
+
+  end

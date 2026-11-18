@@ -1,0 +1,24 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: live"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 8 ["Live"]
+      style 8 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 11 ["Deployment Node"]
+        style 11 fill:#ffffff,stroke:#444444,color:#444444
+
+        13["<div style='font-weight: bold'>Software System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+        style 13 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+      9["<div style='font-weight: bold'>Infrastructure Node</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node]</div>"]
+      style 9 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    1-. "<div></div><div style='font-size: 70%'></div>" .->9
+    9-. "<div></div><div style='font-size: 70%'></div>" .->13
+
+  end

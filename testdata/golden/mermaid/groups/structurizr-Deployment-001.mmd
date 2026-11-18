@@ -1,0 +1,43 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: Software System - Live"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph group1 ["Servers"]
+      style group1 fill:#ffffff,stroke:#cccccc,color:#cccccc,stroke-dasharray:5
+
+      subgraph 12 ["Server 2"]
+        style 12 fill:#ffffff,stroke:#444444,color:#444444
+
+        subgraph group2 ["Service 2"]
+          style group2 fill:#ffffff,stroke:#cccccc,color:#cccccc,stroke-dasharray:5
+
+          13["<div style='font-weight: bold'>Service 2 API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+          style 13 fill:#ffffff,stroke:#444444,color:#444444
+          14["<div style='font-weight: bold'>Service 2 Database</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+          style 14 fill:#ffffff,stroke:#444444,color:#444444
+        end
+
+      end
+
+      subgraph 8 ["Server 1"]
+        style 8 fill:#ffffff,stroke:#444444,color:#444444
+
+        subgraph group3 ["Service 1"]
+          style group3 fill:#ffffff,stroke:#cccccc,color:#cccccc,stroke-dasharray:5
+
+          10["<div style='font-weight: bold'>Service 1 Database</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+          style 10 fill:#ffffff,stroke:#444444,color:#444444
+          9["<div style='font-weight: bold'>Service 1 API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+          style 9 fill:#ffffff,stroke:#444444,color:#444444
+        end
+
+      end
+
+    end
+
+    9-. "<div>Reads from and writes to</div><div style='font-size: 70%'></div>" .->10
+    13-. "<div>Reads from and writes to</div><div style='font-size: 70%'></div>" .->14
+
+  end

@@ -1,0 +1,36 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["System Context View: Financial Risk System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>Business User</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>A regular business user.</div>"]
+    style 1 fill:#d46a6a,stroke:#944a4a,color:#ffffff
+    2["<div style='font-weight: bold'>Configuration User</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>A regular business user who<br />can also configure the<br />parameters used in the risk<br />calculations.</div>"]
+    style 2 fill:#d46a6a,stroke:#944a4a,color:#ffffff
+    3("<div style='font-weight: bold'>Financial Risk System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Calculates the bank's<br />exposure to risk for product<br />X.</div>")
+    style 3 fill:#550000,stroke:#3b0000,color:#ffffff
+    4("<div style='font-weight: bold'>Trade Data System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>The system of record for<br />trades of type X.</div>")
+    style 4 fill:#801515,stroke:#590e0e,color:#ffffff
+    5("<div style='font-weight: bold'>Reference Data System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Manages reference data for<br />all counterparties the bank<br />interacts with.</div>")
+    style 5 fill:#801515,stroke:#590e0e,color:#ffffff
+    6("<div style='font-weight: bold'>Reference Data System v2.0</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Manages reference data for<br />all counterparties the bank<br />interacts with.</div>")
+    style 6 fill:#801515,stroke:#590e0e,color:#ffffff
+    7("<div style='font-weight: bold'>E-mail system</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>The bank's Microsoft Exchange<br />system.</div>")
+    style 7 fill:#801515,stroke:#590e0e,color:#ffffff
+    8("<div style='font-weight: bold'>Central Monitoring Service</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>The bank's central monitoring<br />and alerting dashboard.</div>")
+    style 8 fill:#801515,stroke:#590e0e,color:#ffffff
+    9("<div style='font-weight: bold'>Active Directory</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>The bank's authentication and<br />authorisation system.</div>")
+    style 9 fill:#801515,stroke:#590e0e,color:#ffffff
+
+    1-- "<div>Views reports using</div><div style='font-size: 70%'></div>" -->3
+    3-- "<div>Gets trade data from</div><div style='font-size: 70%'></div>" -->4
+    3-- "<div>Gets counterparty data from</div><div style='font-size: 70%'></div>" -->5
+    3-- "<div>Gets counterparty data from</div><div style='font-size: 70%'></div>" -->6
+    2-- "<div>Configures parameters using</div><div style='font-size: 70%'></div>" -->3
+    3-- "<div>Sends a notification that a<br />report is ready to</div><div style='font-size: 70%'></div>" -->7
+    7-. "<div>Sends a notification that a<br />report is ready to</div><div style='font-size: 70%'>[E-mail message]</div>" .->1
+    3-. "<div>Sends critical failure alerts<br />to</div><div style='font-size: 70%'>[SNMP]</div>" .->8
+    3-- "<div>Uses for user authentication<br />and authorisation</div><div style='font-size: 70%'></div>" -->9
+
+  end

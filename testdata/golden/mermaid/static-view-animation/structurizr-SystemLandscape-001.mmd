@@ -1,0 +1,14 @@
+graph TB
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["System Landscape View"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>A</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 1 fill:#ffffff,stroke:#444444,color:#444444
+    2["<div style='font-weight: bold'>B</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 2 fill:#ffffff,stroke:#444444,color:#444444
+
+    1-. "<div></div><div style='font-size: 70%'></div>" .->2
+
+  end

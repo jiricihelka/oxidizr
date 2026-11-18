@@ -1,0 +1,70 @@
+{
+  "name" : "Shapes",
+  "description" : "An example of all shapes available in Structurizr.",
+  "elements" : [ {
+    "tag" : "Box",
+    "shape" : "Box"
+  }, {
+    "tag" : "Bucket",
+    "shape" : "Bucket"
+  }, {
+    "tag" : "Circle",
+    "shape" : "Circle"
+  }, {
+    "tag" : "Component",
+    "shape" : "Component"
+  }, {
+    "tag" : "Cylinder",
+    "shape" : "Cylinder"
+  }, {
+    "tag" : "Diamond",
+    "shape" : "Diamond"
+  }, {
+    "tag" : "Element",
+    "stroke" : "#000000",
+    "strokeWidth" : 7,
+    "color" : "#000000",
+    "fontSize" : 35,
+    "metadata" : false,
+    "description" : false
+  }, {
+    "tag" : "Ellipse",
+    "shape" : "Ellipse"
+  }, {
+    "tag" : "Folder",
+    "shape" : "Folder"
+  }, {
+    "tag" : "Hexagon",
+    "shape" : "Hexagon"
+  }, {
+    "tag" : "Mobile Device Landscape",
+    "shape" : "MobileDeviceLandscape"
+  }, {
+    "tag" : "Mobile Device Portrait",
+    "shape" : "MobileDevicePortrait"
+  }, {
+    "tag" : "Person",
+    "shape" : "Person"
+  }, {
+    "tag" : "Pipe",
+    "shape" : "Pipe"
+  }, {
+    "tag" : "Robot",
+    "shape" : "Robot"
+  }, {
+    "tag" : "RoundedBox",
+    "shape" : "RoundedBox"
+  }, {
+    "tag" : "Shell",
+    "shape" : "Shell"
+  }, {
+    "tag" : "Terminal",
+    "shape" : "Terminal"
+  }, {
+    "tag" : "Web Browser",
+    "shape" : "WebBrowser"
+  }, {
+    "tag" : "Window",
+    "shape" : "Window"
+  } ]
+}

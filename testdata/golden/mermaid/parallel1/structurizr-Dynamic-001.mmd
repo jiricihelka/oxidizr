@@ -1,0 +1,28 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View: Software System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 2 ["Software System"]
+      style 2 fill:#ffffff,stroke:#444444,color:#444444
+
+      3["<div style='font-weight: bold'>Web Application</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 3 fill:#ffffff,stroke:#444444,color:#444444
+      4["<div style='font-weight: bold'>Message Bus</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 4 fill:#ffffff,stroke:#444444,color:#444444
+      5["<div style='font-weight: bold'>App 1</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 5 fill:#ffffff,stroke:#444444,color:#444444
+      6["<div style='font-weight: bold'>App 2</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 6 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    1["<div style='font-weight: bold'>User</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div>"]
+    style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+    1-. "<div>1. Updates details</div><div style='font-size: 70%'></div>" .->3
+    3-. "<div>2. Sends update event</div><div style='font-size: 70%'></div>" .->4
+    4-. "<div>3. Broadcasts update event</div><div style='font-size: 70%'></div>" .->5
+    4-. "<div>3. Broadcasts update event</div><div style='font-size: 70%'></div>" .->6
+
+  end

@@ -1,0 +1,18 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Software System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 1 ["Software System"]
+      style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+      2["<div style='font-weight: bold'>UI</div><div style='font-size: 70%; margin-top: 0px'>[Container: JavaScript and React]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
+      style 2 fill:#ffffff,stroke:#444444,color:#444444
+      3["<div style='font-weight: bold'>Backend</div><div style='font-size: 70%; margin-top: 0px'>[Container: Spring Boot]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
+      style 3 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    2-. "<div>Makes API requests to</div><div style='font-size: 70%'>[JSON/HTTPS]</div>" .->3
+
+  end

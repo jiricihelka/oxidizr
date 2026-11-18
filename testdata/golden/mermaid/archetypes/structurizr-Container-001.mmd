@@ -1,0 +1,27 @@
+graph TB
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: X"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>A</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+    subgraph 2 ["X"]
+      style 2 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph group1 ["Customer Service"]
+        style group1 fill:#ffffff,stroke:#cccccc,color:#cccccc,stroke-dasharray:5
+
+        3["<div style='font-weight: bold'>Customer database</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+        style 3 fill:#ffffff,stroke:#444444,color:#444444
+        4["<div style='font-weight: bold'>Customer API</div><div style='font-size: 70%; margin-top: 0px'>[Container: Spring Boot]</div>"]
+        style 4 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+    4-. "<div></div><div style='font-size: 70%'></div>" .->3
+    1-. "<div>Makes API calls using</div><div style='font-size: 70%'>[HTTPS]</div>" .->4
+
+  end

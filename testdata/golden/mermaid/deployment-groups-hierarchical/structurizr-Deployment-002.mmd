@@ -1,0 +1,28 @@
+graph TB
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: Software System - WithSpecifiedDeploymentGroups"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 15 ["Server 1"]
+      style 15 fill:#ffffff,stroke:#444444,color:#444444
+
+      16["<div style='font-weight: bold'>API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 16 fill:#ffffff,stroke:#444444,color:#444444
+      17["<div style='font-weight: bold'>DB</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 17 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    subgraph 19 ["Server 2"]
+      style 19 fill:#ffffff,stroke:#444444,color:#444444
+
+      20["<div style='font-weight: bold'>API</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 20 fill:#ffffff,stroke:#444444,color:#444444
+      21["<div style='font-weight: bold'>DB</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 21 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    16-. "<div>Uses</div><div style='font-size: 70%'></div>" .->17
+    20-. "<div>Uses</div><div style='font-size: 70%'></div>" .->21
+
+  end

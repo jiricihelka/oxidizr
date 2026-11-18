@@ -1,0 +1,19 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Software System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>Element</div><div style='font-size: 70%; margin-top: 0px'></div>"]
+    style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+    subgraph 2 ["Software System"]
+      style 2 fill:#ffffff,stroke:#444444,color:#444444
+
+      4["<div style='font-weight: bold'>Container</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
+      style 4 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    1-. "<div></div><div style='font-size: 70%'></div>" .->4
+
+  end

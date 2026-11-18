@@ -1,0 +1,16 @@
+{
+  "name" : "C4 props",
+  "description" : "Property-driven C4 legs",
+  "elements" : [ {
+    "tag" : "External",
+    "background" : "#ff0000",
+    "color" : "#ffffff"
+  }, {
+    "tag" : "Primary",
+    "color" : "#0000ff"
+  } ],
+  "relationships" : [ {
+    "tag" : "Async",
+    "color" : "#00ff00"
+  } ]
+}
