@@ -178,9 +178,15 @@ pub enum Ctx {
     /// `DocumentationDslContext` (`!docs {`). D7: the importer is deferred
     /// to Phase 4, but the context must exist so `exclude` lines parse until
     /// the deferred error surfaces on close.
-    Documentation { holder: Holder },
+    Documentation {
+        #[allow(dead_code)] // D7: payload for the Phase-4 deferred importer.
+        holder: Holder,
+    },
     /// `DecisionsDslContext` (`!adrs`/`!decisions {`).
-    Decisions { holder: Holder },
+    Decisions {
+        #[allow(dead_code)] // D7: payload for the Phase-4 deferred importer.
+        holder: Holder,
+    },
 
     // ---- property / perspective containers ------------------------------
     /// `PropertiesDslContext` over the property holders its `name value`
@@ -591,6 +597,7 @@ impl Ctx {
     }
 
     /// `StaticStructureElementInstanceDslContext`.
+    #[allow(dead_code)] // Java parity surface: the port's arms inline this guard.
     #[must_use]
     pub fn is_instance(&self) -> bool {
         matches!(self, Ctx::SsInstance { .. } | Ctx::ContainerInstance { .. })
@@ -603,6 +610,7 @@ impl Ctx {
     }
 
     /// `ArchetypeDslContext` (element + relationship archetypes).
+    #[allow(dead_code)] // Java parity surface: the port's arms inline this guard.
     #[must_use]
     pub fn is_archetype(&self) -> bool {
         matches!(
@@ -754,6 +762,7 @@ impl Ctx {
     /// call at each dispatch arm. `None` when the context is not a holder.
     #[must_use]
     #[allow(clippy::match_same_arms)] // holder kinds collapse identically by design
+    #[allow(dead_code)] // Java parity surface: `DslContext.getHolder()`.
     pub fn holder(&self) -> Option<Holder> {
         match self {
             Ctx::Workspace => Some(Holder::Workspace),

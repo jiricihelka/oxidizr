@@ -178,7 +178,7 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 | R-dsl-06 | `p.top().cloned()` heavyweight Ctx clones (`stmt_props.rs:99,282`, `stmt_deployment.rs:100`, `stmt_model.rs:361`, `stmt_style.rs:26`, `stmt_views.rs:1562`) — extract only the payload Copy fields, re-borrow | JU | 2 |
 | R-dsl-07 | `section()` chain fns 553/517/364/320 ln + `permitted_tokens` 300 ln — arm order IS the contract; allows carry rationale | KC | — |
 | R-dsl-08 | stringly archetype `kind: String` ladder (`ctx.rs:60`, `stmt_style.rs:85-108`, `mod.rs:1790-1798`) — enum would surface the `_ =>` InfrastructureNode fallback but rewrites the hot parse path; LSP (P4) is the natural owner | DF | — |
-| R-dsl-09 | engine `pub use` sprawl (`engine/mod.rs:50-55`, `KindFilter`) — externals consume only parse surface → `pub(crate)` demotions | JU | 2 |
+| R-dsl-09 | engine `pub use` sprawl (`engine/mod.rs:50-55`, `KindFilter`) — externals consume only parse surface → `pub(crate)` demotions — **DONE PR2-d** (`DslError` kept `pub` for the api; surfaced dead code settled per R-core-06 policy: `Tokens::sublist` deleted, Ctx/idents parity helpers + D7 holder payloads kept + annotated) | JU | 2 |
 | R-dsl-10 | Java getter names (`Parser::get_*`, whole `Tokens` API) — rustdoc cites `Tokens.java`/`context.getElement`; ratify keep | KC | — |
 | R-dsl-11 | `push_str(&line.to_string())` (`error.rs:109-110`) → `write!` (text identical, golden-guarded) — **DONE PR2-c** | SW | 2 |
 | R-dsl-12 | Java `count` counter lockstep (`rel.rs:457-475`) → `removed.is_empty()`; `stmt_views.rs:1290` clone shrinks with R-dsl-02 — **DONE PR2-c** (`:1290` clone already gone: PR2-a borrow slice + PR2-b Cow) | SW | 2 |

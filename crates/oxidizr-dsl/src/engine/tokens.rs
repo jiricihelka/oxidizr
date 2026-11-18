@@ -4,10 +4,11 @@
 //! result of the first (erratum 26).
 //!
 //! Since 2R R-dsl-01 the backing list is a [`Cow`] slice: `Stmt` owns the
-//! real `Vec`, while trimmed views (`without_context_start_token`,
-//! `sublist`) borrow instead of deep-copying — the reference passes the
-//! same `Tokens` reference to every `else if`, which the owned-only port
-//! paid for with ~12 full token-list copies per logical line.
+//! real `Vec`, while trimmed views (`without_context_start_token`, the
+//! driver's drop-prefix slices) borrow instead of deep-copying — the
+//! reference passes the same `Tokens` reference to every `else if`, which
+//! the owned-only port paid for with ~12 full token-list copies per logical
+//! line.
 
 use std::borrow::Cow;
 
@@ -111,14 +112,6 @@ impl<'a> Tokens<'a> {
         self.raw.last().map(|t| Tokens::unescape(t))
     }
 
-    /// `subList(fromIndex, size())` — borrowed view (2R R-dsl-01).
-    #[must_use]
-    pub fn sublist(&self, from: usize) -> Tokens<'_> {
-        Tokens {
-            raw: Cow::Borrowed(&self.raw[from.min(self.raw.len())..]),
-        }
-    }
-
     /// `withoutContextStartToken()` — drop a trailing `{` (compared with
     /// `equals`, i.e. case-sensitive). Borrowed view either way; the old
     /// `self.clone()` fallback deep-copied every token of every line.
@@ -171,7 +164,6 @@ mod tests {
     #[test]
     fn views_read_through_the_same_unescape() {
         let t = Tokens::new(vec![r#"a\"b\nc"#.to_string(), "d".into()]);
-        assert_eq!(t.sublist(0).get(0), t.get(0));
         assert_eq!(t.without_context_start_token().get(0), t.get(0));
         assert_eq!(t.last().unwrap(), "d");
     }

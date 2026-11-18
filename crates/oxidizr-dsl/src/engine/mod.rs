@@ -47,12 +47,15 @@ use oxidizr_core::{CoreError, Id, ViewRef, Workspace, WorkspaceBuilder};
 use crate::compat;
 use crate::preprocess::{Logical, text_block_value};
 
-pub use ctx::{ColorScheme, Ctx, DslEnvironment, DslGroup, Holder};
+// 2R R-dsl-09: externals consume only the parse surface (`parse_dsl`,
+// `ParseOptions`/`ParseResult`/`EnvLookup`/`InstalledThemes`, `DslError`) —
+// the engine's working types stay crate-internal.
+pub(crate) use ctx::{ColorScheme, Ctx, DslEnvironment, DslGroup, Holder};
 pub use error::DslError;
-pub use idents::{IdentifierScope, IdentifiersRegister, PseudoKind, RegItem};
+pub(crate) use idents::{IdentifierScope, IdentifiersRegister, PseudoKind, RegItem};
 use rel::RelArch;
-pub use tokens::Tokens;
-pub use uuid::{looks_like_uuid, uuid_v4};
+pub(crate) use tokens::Tokens;
+pub(crate) use uuid::uuid_v4;
 
 /// How a chain section finished with a logical line.
 pub(crate) enum Sec {
@@ -1783,7 +1786,7 @@ impl Parser<'_> {
 /// [`Parser::passes_type_filter`] for why exact-kind is the right reading of
 /// the reversed `isAssignableFrom` check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KindFilter {
+pub(crate) enum KindFilter {
     SoftwareSystem,
     Container,
     DeploymentGroup,

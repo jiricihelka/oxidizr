@@ -201,6 +201,7 @@ impl IdentifiersRegister {
     }
 
     /// The identifier of a relationship id.
+    #[allow(dead_code)] // Java parity surface: `Model.getRelationship` lookup.
     #[must_use]
     pub fn find_relationship_id(&self, id: &Id) -> Option<&str> {
         self.relationships
@@ -347,6 +348,7 @@ impl IdentifiersRegister {
 
     /// `toIdentifier` — strip invalid characters, then a leading `-`.
     #[must_use]
+    #[allow(dead_code)] // Java parity surface: `DslIdentifiers.toIdentifier` (test-pinned).
     pub fn to_identifier(s: &str) -> String {
         let mut out: String = s
             .chars()
