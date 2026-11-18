@@ -160,8 +160,15 @@ fn parse_is_deterministic() {
     );
 }
 
-/// Invariant 2 — writer stability: `json2json` over the `dsl2json` output is
-/// byte-stable (internal consistency, not byte-parity with the reference).
+/// Invariant 2 — writer stability: `json2json` reaches a byte fixpoint in ONE
+/// step (`out₃ == out₂`); internal consistency, not byte-parity with the
+/// reference. `out₂ == out₁` is NOT the bar: the reference JSON reader
+/// rebuilds Java `TreeSet`s, re-sorting model element arrays numeric-id
+/// ascending, while the DSL path stores some collections in reverse-insert
+/// order (WRITE-CATALOG §5, witness-proven in P2 commit `cc243a0` — a DSL
+/// group A..F exports F..A, the re-read sorts it A..F). The rebuild is
+/// idempotent, so bytes must stabilize after the first pass — and if they
+/// didn't, `out₃ != out₂` would catch the drift byte-exactly.
 #[test]
 fn json_round_trip_is_byte_stable() {
     if !full_tier() {
@@ -174,22 +181,33 @@ fn json_round_trip_is_byte_stable() {
         let Some(one) = first.bytes else {
             return Ok(());
         };
-        let second = execute(
-            Request::Json2Json {
-                input: Input::Bytes(one.clone()),
-                output: None,
-            },
-            &oxidizr_e2e::hermetic_options(),
-        );
-        match second.bytes {
-            Some(two) if two == one => Ok(()),
-            Some(_) => Err(format!("{name}: json2json is not byte-stable")),
-            None => Err(format!("{name}: json2json failed over own dsl2json output")),
+        let pass = |bytes: Vec<u8>| {
+            execute(
+                Request::Json2Json {
+                    input: Input::Bytes(bytes),
+                    output: None,
+                },
+                &oxidizr_e2e::hermetic_options(),
+            )
+        };
+        let second = pass(one);
+        let Some(two) = second.bytes else {
+            return Err(format!("{name}: json2json failed over own dsl2json output"));
+        };
+        let third = pass(two.clone());
+        match third.bytes {
+            Some(tref) if tref == two => Ok(()),
+            Some(_) => Err(format!(
+                "{name}: json2json is not a byte fixpoint (out3 != out2)"
+            )),
+            None => Err(format!(
+                "{name}: json2json failed over own output (second pass)"
+            )),
         }
     });
     assert!(
         problems.is_empty(),
-        "json2json stability:\n{}",
+        "json2json fixpoint:\n{}",
         problems.join("\n")
     );
 }
