@@ -97,6 +97,50 @@ pub struct FmtReport {
     pub idempotent: bool,
 }
 
+/// One export-format block (P2T-D2): exit + code set + the number of files
+/// written into the scratch output directory. `files` counts ALL written
+/// files (diagrams, `-key` legends and animation frames share the parent's
+/// extension — naming.rs; parsing them back apart is not safe for keys
+/// ending in `-<digits>`, so the manifest counts total files). NEVER bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportReport {
+    /// Expected exit class.
+    pub exit: Exit,
+    /// Sorted, deduplicated OXZ codes of every diagnostic (empty = none).
+    pub codes: Vec<u16>,
+    /// Files written to the scratch output directory.
+    pub files: usize,
+}
+
+/// The export matrix (P2T-D2): the three landed diagram formats plus the
+/// reference-known-but-unlanded `websequencediagrams` as a compat probe —
+/// its OXZ-5007 is the coverage trigger the allow-list note anticipates.
+/// All four are present whenever the `export` section is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportReports {
+    /// `--format plantuml` (Structurizr dialect, default color mode).
+    pub plantuml: ExportReport,
+    /// `--format plantuml/c4plantuml`.
+    pub plantuml_c4: ExportReport,
+    /// `--format mermaid`.
+    pub mermaid: ExportReport,
+    /// `--format websequencediagrams` (known-unlanded compat probe).
+    pub websequencediagrams: ExportReport,
+}
+
+impl ExportReports {
+    /// Iteration in sidecar key order.
+    #[must_use]
+    pub fn formats(&self) -> [(&'static str, &ExportReport); 4] {
+        [
+            ("plantuml", &self.plantuml),
+            ("plantuml-c4", &self.plantuml_c4),
+            ("mermaid", &self.mermaid),
+            ("websequencediagrams", &self.websequencediagrams),
+        ]
+    }
+}
+
 /// The whole sidecar. `Option` sections = command not applicable to the entry.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Manifest {
@@ -109,6 +153,9 @@ pub struct Manifest {
     /// `reconcile` block (T3): applies when the entry carries BOTH inputs —
     /// `workspace.dsl` as the edited model, `workspace.json` as the layout.
     pub reconcile: Option<CommandReport>,
+    /// `export` matrix (P2T-D2): applies when the entry's export input
+    /// (DSL first, else JSON) parses successfully and has ≥ 1 view.
+    pub export: Option<ExportReports>,
     /// `fmt` block.
     pub fmt: Option<FmtReport>,
 }
@@ -130,6 +177,13 @@ impl Manifest {
         }
         if let Some(r) = &self.reconcile {
             map.insert("reconcile".into(), command_to_value(r));
+        }
+        if let Some(r) = &self.export {
+            let mut m = Map::new();
+            for (key, report) in r.formats() {
+                m.insert(key.into(), export_to_value(report));
+            }
+            map.insert("export".into(), Value::Object(m));
         }
         if let Some(r) = &self.fmt {
             let mut m = Map::new();
@@ -165,6 +219,9 @@ impl Manifest {
                 }
                 "reconcile" => {
                     out.reconcile = Some(command_from_value(val, &format!("{at}.reconcile"))?);
+                }
+                "export" => {
+                    out.export = Some(export_reports_from_value(val, &format!("{at}.export"))?);
                 }
                 "fmt" => {
                     let f = val
@@ -251,6 +308,37 @@ impl Manifest {
                             "{name}: counts {:?} != observed {:?}",
                             e.counts, o.counts
                         ));
+                    }
+                }
+            }
+        }
+        match (&self.export, &observed.export) {
+            (None, None) => {}
+            (None, Some(o)) => fails.push(format!(
+                "export: command became applicable (unregistered drift); expected no section, got plantuml exit {} codes {:?}",
+                o.plantuml.exit.as_str(),
+                o.plantuml.codes
+            )),
+            (Some(_), None) => {
+                fails.push("export: stale section — command no longer applies".into());
+            }
+            (Some(e), Some(o)) => {
+                for ((key, exp), (_, obs)) in e.formats().into_iter().zip(o.formats()) {
+                    if exp.exit != obs.exit {
+                        fails.push(format!(
+                            "export.{key}: exit {} != observed {}",
+                            exp.exit.as_str(),
+                            obs.exit.as_str()
+                        ));
+                    }
+                    if exp.codes != obs.codes {
+                        fails.push(format!(
+                            "export.{key}: codes {:?} != observed {:?}",
+                            exp.codes, obs.codes
+                        ));
+                    }
+                    if exp.files != obs.files {
+                        fails.push(format!("export.{key}: files {} != observed {}", exp.files, obs.files));
                     }
                 }
             }
@@ -354,6 +442,72 @@ fn exit_str<'a>(value: Option<&'a Value>, at: &str) -> Result<&'a str, String> {
         .ok_or_else(|| format!("{at}.exit: missing string"))
 }
 
+fn export_to_value(r: &ExportReport) -> Value {
+    let mut m = Map::new();
+    m.insert("exit".into(), Value::String(r.exit.as_str().into()));
+    m.insert(
+        "codes".into(),
+        Value::Array(r.codes.iter().map(|c| Value::from(*c)).collect()),
+    );
+    m.insert("files".into(), Value::from(r.files));
+    Value::Object(m)
+}
+
+/// Parse one format block: `{ exit, codes, files }`.
+fn export_from_value(value: &Value, at: &str) -> Result<ExportReport, String> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| format!("{at}: must be an object"))?;
+    let exit = Exit::parse(exit_str(obj.get("exit"), at)?, at)?;
+    let codes = obj
+        .get("codes")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("{at}.codes: missing array"))?
+        .iter()
+        .map(|v| {
+            v.as_u64()
+                .and_then(|n| u16::try_from(n).ok())
+                .ok_or_else(|| format!("{at}.codes: not a code number: {v}"))
+        })
+        .collect::<Result<Vec<u16>, String>>()?;
+    let files = obj
+        .get("files")
+        .and_then(Value::as_u64)
+        .and_then(|n| usize::try_from(n).ok())
+        .ok_or_else(|| format!("{at}.files: missing count"))?;
+    Ok(ExportReport { exit, codes, files })
+}
+
+/// The export matrix: all four format keys required, unknown ones rejected
+/// (same both-ways discipline as sections — a typo'd format must not skip
+/// checks).
+fn export_reports_from_value(value: &Value, at: &str) -> Result<ExportReports, String> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| format!("{at}: must be an object"))?;
+    for key in obj.keys() {
+        if !matches!(
+            key.as_str(),
+            "plantuml" | "plantuml-c4" | "mermaid" | "websequencediagrams"
+        ) {
+            return Err(format!("{at}: unknown export format `{key}`"));
+        }
+    }
+    let get = |key: &str| -> Result<ExportReport, String> {
+        export_from_value(
+            obj.get(key)
+                .ok_or_else(|| format!("{at}.{key}: missing format block"))?,
+            &format!("{at}.{key}"),
+        )
+    };
+    Ok(ExportReports {
+        plantuml: get("plantuml")?,
+        plantuml_c4: get("plantuml-c4")?,
+        mermaid: get("mermaid")?,
+        websequencediagrams: get("websequencediagrams")?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,12 +535,116 @@ mod tests {
             }),
             json2json: None,
             reconcile: None,
+            export: None,
         };
         let v = m.to_value();
         assert_eq!(Manifest::from_value(&v, "t").unwrap(), m);
         // Key order is deterministic (dsl2json, validate, fmt):
         let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
         assert_eq!(keys, ["dsl2json", "validate", "fmt"]);
+    }
+
+    #[test]
+    fn export_section_round_trip() {
+        let m = Manifest {
+            export: Some(ExportReports {
+                plantuml: ExportReport {
+                    exit: Exit::Ok,
+                    codes: vec![],
+                    files: 2,
+                },
+                plantuml_c4: ExportReport {
+                    exit: Exit::Ok,
+                    codes: vec![],
+                    files: 1,
+                },
+                mermaid: ExportReport {
+                    exit: Exit::Error,
+                    codes: vec![5008],
+                    files: 0,
+                },
+                websequencediagrams: ExportReport {
+                    exit: Exit::Error,
+                    codes: vec![5007],
+                    files: 0,
+                },
+            }),
+            ..Manifest::default()
+        };
+        let v = m.to_value();
+        assert_eq!(Manifest::from_value(&v, "t").unwrap(), m);
+        let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["export"]);
+        let fmt_keys: Vec<&String> = v["export"].as_object().unwrap().keys().collect();
+        assert_eq!(
+            fmt_keys,
+            ["plantuml", "plantuml-c4", "mermaid", "websequencediagrams"]
+        );
+    }
+
+    #[test]
+    fn export_matrix_is_strict() {
+        // Unknown format key fails.
+        let v: Value = serde_json::from_str(
+            r#"{ "export": { "plantuml": { "exit": "ok", "codes": [], "files": 0 },
+                              "graphviz": { "exit": "ok", "codes": [], "files": 0 } } }"#,
+        )
+        .unwrap();
+        assert!(
+            Manifest::from_value(&v, "t")
+                .unwrap_err()
+                .contains("graphviz")
+        );
+        // Missing format keys fail (which one is reported depends on Map
+        // iteration order; the message always locates the export section).
+        let v: Value = serde_json::from_str(
+            r#"{ "export": { "plantuml": { "exit": "ok", "codes": [], "files": 0 } } }"#,
+        )
+        .unwrap();
+        assert!(
+            Manifest::from_value(&v, "t")
+                .unwrap_err()
+                .contains("t.export")
+        );
+    }
+
+    #[test]
+    fn export_diff_detects_drift() {
+        let mk = |files: usize| ExportReport {
+            exit: Exit::Ok,
+            codes: vec![],
+            files,
+        };
+        let mut expected = Manifest {
+            export: Some(ExportReports {
+                plantuml: mk(2),
+                plantuml_c4: mk(2),
+                mermaid: mk(1),
+                websequencediagrams: mk(0),
+            }),
+            ..Manifest::default()
+        };
+        let observed = Manifest {
+            export: Some(ExportReports {
+                plantuml: mk(3),
+                plantuml_c4: mk(2),
+                mermaid: mk(1),
+                websequencediagrams: mk(0),
+            }),
+            ..Manifest::default()
+        };
+        assert_eq!(
+            expected.diff(&observed),
+            ["export.plantuml: files 2 != observed 3"]
+        );
+        // Stale section fails.
+        expected.export = None;
+        assert_eq!(
+            expected.diff(&observed),
+            [
+                "export: command became applicable (unregistered drift); expected no section, got plantuml exit ok codes []"
+            ]
+        );
     }
 
     #[test]
@@ -430,6 +688,7 @@ mod tests {
             }),
             validate: None,
             reconcile: None,
+            export: None,
             fmt: None,
         };
         let observed = Manifest {
@@ -445,6 +704,7 @@ mod tests {
                 counts: None,
             }),
             reconcile: None,
+            export: None,
             fmt: None,
         };
         let d = expected.diff(&observed);

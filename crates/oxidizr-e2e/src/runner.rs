@@ -8,7 +8,9 @@ use oxidizr_api::{ExitClass, FmtMode, Input, LogItem, Outcome, Request, execute}
 use oxidizr_core::validate::flattened;
 
 use crate::corpus::Entry;
-use crate::manifest::{CommandReport, Counts, Exit, FmtReport, Manifest};
+use crate::manifest::{
+    CommandReport, Counts, Exit, ExportReport, ExportReports, FmtReport, Manifest,
+};
 
 /// Run the entry's commands; returns the observed manifest form. Applicable
 /// commands follow the entry's inputs: DSL commands (`dsl2json`, `fmt`) need
@@ -83,6 +85,10 @@ pub fn observe(entry: &Entry) -> Manifest {
     // reconcile (T3): applies when the entry carries BOTH inputs.
     let reconcile = observe_reconcile(entry, &opts);
 
+    // export matrix (P2T-D2): diagram formats + compat probe into scratch
+    // dirs; applicable when the input parses with ≥ 1 view.
+    let export = observe_export(entry, &opts, dsl2json.as_ref(), json2json.as_ref());
+
     // fmt: fixed-point property over the entry text (P1T-D3/D6 seed).
     let fmt = entry.dsl.as_ref().map(|dsl| {
         let first = execute(
@@ -118,6 +124,7 @@ pub fn observe(entry: &Entry) -> Manifest {
         json2json,
         validate,
         reconcile,
+        export,
         fmt,
     }
 }
@@ -154,6 +161,122 @@ fn observe_reconcile(entry: &Entry, opts: &oxidizr_api::ApiOptions) -> Option<Co
         exit: Exit::from_class(out.exit),
         codes: codes_of(&out),
         counts: None,
+    })
+}
+
+/// Fresh unique scratch directory under the process temp dir (parallel-safe;
+/// P2T-D2: exports never write into the corpus tree). Falls back to the
+/// uncreated candidate after 100 collisions — the export then records its
+/// own I/O failure, which is honest, better than hanging.
+#[must_use]
+pub fn scratch_dir(tag: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    static NONCE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let nonce = NONCE.get_or_init(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or_else(|_| "t".to_string(), |d| d.as_nanos().to_string())
+    });
+    let slug: String = tag
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let root = std::env::temp_dir().join("oxidizr-e2e-export");
+    for _ in 0..100 {
+        let n = SEQ.fetch_add(1, Ordering::Relaxed);
+        let candidate = root.join(format!("{nonce}-{n}-{slug}"));
+        if std::fs::create_dir_all(&root).is_ok() && std::fs::create_dir(&candidate).is_ok() {
+            return candidate;
+        }
+    }
+    root.join(format!("{nonce}-x-{slug}"))
+}
+
+/// Export one workspace file through one format into a fresh scratch dir;
+/// returns the outcome plus every emitted file (name → bytes). The scratch
+/// dir is removed before returning — the caller owns the bytes (P2T-D5
+/// invariants compare them across runs/paths).
+#[must_use]
+pub fn export_capture(
+    workspace: &std::path::Path,
+    format: &str,
+    opts: &oxidizr_api::ApiOptions,
+    tag: &str,
+) -> (Outcome, std::collections::BTreeMap<String, Vec<u8>>) {
+    let dir = scratch_dir(tag);
+    let out = execute(
+        Request::Export {
+            workspace: workspace.to_path_buf(),
+            format: format.to_string(),
+            output: Some(dir.clone()),
+        },
+        opts,
+    );
+    let mut files = std::collections::BTreeMap::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if let Ok(bytes) = std::fs::read(&path) {
+                    files.insert(name, bytes);
+                }
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    (out, files)
+}
+
+/// The export matrix (P2T-D2): applies when the entry's export input (DSL
+/// first, else the JSON fixture — the `validate` rule) parses successfully
+/// and carries ≥ 1 view. The unlanded-but-known `websequencediagrams` slot
+/// records the OXZ-5007 compat reality (the coverage allow-list anticipates
+/// it); theme failures (OXZ-5001/5008) surface per format before dispatch,
+/// exactly like the reference ordering.
+fn observe_export(
+    entry: &Entry,
+    opts: &oxidizr_api::ApiOptions,
+    dsl2json: Option<&CommandReport>,
+    json2json: Option<&CommandReport>,
+) -> Option<ExportReports> {
+    let input = entry.dsl.as_ref().or(entry.json.as_ref())?;
+    let parses_with_views = if entry.dsl.is_some() {
+        dsl2json.is_some_and(|r| r.exit == Exit::Ok && r.counts.is_some_and(|c| c.views >= 1))
+    } else {
+        // JSON-only entry: the explicit `json2json` feed is the parse gate;
+        // the view count comes from the fixture itself.
+        json2json.is_some_and(|r| r.exit == Exit::Ok)
+            && entry
+                .json
+                .as_ref()
+                .and_then(|p| std::fs::read(p).ok())
+                .and_then(|b| oxidizr_json::from_slice(&b).ok())
+                .is_some_and(|ws| view_count(&ws) >= 1)
+    };
+    if !parses_with_views {
+        return None;
+    }
+    let report = |format: &str| {
+        let (out, files) = export_capture(input, format, opts, &format!("{}-{format}", entry.name));
+        ExportReport {
+            exit: Exit::from_class(out.exit),
+            codes: codes_of(&out),
+            files: files.len(),
+        }
+    };
+    Some(ExportReports {
+        plantuml: report("plantuml"),
+        plantuml_c4: report("plantuml/c4plantuml"),
+        mermaid: report("mermaid"),
+        websequencediagrams: report("websequencediagrams"),
     })
 }
 

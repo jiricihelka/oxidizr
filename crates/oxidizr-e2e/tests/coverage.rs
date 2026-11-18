@@ -44,24 +44,19 @@ const ALLOWLIST: &[(u16, &str)] = &[
          gate as OXZ-4001, and DSL parsing cannot build one — T3 researched",
     ),
     (
-        5007,
-        "export dispatch landed at M0 with `theme`/`json` only — the diagram \
-         formats (M2–M4) make the code corpus-reachable; remove this entry \
-         when an export manifest covers it (PHASE_2.md)",
-    ),
-    (
         5008,
-        "theme loading (P2-D3) landed at M1 — no corpus manifest emits it yet \
-         (manifests cover dsl2json/json2json/validate/reconcile, not export); \
-         remove when an export manifest covers it (PHASE_2.md)",
+        "theme loading (P2-D3) landed at M1; the 2T export matrix runs themes on \
+         every applicable entry (5001 fires for URL themes offline) — 5008 needs a \
+         broken theme FILE, the 2T fixtures add one; remove when covered \
+         (PHASE_2T.md)",
     ),
     (
         5009,
         "export abort (M2, EXPORT-PLANTUML.md §14) needs a corrupt-diagram \
          workspace (dangling id / view-kind cast mismatch) through a diagram \
-         export — the corpus runs no diagram exports and the reference would \
-         abort on the same input; remove when an export manifest covers it \
-         (PHASE_2.md)",
+         export — the hydrate gate blocks such fixtures at read (T3-era probe); \
+         2T probes the reachable shapes, else this stays permanent \
+         (PHASE_2T.md)",
     ),
     (
         9001,
@@ -88,6 +83,11 @@ fn manifest_codes() -> Vec<u16> {
         .flatten()
         {
             codes.extend(report.codes);
+        }
+        if let Some(exports) = &manifest.export {
+            for (_, report) in exports.formats() {
+                codes.extend(report.codes.iter().copied());
+            }
         }
     }
     codes.sort_unstable();

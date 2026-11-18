@@ -100,7 +100,7 @@ stay — corpus benches add the 156-workspace breadth).
 
 | MS   | Deliverable                                                              | Exit gate |
 | ---- | ------------------------------------------------------------------------ | --------- |
-| PT1  | Manifest v2 + bless + quick fan-out over the EXISTING corpus; V-T6/V-T7 closed | bless round-trips byte-stably; quick tier < 60 s; existing sidecars gain export sections in one reviewable diff |
+| **PT1** | **DONE 2026-11-18** — manifest v2 (`ExportReport`/`ExportReports`, strict parse: 4 format keys required, unknown rejected; diff both ways); runner `observe_export` fan-out (plantuml/plantuml-c4/mermaid + websequencediagrams compat probe) into `scratch_dir`/`export_capture`; coverage gate collects export codes, **5007 off the allow-list**; `tests/path_leakage.rs` (V-T7, permanent); full bless: **157 entries gained export sections** (156 valid + invalid/09-reconcile-contested), 155 carry 5007, 2 carry 5001 (theme-URL entries `75-views-theme`, `158-composite-full-kitchen` — the reference theme-load-before-dispatch order), mutations untouched. Landed refinements: `files` counts ALL scratch files (legend/frame name parsing unsafe for keys ending `-<digits>` — deviation from the draft's `diagrams`, documented in manifest docs); 5007 coverage arrived with the compat-probe slot earlier than PT2 | bless green; quick tier **~0.1 s** with fan-out (V-T6 closed — budget 60 s); V-T7 green; quartet + full tier green |
 | PT2  | 16x export fixtures + coverage shrink (5007 off the allow-list)          | bless green; gate green; allow-list stale-check green |
 | PT3  | `full_export.rs` invariants; V-T8 pre-probe on 3 entries first           | full tier green locally + one dispatched `e2e.yml` run |
 | PT4  | Corpus export benches + `2T` baseline commit                             | `bench cmp 2T` works; CI bench job still feature-free |
@@ -109,14 +109,25 @@ stay — corpus benches add the 156-workspace breadth).
 Size gate: 4 modules (oxidizr-e2e, xtask, e2e/corpus, docs) — this file is the
 decomposition regardless.
 
+**PT1 catch report (the net paying for itself):** the full tier surfaced two
+PRE-EXISTING P2 regressions, both bisected to `cc243a0` (M2-d part 2) and fixed per
+the faithful-port rules, not bless-arounds: (1) `reconcile` had never received the
+M1-e-B `createDefaultViews` load tail — self-reconcile dropped every generated view
+(fixed `726a724`: tail on both reconcile sides, the reference loads both through
+`AbstractCommand.loadWorkspace`); (2) the P1T `json2json` byte-stability invariant
+became false by contract once the JSON reader grew the reference TreeSet re-sort
+(WRITE-CATALOG §5, oracle witnesses) — redefined as the byte **fixpoint** `out₃ ==
+out₂` (`2cb3215`), which keeps the byte-exact drift catch and encodes the real
+contract.
+
 ## P2T-D8 Verification list (empirical, before dependent code)
 
-- **V-T6** (before PT1) — quick-tier budget: time 10 entries × 3 formats in-process;
-  extrapolate × ~90 view-bearing entries. > 60 s ⇒ export matrix moves to a `valid/`
-  subset (one entry per feature-NN group) in the quick tier, full corpus nightly.
-- **V-T7** (PT1) — no path leakage: same entry exported into two different scratch
-  paths ⇒ identical bytes (diagram text keys only from view keys/names; P2 `naming.rs`
-  promise re-checked end-to-end).
+- **V-T6** (before PT1) — **CLOSED 2026-11-18**: the whole quick tier (313 entries,
+  full export fan-out included) runs in ~0.1 s in-process — no subset split needed,
+  the matrix covers the full corpus in the quick tier. Budget 60 s, headroom ×600.
+- **V-T7** (PT1) — **CLOSED 2026-11-18 as a permanent test**: `tests/path_leakage.rs`
+  exports three deterministic entries × two formats into two distinct scratch dirs
+  and asserts byte identity + path-free file names (rides the quick tier).
 - **V-T8** (before PT3) — path parity pre-probe on 3 diverse entries (views + styles
   + properties): if `export(dsl) ≠ export(json2json(dsl))` anywhere, that is a P2 bug
   → witness verdict → fix before wiring the invariant (an invariant must land green

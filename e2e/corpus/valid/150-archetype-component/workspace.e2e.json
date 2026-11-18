@@ -18,6 +18,30 @@
     "codes": [],
     "counts": null
   },
+  "export": {
+    "plantuml": {
+      "exit": "ok",
+      "codes": [],
+      "files": 8
+    },
+    "plantuml-c4": {
+      "exit": "ok",
+      "codes": [],
+      "files": 4
+    },
+    "mermaid": {
+      "exit": "ok",
+      "codes": [],
+      "files": 4
+    },
+    "websequencediagrams": {
+      "exit": "error",
+      "codes": [
+        5007
+      ],
+      "files": 0
+    }
+  },
   "fmt": {
     "exit": "ok",
     "idempotent": true

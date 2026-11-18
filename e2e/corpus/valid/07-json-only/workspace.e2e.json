@@ -8,5 +8,29 @@
     "exit": "ok",
     "codes": [],
     "counts": null
+  },
+  "export": {
+    "plantuml": {
+      "exit": "ok",
+      "codes": [],
+      "files": 2
+    },
+    "plantuml-c4": {
+      "exit": "ok",
+      "codes": [],
+      "files": 1
+    },
+    "mermaid": {
+      "exit": "ok",
+      "codes": [],
+      "files": 1
+    },
+    "websequencediagrams": {
+      "exit": "error",
+      "codes": [
+        5007
+      ],
+      "files": 0
+    }
   }
 }
