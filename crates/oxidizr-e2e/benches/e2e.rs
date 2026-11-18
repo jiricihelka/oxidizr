@@ -173,15 +173,45 @@ fn bench_reconcile(c: &mut Criterion) {
     });
 }
 
-/// Whole-corpus diagram `export` (Phase 2 M4-d): load + dialect export +
-/// the reference write loop, per format. Output goes to a scratch dir
-/// outside the measurement setup; file names collide across iterations on
-/// purpose (the workspace-id prefix is stable) — each pass overwrites.
+/// The three landed diagram formats as `(request format, bench-id part)`
+/// (P2T-D6: c4 joined at 2T, completing the manifest matrix).
+const EXPORT_FORMATS: [(&str, &str); 3] = [
+    ("plantuml", "plantuml"),
+    ("plantuml/c4plantuml", "plantuml_c4"),
+    ("mermaid", "mermaid"),
+];
+
+/// Biggest clean export surface: the valid entry whose blessed manifest
+/// reports the most `plantuml` files (P2T-D6 — for exports, the file count
+/// IS the surface; the DSL-text-size "biggest" of the P1T benches can be a
+/// theme-error entry exporting zero files).
+fn biggest_export_entry() -> Entry {
+    corpus::discover()
+        .expect("corpus discovers")
+        .into_iter()
+        .filter(|e| e.kind == Kind::Valid)
+        .filter_map(|e| {
+            let m = oxidizr_e2e::manifest::Manifest::read(
+                &e.dir.join(oxidizr_e2e::manifest::FILE_NAME),
+            )
+            .ok()?;
+            Some((e, m.export?.plantuml.files))
+        })
+        .max_by_key(|(_, files)| *files)
+        .expect("corpus carries export sections")
+        .0
+}
+
+/// Whole-corpus diagram `export` (Phase 2 M4-d, P2T-D6 matrix): load +
+/// dialect export + the reference write loop, per format. Output goes to a
+/// scratch dir outside the measurement setup; file names collide across
+/// iterations on purpose (the workspace-id prefix is stable) — each pass
+/// overwrites.
 fn bench_export(c: &mut Criterion) {
     let entries = valid_entries();
     let dir = std::env::temp_dir().join(format!("oxidizr-bench-export-{}", std::process::id()));
-    for format in ["plantuml", "mermaid"] {
-        let id = format!("e2e_export_{format}_all");
+    for (format, id_part) in EXPORT_FORMATS {
+        let id = format!("e2e_export_{id_part}_all");
         c.bench_function(&id, |b| {
             b.iter(|| {
                 let mut notes = 0_usize;
@@ -203,6 +233,31 @@ fn bench_export(c: &mut Criterion) {
     let _ = fs::remove_dir_all(&dir);
 }
 
+/// Biggest-entry worst case per format (P2T-D6, mirrors the
+/// `e2e_dsl2json_biggest_*` pattern): one entry exporting the most files.
+fn bench_export_biggest(c: &mut Criterion) {
+    let entry = biggest_export_entry();
+    let file = dsl_file(&entry);
+    let dir = std::env::temp_dir().join(format!("oxidizr-bench-export-big-{}", std::process::id()));
+    for (format, id_part) in EXPORT_FORMATS {
+        let id = format!("e2e_export_{id_part}_biggest_{}", entry.name);
+        c.bench_function(&id, |b| {
+            b.iter(|| {
+                let out = execute(
+                    Request::Export {
+                        workspace: black_box(&file).clone(),
+                        format: black_box(format).to_owned(),
+                        output: Some(dir.clone()),
+                    },
+                    &oxidizr_e2e::hermetic_options(),
+                );
+                black_box(out.log.len())
+            });
+        });
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
+
 criterion_group!(
     benches,
     bench_dsl2json,
@@ -210,6 +265,7 @@ criterion_group!(
     bench_fmt,
     bench_validate,
     bench_reconcile,
-    bench_export
+    bench_export,
+    bench_export_biggest
 );
 criterion_main!(benches);
