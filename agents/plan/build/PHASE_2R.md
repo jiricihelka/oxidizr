@@ -171,9 +171,9 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 | ID | finding (file:line) | dis | wv |
 |---|---|---|---|
 | R-dsl-01 | dispatch preamble re-clones tokens/ctx 7× per line (`engine/mod.rs:69`, 7 × `section` heads) — share borrows (`section(p, &stmt)`); no section mutates `stmt` | SW | 2 |
-| R-dsl-02 | `Tokens::get` allocates 2 Strings per read (`tokens.rs:22`) → `Cow<str>` (skip replace when no `\\`), `eq_at` for compare-sites; `last()` re-entry fix; keep double-pass ORDER (erratum 26) | JU | 2 |
+| R-dsl-02 | `Tokens::get` allocates 2 Strings per read (`tokens.rs:22`) → `Cow<str>` (skip replace when no `\\`), `eq_at` for compare-sites; `last()` re-entry fix; keep double-pass ORDER (erratum 26) — **DONE PR2-b** (Cow get/last/first + `eq_at` at the two `==` compare-sites; validate_view_key takes Cow, owns on success) | JU | 2 |
 | R-dsl-03 | `if let (true, pat) = (cond, val)` tuple hack (`find.rs:43`) → let-chain | SW | 2 |
-| R-dsl-04 | `Option<&String>` params ×4 (`stmt_views.rs:552,600,710,882`) → `Option<&str>` | SW | 2 |
+| R-dsl-04 | `Option<&String>` params ×4 (`stmt_views.rs:552,600,710,882`) → `Option<&str>` — **DONE PR2-b** (folded into the Cow conversion: `Some(&token)` sites) | SW | 2 |
 | R-dsl-05 | `java_trim(…).to_string()` per line (`stmt_line.rs:30`) — borrow is enough | SW | 2 |
 | R-dsl-06 | `p.top().cloned()` heavyweight Ctx clones (`stmt_props.rs:99,282`, `stmt_deployment.rs:100`, `stmt_model.rs:361`, `stmt_style.rs:26`, `stmt_views.rs:1562`) — extract only the payload Copy fields, re-borrow | JU | 2 |
 | R-dsl-07 | `section()` chain fns 553/517/364/320 ln + `permitted_tokens` 300 ln — arm order IS the contract; allows carry rationale | KC | — |

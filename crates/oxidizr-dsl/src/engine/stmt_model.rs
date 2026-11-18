@@ -408,7 +408,7 @@ fn parse_group(
     }
     let name = tokens.get(1);
     match parent {
-        None => Ok(name),
+        None => Ok(name.into_owned()),
         Some(parent) => {
             let separator = p
                 .builder
@@ -449,7 +449,7 @@ fn name_token(
     if name.trim().is_empty() {
         return Err(DslError::stmt(blank_msg.to_string()));
     }
-    Ok(name)
+    Ok(name.into_owned())
 }
 
 /// The parser tag list: `new ArrayList<>(archetype.getTags())` plus
@@ -484,11 +484,11 @@ fn def_person_system(p: &mut Parser<'_>, tokens: &Tokens, system: bool) -> Resul
     let arch = p.get_archetype(kind, &tokens.get(0));
     let a = p.arch_snapshot(arch);
     let description = if tokens.includes(2) {
-        tokens.get(2)
+        tokens.get(2).into_owned()
     } else {
         a.description.clone()
     };
-    let tags = tags_from(&a, tokens.includes(3).then(|| tokens.get(3)));
+    let tags = tags_from(&a, tokens.includes(3).then(|| tokens.get(3).into_owned()));
     // `isExtendingWorkspace()` — on a base workspace, reuse the element with
     // this EXACT name instead of adding (the add would hit the
     // duplicate-name error); description/tags below then layer onto it.
@@ -530,16 +530,16 @@ fn def_container(p: &mut Parser<'_>, system: &Id, tokens: &Tokens) -> Result<Id,
     let arch = p.get_archetype(tok::CONTAINER, &tokens.get(0));
     let a = p.arch_snapshot(arch);
     let description = if tokens.includes(2) {
-        tokens.get(2)
+        tokens.get(2).into_owned()
     } else {
         a.description.clone()
     };
     let technology = if tokens.includes(3) {
-        tokens.get(3)
+        tokens.get(3).into_owned()
     } else {
         a.technology.clone()
     };
-    let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4)));
+    let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
     // ContainerParser reuse on extends (`getContainerWithName`).
     let existing = p
         .extending_workspace
@@ -575,16 +575,16 @@ fn def_component(p: &mut Parser<'_>, container: &Id, tokens: &Tokens) -> Result<
     let arch = p.get_archetype(tok::COMPONENT, &tokens.get(0));
     let a = p.arch_snapshot(arch);
     let description = if tokens.includes(2) {
-        tokens.get(2)
+        tokens.get(2).into_owned()
     } else {
         a.description.clone()
     };
     let technology = if tokens.includes(3) {
-        tokens.get(3)
+        tokens.get(3).into_owned()
     } else {
         a.technology.clone()
     };
-    let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4)));
+    let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
     // ComponentParser reuse on extends (`getComponentWithName`).
     let existing = p
         .extending_workspace
@@ -627,16 +627,16 @@ fn def_custom_element(p: &mut Parser<'_>, tokens: &Tokens) -> Result<Id, DslErro
     let arch = p.get_archetype(tok::CUSTOM_ELEMENT, &tokens.get(0));
     let a = p.arch_snapshot(arch);
     let metadata = if tokens.includes(2) {
-        tokens.get(2)
+        tokens.get(2).into_owned()
     } else {
         a.metadata.clone()
     };
     let description = if tokens.includes(3) {
-        tokens.get(3)
+        tokens.get(3).into_owned()
     } else {
         a.description.clone()
     };
-    let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4)));
+    let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
     let eid = p
         .builder
         .add_custom_element(&name, None, None)

@@ -319,7 +319,7 @@ fn name_value(tokens: &Tokens) -> Result<(String, String), DslError> {
             "Constant/variable names must only contain the following characters: a-zA-Z0-9-_.",
         ));
     }
-    Ok((name, tokens.get(2)))
+    Ok((name.into_owned(), tokens.get(2).into_owned()))
 }
 
 /// `IdentifierScopeParser.parse` — workspace or model scope (RAW tokens).

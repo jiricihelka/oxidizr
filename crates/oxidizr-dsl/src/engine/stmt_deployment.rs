@@ -309,7 +309,7 @@ fn parse_environment(tokens: &Tokens) -> Result<String, DslError> {
     if tokens.size() != 2 {
         return Err(DslError::stmt("Expected: deploymentEnvironment <name> {"));
     }
-    Ok(tokens.get(1))
+    Ok(tokens.get(1).into_owned())
 }
 
 /// `DeploymentGroupParser.parse` (environment scope).
@@ -322,7 +322,7 @@ fn parse_group_name(tokens: &Tokens) -> Result<String, DslError> {
     if tokens.size() != 2 {
         return Err(DslError::stmt("Expected: deploymentGroup <name>"));
     }
-    Ok(tokens.get(1))
+    Ok(tokens.get(1).into_owned())
 }
 
 /// `DeploymentGroupParser.parse` (node scope) — same guards, different
@@ -361,12 +361,12 @@ fn def_deployment_node(
     let a = p.arch_snapshot(arch);
     let name = tokens.get(1);
     let description = if tokens.includes(2) {
-        tokens.get(2)
+        tokens.get(2).into_owned()
     } else {
         a.description.clone()
     };
     let technology = if tokens.includes(3) {
-        tokens.get(3)
+        tokens.get(3).into_owned()
     } else {
         a.technology.clone()
     };
@@ -392,7 +392,7 @@ fn def_deployment_node(
             )
             .map_err(|e| DslError::core(&e))?,
     };
-    let tags = arch_tags(&a, tokens.includes(4).then(|| tokens.get(4)));
+    let tags = arch_tags(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
     // `addProperties` / `addPerspectives` / tags / group — the shared
     // post-creation sequence (`instances` is applied by the caller BEFORE
     // registration, matching the reference order inside the parser).
@@ -427,12 +427,12 @@ fn def_infrastructure_node(
     let a = p.arch_snapshot(arch);
     let name = tokens.get(1);
     let description = if tokens.includes(2) {
-        tokens.get(2)
+        tokens.get(2).into_owned()
     } else {
         a.description.clone()
     };
     let technology = if tokens.includes(3) {
-        tokens.get(3)
+        tokens.get(3).into_owned()
     } else {
         a.technology.clone()
     };
@@ -446,7 +446,7 @@ fn def_infrastructure_node(
             None,
         )
         .map_err(|e| DslError::core(&e))?;
-    let tags = arch_tags(&a, tokens.includes(4).then(|| tokens.get(4)));
+    let tags = arch_tags(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
     p.define_element(&id, &description, &tags, &a)?;
     Ok(id)
 }

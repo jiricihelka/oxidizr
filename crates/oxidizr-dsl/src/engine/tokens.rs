@@ -51,10 +51,19 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// `get(index)` — unescaped view of the raw token.
+    /// `get(index)` — unescaped view of the raw token. Borrowed whenever the
+    /// token carries no escape (2R R-dsl-02: the old shape allocated two
+    /// `String`s per read on a path read several times per logical line).
     #[must_use]
-    pub fn get(&self, index: usize) -> String {
-        Tokens::unescape(&self.raw[index]).into_owned()
+    pub fn get(&self, index: usize) -> Cow<'_, str> {
+        Tokens::unescape(&self.raw[index])
+    }
+
+    /// Java `tokens.get(i).equals(other)` — the compare-only sites, without
+    /// materializing the unescaped view (2R R-dsl-02).
+    #[must_use]
+    pub fn eq_at(&self, index: usize, other: &str) -> bool {
+        Tokens::unescape(&self.raw[index]) == other
     }
 
     /// Raw (still escaped) token — used only by the dispatch chain tests and
@@ -98,8 +107,8 @@ impl<'a> Tokens<'a> {
 
     /// The last token (unescaped view), if any — `tokens.get(size()-1)`.
     #[must_use]
-    pub fn last(&self) -> Option<String> {
-        self.raw.last().map(|t| Tokens::unescape(t).into_owned())
+    pub fn last(&self) -> Option<Cow<'_, str>> {
+        self.raw.last().map(|t| Tokens::unescape(t))
     }
 
     /// `subList(fromIndex, size())` — borrowed view (2R R-dsl-01).

@@ -613,7 +613,7 @@ fn one_token(_p: &Parser<'_>, raw: &Tokens, grammar: &str) -> Result<String, Dsl
     if !raw.includes(1) {
         return Err(DslError::stmt(format!("Expected: {grammar}")));
     }
-    Ok(raw.get(1))
+    Ok(raw.get(1).into_owned())
 }
 
 /// The enum-valued statements: same two guards with the enum list already
@@ -671,7 +671,7 @@ fn style_tag(t: &Tokens, keyword: &str) -> Result<String, DslError> {
             // `StringUtils.isNullOrEmpty` trims.
             return Err(DslError::stmt("A tag must be specified"));
         }
-        Ok(tag)
+        Ok(tag.into_owned())
     } else {
         Err(DslError::stmt(format!("Expected: {grammar}")))
     }

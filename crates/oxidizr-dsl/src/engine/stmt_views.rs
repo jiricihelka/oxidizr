@@ -25,6 +25,8 @@
 //! <file>` with an SVG inlines the plain data URI regardless of the color
 //! scheme (the reference `ImageImporter` ignores the scheme for files).
 
+use std::borrow::Cow;
+
 use oxidizr_core::url::{is_http_url, is_https_url, is_url};
 use oxidizr_core::validate::ElementKind;
 use oxidizr_core::views::{
@@ -71,13 +73,13 @@ fn net_http() -> DslError {
 }
 
 /// `AbstractViewParser.validateViewKey`.
-fn validate_view_key(key: String) -> Result<String, DslError> {
+fn validate_view_key(key: Cow<'_, str>) -> Result<String, DslError> {
     let valid = !key.is_empty()
         && key
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
     if valid {
-        Ok(key)
+        Ok(key.into_owned())
     } else {
         Err(DslError::stmt(
             "View keys can only contain the following characters: a-zA-Z0-9_-",
@@ -120,10 +122,10 @@ fn custom_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         key = validate_view_key(t.get(1))?;
     }
     if t.includes(2) {
-        title = t.get(2);
+        title = t.get(2).into_owned();
     }
     if t.includes(3) {
-        description = t.get(3);
+        description = t.get(3).into_owned();
     }
     let view = p
         .builder
@@ -153,7 +155,7 @@ fn landscape_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         key = validate_view_key(t.get(1))?;
     }
     if t.includes(2) {
-        description = t.get(2);
+        description = t.get(2).into_owned();
     }
     let view = p
         .builder
@@ -185,7 +187,7 @@ fn context_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         key = validate_view_key(t.get(2))?;
     }
     if t.includes(3) {
-        description = t.get(3);
+        description = t.get(3).into_owned();
     }
     let view = p
         .builder
@@ -217,7 +219,7 @@ fn container_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         key = validate_view_key(t.get(2))?;
     }
     if t.includes(3) {
-        description = t.get(3);
+        description = t.get(3).into_owned();
     }
     let view = p
         .builder
@@ -249,7 +251,7 @@ fn component_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         key = validate_view_key(t.get(2))?;
     }
     if t.includes(3) {
-        description = t.get(3);
+        description = t.get(3).into_owned();
     }
     let view = p
         .builder
@@ -287,7 +289,7 @@ fn dynamic_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         return Err(expected(G));
     }
     let description = if t.includes(3) {
-        t.get(3)
+        t.get(3).into_owned()
     } else {
         String::new()
     };
@@ -338,7 +340,7 @@ fn deployment_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     }
     let scope = t.get(1);
     let env_token = t.get(2);
-    let mut environment = env_token.clone();
+    let mut environment = env_token.clone().into_owned();
     if let Some(RegItem::Pseudo {
         kind: PseudoKind::DeploymentEnvironment(name),
         ..
@@ -359,7 +361,7 @@ fn deployment_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         )));
     }
     let description = if t.includes(4) {
-        t.get(4)
+        t.get(4).into_owned()
     } else {
         String::new()
     };
@@ -422,7 +424,7 @@ fn filtered_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         }
     }
     let description = if t.includes(5) {
-        t.get(5)
+        t.get(5).into_owned()
     } else {
         String::new()
     };
@@ -549,8 +551,8 @@ fn add_deployment_element_ignoring_not_permitted(
 
 /// `StringUtils.isNullOrEmpty(identifier)` — the add-ladder error fires on
 /// the identifier path only (expressions pass `null`).
-fn cannot_add(identifier: Option<&String>) -> Option<DslError> {
-    identifier.as_ref().filter(|i| !is_trim_empty(i)).map(|i| {
+fn cannot_add(identifier: Option<&str>) -> Option<DslError> {
+    identifier.filter(|i| !is_trim_empty(i)).map(|i| {
         DslError::stmt(format!(
             "The element \"{i}\" can not be added to this type of view"
         ))
@@ -586,7 +588,7 @@ fn static_include(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), 
         } else {
             let items = p.parse_identifier(&token, ExprScope::Static)?;
             for item in items {
-                add_static_item(p, view, item, Some(&token))?;
+                add_static_item(p, view, item, Some(&*token))?;
             }
         }
     }
@@ -597,7 +599,7 @@ fn add_static_item(
     p: &mut Parser,
     view: ViewRef,
     item: Mi,
-    identifier: Option<&String>,
+    identifier: Option<&str>,
 ) -> Result<(), DslError> {
     match item {
         Mi::Element(id) => {
@@ -684,7 +686,7 @@ fn deployment_include(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<
         } else {
             let items = p.parse_identifier(&token, ExprScope::Deployment)?;
             for item in items {
-                add_deployment_item(p, view, item, Some(&token))?;
+                add_deployment_item(p, view, item, Some(&*token))?;
             }
         }
     }
@@ -707,7 +709,7 @@ fn add_deployment_item(
     p: &mut Parser,
     view: ViewRef,
     item: Mi,
-    identifier: Option<&String>,
+    identifier: Option<&str>,
 ) -> Result<(), DslError> {
     match item {
         Mi::Element(id) => {
@@ -868,7 +870,7 @@ fn custom_include(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), 
         } else {
             let items = p.parse_identifier(&token, ExprScope::Custom)?;
             for item in items {
-                add_custom_item(p, view, item, Some(&token))?;
+                add_custom_item(p, view, item, Some(&*token))?;
             }
         }
     }
@@ -879,7 +881,7 @@ fn add_custom_item(
     p: &mut Parser,
     view: ViewRef,
     item: Mi,
-    identifier: Option<&String>,
+    identifier: Option<&str>,
 ) -> Result<(), DslError> {
     match item {
         Mi::Element(id) => {
@@ -1055,7 +1057,7 @@ fn auto_layout(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if tokens.includes(1) {
         let rd = tokens.get(1);
         // `HashMap.containsKey` — case-SENSITIVE keys.
-        rank_direction = match rd.as_str() {
+        rank_direction = match &*rd {
             "tb" => RankDirection::TopBottom,
             "bt" => RankDirection::BottomTop,
             "lr" => RankDirection::LeftRight,
@@ -1114,7 +1116,7 @@ fn view_text(p: &mut Parser, tokens: &Tokens, title: bool) -> Result<(), DslErro
         let value = tokens.get(1);
         // `setTitle`/`setDescription` store verbatim; empty text is
         // omitted by the writer, so an explicit `""` stores nothing.
-        apply_text(p, view, value, title);
+        apply_text(p, view, value.into_owned(), title);
         Ok(())
     } else {
         Err(expected(grammar))
@@ -1226,7 +1228,7 @@ fn image_content(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), D
     let Some(dir) = p.current_dir() else {
         return Err(DslError::stmt("NullPointerException"));
     };
-    let file = std::path::Path::new(&dir).join(&source);
+    let file = std::path::Path::new(&dir).join(&*source);
     if !file.exists() {
         return Err(DslError::stmt(format!(
             "The file at {} does not exist",
@@ -1299,7 +1301,7 @@ fn dynamic_step(p: &mut Parser, raw: &Tokens, view: ViewRef, open: bool) -> Resu
         }
     }
     let tokens = Tokens::borrowed(rest);
-    let rel_id = if tokens.size() > 1 && tokens.get(1) == tok::RELATIONSHIP {
+    let rel_id = if tokens.size() > 1 && tokens.eq_at(1, tok::RELATIONSHIP) {
         // Pair form. `RELATIONSHIP_TOKEN.equals` — case-sensitive `->`.
         if tokens.has_more_than(4) {
             return Err(too_many(G1));
@@ -1312,12 +1314,12 @@ fn dynamic_step(p: &mut Parser, raw: &Tokens, view: ViewRef, open: bool) -> Resu
         let source = dynamic_element(p, &source_id, true)?;
         let destination = dynamic_element(p, &destination_id, false)?;
         let description = if tokens.includes(3) {
-            tokens.get(3)
+            tokens.get(3).into_owned()
         } else {
             String::new()
         };
         let technology = if tokens.includes(4) {
-            tokens.get(4)
+            tokens.get(4).into_owned()
         } else {
             String::new()
         };
@@ -1353,7 +1355,7 @@ fn dynamic_step(p: &mut Parser, raw: &Tokens, view: ViewRef, open: bool) -> Resu
             )));
         };
         let description = if tokens.includes(1) {
-            tokens.get(1)
+            tokens.get(1).into_owned()
         } else {
             String::new()
         };
@@ -1490,7 +1492,7 @@ fn theme(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if !tokens.includes(1) {
         return Err(expected(G));
     }
-    add_theme(p, tokens.get(1))
+    add_theme(p, tokens.get(1).into_owned())
 }
 
 fn themes(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
@@ -1499,7 +1501,7 @@ fn themes(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
         return Err(expected(G));
     }
     for i in 1..tokens.size() {
-        add_theme(p, tokens.get(i))?;
+        add_theme(p, tokens.get(i).into_owned())?;
     }
     Ok(())
 }
@@ -1521,7 +1523,7 @@ fn term(
     }
     set(
         &mut p.builder.views_mut().configuration.terminology,
-        tokens.get(1),
+        tokens.get(1).into_owned(),
     );
     Ok(())
 }
@@ -1823,7 +1825,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         }
         let url = t.get(1);
         if let Some(rv) = p.relationship_view_mut(view, &rel) {
-            rv.url = Some(url);
+            rv.url = Some(url.into_owned());
         }
         return Sec::Handled;
     }

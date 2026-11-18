@@ -66,7 +66,7 @@ impl Parser<'_> {
         }
         let canonical = match &item {
             RegItem::Element(id) => self.builder.canonical_name_full(id).unwrap_or_default(),
-            RegItem::Pseudo { .. } | RegItem::Relationship(_) => s.clone(),
+            RegItem::Pseudo { .. } | RegItem::Relationship(_) => s.clone().into_owned(),
         };
         Ok((item, canonical))
     }
@@ -96,7 +96,7 @@ impl Parser<'_> {
         let canonical = self
             .builder
             .relationship_canonical_name(&id)
-            .unwrap_or_else(|| s.clone());
+            .unwrap_or_else(|| s.clone().into_owned());
         Ok((id, canonical))
     }
 
@@ -154,6 +154,6 @@ impl Parser<'_> {
                 tokens.size()
             )));
         }
-        Ok(tokens.get(1))
+        Ok(tokens.get(1).into_owned())
     }
 }

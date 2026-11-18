@@ -268,7 +268,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             // (the one-arg ctor performs NO name validation; the block
             // close adds via the OBJECT path, which only duplicate-checks).
             def: Perspective {
-                name: raw.get(1),
+                name: raw.get(1).into_owned(),
                 description: None,
                 value: None,
                 url: None,
@@ -289,10 +289,10 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             if !raw.includes(1) {
                 return Err(DslError::stmt("Expected: <name> <description> [value]"));
             }
-            let name = raw.get(0);
-            let description = raw.get(1);
+            let name = raw.get(0).into_owned();
+            let description = raw.get(1).into_owned();
             let value = if raw.includes(2) {
-                raw.get(2)
+                raw.get(2).into_owned()
             } else {
                 String::default()
             };
@@ -334,7 +334,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                     PerspectiveField::Url => "url <url>",
                 };
                 one_token(raw, grammar)?;
-                let value = raw.get(1);
+                let value = raw.get(1).into_owned();
                 if let Some(Ctx::Perspective { def }) = p.stack.last_mut() {
                     match field {
                         PerspectiveField::Value => def.value = Some(value),
@@ -382,7 +382,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                     }
                     format!("{existing}{separator}{name}")
                 }
-                _ => name,
+                _ => name.into_owned(),
             };
             if let Some(mut el) = p.builder.element_mut(&id) {
                 el.set_group(Some(group));
@@ -479,7 +479,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             // else needs the JVM (`ClassNotFoundException` equivalent —
             // D2 lists `!impliedRelationships <fqcn>` as a JVM-only
             // reject, and the reference message is the CNFE text).
-            let strategy = match option.as_str() {
+            let strategy = match &*option {
                 "com.structurizr.model.DefaultImpliedRelationshipsStrategy" => {
                     ImpliedRelationshipsStrategy::Default
                 }

@@ -46,7 +46,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         return Sec::Handled; // swallowed
     }
     // 292: `}` — end the current context.
-    if stmt.tokens.get(0) == tok::CONTEXT_END {
+    if stmt.tokens.eq_at(0, tok::CONTEXT_END) {
         return p.end_context().into();
     }
     // 295: !include <file|directory|url>
@@ -109,7 +109,7 @@ impl Parser<'_> {
         let base = Path::new(&dsl_file)
             .parent()
             .map_or_else(PathBuf::new, PathBuf::from);
-        let path = base.join(&source);
+        let path = base.join(&*source);
         if !path.exists() {
             return Err(DslError::stmt(format!(
                 "{} could not be found",

@@ -104,11 +104,15 @@ impl Parser<'_> {
         if !tokens.includes(required) {
             return Err(DslError::stmt(format!("Expected: {grammar}")));
         }
-        let description = tokens.includes(desc_ix).then(|| tokens.get(desc_ix));
+        let description = tokens
+            .includes(desc_ix)
+            .then(|| tokens.get(desc_ix).into_owned());
         let technology = tech_ix
             .filter(|&i| tokens.includes(i))
-            .map(|i| tokens.get(i));
-        let tags = tokens.includes(tags_ix).then(|| tokens.get(tags_ix));
+            .map(|i| tokens.get(i).into_owned());
+        let tags = tokens
+            .includes(tags_ix)
+            .then(|| tokens.get(tags_ix).into_owned());
         Ok((description, technology, tags))
     }
 

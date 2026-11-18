@@ -110,7 +110,7 @@ pub(crate) struct Stmt {
 
 impl Stmt {
     /// Java `String firstToken = tokens.get(0)` (post id-strip).
-    pub fn first(&self) -> String {
+    pub fn first(&self) -> std::borrow::Cow<'_, str> {
         self.tokens.get(0)
     }
 }
