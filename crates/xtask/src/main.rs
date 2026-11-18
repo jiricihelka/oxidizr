@@ -311,11 +311,14 @@ fn resolve_ci_steps(args: &[String]) -> Result<Vec<Step>> {
 }
 
 /// cargo honoring the `cargo` wrapper cargo sets for subcommands when available.
-fn cargo_cmd() -> Command {
+/// 2R R-tool-02 (same non-test-panic class as the bench-copy unwraps):
+/// `repo_root` failing means the binary lives outside `<root>/crates/xtask` —
+/// an error to report, not a panic to crash on.
+fn cargo_cmd() -> Result<Command> {
     let program = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let mut cmd = Command::new(program);
-    cmd.current_dir(repo_root().expect("repo root"));
-    cmd
+    cmd.current_dir(repo_root()?);
+    Ok(cmd)
 }
 
 /// Stream a gate to the terminal; `Ok(false)` on nonzero exit (no fail-fast —
@@ -323,7 +326,7 @@ fn cargo_cmd() -> Command {
 fn run_step(step: Step) -> Result<bool> {
     let args = step.cargo_args();
     println!("\n==> {} `$ cargo {}`", step.label(), args.join(" "));
-    let status = cargo_cmd()
+    let status = cargo_cmd()?
         .args(args)
         .status()
         .context("failed to run cargo")?;
@@ -363,7 +366,7 @@ fn cmd_ci(steps: Vec<Step>) -> Result<()> {
 /// CI, the local mirror passes `--features e2e-bench` so the whole-corpus
 /// benches are always measured (P1T-D7: CI skips them, they are local dev).
 fn cmd_bench() -> Result<()> {
-    let status = cargo_cmd()
+    let status = cargo_cmd()?
         .args([
             "bench",
             "--workspace",
@@ -561,7 +564,7 @@ fn reap_wine() {
 
 /// Coverage job mirror: report only, never a gate (agents/plan/TESTING.md).
 fn cmd_cov() -> Result<()> {
-    let probe = cargo_cmd()
+    let probe = cargo_cmd()?
         .args(["llvm-cov", "--version"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -569,7 +572,7 @@ fn cmd_cov() -> Result<()> {
     if !probe.is_ok_and(|s| s.success()) {
         bail!("cargo-llvm-cov not found — the nix dev shell provides it (agents/plan/WORKFLOW.md)");
     }
-    let status = cargo_cmd()
+    let status = cargo_cmd()?
         .args(["llvm-cov", "--workspace", "--summary-only"])
         .status()
         .context("failed to run cargo llvm-cov")?;
@@ -608,16 +611,16 @@ fn cmd_fuzz(secs: u64) -> Result<()> {
     // with the mingw g++ and even picks libFuzzer's *Windows* sources for a
     // Linux target. CI runners have a clean environment; stripping locally
     // keeps this mirror equal to CI (agents/notes/env/fuzz-host-toolchain.md).
-    let mk_cmd = || {
-        let mut cmd = cargo_cmd();
+    let mk_cmd = || -> Result<Command> {
+        let mut cmd = cargo_cmd()?;
         for key in ["CC", "CXX", "AR", "RANLIB"] {
             cmd.env_remove(key);
         }
-        cmd
+        Ok(cmd)
     };
 
     println!("\n==> fuzz build `$ cargo fuzz build`");
-    let status = mk_cmd().args(["fuzz", "build"]).status().context(
+    let status = mk_cmd()?.args(["fuzz", "build"]).status().context(
         "cargo fuzz not found — the nix dev shell provides it (agents/plan/WORKFLOW.md)",
     )?;
     ensure!(status.success(), "cargo fuzz build failed");
@@ -643,7 +646,7 @@ fn cmd_fuzz(secs: u64) -> Result<()> {
             }
         }
         println!("\n==> fuzz `{target}` ({staged} seeds, {secs}s) `$ cargo fuzz run {target}`");
-        let status = mk_cmd()
+        let status = mk_cmd()?
             .args([
                 "fuzz",
                 "run",

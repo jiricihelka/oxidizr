@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-18, **P2R: PR1–PR4 waves DONE**)
+# RESUME — session checkpoint (updated 2026-11-18, **P2R: PR1–PR5 waves DONE**)
 
 ## State
 
@@ -12,45 +12,38 @@
   `63cbc5a`/`fd3c257` + close `89989d6` (all R-dsl rows). PR3 export wave
   `b1b295e`/`a64da54` (+ bench record `041ff22`)/`7bfbac8`/`8a1e763`/
   `70ccde4`/`daf8e24`/`307518b` + close `a3d73ed` (all 18 R-exp rows).
-  PR4 json/api/cli wave (13 R-mis rows, BYTE-PATH): PR4-a `81eb675` json
-  writer cluster (R-mis-02/03/08/09/13 — infallible `set_list`/`list` +
-  `try_set_list`, `decisions` swallow KEPT as byte contract w/ hazard
-  comment, `InstanceTail`, `RvSortKey`, `ThemeView`), PR4-b1 `139581d`
-  printer arms (R-mis-06), PR4-b2 `a371afc` reader return-and-flatten
-  (R-mis-07), PR4-c1 `1db1b5c` pipeline Result shape (R-mis-01/05: private
-  `Fail(Outcome)` flattened at the frozen `execute`; `statement_errors`
-  helper ×4), PR4-c2 `ea9ad45` `decorate` `&&` + `to_request`/`replay`
-  moves (R-mis-04/10), PR4-c3 `8a67f7a` reconcile named builders + set
-  lookups (R-mis-11); PR4-d = R-mis-12 audit-trail ratification (no code:
-  javahash IS the byte contract, cites verified). Cumulative `bench cmp 2T`
-  at PR4 close: ALL 23 groups faster-or-equal — json byte-path legs
-  `json_read` 1234→1087 µs / `json_write` 2.3→1.96 ms, `dsl2json_all`
-  14.6→9.7 ms, `validate_all` 11.0→6.5 ms, `reconcile_166` 1146→567 µs,
-  `c4_biggest_166` 487→255 µs.
-- **Next: PR5** (`R-tool` 4 rows — `cargo xtask` + `oxidizr-e2e` harness,
-  the least constrained wave; tooling code, quartet + full tier + bless
-  still per commit):
-  - R-tool-01: 3× oracle-runner triplication (`reference_export_json`/
-    `_plantuml`/`_theme`, `xtask main.rs:685-784`) → shared
-    `run_oracle_export(oracle, workspace, outdir, format) -> Result<PathBuf/
-    Vec, String>`; `verify_json_legs`/`verify_diagram_legs`/`verify_theme_legs`
-    (`:1186-1310`) `failures: &mut usize` out-params → return
-    `Vec<String>` failure lines, `cmd_oracle_verify` folds them.
-  - R-tool-02: `unwrap()` ×2 in NON-test xtask (`main.rs:418`
-    `p.file_name().unwrap()` in bench-save, `:487` same in restore) →
-    `with_context`/`?` (charter: unwrap only in tests).
-  - R-tool-03: oracle_gen bool-flag ladder (`main.rs:1059-1096`) —
-    validated mutually exclusive; **ratify keep** (KC row, no code).
-  - R-tool-04: e2e triple — `runner.rs:63` `unwrap_or_default()` double
-    swallower on the dsl2json feed; `manifest.rs:400/462` codes-parse
-    duplicated ×2 → one `codes_from_value` helper; `mutate.rs:67-153`
-    5× op prologue (split→cands filter→empty→rng pick) → shared helper,
-    **keep the seeded index selection byte-identical** (mutation dirs are
-    blessed corpus names — `m119-drop-brace-64-…`).
-  - R-tool-03's ratification + the wave-row DONE + RESUME = PR5 close.
-- Then PR6 (§D4 ratchet measurement + enable kept lints; `bench save 2R`;
-  `oracle verify` ONCE; close-out docs: PROGRESS board row, WORKFLOW §Code
-  style lint row, PHASE_2R DONE, RESUME; **no tag**).
+  PR4 json/api/cli wave (13 R-mis rows, BYTE-PATH) `81eb675`/`139581d`/
+  `a371afc`/`1db1b5c`/`ea9ad45`/`8a67f7a` + close `679564a` (R-mis-12
+  audit ratified). PR5 tooling wave (4 R-tool rows) `371a593` xtask
+  (R-tool-01/02: `run_oracle_export` prologue, verify-legs `Vec<String>`,
+  unwraps→context) / `42bff5b` e2e (R-tool-04: explicit feed,
+  `codes_from_value`, mutate `pick_index`/`pick_line` with the rng-draw
+  sequence bit-preserved) + close = R-tool-03 ratify + `cargo_cmd()`
+  `expect("repo root")` elimination (xtask now has ZERO non-test
+  unwrap/expect). Cumulative `bench cmp 2T` at PR4/PR5 close: ALL 23
+  groups faster-or-equal (`m7_dsl_parse_big-bank-plc` 3.0→1.05 ms,
+  `m7_reconcile_cross` 441→177 µs, `json_read` 1234→1046 µs,
+  `json_write` 2.3→1.81 ms, `dsl2json_all` 14.6→10.4 ms).
+- **Next: PR6 — the phase close** (`PHASE_2R.md` §D4 + §D6 V-R2):
+  1. **V-R2 ratchet measurement**: try `redundant_clone` (nursery —
+     unstable, needs a `NIGHTLY.md` register row + measured compile-time
+     hit) on the post-sweep tree: `cargo clippy --workspace --all-targets
+     -- -W clippy::redundant_clone` style probe; record (a) fired-site
+     count, (b) compile-time delta, (c) false-positive notes → keep/drop
+     decision TABLE under §D4 (table recorded even on drop). ≤ 10-allow
+     kill switch (D4): more fight than value → drop.
+  2. If kept: workspace-lint row in root `Cargo.toml` + NIGHTLY.md row +
+     gate quartet (CI `-D warnings` makes it binding) + full tier + bless.
+  3. `cargo xtask bench save 2R` + commit the baseline dir
+     (`bench-baseline/2R/`, README context row).
+  4. `cargo xtask oracle verify` ONCE (needs `$OXIDZR_STRUCTURIZR_BIN` —
+     see `agents/notes/env/toolbox.md`; slow, Category B).
+  5. Close-out docs: WORKFLOW §Code style lint row (+ R-core-13
+     keep-marker notes: `builder.rs:14`/`viewops.rs:15` module-scope
+     missing-doc allows = crate convention, `url.rs:113` test allow
+     = 28-file convention), PROGRESS board row P2R COMPLETE + log entry,
+     PHASE_2R wave table PR6 DONE, RESUME final.
+  6. **No tag** (1T/2T precedent); never push.
 - Wave ritual per commit: `cargo xtask ci` +
   `OXIDZR_E2E_FULL=1 cargo test -p oxidizr-e2e` (8 `test result: ok`) +
   `cargo xtask e2e bless` zero-diff (`corpus-diff=$(git status --short e2e/ | wc -l)` = 0).
@@ -75,6 +68,10 @@
   in the name (`try_set_list`).
 - `entry().or_insert()` keeps the FIRST entry per id — the exact answer an
   `iter().find(…)` scan gave (PR4-c3).
+- Seeded rng code dedupes only around the draw, never across it: empty
+  candidate list draws NOTHING, else exactly one `rng.below` — bless
+  corpus-diff=0 is then the proof the blessed `m<i>-<label>-…` dirs are
+  bit-identical (PR5 mutate prologue).
 - Proof convention unchanged: full tier = 8 `test result: ok`; bless =
   `corpus-diff=0`; commit via `git commit -q -F /tmp/nix-shell.v8guJ6/opencode/<msg>.txt`;
   register edits via python with `assert src.count(old) == 1`.
