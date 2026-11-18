@@ -10,7 +10,61 @@ official tooling (the compat gate applies to every save).
 
 Single-binary promise: `oxidizr-viewer` is one self-contained executable — no Java, no
 browser, no mandatory external binaries. GUI export buttons and multi-window are
-**deferred** (out of this phase).
+**deferred** (out of this phase) — unless the export sign-off (Q2 below) adopts it.
+
+## P3-D0 Parity contract: feature parity, NOT visual parity (ratified 2026-11-18)
+
+**We do not chase visual parity with the Structurizr web UI** — its GUI is unintuitive
+and wonky. We clone **what it can do** (feature parity), never **how it looks**:
+
+- Native egui look-and-feel wins over any web mimicry — chrome, panels, buttons,
+  modals, keyboard scheme are ours to design for usability (the reference stays the
+  feature checklist, not the design mockup).
+- **Exception — the diagram canvas is data, not styling.** Elements render from the
+  workspace JSON via P2's `core::styles` (theme colors/shapes/icons, terminology,
+  metadata, legends). That is the JSON compat contract applied, not visual parity.
+- No pixel/CSS/font-match tests exist for the viewer. QA = the feature matrix below
+  (each ✅ row demonstrably works on real workspaces) + the manual QA checklist.
+- Where the reference has *no* feature and we need one for a good native app
+  (view selector ergonomics, file dialogs), it goes through
+  `ADDITIONAL_FEATURES.md` as usual.
+
+## P3-F Feature parity matrix (verified against pinned monorepo, 2026-11-18)
+
+Sources: `webapp/WEB-INF/fragments/diagrams/*.jspf`, `webapp/WEB-INF/jsp/{diagrams,tree}.jsp`,
+`static/js/structurizr-diagram.js`, `structurizr-core/.../view/ViewSet.java`.
+
+| #  | Reference feature                       | Source (line)                       | P3 stance                        |
+| -- | --------------------------------------- | ----------------------------------- | -------------------------------- |
+| 1  | All 9 view kinds render (landscape…image) | `ViewSet.java:735–860`             | ✅ all; custom/image depth = Q4   |
+| 2  | View navigation tree / switching        | `tree.jsp`, `navigation.jspf`       | ✅ view selector (P3-D4)          |
+| 3  | Pan + wheel zoom                        | `structurizr-diagram.js` ZoomScale  | ✅ (P3-D4)                        |
+| 4  | Diagram key/legend overlay `[i]`        | `key.jspf`                          | ✅ — Q3 sign-off                  |
+| 5  | Tooltips on/off `[t]`                   | `tooltip.jspf`                      | ✅ — Q3 sign-off                  |
+| 6  | Interactive tag filter (client-side)    | `filter.jspf`                       | ✅ — Q3 sign-off                  |
+| 7  | Dynamic-view animation (2 s autoplay)   | `structurizr-diagram.js:80–111`     | ✅ stepper (P3-D3) + play button  |
+| 8  | Edit mode (layout lock/unlock)          | `controls.jspf:61`                  | ✅ (P3-D4)                        |
+| 9  | Drag elements, lasso select, snap       | `lasso.jspf`, P3-D4                 | ✅ (P3-D4)                        |
+| 10 | Align L/C/R/T/M/B + distribute H/V + centre | `controls.jspf:85–111`          | ✅ — Q3 sign-off (new commands)   |
+| 11 | Canvas size ±/auto (view dimensions)    | `controls.jspf:74–76`               | ✅ — Q3 sign-off; writes JSON dims |
+| 12 | Auto-layout dialog (direction, generate vertices, rank/node separation) | `auto-layout.jspf` | ✅ dialog → P3-D5 params |
+| 13 | "Bring elements back" / "remove all vertices" | `auto-layout.jspf:53–54`     | ✅ commands (M3)                  |
+| 14 | Undo layout changes `[u]`               | `controls.jspf:116`                 | ✅ (P3-D4)                        |
+| 15 | Save workspace (layout survives)        | `controls.jspf:127`                 | ✅ (P3-D4; sidecar/in-place)      |
+| 16 | PNG/SVG export (diagram + key)          | `export.jspf`, `controls.jspf:45`   | ❓ **Q2**                         |
+| 17 | Diagram navigator (minimap modal)       | `navigator.jspf`                    | ❓ **Q3** (rec: P4)               |
+| 18 | Quick navigation (search)               | `quick-navigation.jspf`             | ❓ **Q3** (rec: P4)               |
+| 19 | Perspectives                            | `perspectives.jspf`                 | ❌ N/A — service-side feature     |
+| 20 | Health-check overlay                    | `structurizr-healthcheck.js`        | ❌ N/A — P4 `inspect` covers      |
+| 21 | Explore (adjacency walk)                | `controls.jspf:21`                  | ❌ out; 💡 P4+ candidate          |
+| 22 | Embed / share / home / summary          | web chrome                          | ❌ N/A — native app has files     |
+| 23 | Multi-user lock, git sync, DSL editing  | workspace services                  | ❌ N/A — CLI covers (`inspect`, P4) |
+
+Open sign-offs (Q1–Q4, asked 2026-11-18; resolve here before M0 starts):
+Q1 theme-driven canvas rendering stays data-✅ (recommended); Q2 PNG/SVG export in P3?;
+Q3 extras bundle (4/5/6/10/11 in; 17/18 to P4); Q4 depth for custom/image views
+(rec: image views render local files + remote with `--allow-net`; custom views render
+stored definitions where trivially renderable — SVG/text — else definition placeholder).
 
 ## P3-D1 Crate topology
 
