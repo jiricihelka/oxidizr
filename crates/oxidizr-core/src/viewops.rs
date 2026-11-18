@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use crate::builder::WorkspaceBuilder;
 use crate::error::CoreError;
 use crate::ids::Id;
+use crate::model::DeploymentNode;
 use crate::validate::ElementKind;
 use crate::views::{Animation, AutomaticLayout, ElementView, RankDirection, RelationshipView};
 
@@ -498,49 +499,62 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// The `environment` of a deployment element.
+    /// The `environment` of a deployment element. Recursive pre-order over
+    /// the node tree checking node → infrastructure/ssi/ci → children — the
+    /// exact visit order of the old `flatten_nodes` scan, without building
+    /// (and cloning) the inherited-group vectors nobody reads (2R R-core-10).
     #[must_use]
     pub fn element_environment(&self, id: &Id) -> Option<String> {
-        let nodes = crate::builder::flatten_nodes(&self.workspace().model.deployment_nodes);
-        for (node, _) in &nodes {
-            if &node.item.id == id {
-                return Some(node.environment.clone());
-            }
-            for i in &node.infrastructure_nodes {
-                if &i.item.id == id {
-                    return Some(i.environment.clone());
+        fn find<'a>(nodes: &'a [DeploymentNode], id: &Id) -> Option<&'a str> {
+            for n in nodes {
+                if &n.item.id == id {
+                    return Some(&n.environment);
+                }
+                for i in &n.infrastructure_nodes {
+                    if &i.item.id == id {
+                        return Some(&i.environment);
+                    }
+                }
+                for s in &n.software_system_instances {
+                    if &s.item.id == id {
+                        return Some(&s.environment);
+                    }
+                }
+                for c in &n.container_instances {
+                    if &c.item.id == id {
+                        return Some(&c.environment);
+                    }
+                }
+                if let Some(e) = find(&n.children, id) {
+                    return Some(e);
                 }
             }
-            for s in &node.software_system_instances {
-                if &s.item.id == id {
-                    return Some(s.environment.clone());
-                }
-            }
-            for c in &node.container_instances {
-                if &c.item.id == id {
-                    return Some(c.environment.clone());
-                }
-            }
+            None
         }
-        None
+        find(&self.workspace().model.deployment_nodes, id).map(str::to_string)
     }
 
     /// The static element an instance is based on.
     fn instance_static_element(&self, id: &Id) -> Option<Id> {
-        let nodes = crate::builder::flatten_nodes(&self.workspace().model.deployment_nodes);
-        for (node, _) in &nodes {
-            for s in &node.software_system_instances {
-                if &s.item.id == id {
-                    return Some(s.software_system_id.clone());
+        fn find(nodes: &[DeploymentNode], id: &Id) -> Option<Id> {
+            for n in nodes {
+                for s in &n.software_system_instances {
+                    if &s.item.id == id {
+                        return Some(s.software_system_id.clone());
+                    }
+                }
+                for c in &n.container_instances {
+                    if &c.item.id == id {
+                        return Some(c.container_id.clone());
+                    }
+                }
+                if let Some(x) = find(&n.children, id) {
+                    return Some(x);
                 }
             }
-            for c in &node.container_instances {
-                if &c.item.id == id {
-                    return Some(c.container_id.clone());
-                }
-            }
+            None
         }
-        None
+        find(&self.workspace().model.deployment_nodes, id)
     }
 
     /// For a container instance: the software system its container belongs
@@ -612,11 +626,7 @@ impl WorkspaceBuilder {
         relationship: &Id,
     ) -> Result<bool, CoreError> {
         let (source, destination) = self
-            .workspace()
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == relationship)
+            .relationship(relationship)
             .map(|r| (r.source.clone(), r.destination.clone()))
             .ok_or_else(|| CoreError::RelationshipNotFound {
                 id: relationship.clone(),
@@ -1209,12 +1219,7 @@ impl WorkspaceBuilder {
                     .relationships
                     .iter()
                     .filter(|rv| {
-                        let model = self
-                            .workspace()
-                            .model
-                            .relationships
-                            .iter()
-                            .find(|r| r.id == rv.id);
+                        let model = self.relationship(&rv.id);
                         let Some(model) = model else {
                             return false;
                         };
@@ -1255,11 +1260,7 @@ impl WorkspaceBuilder {
         order: &str,
     ) -> Result<Id, CoreError> {
         let (source, destination) = self
-            .workspace()
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == relationship)
+            .relationship(relationship)
             .map(|r| (r.source.clone(), r.destination.clone()))
             .ok_or_else(|| CoreError::RelationshipNotFound {
                 id: relationship.clone(),

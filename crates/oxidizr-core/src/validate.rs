@@ -324,7 +324,11 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
     }
 }
 
-fn flattened_ids(model: &Model) -> Vec<(&Id, ElementKind, &str)> {
+/// Flatten the model into borrowed `(id, kind, name)` triples in hydrate
+/// order — same walk as [`flattened`] without cloning any Id/name (the
+/// gate-path fast twin; 2R R-core-03).
+#[must_use]
+pub(crate) fn flattened_ids(model: &Model) -> Vec<(&Id, ElementKind, &str)> {
     fn walk<'m>(n: &'m DeploymentNode, out: &mut Vec<(&'m Id, ElementKind, &'m str)>) {
         out.push((&n.item.id, ElementKind::DeploymentNode, &n.item.name));
         for c in &n.children {

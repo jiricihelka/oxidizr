@@ -779,13 +779,7 @@ impl WorkspaceBuilder {
     /// strategy's efferent check says otherwise. Order matches the reference
     /// loops (outer: source chain; inner: destination chain reset per step).
     fn create_implied_relationships(&mut self, base_id: &Id) {
-        let base = self
-            .workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == base_id)
-            .expect("just added");
+        let base = self.relationship(base_id).expect("just added");
         let (src, dst, desc, tech) = (
             base.source.clone(),
             base.destination.clone(),
@@ -857,13 +851,7 @@ impl WorkspaceBuilder {
                 .collect();
             for base_id in fwd_ids {
                 let (desc, tech) = {
-                    let base = self
-                        .workspace
-                        .model
-                        .relationships
-                        .iter()
-                        .find(|r| r.id == base_id)
-                        .expect("model relationship");
+                    let base = self.relationship(&base_id).expect("model relationship");
                     (base.description.clone(), base.technology.clone())
                 };
                 if self.has_efferent(instance_id, &other_id, desc.as_deref().unwrap_or("")) {
@@ -889,13 +877,7 @@ impl WorkspaceBuilder {
                 .collect();
             for base_id in rev_ids {
                 let (desc, tech) = {
-                    let base = self
-                        .workspace
-                        .model
-                        .relationships
-                        .iter()
-                        .find(|r| r.id == base_id)
-                        .expect("model relationship");
+                    let base = self.relationship(&base_id).expect("model relationship");
                     (base.description.clone(), base.technology.clone())
                 };
                 if self.has_efferent(&other_id, instance_id, desc.as_deref().unwrap_or("")) {
@@ -1073,9 +1055,9 @@ impl WorkspaceBuilder {
     /// lookups and the `include *` / expression finders.
     #[must_use]
     pub fn all_element_ids(&self) -> Vec<Id> {
-        let mut ids: Vec<Id> = crate::validate::flattened(&self.workspace.model)
+        let mut ids: Vec<Id> = crate::validate::flattened_ids(&self.workspace.model)
             .into_iter()
-            .map(|(id, _, _)| id)
+            .map(|(id, _, _)| id.clone())
             .collect();
         ids.sort_by_key(|id| id_sort_key(id.as_str()));
         ids
@@ -1153,12 +1135,7 @@ impl WorkspaceBuilder {
     /// `Relationship.getCanonicalName()` (`CanonicalNameGenerator`).
     #[must_use]
     pub fn relationship_canonical_name(&self, id: &Id) -> Option<String> {
-        let r = self
-            .workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)?;
+        let r = self.relationship(id)?;
         let source = self.canonical_name_full(&r.source)?;
         let dest = self.canonical_name_full(&r.destination)?;
         Some(crate::canonical::relationship(
@@ -1217,11 +1194,7 @@ impl WorkspaceBuilder {
     /// `Relationship.getTechnology()` (empty string when unset).
     #[must_use]
     pub fn relationship_technology(&self, id: &Id) -> String {
-        self.workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)
+        self.relationship(id)
             .and_then(|r| r.technology.clone())
             .unwrap_or_default()
     }
@@ -1229,11 +1202,7 @@ impl WorkspaceBuilder {
     /// `Relationship.getLinkedRelationshipId()`.
     #[must_use]
     pub fn linked_relationship_id(&self, id: &Id) -> Option<Id> {
-        self.workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)
+        self.relationship(id)
             .and_then(|r| r.linked_relationship_id.clone())
     }
 
@@ -1310,13 +1279,7 @@ impl WorkspaceBuilder {
                 });
             return item.tags.has(kind, tag);
         }
-        if let Some(r) = self
-            .workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)
-        {
+        if let Some(r) = self.relationship(id) {
             let defaults = crate::tags::relationship_defaults(
                 r.linked_relationship_id.is_some(),
                 r.interaction_style,
@@ -1332,11 +1295,7 @@ impl WorkspaceBuilder {
         if let Some(item) = self.item(id) {
             return item.properties.get(name) == Some(value);
         }
-        self.workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)
+        self.relationship(id)
             .is_some_and(|r| r.properties.get(name) == Some(value))
     }
 
@@ -1352,12 +1311,7 @@ impl WorkspaceBuilder {
     /// `Relationship.getInteractionStyle()` (never set from the DSL).
     #[must_use]
     pub fn relationship_style(&self, id: &Id) -> Option<crate::tags::InteractionStyle> {
-        self.workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)
-            .and_then(|r| r.interaction_style)
+        self.relationship(id).and_then(|r| r.interaction_style)
     }
 
     /// `AbstractRelationshipParser.createRelationship` — the DSL relationship
@@ -1445,11 +1399,7 @@ impl WorkspaceBuilder {
     /// [`WorkspaceBuilder::dsl_uses`].
     fn maybe_create_implied(&mut self, id: &Id) {
         let (source, destination) = self
-            .workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)
+            .relationship(id)
             .map(|r| (r.source.clone(), r.destination.clone()))
             .expect("just inserted");
         if self.implied_strategy != ImpliedRelationshipsStrategy::Default
@@ -1512,12 +1462,7 @@ impl WorkspaceBuilder {
     /// relationship (for `-/>` and the `NoRelationship` context hand-off).
     #[must_use]
     pub fn relationship_parts(&self, id: &Id) -> Option<(String, String, Option<Id>)> {
-        let r = self
-            .workspace
-            .model
-            .relationships
-            .iter()
-            .find(|r| &r.id == id)?;
+        let r = self.relationship(id)?;
         Some((
             r.description.clone().unwrap_or_default(),
             r.technology.clone().unwrap_or_default(),
@@ -2165,49 +2110,39 @@ impl WorkspaceBuilder {
     /// triggers `generateViewKey(prefix)` = `<Prefix>-<counter:000>` scanning
     /// from 1 (marks `generatedKey`); a given key must be unique across ALL
     /// views; `order` = max existing order + 1 across the whole view set.
+    /// The view set is walked ONCE (2R R-core-11 — the old shape rebuilt and
+    /// rescanned `all_views()` per key-candidate; behaviour is identical).
     fn new_view_base(&mut self, key: &str, prefix: &str) -> Result<ViewBase, CoreError> {
+        let views = self.workspace.views.all_views();
+        let order = views
+            .iter()
+            .map(|v| v.order())
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
         let (key, generated) = if key.is_empty() {
-            (self.generate_view_key(prefix), true)
+            (Self::generate_view_key(&views, prefix), true)
         } else {
-            if self
-                .workspace
-                .views
-                .all_views()
-                .iter()
-                .any(|v| v.key() == key)
-            {
+            if views.iter().any(|v| v.key() == key) {
                 return Err(CoreError::DuplicateViewKey {
                     key: key.to_string(),
                 });
             }
             (key.to_string(), false)
         };
-        let order = self
-            .workspace
-            .views
-            .all_views()
-            .iter()
-            .map(|v| v.order())
-            .max()
-            .unwrap_or(0)
-            + 1;
         let mut base = ViewBase::new(key, order);
         base.generated_key = generated;
         Ok(base)
     }
 
-    /// `ViewSet.generateViewKey`: `DecimalFormat("000")` scan from 1.
-    fn generate_view_key(&self, prefix: &str) -> String {
+    /// `ViewSet.generateViewKey`: `DecimalFormat("000")` scan from 1 over a
+    /// once-collected key set.
+    fn generate_view_key(views: &[crate::views::View<'_>], prefix: &str) -> String {
+        let taken: std::collections::HashSet<&str> = views.iter().map(|v| v.key()).collect();
         let mut n = 1_u32;
         loop {
             let candidate = format!("{prefix}-{n:03}");
-            if !self
-                .workspace
-                .views
-                .all_views()
-                .iter()
-                .any(|v| v.key() == candidate)
-            {
+            if !taken.contains(candidate.as_str()) {
                 return candidate;
             }
             n += 1;
@@ -2264,17 +2199,17 @@ impl WorkspaceBuilder {
     /// Whether an id names an element of any kind.
     #[must_use]
     pub fn has_element(&self, id: &Id) -> bool {
-        crate::validate::flattened(&self.workspace.model)
-            .iter()
+        crate::validate::flattened_ids(&self.workspace.model)
+            .into_iter()
             .any(|(eid, _, _)| eid == id)
     }
 
     /// The kind label of an element id.
     #[must_use]
     pub fn element_kind(&self, id: &Id) -> Option<crate::validate::ElementKind> {
-        crate::validate::flattened(&self.workspace.model)
+        crate::validate::flattened_ids(&self.workspace.model)
             .into_iter()
-            .find(|(eid, _, _)| eid == id)
+            .find(|&(eid, _, _)| eid == id)
             .map(|(_, kind, _)| kind)
     }
 
@@ -2347,6 +2282,18 @@ impl WorkspaceBuilder {
             .model
             .relationships
             .iter_mut()
+            .find(|r| &r.id == id)
+    }
+
+    /// Borrow a model relationship by id — the read-side twin of
+    /// [`Self::relationship_mut`]; hand-rolled at ~15 call sites before
+    /// 2R R-core-09.
+    #[must_use]
+    pub(crate) fn relationship(&self, id: &Id) -> Option<&Relationship> {
+        self.workspace
+            .model
+            .relationships
+            .iter()
             .find(|r| &r.id == id)
     }
 
