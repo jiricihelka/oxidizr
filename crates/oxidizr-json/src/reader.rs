@@ -261,10 +261,16 @@ fn read_item(o: Obj<'_>, named: bool) -> ModelItem {
     }
 }
 
-/// Reads an element's nested `relationships[]` into the shared collector and
-/// returns the link list (`Element.setRelationships`; the writer re-sorts).
-fn read_relationships(o: Obj<'_>, rels: &mut Vec<Relationship>) -> Vec<Id> {
+/// Reads an element's nested `relationships[]`: returns the link list
+/// (`Element.setRelationships`; the writer re-sorts) AND the read
+/// relationships themselves. 2R R-mis-07: return-and-flatten replaces the
+/// `&mut Vec<Relationship>` out-param threaded through every model reader —
+/// `read_model` is the single collector again, extended in the exact
+/// traversal order the old pushes followed (so even the stable-sort ties of
+/// the final numeric-id `sort_by` cannot move).
+fn read_relationships(o: Obj<'_>) -> (Vec<Id>, Vec<Relationship>) {
     let mut ids = Vec::new();
+    let mut rels = Vec::new();
     for r in objects(o, "relationships") {
         let rel = Relationship {
             id: id_field(r, "id").unwrap_or_else(no_id),
@@ -290,7 +296,7 @@ fn read_relationships(o: Obj<'_>, rels: &mut Vec<Relationship>) -> Vec<Id> {
         ids.push(rel.id.clone());
         rels.push(rel);
     }
-    ids
+    (ids, rels)
 }
 
 /// `DeploymentNode.instances` — the reference setter's validation, verbatim
@@ -392,7 +398,11 @@ fn health_checks(o: Obj<'_>) -> Result<Vec<HttpHealthCheck>, JsonError> {
         .collect()
 }
 
-fn read_node(o: Obj<'_>, rels: &mut Vec<Relationship>) -> Result<DeploymentNode, JsonError> {
+/// 2R R-mis-07: returns the subtree's collected `relationships[]` beside the
+/// node — children, infrastructure nodes, software-system instances,
+/// container instances, then the node's own, the exact order the old
+/// out-param pushes followed.
+fn read_node(o: Obj<'_>) -> Result<(DeploymentNode, Vec<Relationship>), JsonError> {
     let instances = match text(o, "instances") {
         Some(s) => {
             check_instances(&s).map_err(|m| JsonError::Read(m.to_string()))?;
@@ -401,67 +411,160 @@ fn read_node(o: Obj<'_>, rels: &mut Vec<Relationship>) -> Result<DeploymentNode,
         // The setter is not called when the key is absent — field default.
         None => DEFAULT_INSTANCES.to_string(),
     };
-    Ok(DeploymentNode {
-        item: read_item(o, true),
-        group: text(o, "group"),
-        environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
-        technology: text(o, "technology"),
-        instances,
-        deployment_groups: str_array(o, "deploymentGroups"),
-        children: objects(o, "children")
-            .into_iter()
-            .map(|c| read_node(c, rels))
-            .collect::<Result<_, _>>()?,
-        infrastructure_nodes: objects(o, "infrastructureNodes")
-            .into_iter()
-            .map(|i| read_infra_node(i, rels))
-            .collect(),
-        software_system_instances: objects(o, "softwareSystemInstances")
-            .into_iter()
-            .map(|i| read_ssi(i, rels))
-            .collect::<Result<_, _>>()?,
-        container_instances: objects(o, "containerInstances")
-            .into_iter()
-            .map(|i| read_ci(i, rels))
-            .collect::<Result<_, _>>()?,
-        relationships: read_relationships(o, rels),
-    })
+    let mut rels = Vec::new();
+    let children = objects(o, "children")
+        .into_iter()
+        .map(|c| {
+            let (node, sub) = read_node(c)?;
+            rels.extend(sub);
+            Ok(node)
+        })
+        .collect::<Result<Vec<_>, JsonError>>()?;
+    let infrastructure_nodes = objects(o, "infrastructureNodes")
+        .into_iter()
+        .map(|i| {
+            let (node, sub) = read_infra_node(i);
+            rels.extend(sub);
+            node
+        })
+        .collect();
+    let software_system_instances = objects(o, "softwareSystemInstances")
+        .into_iter()
+        .map(|i| {
+            let (instance, sub) = read_ssi(i)?;
+            rels.extend(sub);
+            Ok(instance)
+        })
+        .collect::<Result<Vec<_>, JsonError>>()?;
+    let container_instances = objects(o, "containerInstances")
+        .into_iter()
+        .map(|i| {
+            let (instance, sub) = read_ci(i)?;
+            rels.extend(sub);
+            Ok(instance)
+        })
+        .collect::<Result<Vec<_>, JsonError>>()?;
+    let (own_ids, own_rels) = read_relationships(o);
+    rels.extend(own_rels);
+    Ok((
+        DeploymentNode {
+            item: read_item(o, true),
+            group: text(o, "group"),
+            environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
+            technology: text(o, "technology"),
+            instances,
+            deployment_groups: str_array(o, "deploymentGroups"),
+            children,
+            infrastructure_nodes,
+            software_system_instances,
+            container_instances,
+            relationships: own_ids,
+        },
+        rels,
+    ))
 }
 
-fn read_infra_node(o: Obj<'_>, rels: &mut Vec<Relationship>) -> InfrastructureNode {
-    InfrastructureNode {
-        item: read_item(o, true),
-        group: text(o, "group"),
-        environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
-        technology: text(o, "technology"),
-        relationships: read_relationships(o, rels),
-    }
+fn read_infra_node(o: Obj<'_>) -> (InfrastructureNode, Vec<Relationship>) {
+    let (own_ids, own_rels) = read_relationships(o);
+    (
+        InfrastructureNode {
+            item: read_item(o, true),
+            group: text(o, "group"),
+            environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
+            technology: text(o, "technology"),
+            relationships: own_ids,
+        },
+        own_rels,
+    )
 }
 
-fn read_ssi(o: Obj<'_>, rels: &mut Vec<Relationship>) -> Result<SoftwareSystemInstance, JsonError> {
-    Ok(SoftwareSystemInstance {
-        item: read_item(o, false),
-        group: text(o, "group"),
-        environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
-        software_system_id: id_field(o, "softwareSystemId").unwrap_or_else(no_id),
-        instance_id: i32_field(o, "instanceId", 0),
-        deployment_groups: str_array(o, "deploymentGroups"),
-        health_checks: health_checks(o)?,
-        relationships: read_relationships(o, rels),
-    })
+fn read_ssi(o: Obj<'_>) -> Result<(SoftwareSystemInstance, Vec<Relationship>), JsonError> {
+    let (own_ids, own_rels) = read_relationships(o);
+    Ok((
+        SoftwareSystemInstance {
+            item: read_item(o, false),
+            group: text(o, "group"),
+            environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
+            software_system_id: id_field(o, "softwareSystemId").unwrap_or_else(no_id),
+            instance_id: i32_field(o, "instanceId", 0),
+            deployment_groups: str_array(o, "deploymentGroups"),
+            health_checks: health_checks(o)?,
+            relationships: own_ids,
+        },
+        own_rels,
+    ))
 }
 
-fn read_ci(o: Obj<'_>, rels: &mut Vec<Relationship>) -> Result<ContainerInstance, JsonError> {
-    Ok(ContainerInstance {
-        item: read_item(o, false),
-        group: text(o, "group"),
-        environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
-        container_id: id_field(o, "containerId").unwrap_or_else(no_id),
-        instance_id: i32_field(o, "instanceId", 0),
-        deployment_groups: str_array(o, "deploymentGroups"),
-        health_checks: health_checks(o)?,
-        relationships: read_relationships(o, rels),
-    })
+fn read_ci(o: Obj<'_>) -> Result<(ContainerInstance, Vec<Relationship>), JsonError> {
+    let (own_ids, own_rels) = read_relationships(o);
+    Ok((
+        ContainerInstance {
+            item: read_item(o, false),
+            group: text(o, "group"),
+            environment: text(o, "environment").unwrap_or_else(|| DEFAULT_ENVIRONMENT.to_string()),
+            container_id: id_field(o, "containerId").unwrap_or_else(no_id),
+            instance_id: i32_field(o, "instanceId", 0),
+            deployment_groups: str_array(o, "deploymentGroups"),
+            health_checks: health_checks(o)?,
+            relationships: own_ids,
+        },
+        own_rels,
+    ))
+}
+
+/// Software system with its containers/components leg (extracted from the
+/// `read_model` inline closures for the 2R R-mis-07 return-and-flatten);
+/// collects components' relationships before the container's own, the
+/// containers' before the system's own — the old push order.
+fn read_software_system(o: Obj<'_>) -> (SoftwareSystem, Vec<Relationship>) {
+    let mut rels = Vec::new();
+    let containers = objects(o, "containers")
+        .into_iter()
+        .map(|c| {
+            let mut container_rels = Vec::new();
+            let components = objects(c, "components")
+                .into_iter()
+                .map(|k| {
+                    let (k_ids, k_rels) = read_relationships(k);
+                    container_rels.extend(k_rels);
+                    Component {
+                        item: read_item(k, true),
+                        group: text(k, "group"),
+                        technology: text(k, "technology"),
+                        documentation: read_documentation(
+                            k.get("documentation").and_then(Value::as_object),
+                        ),
+                        relationships: k_ids,
+                    }
+                })
+                .collect();
+            let (own_ids, own_rels) = read_relationships(c);
+            container_rels.extend(own_rels);
+            rels.extend(container_rels);
+            Container {
+                item: read_item(c, true),
+                group: text(c, "group"),
+                technology: text(c, "technology"),
+                components,
+                documentation: read_documentation(
+                    c.get("documentation").and_then(Value::as_object),
+                ),
+                relationships: own_ids,
+            }
+        })
+        .collect();
+    let (own_ids, own_rels) = read_relationships(o);
+    rels.extend(own_rels);
+    (
+        SoftwareSystem {
+            item: read_item(o, true),
+            group: text(o, "group"),
+            containers,
+            documentation: read_documentation(o.get("documentation").and_then(Value::as_object)),
+            relationships: own_ids,
+        },
+        rels,
+    )
 }
 
 fn read_model(o: Option<Obj<'_>>) -> Result<Model, JsonError> {
@@ -477,11 +580,15 @@ fn read_model(o: Option<Obj<'_>>) -> Result<Model, JsonError> {
     if let Some(o) = o {
         out.custom_elements = objects(o, "customElements")
             .into_iter()
-            .map(|e| CustomElement {
-                item: read_item(e, true),
-                group: text(e, "group"),
-                metadata: text(e, "metadata"),
-                relationships: read_relationships(e, &mut rels),
+            .map(|e| {
+                let (own_ids, own_rels) = read_relationships(e);
+                rels.extend(own_rels);
+                CustomElement {
+                    item: read_item(e, true),
+                    group: text(e, "group"),
+                    metadata: text(e, "metadata"),
+                    relationships: own_ids,
+                }
             })
             .collect();
         // `Model.setCustomElements` rebuilds the field as a `TreeSet`, so a
@@ -496,50 +603,31 @@ fn read_model(o: Option<Obj<'_>>) -> Result<Model, JsonError> {
             .sort_by(|a, b| id_ord(&a.item.id, &b.item.id));
         out.deployment_nodes = objects(o, "deploymentNodes")
             .into_iter()
-            .map(|n| read_node(n, &mut rels))
-            .collect::<Result<_, _>>()?;
+            .map(|n| {
+                let (node, sub) = read_node(n)?;
+                rels.extend(sub);
+                Ok(node)
+            })
+            .collect::<Result<Vec<_>, JsonError>>()?;
         out.people = objects(o, "people")
             .into_iter()
-            .map(|p| Person {
-                item: read_item(p, true),
-                group: text(p, "group"),
-                relationships: read_relationships(p, &mut rels),
+            .map(|p| {
+                let (own_ids, own_rels) = read_relationships(p);
+                rels.extend(own_rels);
+                Person {
+                    item: read_item(p, true),
+                    group: text(p, "group"),
+                    relationships: own_ids,
+                }
             })
             .collect();
         out.properties = props(o, "properties");
         out.software_systems = objects(o, "softwareSystems")
             .into_iter()
-            .map(|s| SoftwareSystem {
-                item: read_item(s, true),
-                group: text(s, "group"),
-                containers: objects(s, "containers")
-                    .into_iter()
-                    .map(|c| Container {
-                        item: read_item(c, true),
-                        group: text(c, "group"),
-                        technology: text(c, "technology"),
-                        components: objects(c, "components")
-                            .into_iter()
-                            .map(|k| Component {
-                                item: read_item(k, true),
-                                group: text(k, "group"),
-                                technology: text(k, "technology"),
-                                documentation: read_documentation(
-                                    k.get("documentation").and_then(Value::as_object),
-                                ),
-                                relationships: read_relationships(k, &mut rels),
-                            })
-                            .collect(),
-                        documentation: read_documentation(
-                            c.get("documentation").and_then(Value::as_object),
-                        ),
-                        relationships: read_relationships(c, &mut rels),
-                    })
-                    .collect(),
-                documentation: read_documentation(
-                    s.get("documentation").and_then(Value::as_object),
-                ),
-                relationships: read_relationships(s, &mut rels),
+            .map(|s| {
+                let (system, sub) = read_software_system(s);
+                rels.extend(sub);
+                system
             })
             .collect();
     }
