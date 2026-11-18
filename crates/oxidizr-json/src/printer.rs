@@ -125,22 +125,13 @@ fn emit(value: &Json, depth: usize, out: &mut Vec<u8>) {
                 out.extend_from_slice(b"[ ]");
                 return;
             }
-            let objects = matches!(items[0], Json::Obj(_));
-            if !objects {
-                // Jackson's `DefaultPrettyPrinter` inlines scalar arrays on
-                // one line: `[ "a", "b" ]`.
-                out.extend_from_slice(b"[ ");
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        out.extend_from_slice(b", ");
-                    }
-                    emit(item, depth, out);
-                }
-                out.extend_from_slice(b" ]");
-                return;
-            }
-            // Object arrays expand: `[ {` … `}, {` … `} ]` — each element
-            // object closes at `depth` (its keys at depth+1), joined inline.
+            // Jackson `DefaultPrettyPrinter` writes EVERY array the same way:
+            // `[ ` … items joined inline with `, ` … ` ]`. Scalars fit one
+            // line (`[ "a", "b" ]`); object arrays only LOOK expanded
+            // (`[ {` … `}, {` … `} ]`) because each element `Obj` renders
+            // multi-line at `depth` itself. 2R R-mis-06: the old shape
+            // branched on `matches!(items[0], Json::Obj(_))` into two
+            // byte-identical loops (verified under the goldens) — collapsed.
             out.extend_from_slice(b"[ ");
             for (i, item) in items.iter().enumerate() {
                 if i > 0 {
