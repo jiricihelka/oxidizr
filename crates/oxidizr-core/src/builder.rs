@@ -320,15 +320,21 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        self.system_ref(system)
-            .ok_or_else(|| CoreError::WrongElementKind {
-                id: system.clone(),
-                expected: "software system",
-            })?;
-        if self
-            .system_ref(system)
-            .is_some_and(|s| s.containers.iter().any(|c| c.item.name == name))
-        {
+        // One walk for the kind guard + duplicate-name check; the push
+        // re-lookup surfaces the same `WrongElementKind` error instead of
+        // the old `expect("checked above")` panic (2R R-core-07 — nothing
+        // changes the model between the two lookups, so the error arm is
+        // unreachable; reference: Model.addContainer).
+        let duplicate = {
+            let s = self
+                .system_ref(system)
+                .ok_or_else(|| CoreError::WrongElementKind {
+                    id: system.clone(),
+                    expected: "software system",
+                })?;
+            s.containers.iter().any(|c| c.item.name == name)
+        };
+        if duplicate {
             return Err(CoreError::DuplicateContainerName {
                 name: name.to_string(),
             });
@@ -336,7 +342,10 @@ impl WorkspaceBuilder {
         let item = self.new_item(name, description, tags_csv);
         let id = item.id.clone();
         self.system_mut(system)
-            .expect("checked above")
+            .ok_or_else(|| CoreError::WrongElementKind {
+                id: system.clone(),
+                expected: "software system",
+            })?
             .containers
             .push(Container {
                 item,
@@ -359,15 +368,18 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        self.container_ref(container)
-            .ok_or_else(|| CoreError::WrongElementKind {
-                id: container.clone(),
-                expected: "container",
-            })?;
-        if self
-            .container_ref(container)
-            .is_some_and(|c| c.components.iter().any(|k| k.item.name == name))
-        {
+        // Same single-walk guard + error-valued re-lookup as `add_container`
+        // (2R R-core-07).
+        let duplicate = {
+            let c = self
+                .container_ref(container)
+                .ok_or_else(|| CoreError::WrongElementKind {
+                    id: container.clone(),
+                    expected: "container",
+                })?;
+            c.components.iter().any(|k| k.item.name == name)
+        };
+        if duplicate {
             return Err(CoreError::DuplicateComponentName {
                 name: name.to_string(),
             });
@@ -375,7 +387,10 @@ impl WorkspaceBuilder {
         let item = self.new_item(name, description, tags_csv);
         let id = item.id.clone();
         self.container_mut(container)
-            .expect("checked above")
+            .ok_or_else(|| CoreError::WrongElementKind {
+                id: container.clone(),
+                expected: "container",
+            })?
             .components
             .push(Component {
                 item,
@@ -446,8 +461,11 @@ impl WorkspaceBuilder {
         };
         let item = self.new_item(name, description, tags_csv);
         let id = item.id.clone();
+        // Re-lookup surfaces the same `DeploymentNodeNotFound` the guard
+        // above raises — the old `expect("just found")` panic is gone
+        // (2R R-core-07; nothing mutates the model between the lookups).
         self.node_mut(parent)
-            .expect("just found")
+            .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: parent.clone() })?
             .children
             .push(new_node(item, &env, technology));
         Ok(id)
@@ -484,8 +502,9 @@ impl WorkspaceBuilder {
         };
         let item = self.new_item(name, description, tags_csv);
         let id = item.id.clone();
+        // Error-valued re-lookup, as in `add_container` (2R R-core-07).
         self.node_mut(node)
-            .expect("checked above")
+            .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?
             .infrastructure_nodes
             .push(InfrastructureNode {
                 item,
@@ -513,7 +532,14 @@ impl WorkspaceBuilder {
         }
         // Reference: the instance NAME is derived (getElement().getName(),
         // @JsonIgnore — never serialized); we mirror it for diagnostics.
-        let name = self.item(system).expect("system exists").name.clone();
+        // `is_system` above guarantees the lookup; error-valued, not a panic
+        // (2R R-core-07 — same error the guard raises).
+        let name = self.item(system).map(|i| i.name.clone()).ok_or_else(|| {
+            CoreError::WrongElementKind {
+                id: system.clone(),
+                expected: "software system",
+            }
+        })?;
         let mut item = self.new_item(&name, None, tags_csv);
         item.tags.add(crate::tags::tag::SOFTWARE_SYSTEM_INSTANCE);
         let id = item.id.clone();
@@ -559,7 +585,15 @@ impl WorkspaceBuilder {
                 expected: "container",
             });
         }
-        let name = self.item(container).expect("container exists").name.clone();
+        // As in `add_software_system_instance`: guarded lookup, error-valued
+        // (2R R-core-07).
+        let name = self
+            .item(container)
+            .map(|i| i.name.clone())
+            .ok_or_else(|| CoreError::WrongElementKind {
+                id: container.clone(),
+                expected: "container",
+            })?;
         let mut item = self.new_item(&name, None, tags_csv);
         item.tags.add(crate::tags::tag::CONTAINER_INSTANCE);
         let id = item.id.clone();
@@ -779,7 +813,11 @@ impl WorkspaceBuilder {
     /// strategy's efferent check says otherwise. Order matches the reference
     /// loops (outer: source chain; inner: destination chain reset per step).
     fn create_implied_relationships(&mut self, base_id: &Id) {
-        let base = self.relationship(base_id).expect("just added");
+        // The base was inserted by the caller moments ago; if it were not
+        // there, there is nothing to imply (2R R-core-07: no panic).
+        let Some(base) = self.relationship(base_id) else {
+            return;
+        };
         let (src, dst, desc, tech) = (
             base.source.clone(),
             base.destination.clone(),
@@ -850,9 +888,14 @@ impl WorkspaceBuilder {
                 .map(|r| r.id.clone())
                 .collect();
             for base_id in fwd_ids {
-                let (desc, tech) = {
-                    let base = self.relationship(&base_id).expect("model relationship");
-                    (base.description.clone(), base.technology.clone())
+                // `base_id` was just collected from the same arena; if it
+                // were gone there would be nothing to replicate (2R
+                // R-core-07: control flow, not a panic).
+                let Some((desc, tech)) = self
+                    .relationship(&base_id)
+                    .map(|b| (b.description.clone(), b.technology.clone()))
+                else {
+                    continue;
                 };
                 if self.has_efferent(instance_id, &other_id, desc.as_deref().unwrap_or("")) {
                     continue; // Java: addRelationship returns null → skipped
@@ -876,9 +919,14 @@ impl WorkspaceBuilder {
                 .map(|r| r.id.clone())
                 .collect();
             for base_id in rev_ids {
-                let (desc, tech) = {
-                    let base = self.relationship(&base_id).expect("model relationship");
-                    (base.description.clone(), base.technology.clone())
+                // `base_id` was just collected from the same arena; if it
+                // were gone there would be nothing to replicate (2R
+                // R-core-07: control flow, not a panic).
+                let Some((desc, tech)) = self
+                    .relationship(&base_id)
+                    .map(|b| (b.description.clone(), b.technology.clone()))
+                else {
+                    continue;
                 };
                 if self.has_efferent(&other_id, instance_id, desc.as_deref().unwrap_or("")) {
                     continue;
@@ -1398,10 +1446,14 @@ impl WorkspaceBuilder {
     /// [`WorkspaceBuilder::add_relationship`] and
     /// [`WorkspaceBuilder::dsl_uses`].
     fn maybe_create_implied(&mut self, id: &Id) {
-        let (source, destination) = self
+        // The relationship was inserted moments before every call site; if
+        // it were missing there is nothing to hook (2R R-core-07).
+        let Some((source, destination)) = self
             .relationship(id)
             .map(|r| (r.source.clone(), r.destination.clone()))
-            .expect("just inserted");
+        else {
+            return;
+        };
         if self.implied_strategy != ImpliedRelationshipsStrategy::Default
             && is_implied_kind(self.element_kind(&source))
             && is_implied_kind(self.element_kind(&destination))

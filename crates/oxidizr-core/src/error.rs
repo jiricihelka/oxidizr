@@ -90,6 +90,16 @@ pub enum CoreError {
         /// The unknown id.
         id: Id,
     },
+    /// 2R R-core-07: a view slot that carries no model-view content was used
+    /// for a content mutation — an image/filtered view (or, in theory, a
+    /// stale slot; the port has no view-removal API). The reference cannot
+    /// express this call at all (its view handles are typed), so there is no
+    /// reference message; this replaces the port's own `expect` panic. Not
+    /// reachable from the DSL: statements mutate only typed model views.
+    NoViewContent {
+        /// The view key.
+        key: String,
+    },
     /// Reference `IllegalArgumentException("A deployment group name must be
     /// specified.")` — `DeploymentNode.addDeploymentGroup`.
     DeploymentGroupNameRequired,
@@ -203,6 +213,7 @@ impl fmt::Display for CoreError {
             CoreError::InstanceNotFound { id } => {
                 write!(f, "There is no element instance with the ID \"{id}\".")
             }
+            CoreError::NoViewContent { key } => write!(f, "The view {key} has no model content."),
             CoreError::DeploymentGroupNameRequired => {
                 write!(f, "A deployment group name must be specified.")
             }

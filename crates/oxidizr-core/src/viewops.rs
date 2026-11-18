@@ -101,6 +101,22 @@ impl WorkspaceBuilder {
         }
     }
 
+    /// Mutable model-view content as an error value: [`CoreError::NoViewContent`]
+    /// when the slot carries none (image/filtered view, or — theoretically —
+    /// a stale slot), replacing the 2R-era `expect_content` panic helper
+    /// (R-core-07, charter: no panics in library code).
+    fn model_content_mut(
+        &mut self,
+        view: ViewRef,
+    ) -> Result<&mut crate::views::ViewContent, CoreError> {
+        if let Some(content) = self.content_mut(view) {
+            return Ok(content);
+        }
+        Err(CoreError::NoViewContent {
+            key: self.view_key(view),
+        })
+    }
+
     fn animations_mut(&mut self, view: ViewRef) -> Option<&mut Vec<Animation>> {
         let views = &mut self.workspace_mut().views;
         match view {
@@ -428,9 +444,13 @@ impl WorkspaceBuilder {
         }
         let scope = self.dynamic_scope(view);
         let scope_kind = scope.as_ref().and_then(|s| self.element_kind(s));
-        if scope_kind == Some(ElementKind::SoftwareSystem) {
-            let scope = scope.clone().expect("checked");
-            if element == &scope {
+        // Pair the scope with its kind: `scope_kind` is derived from `scope`,
+        // so a `Some` kind always implies a `Some` scope — the branches used
+        // to split the pair and re-join it with `clone().expect("checked")`
+        // (2R R-core-07).
+        let scoped = scope_kind.map(|k| (scope.as_ref(), k));
+        if let Some((Some(scope), ElementKind::SoftwareSystem)) = scoped {
+            if element == scope {
                 return not_permitted(format!(
                     "{name} is already the scope of this view and cannot be added to it."
                 ));
@@ -449,10 +469,9 @@ impl WorkspaceBuilder {
             }
             return Ok(());
         }
-        if scope_kind == Some(ElementKind::Container) {
-            let scope = scope.clone().expect("checked");
-            let scope_parent = self.element_parent(&scope);
-            if element == &scope || Some(element.clone()) == scope_parent {
+        if let Some((Some(scope), ElementKind::Container)) = scoped {
+            let scope_parent = self.element_parent(scope);
+            if element == scope || Some(element.clone()) == scope_parent {
                 return not_permitted(format!(
                     "{name} is already the scope of this view and cannot be added to it."
                 ));
@@ -591,14 +610,14 @@ impl WorkspaceBuilder {
             }
         }
         if add_relationships {
-            self.view_add_relationships_for(view, element);
+            self.view_add_relationships_for(view, element)?;
         }
         Ok(())
     }
 
     /// `ModelView.addRelationships(element)`: every relationship whose ends
     /// are BOTH in the view now gets a relationship view.
-    fn view_add_relationships_for(&mut self, view: ViewRef, element: &Id) {
+    fn view_add_relationships_for(&mut self, view: ViewRef, element: &Id) -> Result<(), CoreError> {
         let in_view = self.view_element_ids(view);
         let rel_ids: Vec<Id> = self
             .workspace()
@@ -612,10 +631,11 @@ impl WorkspaceBuilder {
             })
             .map(|r| r.id.clone())
             .collect();
-        let content = expect_content(self.content_mut(view));
+        let content = self.model_content_mut(view)?;
         for id in rel_ids {
             upsert_relationship_view(content, id);
         }
+        Ok(())
     }
 
     /// `View.addRelationship(relationship)`: add only when both ends are in
@@ -636,7 +656,7 @@ impl WorkspaceBuilder {
         {
             return Ok(false);
         }
-        let content = expect_content(self.content_mut(view));
+        let content = self.model_content_mut(view)?;
         upsert_relationship_view(content, relationship.clone());
         Ok(true)
     }
@@ -1269,7 +1289,7 @@ impl WorkspaceBuilder {
         self.check_element_can_be_added(view, &destination)?;
         self.view_add_element(view, &source, false)?;
         self.view_add_element(view, &destination, false)?;
-        let content = expect_content(self.content_mut(view));
+        let content = self.model_content_mut(view)?;
         content.relationships.push(RelationshipView {
             id: relationship.clone(),
             description: Some(description.to_string()),
@@ -1359,7 +1379,7 @@ impl WorkspaceBuilder {
         };
         self.view_add_element(view, source, false)?;
         self.view_add_element(view, destination, false)?;
-        let content = expect_content(self.content_mut(view));
+        let content = self.model_content_mut(view)?;
         content.relationships.push(RelationshipView {
             id: rel_id.clone(),
             description: Some(description.to_string()),
@@ -1562,12 +1582,6 @@ fn upsert_relationship_view(content: &mut crate::views::ViewContent, relationshi
             position: None,
         });
     }
-}
-
-fn expect_content(
-    content: Option<&mut crate::views::ViewContent>,
-) -> &mut crate::views::ViewContent {
-    content.expect("model views always have content")
 }
 
 /// `SystemContextView.canBeRemoved`: the scoped system is the only element
