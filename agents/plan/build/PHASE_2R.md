@@ -251,8 +251,8 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 
 | ID | finding (file:line) | dis | wv |
 |---|---|---|---|
-| R-tool-01 | 3× oracle runner triplication + `failures: &mut usize` out-params (`xtask main.rs:685-784,1186-1310`) → `run_oracle_export` + `Vec<String>` results | SW | 5 |
-| R-tool-02 | `unwrap()` in non-test xtask (`main.rs:418,487`) — charter violation → `with_context`/`?` | SW | 5 |
+| R-tool-01 | 3× oracle runner triplication + `failures: &mut usize` out-params (`xtask main.rs:685-784,1186-1310`) → `run_oracle_export` + `Vec<String>` results — **DONE PR5** (`run_oracle_export(oracle, workspace, outdir, format)` = the create-dirs + run + exit-status prologue all three runners shared — the json leg's failure message now names `json` like the others did; `verify_json_legs`/`verify_diagram_legs`/`verify_theme_legs` answer `(counts…, Vec<String>)` failure lines, `cmd_oracle_verify` folds + prints them after the streaming `ok:` lines and bails with the count) | SW | 5 |
+| R-tool-02 | `unwrap()` in non-test xtask (`main.rs:418,487`) — charter violation → `with_context`/`?` — **DONE PR5** (bench save/restore `p.file_name().unwrap()` → `with_context(…)?`; remaining `.unwrap()`s verified all inside `mod tests`) | SW | 5 |
 | R-tool-03 | oracle_gen bool-flag ladder (`main.rs:1059-1096`) — validated mutually-exclusive; borderline, ratify keep | KC | — |
 | R-tool-04 | e2e runner double-default swallower (`runner.rs:63`); manifest codes-parse ×2 (`manifest.rs:400,462`); mutate 5× prologue (`mutate.rs:67-153`) — dedupe prologue, keep seeded index selection | SW | 5 |
 

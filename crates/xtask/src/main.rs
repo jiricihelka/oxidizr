@@ -415,7 +415,13 @@ fn cmd_bench_save(label: &str) -> Result<()> {
             let p = entry?.path();
             if p.extension().is_some_and(|e| e == "json") {
                 fs::create_dir_all(dst.join(&name))?;
-                fs::copy(&p, dst.join(&name).join(p.file_name().unwrap()))?;
+                // 2R R-tool-02: a `read_dir` entry always has a file name —
+                // but the charter says a broken answer surfaces as an
+                // error, never a panic (`unwrap` is test-only).
+                let file_name = p
+                    .file_name()
+                    .with_context(|| format!("no file name: {}", p.display()))?;
+                fs::copy(&p, dst.join(&name).join(file_name))?;
                 n += 1;
             }
         }
@@ -484,7 +490,11 @@ fn stage_baseline(criterion: &Path, base: &Path, label: &str) -> Result<usize> {
             let p = entry?.path();
             if p.extension().is_some_and(|e| e == "json") {
                 fs::create_dir_all(&dest)?;
-                fs::copy(&p, dest.join(p.file_name().unwrap()))?;
+                // 2R R-tool-02: same contract as the save leg above.
+                let file_name = p
+                    .file_name()
+                    .with_context(|| format!("no file name: {}", p.display()))?;
+                fs::copy(&p, dest.join(file_name))?;
                 n += 1;
             }
         }
@@ -681,26 +691,35 @@ fn find_oracle() -> Result<PathBuf> {
     );
 }
 
-/// Run `structurizr export --format json` and return the produced file path.
-fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Result<PathBuf> {
+/// The oracle export prologue (2R R-tool-01: the create-dirs + run + exit-
+/// status leg the json/plantuml/theme runners used to triplicate). The
+/// failure message names the format on every leg (the json leg's old
+/// message left it out).
+fn run_oracle_export(oracle: &Path, workspace: &Path, outdir: &Path, format: &str) -> Result<()> {
     fs::create_dir_all(outdir)?;
     let output = Command::new(oracle)
         .arg("export")
         .arg("--workspace")
         .arg(workspace)
         .arg("--format")
-        .arg("json")
+        .arg(format)
         .arg("--output")
         .arg(outdir)
         .output()
         .with_context(|| format!("failed to run {}", oracle.display()))?;
     if !output.status.success() {
         bail!(
-            "structurizr export failed ({}):\n{}",
+            "structurizr {format} export failed ({}):\n{}",
             workspace.display(),
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    Ok(())
+}
+
+/// Run `structurizr export --format json` and return the produced file path.
+fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Result<PathBuf> {
+    run_oracle_export(oracle, workspace, outdir, "json")?;
     let stem = workspace
         .file_stem()
         .and_then(|s| s.to_str())
@@ -728,48 +747,14 @@ fn reference_export_plantuml(
     format: &str,
     ext: &str,
 ) -> Result<Vec<PathBuf>> {
-    fs::create_dir_all(outdir)?;
-    let output = Command::new(oracle)
-        .arg("export")
-        .arg("--workspace")
-        .arg(workspace)
-        .arg("--format")
-        .arg(format)
-        .arg("--output")
-        .arg(outdir)
-        .output()
-        .with_context(|| format!("failed to run {}", oracle.display()))?;
-    if !output.status.success() {
-        bail!(
-            "structurizr {format} export failed ({}):\n{}",
-            workspace.display(),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    run_oracle_export(oracle, workspace, outdir, format)?;
     walk_files(outdir, ext)
 }
 
 /// Run `structurizr export --format theme` and return the single
 /// `<stem>-theme.json` the reference wrote (workspace-stem naming, M0).
 fn reference_export_theme(oracle: &Path, workspace: &Path, outdir: &Path) -> Result<PathBuf> {
-    fs::create_dir_all(outdir)?;
-    let output = Command::new(oracle)
-        .arg("export")
-        .arg("--workspace")
-        .arg(workspace)
-        .arg("--format")
-        .arg("theme")
-        .arg("--output")
-        .arg(outdir)
-        .output()
-        .with_context(|| format!("failed to run {}", oracle.display()))?;
-    if !output.status.success() {
-        bail!(
-            "structurizr theme export failed ({}):\n{}",
-            workspace.display(),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    run_oracle_export(oracle, workspace, outdir, "theme")?;
     let stem = workspace
         .file_stem()
         .and_then(|s| s.to_str())
@@ -1169,11 +1154,22 @@ fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], mode: GenMode) -> Result<(
 
 fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
     let root = repo_root()?;
-    let mut failures = 0_usize;
-    let goldens = verify_json_legs(oracle, &root, &mut failures)?;
-    let diagram_sets = verify_diagram_legs(oracle, &root, &mut failures)?;
-    let theme_sets = verify_theme_legs(oracle, &root, &mut failures)?;
-    ensure!(failures == 0, "{failures} golden(s) failed verification");
+    // 2R R-tool-01: the legs answer their failure LINES instead of mutating
+    // a shared counter; this fold prints them (after the streaming `ok:`
+    // lines) and bails with the count, as the old `failures == 0` did.
+    let (goldens, mut failed) = verify_json_legs(oracle, &root)?;
+    let (diagram_sets, diagram_failed) = verify_diagram_legs(oracle, &root)?;
+    failed.extend(diagram_failed);
+    let (theme_sets, theme_failed) = verify_theme_legs(oracle, &root)?;
+    failed.extend(theme_failed);
+    for line in &failed {
+        println!("{line}");
+    }
+    ensure!(
+        failed.is_empty(),
+        "{} golden(s) failed verification",
+        failed.len()
+    );
     println!(
         "oracle verify: {} json + {diagram_sets} diagram + {theme_sets} theme golden set(s) match",
         goldens.len()
@@ -1183,7 +1179,8 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
 
 /// Top-level `golden/*.json` only — the subdirectories are the diagram
 /// (plantuml[-c4], mermaid) and theme corpora, verified by their legs.
-fn verify_json_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result<Vec<PathBuf>> {
+fn verify_json_legs(oracle: &Path, root: &Path) -> Result<(Vec<PathBuf>, Vec<String>)> {
+    let mut failed: Vec<String> = Vec::new();
     let mut goldens: Vec<PathBuf> = fs::read_dir(root.join("testdata").join("golden"))?
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "json"))
@@ -1205,19 +1202,21 @@ fn verify_json_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result<
         if fresh == committed {
             println!("ok: {name}");
         } else {
-            *failures += 1;
-            println!("MISMATCH: {name} (reference output drifted from committed golden)");
+            failed.push(format!(
+                "MISMATCH: {name} (reference output drifted from committed golden)"
+            ));
         }
     }
-    Ok(goldens)
+    Ok((goldens, failed))
 }
 
 /// Diagram goldens (M2-d, C4 leg M3-d, Mermaid leg M4-d):
 /// `testdata/golden/<subdir>/<fixture>/*<ext>`, byte-exact (no
 /// normalization — the diagram writer injects no harness artifacts).
 /// The fixture name is the directory name.
-fn verify_diagram_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result<usize> {
+fn verify_diagram_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>)> {
     let mut diagram_sets = 0_usize;
+    let mut failed: Vec<String> = Vec::new();
     for (subdir, format, ext) in [
         ("plantuml", "plantuml", ".puml"),
         ("plantuml-c4", "plantuml/c4plantuml", ".puml"),
@@ -1262,20 +1261,22 @@ fn verify_diagram_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Resu
             if fresh_files == committed_files {
                 println!("ok: {name} ({subdir}, {} files)", fresh_files.len());
             } else {
-                *failures += 1;
-                println!("MISMATCH: {name} ({subdir} output drifted from committed goldens)");
+                failed.push(format!(
+                    "MISMATCH: {name} ({subdir} output drifted from committed goldens)"
+                ));
             }
             diagram_sets += 1;
         }
     }
-    Ok(diagram_sets)
+    Ok((diagram_sets, failed))
 }
 
 /// Theme goldens (M4-d): `testdata/golden/theme/<fixture>.json`, the raw
 /// `--format theme` output (`ThemeUtils.toJson`, P2-V1 — no harness
 /// artifacts), byte-exact.
-fn verify_theme_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result<usize> {
+fn verify_theme_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>)> {
     let mut theme_sets = 0_usize;
+    let mut failed: Vec<String> = Vec::new();
     let mut theme_goldens: Vec<PathBuf> =
         fs::read_dir(root.join("testdata").join("golden").join("theme"))
             .map(|entries| {
@@ -1301,12 +1302,13 @@ fn verify_theme_legs(oracle: &Path, root: &Path, failures: &mut usize) -> Result
         if fresh == committed {
             println!("ok: {name} (theme)");
         } else {
-            *failures += 1;
-            println!("MISMATCH: {name} (theme output drifted from committed golden)");
+            failed.push(format!(
+                "MISMATCH: {name} (theme output drifted from committed golden)"
+            ));
         }
         theme_sets += 1;
     }
-    Ok(theme_sets)
+    Ok((theme_sets, failed))
 }
 
 /// `cargo xtask export-verify` — P2-D9 semantic comparator (Category B, run
