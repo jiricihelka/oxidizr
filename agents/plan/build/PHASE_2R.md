@@ -5,7 +5,9 @@ The port so far (~40k lib LOC) was written to be *behaviorally* faithful — JSO
 bytes are the contract — and the e2e + golden + oracle nets now guard that contract at
 unprecedented breadth (313 corpus entries, export matrix, full-tier invariants, 12
 corpus benches). 2R spends that safety net: remove **Java-isms in the Rust structure**
-that default clippy does not flag, while the bytes it produces stay bit-identical. The
+that even the workspace's enforced lint bar (`clippy all + pedantic`, `-D warnings`,
+inherited via `[lints] workspace = true`) does not flag, while the bytes it produces
+stay bit-identical. The
 P1T/2T precedent stands: an interlude rides the net it didn't have before, and the net
 pays for itself by catching latent problems on the way.
 
@@ -79,17 +81,25 @@ one disposition:
 | **KEEP-CITE** | load-bearing faithful port (Java `hashCode` emulation, TreeSet-rebuild ordering, byte-shape string building) | leave; ensure a narrow `#[allow]` + faithful-port rationale exists if §D5's lints will flag it |
 | **DEFER** | real but not 2R's scope (needs P3+ API/behavior thought) | stays in the register with a pointer, invisible to the waves |
 
-## P2R-D4 Lint ratchet (ratified: selective, not pedantic-everything)
+## P2R-D4 Lint ratchet (corrected 2026-11-18 by the surveys: bar is `all + pedantic` already)
 
-After the sweep waves (never before — measure against a clean tree): try each candidate
-lint workspace-wide, keep the ones that land with **≤ 10 narrow `#[allow]`s total**
-(each allow gets the faithful-port rationale, `agents/notes/process/faithful-port.md`).
-Candidates (from the survey checklist, non-binding): `explicit_iter_loop`,
-`needless_pass_by_value`, `trivially_copy_pass_by_ref`, `match_same_arms`,
-`unnecessary_wraps`, `redundant_clone` (unstable → requires a `NIGHTLY.md` register row
-+ measured compile-time hit; drop it if either is bad). Kept lints are enabled as
-`#![warn(clippy::…)]` per lib crate + a WORKFLOW.md §Code style row. No lint exists for
-accessor naming (`get_x` → `x`) — that pattern is enforced by the survey + review only.
+**Verified premise (CORRECTION to the draft):** the workspace root `Cargo.toml`
+already sets `[workspace.lints.clippy] all = "warn" + pedantic = "warn"`, inherited by
+every crate via `[lints] workspace = true` — so every candidate the draft listed
+(`explicit_iter_loop`, `needless_pass_by_value`, `trivially_copy_pass_by_ref`,
+`match_same_arms`, `unnecessary_wraps`) is **already enforced** under CI `-D warnings`.
+The genuine lint blind spots are only: **nursery/restriction** families + non-lintable
+habits. Hence the ratchet: after the sweep waves, try `redundant_clone` (nursery —
+unstable, so it needs a `NIGHTLY.md` register row + measured compile-time hit) and
+nothing else workspace-wide; `&x.clone()`-style waste and accessor naming stay
+survey+review territory (no lint exists). Kept additions land as workspace-lint rows +
+a WORKFLOW.md §Code style note.
+Related hygiene the survey found (folded into PR1/PR3): `faithful-port.md`'s
+narrowest-scope rule is violated by the module-level
+`#![allow(missing_errors_doc, missing_panics_doc)]` in core `builder.rs:14`/
+`viewops.rs:15` (decide per-fn vs a recorded scope exception) and the **no-op** allow
+in core `url.rs:113` (`unwrap_used` is a restriction lint the workspace never enables
+— delete it).
 
 ## P2R-D5 Waves (ordered, each ends green — quartet + full tier + bless no-op + commit)
 
@@ -98,7 +108,7 @@ file before starting.
 
 | MS | Deliverable | Exit gate |
 |---|---|---|
-| PR0 | Close the survey: populate §Register from the four crate sweeps; assign dispositions; record out-of-scope rejects | register complete + dispositions 100 %; quartet green (docs commit) |
+| **PR0** | **DONE 2026-11-18** — register populated from all four crate sweeps (65 rows incl. perimeter), dispositions complete (SW 32 / JU 22 / KC 9 / DF 1 + SW/DF 1); survey premise corrections recorded above (lint bar `all+pedantic` — §D4 rewritten; ast `RefCell` claim FALSE; naive brace-tool long-fn measurements wrong — real targets listed). The surveys' verdict: crates are far more idiomatic than feared — real prey = the dsl dispatch-clone family (R-dsl-01/02, the crate's entire perf gap), core method-body habits (clones/`expect` panics/duplicated lookups), export write-loop clones + the cited decompositions, and the api `Outcome` plumbing shape | register + dispositions 100 %; quartet green (docs commit) |
 | PR1 | `oxidizr-core` wave (model/builder/viewops — biggest clone + accessor cluster; P3 builds directly on it) | green + `bench cmp 2T` reviewed |
 | PR2 | `oxidizr-dsl` wave (lexer/parser/fmt — BYTE-PATH heavy: bless no-op + goldens are the boss) | green + `bench cmp 2T` reviewed |
 | PR3 | `oxidizr-export` wave (plantuml/mermaid/theme engines; decomposition with citations per D2) | green + `bench cmp 2T` reviewed |
@@ -113,9 +123,10 @@ file before starting.
   meaningful before the first behavior-adjacent edit lands. **CLOSED 2026-11-18**:
   full tier 8/8 ok + `cargo xtask e2e bless` → every entry `unchanged`, corpus git
   diff = 0 lines, at HEAD `7e1fe73` (pre-2R). The ritual is a real net.
-- **V-R2** (before PR6) — lint candidate measurement: per-candidate workspace try +
-  allow-count tally + (`redundant_clone` only) compile-time delta → decision table
-  recorded under §D4.
+- **V-R2** (before PR6) — ratchet measurement: try `redundant_clone` (nursery) on the
+  post-sweep tree; record (a) fired-site count, (b) compile-time delta, (c) false-
+  positive notes → keep/drop decision table under §D4. Decision table recorded even
+  when the verdict is drop.
 - **V-R3** (per wave) — bench review: `bench cmp 2T` numbers posted in the wave's
   commit message (one line), regressions > ~10 % block until explained or reverted.
 
@@ -134,8 +145,119 @@ file before starting.
 - **Mechanical churn hiding real changes** — waves commit by pattern-family (D3), so
   any suspicious diff is isolated to its family's commit; review per family, not per wave.
 
-## Register (populated at PR0)
+## Survey corrections (verified 2026-11-18 — trust these over the draft premises)
 
-_Survey of 2026-11-18 in flight: dsl / core / export / json+api+cli+misc sweeps —
-findings land here as `R-dsl-nn`, `R-core-nn`, `R-exp-nn`, `R-mis-nn` rows with
-pattern, evidence (file:line), disposition class, wave._
+- **Lint bar**: workspace lints are `clippy all + pedantic = "warn"`, `-D warnings` in
+  CI (root `Cargo.toml [workspace.lints]`, inherited via `[lints] workspace = true`).
+  §D4 rewritten accordingly.
+- **`oxidizr-ast` has NO `RefCell`/`Cell`** anywhere — the owned AST uses `Rc<str>`
+  for the source; the parser is already ownership-based. Nothing to convert.
+- **Long-function measurements from naive brace tools were wrong**: `viewops.rs:1200`
+  is a 32-line fn (top-5 real: `check_element_can_be_added` 162, `create_default_views`
+  125, `view_add_default_elements` 124 — all cited); `engine.rs:1208` is a 14-line fn.
+  Real decomposition targets: `structurizr.rs render()` (174 ln) and, as name-pinned
+  decompositions, `body` (107 ln) / `export_dynamic_sequence` (125 ln). The dsl
+  `section()` chains (553/517/364/320 ln) are the *documented contract* — keep.
+
+## Register (PR0 — populated from the four crate sweeps, 2026-11-18)
+
+Dispositions per §D3: **SW** = sweep, **JU** = judge (per-site reasoning, wave
+commit), **KC** = keep-cite (ratified Java shape), **DF** = defer (out of 2R).
+Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/close.
+
+### oxidizr-dsl
+
+| ID | finding (file:line) | dis | wv |
+|---|---|---|---|
+| R-dsl-01 | dispatch preamble re-clones tokens/ctx 7× per line (`engine/mod.rs:69`, 7 × `section` heads) — share borrows (`section(p, &stmt)`); no section mutates `stmt` | SW | 2 |
+| R-dsl-02 | `Tokens::get` allocates 2 Strings per read (`tokens.rs:22`) → `Cow<str>` (skip replace when no `\\`), `eq_at` for compare-sites; `last()` re-entry fix; keep double-pass ORDER (erratum 26) | JU | 2 |
+| R-dsl-03 | `if let (true, pat) = (cond, val)` tuple hack (`find.rs:43`) → let-chain | SW | 2 |
+| R-dsl-04 | `Option<&String>` params ×4 (`stmt_views.rs:552,600,710,882`) → `Option<&str>` | SW | 2 |
+| R-dsl-05 | `java_trim(…).to_string()` per line (`stmt_line.rs:30`) — borrow is enough | SW | 2 |
+| R-dsl-06 | `p.top().cloned()` heavyweight Ctx clones (`stmt_props.rs:99,282`, `stmt_deployment.rs:100`, `stmt_model.rs:361`, `stmt_style.rs:26`, `stmt_views.rs:1562`) — extract only the payload Copy fields, re-borrow | JU | 2 |
+| R-dsl-07 | `section()` chain fns 553/517/364/320 ln + `permitted_tokens` 300 ln — arm order IS the contract; allows carry rationale | KC | — |
+| R-dsl-08 | stringly archetype `kind: String` ladder (`ctx.rs:60`, `stmt_style.rs:85-108`, `mod.rs:1790-1798`) — enum would surface the `_ =>` InfrastructureNode fallback but rewrites the hot parse path; LSP (P4) is the natural owner | DF | — |
+| R-dsl-09 | engine `pub use` sprawl (`engine/mod.rs:50-55`, `KindFilter`) — externals consume only parse surface → `pub(crate)` demotions | JU | 2 |
+| R-dsl-10 | Java getter names (`Parser::get_*`, whole `Tokens` API) — rustdoc cites `Tokens.java`/`context.getElement`; ratify keep | KC | — |
+| R-dsl-11 | `push_str(&line.to_string())` (`error.rs:109-110`) → `write!` (text identical, golden-guarded) | SW | 2 |
+| R-dsl-12 | Java `count` counter lockstep (`rel.rs:457-475`) → `removed.is_empty()`; `stmt_views.rs:1290` clone shrinks with R-dsl-02 | SW | 2 |
+| R-dsl-13 | `.to_lowercase().ends_with(".json")` computed twice (`mod.rs:1452,1499`) — hoist once; do NOT `Path::extension`-ify (reference shape) | SW | 2 |
+| R-dsl-14 | bool-flag params (`apply_text title`, `dynamic_step open`, `relationship_endpoint source`…) — all in byte-contract chains; ratify skip | KC | — |
+| R-dsl-15 | 31 `#[allow]` sites: all narrow + rationaled — model for other crates | KC | — |
+
+### oxidizr-core
+
+| ID | finding (file:line) | dis | wv |
+|---|---|---|---|
+| R-core-01 | waste clones: `&id.clone()` (`builder.rs:1452`), loop clones ×3 (`:791,800-805`) | SW | 1 |
+| R-core-02 | 7 element constructors clone the whole item to return its id (`:254,272,301,338,376,411,483`) — clone `Id` (Arc bump) once, move item | SW | 1 |
+| R-core-03 | `has_element`/`element_kind` re-run cloning `flattened()` per call (`:2259-2272`) — borrowed twin `flattened_ids` (`validate.rs:328`) → `pub(crate)`, reuse (DRY + gate-path allocation storm) | SW | 1 |
+| R-core-04 | `.to_string()` inside `.filter()` per rel-view (`viewops.rs:1223-24`) — membership on `Vec<&Id>` | SW | 1 |
+| R-core-05 | snapshot-clone habits (`viewops.rs:835-841` endpoints, `:1305-1317` RelInfo) | JU | 1 |
+| R-core-06 | pub shrink: dead parity API (`element_tag_defaults:1339`, `relationship_technology:1212`, `add_tags:1920`, `efferent_relationships:1053`, `implied_strategy:103`, `set_workspace_id:168`) → keep + `#[allow(dead_code)]` + "Java parity surface" comment; internal-only (`has_element`, viewops trio, `item_mut`, ref/mut getters) → `pub(crate)`; `found:126` → private | JU | 1 |
+| R-core-07 | `expect("checked")` library panics (CHARTER violation): `viewops.rs:430,451` + check-then-mutate `.expect("checked above")` ×~10 (`builder.rs:335,373,443,480,508,554,780,859,891,1447`, `viewops.rs expect_content:1563`) — single-lookup Result with identical messages | JU | 1 |
+| R-core-08 | out-param closure with stop-signal (`element_technology`, `builder.rs:1169-1208`) | JU | 1 |
+| R-core-09 | 16× `find(\|r\| &r.id == id)` — add borrowed `relationship()` twin of `relationship_mut`, rewrite sites | SW | 1 |
+| R-core-10 | instance lookups rebuild full `flatten_nodes` (clones group Vecs) per gate call (`viewops.rs:503-544`) — recursive `find_env`/`find_instance`, no group data needed | SW | 1 |
+| R-core-11 | `new_view_base`/`generate_view_key` double `all_views()` O(n²) (`builder.rs:2161-2208`) — one collected pass; `ViewRef::slot` helper kills 9 copy-paste tails | SW | 1 |
+| R-core-12 | **DO-NOT-TOUCH order perimeter** (0 violations found): `partition_point`+`style_cmp` (`views.rs:641-679`), `id_sort_key`, `java_cmp_str`, custom-elements reverse-insert, keep-first-users, hydrate-order sort, writer-sorted notes — WRITE-CATALOG §5 | KC | — |
+| R-core-13 | allow hygiene: delete no-op `#![allow(unwrap_used)]` (`url.rs:113`, restriction lint never enabled); module-scope `missing_errors_doc/missing_panics_doc` allows (`builder.rs:14`, `viewops.rs:15`) KEPT as a recorded crate convention — note it in WORKFLOW §Code style at PR6 | JU | 1 |
+| R-core-14 | `Tags::set_from_csv` is a constructor in setter clothing (`tags.rs:117`, one json-reader caller) → honest name | JU | 1 |
+| R-core-15 | keep markers + doc promotes: `styles.rs` copyFrom ×26 "do not fold" marker; `check_element_can_be_added`/`animation_step_relationships` rustdoc cites; `let _ = name;` destructure; validate HashMap-vs-quadratic style unify → DF (byte-adjacent, low value) | JU | 1 |
+
+### oxidizr-export
+
+| ID | finding (file:line) | dis | wv |
+|---|---|---|---|
+| R-exp-01 | `is_visible` clones `Frame` per element×frame (`engine.rs:1159`) → `match &self.frame` | SW | 3 |
+| R-exp-02 | `rels.clone()` for a trailing `is_empty()` (`engine.rs:900`) — hoist flag, iterate by ref | SW | 3 |
+| R-exp-03 | index-`remove` dedup O(n²) (`engine.rs:1497-1506`) → `Vec::dedup_by` (same keep-first-of-run; run `bench cmp 2T`) | SW | 3 |
+| R-exp-04 | `order.clone()` per comparator call (`engine.rs:1487-1492`) — inline into `format!` with `as_deref()`; key shape stays a `String` (TreeSet key = contract) | SW | 3 |
+| R-exp-05 | `IndentingWriter` per-line: `padding()` String + `replace()` even w/o `\n` (`indent.rs:68-90`) — fill loop + `contains` guard; own commit + bench (bytes guarded by whole export net) | JU | 3 |
+| R-exp-06 | `color_or_null(Option<&String>) -> String` (`structurizr.rs:1253`) → `Option<&str> -> &str`, 9 callers `.as_deref()` | SW | 3 |
+| R-exp-07 | `to_string().into_bytes()` double copy (`naming.rs:75,84,95`) → `as_bytes().to_vec()` | SW | 3 |
+| R-exp-08 | `Engine::relationship()` linear scan per rv AND per is_visible leg; sequence sibling re-probes `canonical_name`; mermaid `sequence_document` `view_relationships()` ×2 — memoize (criterion-verifiable vs 2T) | JU | 3 |
+| R-exp-09 | pub shrink: only `ExportFormat`/`ExportError`/`ThemeStore`/`ThemeError`/`ExportedFile` cross the crate; `Engine::workspace()/frame()` have zero callers → `pub(crate)` (publish=true — shrink deliberately) | JU | 3 |
+| R-exp-10 | `render()` 174 ln → per-style `render_*` fns, each citing its `PlantUML*Style#toString`; allow gone; catalog docs don't cite `render()` — doc-safe | JU | 3 |
+| R-exp-11 | `body` (107 ln) split per view-kind leg citing Java overloads; `export_dynamic_sequence` inner blocks split (sibling-insert + boundary-stack = "Rust glue"); **keep fn names** — cited at `EXPORT-MERMAID.md:141,146`, `PHASE_2.md:321-322`; catalog refs same-commit | JU | 3 |
+| R-exp-12 | `type_of(_, include_metadata_symbols: bool)` — mirrors Java overload, doc-cited; prod calls all-`true` | KC | — |
+| R-exp-13 | `canonical_name` reverse+push join (`engine.rs:1367-82`) → `chain.join("/")` w/ trailing-slash care; golden-verify | SW | 3 |
+| R-exp-14 | c4 color cascades ×4 near-identical (`c4.rs:582-603`) → `cascade_color` (two calls = the two Java cascades); drop `let element_to_write = element;`; `_view` param | SW | 3 |
+| R-exp-15 | `unwrap_or_default` on "unreachable" abort paths (`c4.rs:642,677`, `mermaid.rs:128`) — behavior is the contract; keep + cite | KC | — |
+| R-exp-16 | themes: 2-var env loop stringly branch; `load_themes` clone iteration; silent-skips need EXPORT-PROPERTIES §6 cites where missing | JU | 3 |
+| R-exp-17 | stale/dead attrs: `paths.rs:49` `items_after_statements` allow (verify at implementation — it's a *style* lint under `all`, so re-check before deleting); `b64` inconsistent `try_from` vs `as usize`; unimplemented `WorkspaceExporter`/`DiagramExporter` traits = pub API → DF | SW/DF | 3 |
+| R-exp-18 | below-cut cluster: add_style clone-then-discard, `engine.rs:348` collect-then-loop, `format.rs:143` double-dispatch collapse, `selector()` b64 recompute | SW | 3 |
+
+### oxidizr-json / api / cli (+ diag, ast, e2e src)
+
+| ID | finding (file:line) | dis | wv |
+|---|---|---|---|
+| R-mis-01 | `Outcome`-as-accumulator + 15× repeated `match x { Err(e) => { out.fail(…); return out; } }` in pipeline command bodies — internal helper Result, convert at the frozen `execute` boundary; partial-log semantics carried in the error | JU | 4 |
+| R-mis-02 | `deployment_instance_tail` 6 args / out-vec / `Option<&String>` (`writer.rs:715-732`) + unrationaled `too_many_arguments` allow | SW | 4 |
+| R-mis-03 | `relationship_views_with` comparator allocates 2 `format!` + re-parses f64 per comparison (`writer.rs:1368-95`); `dynamic: bool` params — precomputed sort keys; preserve stable-sort ORDER (`7/1, 9/2, 10/3, 11/3` witness) | JU | 4 |
+| R-mis-04 | tuple bool smuggling (`suggest.rs:120-126`) → plain `&&` (keep the guard the tuple encodes) | SW | 4 |
+| R-mis-05 | parse-error decoration ladder duplicated ×4 (`pipeline.rs:442,557,663,751`) → one helper | SW | 4 |
+| R-mis-06 | dead-identical scalar-vs-object array arms in printer (`printer.rs:123-152`, verified) — collapse under goldens + Jackson-semantics comment | JU | 4 |
+| R-mis-07 | reader rels out-param threading (`reader.rs:266-294,395-465`) — return-and-flatten; order-independence per :546-549 comment (verify + goldens) | JU | 4 |
+| R-mis-08 | `theme_to_vec` deep clones for a single serialize (`theme.rs:62-71`) — borrowed entries | JU | 4 |
+| R-mis-09 | `set_list(…).unwrap_or(None)` conflation ×~10 (`writer.rs:427,595,793…`) — infallible variant, drop the swallow-hazard | JU | 4 |
+| R-mis-10 | cli `to_request` clones a dead `Cli` (`lib.rs:184-235` → move) + replay issue clones (`:270-283`) | SW | 4 |
+| R-mis-11 | reconcile `rels: bool` ×2 + closure shadows `fn map_ids` + `contains`/`find` scans (`reconcile.rs:53,143,346,364,423`) | SW | 4 |
+| R-mis-12 | javahash O(n²) emulator + reader `check_instances`/`two_star_shape` bug-compat — audit-trail | KC | — |
+| R-mis-13 | allow gaps: `writer.rs:715` (with R-mis-02) + `golden_m3.rs:81` test allow rationale | SW | 4 |
+
+### xtask / oxidizr-e2e harness
+
+| ID | finding (file:line) | dis | wv |
+|---|---|---|---|
+| R-tool-01 | 3× oracle runner triplication + `failures: &mut usize` out-params (`xtask main.rs:685-784,1186-1310`) → `run_oracle_export` + `Vec<String>` results | SW | 5 |
+| R-tool-02 | `unwrap()` in non-test xtask (`main.rs:418,487`) — charter violation → `with_context`/`?` | SW | 5 |
+| R-tool-03 | oracle_gen bool-flag ladder (`main.rs:1059-1096`) — validated mutually-exclusive; borderline, ratify keep | KC | — |
+| R-tool-04 | e2e runner double-default swallower (`runner.rs:63`); manifest codes-parse ×2 (`manifest.rs:400,462`); mutate 5× prologue (`mutate.rs:67-153`) — dedupe prologue, keep seeded index selection | SW | 5 |
+
+### Perimeter (all waves respect)
+
+DO-NOT-TOUCH without a WRITE-CATALOG re-check: dsl Vec-as-LinkedHashSet stand-ins
+(D8 comments), core order-perimeter (R-core-12), json javahash/reader leniency/printer
+ordering, export comparator key shapes + HashSet-order index loops
+(`structurizr.rs:790-847`, `c4.rs:228-290`).
