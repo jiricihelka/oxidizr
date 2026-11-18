@@ -9,6 +9,9 @@
 //! `contains`/`indexOf`/`Set` is reference-based) becomes id equality: the
 //! model keeps one object per id.
 
+use std::cell::{OnceCell, RefCell};
+use std::collections::HashMap;
+
 use oxidizr_core::configuration::Workspace;
 use oxidizr_core::model::{Model, Relationship};
 use oxidizr_core::views::{
@@ -229,22 +232,38 @@ pub struct Engine<'a> {
     workspace: &'a Workspace,
     color_scheme: ColorScheme,
     frame: Option<Frame>,
+    /// 2R R-exp-08: lazy id → relationship index. The reference's
+    /// `getRelationshipById` scans `getRelationships()` per call; oxidizr
+    /// builds the map once per export (first id wins — the `find` semantics
+    /// of the old scan on a duplicate id).
+    rel_index: OnceCell<HashMap<&'a str, &'a Relationship>>,
+    /// 2R R-exp-08: memo for `canonical_name` (id → name; the workspace is
+    /// immutable for `'a`, so the name is a pure function of the id).
+    name_index: RefCell<HashMap<&'a str, String>>,
 }
 
 impl<'a> Engine<'a> {
     /// New engine over `workspace` (frame state starts empty).
+    // 2R R-exp-08: no longer `const` — the memo maps need `HashMap::new()`
+    // (not a `const fn`); engines are built once per export anyway.
     #[must_use]
-    pub const fn new(workspace: &'a Workspace, color_scheme: ColorScheme) -> Self {
+    pub fn new(workspace: &'a Workspace, color_scheme: ColorScheme) -> Self {
         Self {
             workspace,
             color_scheme,
             frame: None,
+            rel_index: OnceCell::new(),
+            name_index: RefCell::new(HashMap::new()),
         }
     }
 
     /// The workspace being exported.
+    // 2R R-exp-09 (R-core-06 shape): pub-in-crate shrink — zero callers
+    // outside this crate; the getter stays as the Java parity surface
+    // (`AbstractDiagramExporter#getWorkspace`).
+    #[allow(dead_code)] // Java parity surface, see above
     #[must_use]
-    pub const fn workspace(&self) -> &'a Workspace {
+    pub(crate) const fn workspace(&self) -> &'a Workspace {
         self.workspace
     }
 
@@ -268,8 +287,11 @@ impl<'a> Engine<'a> {
 
     /// The current animation frame (`hide` legs and `isVisible` consult
     /// it; `None` on every non-animation export).
+    // 2R R-exp-09 (R-core-06 shape): zero callers outside this crate;
+    // stays as the parity surface for the Java `frame` field read.
+    #[allow(dead_code)] // Java parity surface, see above
     #[must_use]
-    pub const fn frame(&self) -> Option<&Frame> {
+    pub(crate) const fn frame(&self) -> Option<&Frame> {
         self.frame.as_ref()
     }
 
@@ -1145,10 +1167,20 @@ impl<'a> Engine<'a> {
     /// [`ExportError::ReferenceAbort`] when the id references a missing
     /// relationship.
     pub fn relationship(&self, rv: &RelationshipView) -> Result<&'a Relationship, ExportError> {
-        self.model()
-            .relationships
-            .iter()
-            .find(|r| r.id == rv.id)
+        // 2R R-exp-08: lazy `HashMap` — the old linear scan ran per
+        // relationship view AND per `is_visible` leg (the reference reads
+        // its object graph instead of re-scanning). First id wins, matching
+        // the `find` semantics on a duplicate id.
+        let index = self.rel_index.get_or_init(|| {
+            let mut index = HashMap::with_capacity(self.model().relationships.len());
+            for rel in &self.model().relationships {
+                index.entry(rel.id.as_str()).or_insert(rel);
+            }
+            index
+        });
+        index
+            .get(rv.id.as_str())
+            .copied()
             .ok_or(ExportError::ReferenceAbort(
                 "relationship view references a missing relationship",
             ))
@@ -1340,8 +1372,25 @@ impl<'a> Engine<'a> {
     /// `<Kind>://<name path>` with `.` and `/` stripped from every name;
     /// deployment chains are `/`-joined, static chains `.`-joined
     /// (catalog §8 sibling matching).
+    ///
+    /// 2R R-exp-08: memoized per engine (id → name). The workspace is
+    /// immutable for `'a`, so the name is a pure function of the id; the
+    /// sequence legs and the §8 sibling matching re-probe the same elements
+    /// and the deployment leg recursed per ancestor without sharing work.
     #[must_use]
     pub fn canonical_name(&self, element: ElemRef<'a>) -> String {
+        let id = element.id().as_str();
+        if let Some(name) = self.name_index.borrow().get(id) {
+            return name.clone();
+        }
+        let name = self.canonical_name_uncached(element);
+        // The borrow ends before the insert's own statement — `node_tail`
+        // recursion re-enters this wrapper, never holds the borrow.
+        self.name_index.borrow_mut().insert(id, name.clone());
+        name
+    }
+
+    fn canonical_name_uncached(&self, element: ElemRef<'a>) -> String {
         use oxidizr_core::validate::ElementKind as K;
         let format_name = |name: &str| name.replace(['.', '/'], "");
         let by_id =

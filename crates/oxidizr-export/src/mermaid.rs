@@ -41,16 +41,16 @@ pub const MERMAID_ICONS_PROPERTY: &str = "mermaid.icons";
 /// The `mermaid.*` gate helpers — per-property case rules (catalog §1):
 /// title and icons are case-SENSITIVE `equals("true")`, the sequence gate
 /// is `equalsIgnoreCase`.
-fn is_title_on(e: &Engine, view: View<'_>) -> bool {
+fn is_title_on<'a>(e: &Engine<'a>, view: View<'a>) -> bool {
     e.property(view.base(), MERMAID_TITLE_PROPERTY, "true") == "true"
 }
 
-fn sequence_gated(e: &Engine, view: View<'_>) -> bool {
+fn sequence_gated<'a>(e: &Engine<'a>, view: View<'a>) -> bool {
     e.property(view.base(), MERMAID_SEQUENCE_DIAGRAM_PROPERTY, "false")
         .eq_ignore_ascii_case("true")
 }
 
-fn icons_gated(e: &Engine, view: View<'_>) -> bool {
+fn icons_gated<'a>(e: &Engine<'a>, view: View<'a>) -> bool {
     e.property(view.base(), MERMAID_ICONS_PROPERTY, "false") == "true"
 }
 
@@ -526,8 +526,11 @@ impl Dialect for MermaidDialect {
 
         // LinkedHashSet over the relationship views: source then
         // destination per view, first-seen wins.
+        // 2R R-exp-08: ONE probe of the (deterministic) view list — the old
+        // shape collected the Vec twice, once per leg.
+        let rels = e.view_relationships(view);
         let mut elements: Vec<ElemRef<'a>> = Vec::new();
-        for rv in e.view_relationships(view) {
+        for rv in &rels {
             let relationship = e.relationship(rv)?;
             for id in [&relationship.source, &relationship.destination] {
                 let element = element_by_id(e.model(), id).ok_or(ExportError::ReferenceAbort(
@@ -544,7 +547,7 @@ impl Dialect for MermaidDialect {
         // ALWAYS written, even with no participants.
         w.write_line(None);
 
-        for rv in e.view_relationships(view) {
+        for rv in &rels {
             let relationship = e.relationship(rv)?;
             let response = rv.response == Some(true);
             let (source, destination) = if response {
