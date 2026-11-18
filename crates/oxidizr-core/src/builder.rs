@@ -99,6 +99,9 @@ impl WorkspaceBuilder {
     }
 
     /// The current implied-relationships strategy.
+    // Java parity surface (strategy getter/setter pair); no in-workspace
+    // consumer yet — kept per 2R R-core-06, not dead code to delete.
+    #[allow(dead_code)]
     #[must_use]
     pub const fn implied_strategy(&self) -> ImpliedRelationshipsStrategy {
         self.implied_strategy
@@ -123,6 +126,10 @@ impl WorkspaceBuilder {
     }
 
     /// Register an externally assigned id (JSON load / `!identifiers` import).
+    // Java parity surface (`IdGeneratorStrategy#found`); `adopt` seeds the
+    // counter directly, and no other consumer exists — kept per 2R
+    // R-core-06.
+    #[allow(dead_code)]
     pub fn found(&mut self, id: &Id) {
         self.id_gen.found(id);
     }
@@ -165,6 +172,9 @@ impl WorkspaceBuilder {
     }
 
     /// Set the numeric workspace id (JSON `id`).
+    // Java parity surface (`Workspace#setId`); the JSON reader assigns
+    // `workspace.id` through `adopt` instead — kept per 2R R-core-06.
+    #[allow(dead_code)]
     pub fn set_workspace_id(&mut self, id: i64) {
         self.workspace.id = id;
     }
@@ -1086,6 +1096,9 @@ impl WorkspaceBuilder {
 
     /// `element.getRelationships()` — efferent relationship ids in model
     /// (insertion) order.
+    // Java parity surface (`Element#getRelationships` read side); the port's
+    // consumers use the efferent CHECKS instead — kept per 2R R-core-06.
+    #[allow(dead_code)]
     #[must_use]
     pub fn efferent_relationships(&self, id: &Id) -> Vec<Id> {
         self.workspace
@@ -1212,34 +1225,36 @@ impl WorkspaceBuilder {
                 }
             }
         }
-        let mut out: Option<String> = None;
+        // The walk already carries a found value in its `Option<T>` return
+        // channel — the pre-2R shape stashed it into a captured `out`
+        // holder with `Some(())` stop-signals (R-core-08).
         self.walk_nodes_search(&mut |node, _ancestors| {
             if &node.item.id == id {
-                out = Some(node.technology.clone().unwrap_or_default());
-                return Some(());
+                return Some(node.technology.clone().unwrap_or_default());
             }
             for i in &node.infrastructure_nodes {
                 if &i.item.id == id {
-                    out = Some(i.technology.clone().unwrap_or_default());
-                    return Some(());
+                    return Some(i.technology.clone().unwrap_or_default());
                 }
             }
             for c in &node.container_instances {
                 if &c.item.id == id {
-                    out = Some(
+                    return Some(
                         self.container_ref(&c.container_id)
                             .and_then(|c| c.technology.clone())
                             .unwrap_or_default(),
                     );
-                    return Some(());
                 }
             }
             None
-        });
-        out.unwrap_or_default()
+        })
+        .unwrap_or_default()
     }
 
     /// `Relationship.getTechnology()` (empty string when unset).
+    // Java parity surface (`Relationship#getTechnology`); the exporters read
+    // the model field directly — kept per 2R R-core-06.
+    #[allow(dead_code)]
     #[must_use]
     pub fn relationship_technology(&self, id: &Id) -> String {
         self.relationship(id)
@@ -1349,6 +1364,9 @@ impl WorkspaceBuilder {
 
     /// The default tags of an element id's kind (`ModelItem.getDefaultTags()`);
     /// empty for a relationship or unknown id.
+    // Java parity surface (`ModelItem#getDefaultTags`); the JSON reader
+    // computes defaults from kind directly — kept per 2R R-core-06.
+    #[allow(dead_code)]
     #[must_use]
     pub fn element_tag_defaults(&self, id: &Id) -> &'static [&'static str] {
         self.element_kind(id).map_or(&[], |k| {
@@ -1921,6 +1939,10 @@ impl WorkspaceBuilder {
     }
 
     /// `tags "a,b"` — ADD tags (reference `addTags`, trimmed, first position).
+    // Java parity surface (`ModelItem#addTags`); the DSL statement uses
+    // `add_tag_parts` (reference `addTags(String…)` varargs) — kept per 2R
+    // R-core-06.
+    #[allow(dead_code)]
     pub fn add_tags(&mut self, id: &Id, csv: &str) -> Result<(), CoreError> {
         if let Some(item) = self.item_mut(id) {
             for t in java_split_csv(csv) {
@@ -2250,7 +2272,7 @@ impl WorkspaceBuilder {
 
     /// Whether an id names an element of any kind.
     #[must_use]
-    pub fn has_element(&self, id: &Id) -> bool {
+    pub(crate) fn has_element(&self, id: &Id) -> bool {
         crate::validate::flattened_ids(&self.workspace.model)
             .into_iter()
             .any(|(eid, _, _)| eid == id)
@@ -2294,7 +2316,7 @@ impl WorkspaceBuilder {
     }
 
     /// Mutable shared item of any element.
-    pub fn item_mut(&mut self, id: &Id) -> Option<&mut ModelItem> {
+    pub(crate) fn item_mut(&mut self, id: &Id) -> Option<&mut ModelItem> {
         let id_cloned = id.clone();
         macro_rules! by_id {
             ($v:expr) => {
@@ -2381,7 +2403,7 @@ impl WorkspaceBuilder {
     }
 
     /// Mutable access to a software system.
-    pub fn system_mut(&mut self, id: &Id) -> Option<&mut SoftwareSystem> {
+    pub(crate) fn system_mut(&mut self, id: &Id) -> Option<&mut SoftwareSystem> {
         self.workspace
             .model
             .software_systems
@@ -2391,7 +2413,7 @@ impl WorkspaceBuilder {
 
     /// Read access to a software system.
     #[must_use]
-    pub fn system_ref(&self, id: &Id) -> Option<&SoftwareSystem> {
+    pub(crate) fn system_ref(&self, id: &Id) -> Option<&SoftwareSystem> {
         self.workspace
             .model
             .software_systems
@@ -2401,7 +2423,7 @@ impl WorkspaceBuilder {
 
     /// Read access to a container (any system).
     #[must_use]
-    pub fn container_ref(&self, id: &Id) -> Option<&Container> {
+    pub(crate) fn container_ref(&self, id: &Id) -> Option<&Container> {
         self.workspace
             .model
             .software_systems
@@ -2427,7 +2449,7 @@ impl WorkspaceBuilder {
     }
 
     /// Mutable access to a container (any system).
-    pub fn container_mut(&mut self, id: &Id) -> Option<&mut Container> {
+    pub(crate) fn container_mut(&mut self, id: &Id) -> Option<&mut Container> {
         fn find<'a>(systems: &'a mut [SoftwareSystem], id: &Id) -> Option<&'a mut Container> {
             for s in systems {
                 if let Some(c) = s.containers.iter_mut().find(|c| &c.item.id == id) {

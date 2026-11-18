@@ -249,7 +249,9 @@ pub fn instance_tag_chain(parent_tags: &str, instance_tags: &str) -> String {
 /// `ElementStyle.copyFrom` (`ElementStyle.java` 391–448): numbers/booleans/
 /// enums copy when non-null, colors and icon only when non-empty, properties
 /// merged in iteration order (`addProperty` = `HashMap.put`). Field order is
-/// the Java method's — it fixes the merged property-map order.
+/// the Java method's — it fixes the merged property-map order. Each
+/// `if src.x.is_some()` stays 1:1 with the Java statement: do NOT fold into
+/// `dst.x = src.x.or(dst.x)` (2R R-core-15 keep-marker).
 fn copy_from_element(dst: &mut ElementStyle, src: &ElementStyle) {
     if src.width.is_some() {
         dst.width = src.width;
@@ -298,7 +300,9 @@ fn copy_from_element(dst: &mut ElementStyle, src: &ElementStyle) {
     }
 }
 
-/// `RelationshipStyle.copyFrom` (`RelationshipStyle.java` 275–327).
+/// `RelationshipStyle.copyFrom` (`RelationshipStyle.java` 275–327). Same
+/// 1:1 statement shape as [`copy_from_element`] — keep-markers apply (2R
+/// R-core-15).
 fn copy_from_relationship(dst: &mut RelationshipStyle, src: &RelationshipStyle) {
     if src.thickness.is_some() {
         dst.thickness = src.thickness;
@@ -631,12 +635,12 @@ mod tests {
         let linked = Relationship {
             id: Id::new("10"),
             linked_relationship_id: Some(Id::new("11")),
-            tags: Tags::set_from_csv("Linked"),
+            tags: Tags::from_json_csv("Linked"),
             ..rel.clone()
         };
         let base = Relationship {
             id: Id::new("11"),
-            tags: Tags::set_from_csv("Base"),
+            tags: Tags::from_json_csv("Base"),
             ..rel
         };
         let styles = Styles {

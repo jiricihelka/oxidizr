@@ -159,7 +159,7 @@ fn props(o: Obj<'_>, key: &str) -> Properties {
 }
 
 fn tags_field(o: Obj<'_>, key: &str) -> Tags {
-    text(o, key).map_or_else(Tags::new, |csv| Tags::set_from_csv(&csv))
+    text(o, key).map_or_else(Tags::new, |csv| Tags::from_json_csv(&csv))
 }
 
 /// `yyyy-MM-dd'T'HH:mm:ss'Z'` (the writer's format) or epoch millis, as the

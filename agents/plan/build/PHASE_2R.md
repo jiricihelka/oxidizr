@@ -97,9 +97,10 @@ a WORKFLOW.md §Code style note.
 Related hygiene the survey found (folded into PR1/PR3): `faithful-port.md`'s
 narrowest-scope rule is violated by the module-level
 `#![allow(missing_errors_doc, missing_panics_doc)]` in core `builder.rs:14`/
-`viewops.rs:15` (decide per-fn vs a recorded scope exception) and the **no-op** allow
-in core `url.rs:113` (`unwrap_used` is a restriction lint the workspace never enables
-— delete it).
+`viewops.rs:15` (resolved: kept as a recorded crate convention, documented at PR6).
+The `unwrap_used` allow in core `url.rs:113` the survey flagged as a no-op outlier is
+**KEPT** — corrected at PR1-d: 28 files carry the identical test-module allow as the
+charter's `unwrap`-only-in-tests guard.
 
 ## P2R-D5 Waves (ordered, each ends green — quartet + full tier + bless no-op + commit)
 
@@ -201,7 +202,7 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 | R-core-10 | instance lookups rebuild full `flatten_nodes` (clones group Vecs) per gate call (`viewops.rs:503-544`) — recursive `find_env`/`find_instance`, no group data needed | SW | 1 |
 | R-core-11 | `new_view_base`/`generate_view_key` double `all_views()` O(n²) (`builder.rs:2161-2208`) — one collected pass; `ViewRef::slot` helper kills 9 copy-paste tails | SW | 1 |
 | R-core-12 | **DO-NOT-TOUCH order perimeter** (0 violations found): `partition_point`+`style_cmp` (`views.rs:641-679`), `id_sort_key`, `java_cmp_str`, custom-elements reverse-insert, keep-first-users, hydrate-order sort, writer-sorted notes — WRITE-CATALOG §5 | KC | — |
-| R-core-13 | allow hygiene: delete no-op `#![allow(unwrap_used)]` (`url.rs:113`, restriction lint never enabled); module-scope `missing_errors_doc/missing_panics_doc` allows (`builder.rs:14`, `viewops.rs:15`) KEPT as a recorded crate convention — note it in WORKFLOW §Code style at PR6 | JU | 1 |
+| R-core-13 | allow hygiene: `#![allow(unwrap_used)]` in `url.rs:113` **KEPT** (implemented 2026-11-18: it matches the workspace-wide test-module convention — 28 files carry the identical allow as the charter's `unwrap`-only-in-tests guard; the survey's "no-op outlier" read was wrong). Module-scope `missing_errors_doc/missing_panics_doc` allows (`builder.rs:14`, `viewops.rs:15`) KEPT as a recorded crate convention — note both in WORKFLOW §Code style at PR6 | KC | — |
 | R-core-14 | `Tags::set_from_csv` is a constructor in setter clothing (`tags.rs:117`, one json-reader caller) → honest name | JU | 1 |
 | R-core-15 | keep markers + doc promotes: `styles.rs` copyFrom ×26 "do not fold" marker; `check_element_can_be_added`/`animation_step_relationships` rustdoc cites; `let _ = name;` destructure; validate HashMap-vs-quadratic style unify → DF (byte-adjacent, low value) | JU | 1 |
 

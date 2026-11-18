@@ -217,7 +217,7 @@ impl WorkspaceBuilder {
 
     /// `ModelView.isElementInView`.
     #[must_use]
-    pub fn view_contains_element(&self, view: ViewRef, element: &Id) -> bool {
+    pub(crate) fn view_contains_element(&self, view: ViewRef, element: &Id) -> bool {
         self.content_ref(view)
             .is_some_and(|c| c.elements.iter().any(|e| &e.id == element))
     }
@@ -231,7 +231,7 @@ impl WorkspaceBuilder {
 
     /// The ids of the elements currently in the view.
     #[must_use]
-    pub fn view_element_ids(&self, view: ViewRef) -> Vec<Id> {
+    pub(crate) fn view_element_ids(&self, view: ViewRef) -> Vec<Id> {
         self.content_ref(view)
             .map(|c| c.elements.iter().map(|e| e.id.clone()).collect())
             .unwrap_or_default()
@@ -241,8 +241,11 @@ impl WorkspaceBuilder {
     // gates (per-subclass `checkElementCanBeAdded`)
     // ------------------------------------------------------------------
 
-    // One fn per reference `checkElementCanBeAdded` override keeps the port
-    // 1:1 with the Java subclasses, hence the length.
+    /// `ModelView.checkElementCanBeAdded` plus every per-subclass override
+    /// (`SystemLandscapeView`/`SystemContextView`/`ContainerView`/
+    /// `ComponentView`/`DeploymentView`), dispatched on the view kind. One
+    /// fn per reference override keeps the port 1:1 with the Java
+    /// subclasses, hence the length.
     #[allow(clippy::too_many_lines)]
     fn check_element_can_be_added(&self, view: ViewRef, element: &Id) -> Result<(), CoreError> {
         let kind = self
@@ -862,19 +865,27 @@ impl WorkspaceBuilder {
         if self.view_add_element(view, element, true).is_err() {
             return;
         }
-        let candidates: Vec<(Id, Id)> = self
+        // Snapshot only the ids that pass the filter (in relationship order)
+        // rather than every endpoint pair — `view_add_element` never touches
+        // `model.relationships`, so collect-then-add is behaviour-identical
+        // to the old clone-the-table-then-scan (2R R-core-05).
+        let to_add: Vec<Id> = self
             .workspace()
             .model
             .relationships
             .iter()
-            .map(|r| (r.source.clone(), r.destination.clone()))
+            .filter_map(|r| {
+                if &r.source == element && self.filter_matches(filter, &r.destination) {
+                    Some(r.destination.clone())
+                } else if &r.destination == element && self.filter_matches(filter, &r.source) {
+                    Some(r.source.clone())
+                } else {
+                    None
+                }
+            })
             .collect();
-        for (source, destination) in candidates {
-            if &source == element && self.filter_matches(filter, &destination) {
-                let _ = self.view_add_element(view, &destination, true);
-            } else if &destination == element && self.filter_matches(filter, &source) {
-                let _ = self.view_add_element(view, &source, true);
-            }
+        for id in to_add {
+            let _ = self.view_add_element(view, &id, true);
         }
     }
 
@@ -1227,6 +1238,12 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
+    /// The relationship ids revealed by one animation step: a view
+    /// relationship-view joins when exactly one of its model endpoints is in
+    /// this step and the other was revealed by an earlier one — the id
+    /// spellings of Java's `AnimationStep.getRelationships` (the add-side
+    /// rule is cited on [`Self::view_add_animation_step`]). Empty for a view
+    /// without content. Undocumented before 2R R-core-15.
     fn animation_step_relationships(
         &self,
         view: ViewRef,
@@ -1326,54 +1343,49 @@ impl WorkspaceBuilder {
     ) -> Result<Id, CoreError> {
         self.check_element_can_be_added(view, source)?;
         self.check_element_can_be_added(view, destination)?;
-        let rels: Vec<RelInfo> = self
-            .workspace()
-            .model
-            .relationships
-            .iter()
-            .map(|r| RelInfo {
-                id: r.id.clone(),
-                source: r.source.clone(),
-                destination: r.destination.clone(),
-                description: r.description.clone(),
-                technology: r.technology.clone(),
-            })
-            .collect();
-        // Forward lookup (reference order): no technology →
-        // `getEfferentRelationshipWith(dest, description)` — an EXACT
-        // normalized-description match ("" matches ""!) — falling back to any
-        // efferent source→destination relationship; with a technology the
-        // reference loops WITHOUT break, so the LAST tech match wins.
-        let forward = if technology.is_empty() {
-            find_rel(&rels, source, destination, Some(description), "")
-                .or_else(|| find_rel(&rels, source, destination, None, ""))
-        } else {
-            find_rel_last(&rels, source, destination, technology)
-        };
-        let (rel_id, response) = if let Some(id) = forward {
-            (id, false)
-        } else {
-            // Reverse lookup; usable only when that relationship is
-            // ALREADY in this view (`response: true`).
-            let reverse = if technology.is_empty() {
-                find_rel(&rels, destination, source, None, "")
+        // All lookups complete before the first mutation below, so they run
+        // on a shared borrow of the relationship arena — the pre-2R shape
+        // projected every relationship (incl. description/technology
+        // Strings) into a `Vec<RelInfo>` snapshot (R-core-05).
+        let (rel_id, response) = {
+            let rels = &self.workspace().model.relationships;
+            // Forward lookup (reference order): no technology →
+            // `getEfferentRelationshipWith(dest, description)` — an EXACT
+            // normalized-description match ("" matches ""!) — falling back
+            // to any efferent source→destination relationship; with a
+            // technology the reference loops WITHOUT break, so the LAST
+            // tech match wins.
+            let forward = if technology.is_empty() {
+                find_rel(rels, source, destination, Some(description), "")
+                    .or_else(|| find_rel(rels, source, destination, None, ""))
             } else {
-                find_rel_last(&rels, destination, source, technology)
+                find_rel_last(rels, source, destination, technology)
             };
-            match reverse {
-                Some(id) if self.view_contains_relationship(view, &id) => (id, true),
-                _ => {
-                    return Err(CoreError::DynamicRelationshipMissing {
-                        source: self
-                            .item(source)
-                            .map(|i| i.name.clone())
-                            .unwrap_or_default(),
-                        destination: self
-                            .item(destination)
-                            .map(|i| i.name.clone())
-                            .unwrap_or_default(),
-                        technology: (!technology.is_empty()).then(|| technology.to_string()),
-                    });
+            if let Some(id) = forward {
+                (id, false)
+            } else {
+                // Reverse lookup; usable only when that relationship is
+                // ALREADY in this view (`response: true`).
+                let reverse = if technology.is_empty() {
+                    find_rel(rels, destination, source, None, "")
+                } else {
+                    find_rel_last(rels, destination, source, technology)
+                };
+                match reverse {
+                    Some(id) if self.view_contains_relationship(view, &id) => (id, true),
+                    _ => {
+                        return Err(CoreError::DynamicRelationshipMissing {
+                            source: self
+                                .item(source)
+                                .map(|i| i.name.clone())
+                                .unwrap_or_default(),
+                            destination: self
+                                .item(destination)
+                                .map(|i| i.name.clone())
+                                .unwrap_or_default(),
+                            technology: (!technology.is_empty()).then(|| technology.to_string()),
+                        });
+                    }
                 }
             }
         };
@@ -1506,16 +1518,6 @@ impl WorkspaceBuilder {
     }
 }
 
-/// Minimal relationship projection for the dynamic lookups (avoids holding
-/// a borrow of the workspace across mutations).
-struct RelInfo {
-    id: Id,
-    source: Id,
-    destination: Id,
-    description: Option<String>,
-    technology: Option<String>,
-}
-
 /// `(id, name)` of a software system, as planned by `create_default_views`.
 type SystemRef = (Id, String);
 
@@ -1536,7 +1538,7 @@ type EnvironmentPlan = (String, Vec<SystemRef>, bool);
 /// One directional relationship lookup: exact normalized description when
 /// `Some`, any description when `None`; exact technology when non-empty.
 fn find_rel(
-    rels: &[RelInfo],
+    rels: &[crate::model::Relationship],
     from: &Id,
     to: &Id,
     description: Option<&str>,
@@ -1554,7 +1556,12 @@ fn find_rel(
 
 /// Technology-filtered lookup with the reference's no-break loop: the LAST
 /// source→destination relationship with exactly this technology wins.
-fn find_rel_last(rels: &[RelInfo], from: &Id, to: &Id, technology: &str) -> Option<Id> {
+fn find_rel_last(
+    rels: &[crate::model::Relationship],
+    from: &Id,
+    to: &Id,
+    technology: &str,
+) -> Option<Id> {
     rels.iter()
         .rev()
         .find(|r| {

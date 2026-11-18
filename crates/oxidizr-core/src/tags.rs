@@ -110,11 +110,12 @@ impl Tags {
         &self.stored
     }
 
-    /// JSON-load path: replace the stored set from a comma-separated string.
+    /// JSON-load path: parse a comma-separated string into a tag set.
     /// Reference `setTags(String)`: `split(",")` with NO trim (a stored default
-    /// tag simply re-dedups against the derived one on write).
+    /// tag simply re-dedups against the derived one on write). `from_`-named
+    /// because it constructs, not mutates (2R R-core-14).
     #[must_use]
-    pub fn set_from_csv(csv: &str) -> Tags {
+    pub fn from_json_csv(csv: &str) -> Tags {
         let mut tags = Tags::new();
         for part in csv.split(',') {
             tags.push_unique(part);
@@ -250,14 +251,14 @@ mod tests {
         t.add("Foo");
         assert_eq!(t.serialized_for(TagKind::Person), "Element,Person,Foo");
         // A re-stored "Element" (from a JSON round-trip) dedups in place.
-        let t2 = Tags::set_from_csv("Element,Person,Foo");
+        let t2 = Tags::from_json_csv("Element,Person,Foo");
         assert_eq!(t2.serialized_for(TagKind::Person), "Element,Person,Foo");
     }
 
     #[test]
-    fn set_from_csv_does_not_trim() {
+    fn from_json_csv_does_not_trim() {
         // Reference `split(",")` keeps the space: " b" is a distinct stored tag.
-        let t = Tags::set_from_csv("a, b");
+        let t = Tags::from_json_csv("a, b");
         assert_eq!(t.stored(), ["a".to_string(), " b".to_string()]);
         assert!(t.contains_stored(" b"));
         assert!(!t.contains_stored("b"));
@@ -274,7 +275,7 @@ mod tests {
 
     #[test]
     fn custom_element_default_is_element_only() {
-        let t = Tags::set_from_csv("Mine,Element");
+        let t = Tags::from_json_csv("Mine,Element");
         assert_eq!(t.serialized_for(TagKind::CustomElement), "Element,Mine");
     }
 
@@ -299,7 +300,7 @@ mod tests {
             relationship_defaults(true, Some(InteractionStyle::Synchronous)),
             Vec::<&'static str>::new()
         );
-        let t = Tags::set_from_csv("Synchronous,Relationship");
+        let t = Tags::from_json_csv("Synchronous,Relationship");
         assert_eq!(
             t.serialized(&relationship_defaults(true, None)),
             "Synchronous,Relationship"
