@@ -23,13 +23,12 @@ use super::{
 };
 
 #[allow(clippy::too_many_lines)] // the chain arm order IS the contract
-pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
+pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
-    let idr = stmt.identifier.clone();
-    let idr = idr.as_deref();
-    let raw = stmt.tokens.clone();
+    let idr = stmt.identifier.as_deref();
+    let raw = &stmt.tokens;
     let t = raw.without_context_start_token();
-    let open = Parser::should_start_context(&raw);
+    let open = Parser::should_start_context(raw);
 
     let is_model = p.in_ctx(|c| matches!(c, Ctx::Model { .. }));
     let is_env = p.in_ctx(Ctx::is_environment);

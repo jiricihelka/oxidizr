@@ -22,9 +22,9 @@ use super::error::DslError;
 use super::{Parser, Sec, Stmt, eqi, java_split_str, tok};
 
 #[allow(clippy::too_many_lines)] // the chain arm order IS the contract
-pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
+pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
-    let raw = stmt.tokens.clone();
+    let raw = &stmt.tokens;
     let top = p.top().cloned();
 
     // Guards — "top of stack" checks (`inContext`); `!isGroup` is the
@@ -67,7 +67,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     if eqi(&first, tok::DESCRIPTION) && (is_element_ng || is_elements) {
         return (|| {
             let targets = targets(p)?;
-            one_token(&raw, "description <description>")?;
+            one_token(raw, "description <description>")?;
             let description = raw.get(1);
             for id in &targets {
                 p.builder
@@ -94,7 +94,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         };
         if single || is_elements || matches!(top, Some(Ctx::Relationships { .. })) {
             return (|| {
-                one_token(&raw, "technology <technology>")?;
+                one_token(raw, "technology <technology>")?;
                 let technology = raw.get(1);
                 match p.top().cloned() {
                     Some(Ctx::Elements { items }) => {
@@ -174,7 +174,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     if eqi(&first, tok::INSTANCES) && matches!(top, Some(Ctx::DeploymentNode { .. })) {
         return (|| {
             let id = item_id(p)?;
-            one_token(&raw, "instances <number|range>")?;
+            one_token(raw, "instances <number|range>")?;
             p.builder
                 .set_instances(&id, &raw.get(1))
                 .map_err(|e| DslError::core(&e))
@@ -186,7 +186,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     if eqi(&first, tok::URL) && (is_item_ng || is_items) {
         return (|| {
             let targets = targets(p)?;
-            one_token(&raw, "url <url>")?;
+            one_token(raw, "url <url>")?;
             let url = raw.get(1);
             for id in &targets {
                 p.builder
@@ -260,7 +260,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     // CALLED "perspective" — the reference quirk).
     if eqi(&first, tok::PERSPECTIVE)
         && matches!(top, Some(Ctx::Perspectives { .. }))
-        && Parser::should_start_context(&raw)
+        && Parser::should_start_context(raw)
         && raw.size() == 3
     {
         p.start_context(Ctx::Perspective {
@@ -333,7 +333,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                     PerspectiveField::Description => "description <description>",
                     PerspectiveField::Url => "url <url>",
                 };
-                one_token(&raw, grammar)?;
+                one_token(raw, grammar)?;
                 let value = raw.get(1);
                 if let Some(Ctx::Perspective { def }) = p.stack.last_mut() {
                     match field {
@@ -505,7 +505,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     // 728: `name <name>` at workspace scope.
     if eqi(&first, tok::NAME) && is_workspace_ctx {
         return (|| {
-            one_token(&raw, "name <name>")?;
+            one_token(raw, "name <name>")?;
             p.builder.set_workspace_name(raw.get(1));
             Ok(())
         })()
@@ -515,7 +515,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     // 731: `description <description>` at workspace scope.
     if eqi(&first, tok::DESCRIPTION) && is_workspace_ctx {
         return (|| {
-            one_token(&raw, "description <description>")?;
+            one_token(raw, "description <description>")?;
             p.builder.set_workspace_description(raw.get(1));
             Ok(())
         })()

@@ -20,13 +20,12 @@ use super::rel::RelArch;
 use super::{Parser, Sec, Stmt, Tokens, eqi, java_split_str, tok};
 
 #[allow(clippy::too_many_lines)] // the chain arm order IS the contract
-pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
+pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
-    let idr = stmt.identifier.clone();
-    let idr = idr.as_deref();
-    let raw = stmt.tokens.clone();
+    let idr = stmt.identifier.as_deref();
+    let raw = &stmt.tokens;
     let t = raw.without_context_start_token();
-    let open = Parser::should_start_context(&raw);
+    let open = Parser::should_start_context(raw);
 
     let is_model = p.in_ctx(|c| matches!(c, Ctx::Model { .. }));
     let is_system = p.in_ctx(|c| matches!(c, Ctx::SoftwareSystem { .. }));
@@ -81,7 +80,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         return (|| {
             let arch = p.get_archetype(tok::RELATIONSHIP, &raw.get(1));
             let rels = p.explicit_rel(&t, arch)?;
-            p.register_rel_result(idr, rels, &raw)
+            p.register_rel_result(idr, rels, raw)
         })()
         .into();
     }
@@ -92,7 +91,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         return (|| {
             let arch = p.get_archetype(tok::RELATIONSHIP, &raw.get(0));
             let rels = p.implicit_rel(&t, arch)?;
-            p.register_rel_result(idr, rels, &raw)
+            p.register_rel_result(idr, rels, raw)
         })()
         .into();
     }
@@ -362,7 +361,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                 return Err(DslError::stmt("Expected: group <name> {"));
             };
             let parent = top.group_payload().cloned();
-            let name = parse_group(p, &raw, parent.as_ref())?;
+            let name = parse_group(p, raw, parent.as_ref())?;
             let uid = p.group_open(parent.as_ref().map(|g| g.uid));
             let group = DslGroup {
                 uid,

@@ -20,9 +20,9 @@ use super::error::DslError;
 use super::{Archetype, Parser, Sec, Stmt, Tokens, eqi, tok};
 
 #[allow(clippy::too_many_lines)] // the chain arm order IS the contract
-pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
+pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
-    let raw = stmt.tokens.clone();
+    let raw = &stmt.tokens;
     let top = p.top().cloned();
 
     // ------------------------------------------------------------------
@@ -55,7 +55,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                 continue;
             }
             let idx = define_archetype(p, stmt.identifier.as_deref(), kind, &first);
-            let open = Parser::should_start_context(&raw) && kind != tok::GROUP;
+            let open = Parser::should_start_context(raw) && kind != tok::GROUP;
             if open {
                 p.start_context(Ctx::ElementArchetype {
                     kind: kind.to_string(),
@@ -66,7 +66,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if p.is_relationship_keyword_or_archetype(&first) {
             let idx = define_archetype(p, stmt.identifier.as_deref(), tok::RELATIONSHIP, &first);
-            if Parser::should_start_context(&raw) {
+            if Parser::should_start_context(raw) {
                 p.start_context(Ctx::RelationshipArchetype { idx });
             }
             return Sec::Handled;
@@ -86,7 +86,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
             )
         {
             return (|| {
-                let value = one_token(p, &raw, "metadata <metadata>")?;
+                let value = one_token(p, raw, "metadata <metadata>")?;
                 p.archetype_list[idx].metadata = value;
                 Ok(())
             })()
@@ -94,7 +94,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::DESCRIPTION) {
             return (|| {
-                let value = one_token(p, &raw, "description <description>")?;
+                let value = one_token(p, raw, "description <description>")?;
                 p.archetype_list[idx].description = value;
                 Ok(())
             })()
@@ -110,7 +110,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         };
         if eqi(&first, tok::TECHNOLOGY) && technology_kind {
             return (|| {
-                let value = one_token(p, &raw, "technology <technology>")?;
+                let value = one_token(p, raw, "technology <technology>")?;
                 p.archetype_list[idx].technology = value;
                 Ok(())
             })()
@@ -118,7 +118,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::TAG) {
             return (|| {
-                let value = one_token(p, &raw, "tag <tag>")?;
+                let value = one_token(p, raw, "tag <tag>")?;
                 // `Archetype.addTags(String...)` with ONE vararg — the value
                 // is TRIMMED but NOT split on commas, and an empty tag lands
                 // in the LinkedHashSet (`tag.trim()` is added unconditionally).
@@ -222,7 +222,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         // grammar text always says `colour`.
         if eqi(&first, tok::ELEMENT_STYLE_BACKGROUND) {
             return (|| {
-                let value = one_token(p, &raw, "background <#rrggbb|color name>")?;
+                let value = one_token(p, raw, "background <#rrggbb|color name>")?;
                 let value = style_color(&value)?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.background = Some(value);
@@ -233,7 +233,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_COLOUR) || eqi(&first, tok::ELEMENT_STYLE_COLOR) {
             return (|| {
-                let value = one_token(p, &raw, "colour <#rrggbb|color name>")?;
+                let value = one_token(p, raw, "colour <#rrggbb|color name>")?;
                 let value = style_color(&value)?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.color = Some(value);
@@ -244,7 +244,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_STROKE) {
             return (|| {
-                let value = one_token(p, &raw, "stroke <#rrggbb|color name>")?;
+                let value = one_token(p, raw, "stroke <#rrggbb|color name>")?;
                 let value = style_color(&value)?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.stroke = Some(value);
@@ -255,7 +255,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_STROKE_WIDTH) {
             return (|| {
-                let value = one_token(p, &raw, "strokeWidth <1-10>")?;
+                let value = one_token(p, raw, "strokeWidth <1-10>")?;
                 let n = java_int(&value).ok_or_else(|| {
                     DslError::stmt("Stroke width must be an integer between 1 and 10")
                 })?;
@@ -270,7 +270,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_SHAPE) {
             return (|| {
-                one_grammar(p, &raw, "shape", SHAPE_GRAMMAR)?;
+                one_grammar(p, raw, "shape", SHAPE_GRAMMAR)?;
                 let name = raw.get(1).to_lowercase();
                 let shape = SHAPE_NAMES
                     .iter()
@@ -286,7 +286,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_BORDER) {
             return (|| {
-                one_grammar(p, &raw, "border", "solid|dashed|dotted")?;
+                one_grammar(p, raw, "border", "solid|dashed|dotted")?;
                 let name = raw.get(1).to_lowercase();
                 let border = BORDER_NAMES
                     .iter()
@@ -302,7 +302,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_OPACITY) {
             return (|| {
-                let value = one_token(p, &raw, "opacity <0-100>")?;
+                let value = one_token(p, raw, "opacity <0-100>")?;
                 let n = java_int(&value).ok_or_else(|| {
                     DslError::stmt("Opacity must be an integer between 0 and 100")
                 })?;
@@ -332,7 +332,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         ] {
             if eqi(&first, token) {
                 return (|| {
-                    let value = one_token(p, &raw, grammar)?;
+                    let value = one_token(p, raw, grammar)?;
                     let n = java_int(&value).ok_or_else(|| DslError::stmt(message))?;
                     if let Some(s) = element_style_mut(p, idx) {
                         match token {
@@ -348,7 +348,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_METADATA) {
             return (|| {
-                let value = one_token(p, &raw, "metadata <true|false>")?;
+                let value = one_token(p, raw, "metadata <true|false>")?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.metadata = Some(tri_bool(&value, "Metadata")?);
                 }
@@ -359,7 +359,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         if eqi(&first, tok::ELEMENT_STYLE_DESCRIPTION) {
             return (|| {
                 // The reference grammar text literally says `<true|false>`.
-                let value = one_token(p, &raw, "description <true|false>")?;
+                let value = one_token(p, raw, "description <true|false>")?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.description = Some(tri_bool(&value, "Description")?);
                 }
@@ -369,7 +369,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_ICON) {
             return (|| {
-                let value = one_token(p, &raw, "icon <file|url>")?;
+                let value = one_token(p, raw, "icon <file|url>")?;
                 let data_uri = resolve_icon(p, &value)?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.icon = Some(data_uri);
@@ -380,7 +380,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_ICON_POSITION) {
             return (|| {
-                one_grammar(p, &raw, "iconPosition", "Top|Bottom|Left")?;
+                one_grammar(p, raw, "iconPosition", "Top|Bottom|Left")?;
                 let name = raw.get(1).to_lowercase();
                 let pos = ICON_POSITION_NAMES
                     .iter()
@@ -418,7 +418,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     if let Some(Ctx::RelationshipStyle { idx }) = top {
         if eqi(&first, tok::RELATIONSHIP_STYLE_THICKNESS) {
             return (|| {
-                let value = one_token(p, &raw, "thickness <number>")?;
+                let value = one_token(p, raw, "thickness <number>")?;
                 let n = java_int(&value)
                     .ok_or_else(|| DslError::stmt("Thickness must be a positive integer"))?;
                 if let Some(s) = relationship_style_mut(p, idx) {
@@ -431,7 +431,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         if eqi(&first, tok::RELATIONSHIP_STYLE_COLOUR) || eqi(&first, tok::RELATIONSHIP_STYLE_COLOR)
         {
             return (|| {
-                let value = one_token(p, &raw, "colour <#rrggbb|color name>")?;
+                let value = one_token(p, raw, "colour <#rrggbb|color name>")?;
                 let value = style_color(&value)?;
                 if let Some(s) = relationship_style_mut(p, idx) {
                     s.color = Some(value);
@@ -442,7 +442,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::RELATIONSHIP_STYLE_DASHED) {
             return (|| {
-                let value = one_token(p, &raw, "dashed <true|false>")?;
+                let value = one_token(p, raw, "dashed <true|false>")?;
                 if let Some(s) = relationship_style_mut(p, idx) {
                     s.dashed = Some(tri_bool(&value, "Dashed")?);
                 }
@@ -452,7 +452,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::RELATIONSHIP_STYLE_OPACITY) {
             return (|| {
-                let value = one_token(p, &raw, "opacity <0-100>")?;
+                let value = one_token(p, raw, "opacity <0-100>")?;
                 let n = java_int(&value).ok_or_else(|| {
                     DslError::stmt("Opacity must be an integer between 0 and 100")
                 })?;
@@ -477,7 +477,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         ] {
             if eqi(&first, token) {
                 return (|| {
-                    let value = one_token(p, &raw, grammar)?;
+                    let value = one_token(p, raw, grammar)?;
                     let n = java_int(&value).ok_or_else(|| DslError::stmt(message))?;
                     if let Some(s) = relationship_style_mut(p, idx) {
                         if token == tok::ELEMENT_STYLE_FONT_SIZE {
@@ -493,7 +493,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::RELATIONSHIP_STYLE_POSITION) {
             return (|| {
-                let value = one_token(p, &raw, "position <0-100>")?;
+                let value = one_token(p, raw, "position <0-100>")?;
                 let n = java_int(&value).ok_or_else(|| {
                     DslError::stmt("Position must be an integer between 0 and 100")
                 })?;
@@ -506,7 +506,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::RELATIONSHIP_STYLE_LINE_STYLE) {
             return (|| {
-                one_grammar(p, &raw, "style", "solid|dashed|dotted")?;
+                one_grammar(p, raw, "style", "solid|dashed|dotted")?;
                 let name = raw.get(1).to_lowercase();
                 let ls = LINE_STYLE_NAMES
                     .iter()
@@ -524,7 +524,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::RELATIONSHIP_STYLE_ROUTING) {
             return (|| {
-                one_grammar(p, &raw, "routing", "direct|orthogonal|curved")?;
+                one_grammar(p, raw, "routing", "direct|orthogonal|curved")?;
                 let name = raw.get(1).to_lowercase();
                 let routing = ROUTING_NAMES
                     .iter()
@@ -542,7 +542,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::RELATIONSHIP_STYLE_JUMP) {
             return (|| {
-                let value = one_token(p, &raw, "jump <true|false>")?;
+                let value = one_token(p, raw, "jump <true|false>")?;
                 if let Some(s) = relationship_style_mut(p, idx) {
                     s.jump = Some(tri_bool(&value, "Jump")?);
                 }
@@ -552,7 +552,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_METADATA) {
             return (|| {
-                let value = one_token(p, &raw, "metadata <true|false>")?;
+                let value = one_token(p, raw, "metadata <true|false>")?;
                 if let Some(s) = relationship_style_mut(p, idx) {
                     s.metadata = Some(tri_bool(&value, "Metadata")?);
                 }
@@ -562,7 +562,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_DESCRIPTION) {
             return (|| {
-                let value = one_token(p, &raw, "description <true|false>")?;
+                let value = one_token(p, raw, "description <true|false>")?;
                 if let Some(s) = relationship_style_mut(p, idx) {
                     s.description = Some(tri_bool(&value, "Description")?);
                 }

@@ -66,7 +66,10 @@ pub(crate) enum Sec {
 }
 
 /// One chain section (`else if` group over a contiguous Java line range).
-type Section = fn(&mut Parser, &mut Stmt) -> Sec;
+/// Shared-borrow `&Stmt` per 2R R-dsl-01: no section mutates the statement
+/// (they mutate the parser), and the Java chain shares ONE tokens reference
+/// across every `else if`.
+type Section = fn(&mut Parser, &Stmt) -> Sec;
 
 impl From<Result<(), DslError>> for Sec {
     /// Arm-body shorthand: `ok → Handled`, `err → Err`.
@@ -90,7 +93,8 @@ const SECTIONS: &[Section] = &[
     stmt_config::section,
 ];
 
-/// A dispatched logical line (state the chain arms read and mutate).
+/// A dispatched logical line (state the chain arms read; mutations land on
+/// the parser, never here — 2R R-dsl-01).
 pub(crate) struct Stmt {
     /// The joined logical line, BOM-stripped — what the tokenizer saw.
     pub raw: String,
@@ -98,7 +102,7 @@ pub(crate) struct Stmt {
     #[allow(dead_code)] // diagnostics re-anchor on it from M5 onward
     pub number: u32,
     /// Tokens after `${}` substitution and `id =` prefix removal.
-    pub tokens: Tokens,
+    pub tokens: Tokens<'static>,
     /// The `id = ` identifier, if the statement carried one (Java
     /// `identifier`).
     pub identifier: Option<String>,
@@ -1301,20 +1305,23 @@ impl<'a> Parser<'a> {
 
         // 266–269: tokenize + per-token substitution.
         let raw_tokens = tokenize::tokenize(&raw);
-        let substituted: Vec<String> = raw_tokens
+        let mut substituted: Vec<String> = raw_tokens
             .iter()
             .map(|t| self.substitute_strings(t))
             .collect();
-        let mut tokens = Tokens::new(substituted);
 
-        // 271–278: the `id = ` prefix.
+        // 271–278: the `id = ` prefix. Applied on the token Vec before the
+        // `Tokens` wrap (2R R-dsl-01 — the old `tokens.sublist(2)` reassign
+        // cannot express itself over borrowed views; the unescape view and
+        // the check order are identical).
         let mut identifier = None;
-        if tokens.size() >= 3 && tokens.get(1) == tok::ASSIGNMENT {
-            let ident = tokens.get(0);
+        if substituted.len() >= 3 && Tokens::unescape(&substituted[1]) == tok::ASSIGNMENT {
+            let ident = Tokens::unescape(&substituted[0]).into_owned();
             IdentifiersRegister::validate_identifier_name(&ident).map_err(DslError::stmt)?;
             identifier = Some(ident);
-            tokens = tokens.sublist(2);
+            substituted = substituted.split_off(2);
         }
+        let tokens = Tokens::new(substituted);
 
         // `String firstToken = tokens.get(0)` — Java throws
         // IndexOutOfBoundsException for a token list that is empty AFTER the
@@ -1324,14 +1331,14 @@ impl<'a> Parser<'a> {
             return Err(DslError::stmt("Index 0 out of bounds for length 0"));
         }
 
-        let mut stmt = Stmt {
+        let stmt = Stmt {
             raw,
             number,
             tokens,
             identifier,
         };
         for section in SECTIONS {
-            match section(self, &mut stmt) {
+            match section(self, &stmt) {
                 Sec::Handled => return Ok(()),
                 Sec::Err(e) => return Err(e),
                 Sec::No => {}

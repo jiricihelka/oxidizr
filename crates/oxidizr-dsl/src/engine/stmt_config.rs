@@ -19,11 +19,11 @@ use super::ctx::{Ctx, Holder};
 use super::error::DslError;
 use super::{IdentifierScope, NameValue, NameValueType, Parser, Sec, Stmt, Tokens, eqi, tok};
 
-pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
+pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
-    let raw = stmt.tokens.clone();
+    let raw = &stmt.tokens;
     let t = raw.without_context_start_token();
-    let open = Parser::should_start_context(&raw);
+    let open = Parser::should_start_context(raw);
 
     let is_workspace = p.in_ctx(|c| matches!(c, Ctx::Workspace));
     let is_model = p.in_ctx(|c| matches!(c, Ctx::Model { .. }));
@@ -41,10 +41,10 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
 
     // 1199/1202: ConfigurationParser (RAW tokens).
     if eqi(&first, tok::SCOPE) && is_config {
-        return parse_scope(p, &raw).into();
+        return parse_scope(p, raw).into();
     }
     if eqi(&first, tok::VISIBILITY) && is_config {
-        return parse_visibility(p, &raw).into();
+        return parse_visibility(p, raw).into();
     }
 
     // 1205: users { — also an unconditional context start.
@@ -55,7 +55,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
 
     // 1208: the users-role catch-all — ANY token inside `users {`.
     if is_users {
-        return user_role(p, &raw).into();
+        return user_role(p, raw).into();
     }
 
     // 1210–1258: !docs <path> [importer] — workspace / softwareSystem /
@@ -67,7 +67,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         }
     }
     if eqi(&first, tok::DOCS_EXCLUDE) && is_docs {
-        return parse_exclude(&raw).into();
+        return parse_exclude(raw).into();
     }
 
     // 1259–1330: !adrs / !decisions <path> [type|importer].
@@ -75,7 +75,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         return decisions_arm(p, &t, open, docs_holder_expect(p)).into();
     }
     if eqi(&first, tok::DECISIONS_EXCLUDE) && is_decisions {
-        return parse_exclude(&raw).into();
+        return parse_exclude(raw).into();
     }
 
     // 1331: !constant — removed keyword, context-independent throw.
@@ -89,7 +89,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     // parser's `addConstant`/`addVariable` duplicate rules).
     if eqi(&first, tok::CONST) {
         return (|| {
-            let (name, value) = name_value(&raw)?;
+            let (name, value) = name_value(raw)?;
             if p.constants.contains_key(&name) {
                 return Err(DslError::stmt(format!(
                     "A constant/variable \"{name}\" already exists"
@@ -109,7 +109,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     }
     if eqi(&first, tok::VAR) {
         return (|| {
-            let (name, value) = name_value(&raw)?;
+            let (name, value) = name_value(raw)?;
             if p.constants
                 .get(&name)
                 .is_some_and(|nv| nv.vtype == NameValueType::Constant)
@@ -133,7 +133,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
 
     // 1339: !identifiers <flat|hierarchical> — workspace or model scope.
     if eqi(&first, tok::IDENTIFIERS) && (is_workspace || is_model) {
-        return identifier_scope(p, &raw).into();
+        return identifier_scope(p, raw).into();
     }
 
     Sec::No

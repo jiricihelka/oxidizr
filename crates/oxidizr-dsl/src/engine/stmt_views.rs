@@ -1285,15 +1285,20 @@ fn image_content(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), D
 fn dynamic_step(p: &mut Parser, raw: &Tokens, view: ViewRef, open: bool) -> Result<(), DslError> {
     const G1: &str = "[order:] <identifier> -> <identifier> [description] [technology]";
     const G2: &str = "[order:] <identifier> [description]";
-    // Java mutates the driver's token list; work on a clone (the trailing
-    // `{` stays, and `open` was computed from it before).
-    let mut tokens = raw.clone();
+    // Java mutates the driver's token list; the port's answer is a borrowed
+    // view with a drop-prefix offset instead of the old deep clone (2R
+    // R-dsl-01; the trailing `{` stays, and `open` was computed from it
+    // before).
+    let mut rest = raw.raw_tokens();
     let mut order = String::new();
-    if !tokens.is_empty() && tokens.get(0).ends_with(':') {
-        let first = tokens.get(0);
-        order = first[..first.len() - 1].to_string();
-        tokens = tokens.sublist(1);
+    if let Some(first) = rest.first() {
+        let first = Tokens::unescape(first);
+        if let Some(stripped) = first.strip_suffix(':') {
+            order = stripped.to_string();
+            rest = &rest[1..];
+        }
     }
+    let tokens = Tokens::borrowed(rest);
     let rel_id = if tokens.size() > 1 && tokens.get(1) == tok::RELATIONSHIP {
         // Pair form. `RELATIONSHIP_TOKEN.equals` — case-sensitive `->`.
         if tokens.has_more_than(4) {
@@ -1554,11 +1559,11 @@ fn metadata_symbols(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_lines)] // the chain arm order IS the contract
-pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
+pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
-    let raw = stmt.tokens.clone();
+    let raw = &stmt.tokens;
     let t = raw.without_context_start_token();
-    let open = Parser::should_start_context(&raw);
+    let open = Parser::should_start_context(raw);
     let top = p.top().cloned();
     let top = top.as_ref();
     let in_views = matches!(top, Some(Ctx::Views));
@@ -1650,26 +1655,26 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     // -- custom view content ---------------------------------------------
     if super::eqi(&first, tok::VIEW_INCLUDE) {
         if let Some(Ctx::CustomView { view }) = top {
-            return Sec::from(custom_include(p, *view, &raw));
+            return Sec::from(custom_include(p, *view, raw));
         }
         if let Some(Ctx::DeploymentView { view }) = top {
-            return Sec::from(deployment_include(p, *view, &raw));
+            return Sec::from(deployment_include(p, *view, raw));
         }
         if top.is_some_and(super::ctx::Ctx::is_static_view) {
             let view = top.and_then(Ctx::view).expect("static view");
-            return Sec::from(static_include(p, view, &raw));
+            return Sec::from(static_include(p, view, raw));
         }
     }
     if super::eqi(&first, tok::VIEW_EXCLUDE) {
         if let Some(Ctx::CustomView { view }) = top {
-            return Sec::from(custom_exclude(p, *view, &raw));
+            return Sec::from(custom_exclude(p, *view, raw));
         }
         if let Some(Ctx::DeploymentView { view }) = top {
-            return Sec::from(deployment_exclude(p, *view, &raw));
+            return Sec::from(deployment_exclude(p, *view, raw));
         }
         if top.is_some_and(super::ctx::Ctx::is_static_view) {
             let view = top.and_then(Ctx::view).expect("static view");
-            return Sec::from(static_exclude(p, view, &raw));
+            return Sec::from(static_exclude(p, view, raw));
         }
     }
     if super::eqi(&first, tok::VIEW_ANIMATION_STEP) {
@@ -1679,7 +1684,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                     "animationStep <identifier|element expression> [identifier|element expression...]",
                 ));
             }
-            return Sec::from(custom_animation_step(p, *view, &raw, 1));
+            return Sec::from(custom_animation_step(p, *view, raw, 1));
         }
         if top.is_some_and(super::ctx::Ctx::is_static_view) {
             let view = top.and_then(Ctx::view).expect("static view");
@@ -1688,7 +1693,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                     "animationStep <identifier|element expression> [identifier|element expression...]",
                 ));
             }
-            return Sec::from(static_animation_step(p, view, &raw, 1));
+            return Sec::from(static_animation_step(p, view, raw, 1));
         }
         if let Some(Ctx::DeploymentView { view }) = top {
             if !raw.includes(1) {
@@ -1696,7 +1701,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                     "animationStep <identifier|element expression> [identifier|element expression...]",
                 ));
             }
-            return Sec::from(deployment_animation_step(p, *view, &raw, 1));
+            return Sec::from(deployment_animation_step(p, *view, raw, 1));
         }
     }
     if super::eqi(&first, tok::VIEW_ANIMATION) {
@@ -1723,7 +1728,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                 "<identifier|element expression> [identifier|element expression...]",
             ));
         }
-        return Sec::from(custom_animation_step(p, view, &raw, 0));
+        return Sec::from(custom_animation_step(p, view, raw, 0));
     }
     if let Some(Ctx::StaticViewAnimation { view }) = top {
         let view = *view;
@@ -1732,7 +1737,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                 "<identifier|element expression> [identifier|element expression...]",
             ));
         }
-        return Sec::from(static_animation_step(p, view, &raw, 0));
+        return Sec::from(static_animation_step(p, view, raw, 0));
     }
     if let Some(Ctx::DeploymentViewAnimation { view }) = top {
         let view = *view;
@@ -1741,12 +1746,12 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
                 "<identifier|element expression> [identifier|element expression...]",
             ));
         }
-        return Sec::from(deployment_animation_step(p, view, &raw, 0));
+        return Sec::from(deployment_animation_step(p, view, raw, 0));
     }
 
     // -- autoLayout / default / title / description ----------------------
     if super::eqi(&first, tok::VIEW_AUTOLAYOUT) && top.is_some_and(Ctx::is_view) {
-        return Sec::from(auto_layout(p, &raw));
+        return Sec::from(auto_layout(p, raw));
     }
     if super::eqi(&first, tok::VIEW_DEFAULT) && top.is_some_and(Ctx::is_view) {
         if let Some(view) = top.and_then(Ctx::view) {
@@ -1756,27 +1761,27 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
         return Sec::Handled;
     }
     if super::eqi(&first, tok::VIEW_TITLE) && top.is_some_and(Ctx::is_view) {
-        return Sec::from(view_text(p, &raw, true));
+        return Sec::from(view_text(p, raw, true));
     }
     if super::eqi(&first, tok::VIEW_DESCRIPTION) && top.is_some_and(Ctx::is_view) {
-        return Sec::from(view_text(p, &raw, false));
+        return Sec::from(view_text(p, raw, false));
     }
 
     // -- image view content ----------------------------------------------
     if super::eqi(&first, tok::PLANTUML) && matches!(top, Some(Ctx::ImageView { .. })) {
-        return Sec::from(plantuml_or_mermaid(p, &raw, "plantuml"));
+        return Sec::from(plantuml_or_mermaid(p, raw, "plantuml"));
     }
     if super::eqi(&first, tok::MERMAID) && matches!(top, Some(Ctx::ImageView { .. })) {
-        return Sec::from(plantuml_or_mermaid(p, &raw, "mermaid"));
+        return Sec::from(plantuml_or_mermaid(p, raw, "mermaid"));
     }
     if super::eqi(&first, tok::KROKI) && matches!(top, Some(Ctx::ImageView { .. })) {
-        return Sec::from(kroki(p, &raw));
+        return Sec::from(kroki(p, raw));
     }
     if super::eqi(&first, tok::IMAGE)
         && let Some(Ctx::ImageView { view, .. }) = top
     {
         let view = *view;
-        return Sec::from(image_content(p, view, &raw));
+        return Sec::from(image_content(p, view, raw));
     }
     if super::eqi(&first, tok::LIGHT)
         && let Some(Ctx::ImageView { view, .. }) = top
@@ -1802,7 +1807,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     // -- dynamic relationship statements ----------------------------------
     if let Some(Ctx::DynamicView { view } | Ctx::DynamicParallel { view, .. }) = top {
         let view = *view;
-        return Sec::from(dynamic_step(p, &raw, view, open));
+        return Sec::from(dynamic_step(p, raw, view, open));
     }
     if super::eqi(&first, tok::URL)
         && let Some(Ctx::DynamicRel { view, rel }) = top
@@ -1825,10 +1830,10 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
 
     // -- theme / themes ----------------------------------------------------
     if super::eqi(&first, tok::THEME) && views_or_styles {
-        return Sec::from(theme(p, &raw));
+        return Sec::from(theme(p, raw));
     }
     if super::eqi(&first, tok::THEMES) && views_or_styles {
-        return Sec::from(themes(p, &raw));
+        return Sec::from(themes(p, raw));
     }
 
     // -- terminology -------------------------------------------------------
@@ -1838,38 +1843,38 @@ pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
     }
     if matches!(top, Some(Ctx::Terminology)) {
         if super::eqi(&first, tok::PERSON) {
-            return Sec::from(term(p, &raw, "person", |t, v| t.person = Some(v)));
+            return Sec::from(term(p, raw, "person", |t, v| t.person = Some(v)));
         }
         if super::eqi(&first, tok::SOFTWARE_SYSTEM) {
-            return Sec::from(term(p, &raw, "softwareSystem", |t, v| {
+            return Sec::from(term(p, raw, "softwareSystem", |t, v| {
                 t.software_system = Some(v);
             }));
         }
         if super::eqi(&first, tok::CONTAINER) {
-            return Sec::from(term(p, &raw, "container", |t, v| {
+            return Sec::from(term(p, raw, "container", |t, v| {
                 t.container = Some(v);
             }));
         }
         if super::eqi(&first, tok::COMPONENT) {
-            return Sec::from(term(p, &raw, "component", |t, v| t.component = Some(v)));
+            return Sec::from(term(p, raw, "component", |t, v| t.component = Some(v)));
         }
         if super::eqi(&first, tok::DEPLOYMENT_NODE) {
-            return Sec::from(term(p, &raw, "deploymentNode", |t, v| {
+            return Sec::from(term(p, raw, "deploymentNode", |t, v| {
                 t.deployment_node = Some(v);
             }));
         }
         if super::eqi(&first, tok::INFRASTRUCTURE_NODE) {
-            return Sec::from(term(p, &raw, "infrastructureNode", |t, v| {
+            return Sec::from(term(p, raw, "infrastructureNode", |t, v| {
                 t.infrastructure_node = Some(v);
             }));
         }
         if super::eqi(&first, tok::TERMINOLOGY_RELATIONSHIP) {
-            return Sec::from(term(p, &raw, "relationship", |t, v| {
+            return Sec::from(term(p, raw, "relationship", |t, v| {
                 t.relationship = Some(v);
             }));
         }
         if super::eqi(&first, tok::METADATA_SYMBOLS) {
-            return Sec::from(metadata_symbols(p, &raw));
+            return Sec::from(metadata_symbols(p, raw));
         }
     }
 

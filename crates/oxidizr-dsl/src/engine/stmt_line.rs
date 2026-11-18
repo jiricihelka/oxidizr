@@ -25,9 +25,9 @@ fn jvm_only(token: &str) -> DslError {
     )
 }
 
-pub(crate) fn section(p: &mut Parser, stmt: &mut Stmt) -> Sec {
+pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
-    let trimmed = compat::java_trim(&stmt.raw).to_string();
+    let trimmed = compat::java_trim(&stmt.raw);
 
     // 281: multi-line comment fully contained on the line — ignore.
     if trimmed.starts_with("/*") && trimmed.ends_with("*/") {
