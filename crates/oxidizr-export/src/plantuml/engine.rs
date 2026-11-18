@@ -392,106 +392,21 @@ impl<'a> Engine<'a> {
         Ok(diagram)
     }
 
-    /// The per-kind private `export(view, animationStep)` bodies.
-    #[allow(clippy::too_many_lines)] // one leg per reference `export(view)` overload
+    /// The per-kind private `export(view, animationStep)` bodies —
+    /// dispatch only (2R R-exp-11: one `body_*` fn per reference
+    /// `export(view)` overload, each citing its own; the
+    /// `too_many_lines` allow this dispatch shape replaces is gone).
     fn body<D: Dialect>(&mut self, d: &mut D, view: View<'a>) -> Result<Diagram, ExportError> {
         let mut w = IndentingWriter::new();
         d.write_header(self, view, &mut w)?;
         match view {
             View::Custom(_) | View::Landscape(_) | View::Context(_) => {
-                let mut elements = self.get_groupable_elements(view, None)?;
-                self.write_elements(d, view, &mut elements, &mut w)?;
-                if !elements.is_empty() {
-                    w.write_line(None);
-                }
-                self.write_relationships(d, view, &mut w)?;
+                self.body_flat(d, view, &mut w)?;
             }
-            View::Container(_) => {
-                let mut elements_written = false;
-                for element in self.view_elements(view) {
-                    if element.kind() != oxidizr_core::validate::ElementKind::Container {
-                        d.write_element(self, view, element, &mut w)?;
-                        elements_written = true;
-                    }
-                }
-                if elements_written {
-                    w.write_line(None);
-                }
-                for system in self.get_boundary_systems(view) {
-                    d.start_software_system_boundary(self, view, system, &mut w);
-                    let mut scoped = self.get_groupable_elements(view, Some(system.id()))?;
-                    self.write_elements(d, view, &mut scoped, &mut w)?;
-                    d.end_software_system_boundary(self, view, &mut w);
-                }
-                self.write_relationships(d, view, &mut w)?;
-            }
-            View::Component(_) => {
-                let customs = self.get_custom_elements(view);
-                self.write_flat_leg(d, view, &customs, &mut w)?;
-                let people = self.get_people(view);
-                self.write_flat_leg(d, view, &people, &mut w)?;
-                let systems = self.get_systems(view);
-                self.write_flat_leg(d, view, &systems, &mut w)?;
-                self.write_boundary_container_legs(d, view, &mut w)?;
-                self.write_relationships(d, view, &mut w)?;
-            }
-            View::Dynamic(dv) => {
-                let mut elements_written = false;
-                let scope = dv
-                    .element_id
-                    .as_ref()
-                    .and_then(|id| element_by_id(self.model(), id));
-                match scope.map(ElemRef::kind) {
-                    None => {
-                        let mut elements = self.get_groupable_elements(view, None)?;
-                        self.write_elements(d, view, &mut elements, &mut w)?;
-                        elements_written = !elements.is_empty();
-                    }
-                    Some(oxidizr_core::validate::ElementKind::SoftwareSystem) => {
-                        for system in self.get_boundary_systems(view) {
-                            d.start_software_system_boundary(self, view, system, &mut w);
-                            let mut scoped =
-                                self.get_groupable_elements(view, Some(system.id()))?;
-                            self.write_elements(d, view, &mut scoped, &mut w)?;
-                            d.end_software_system_boundary(self, view, &mut w);
-                        }
-                        for element in self.view_elements(view) {
-                            if element.parent_id().is_none() {
-                                d.write_element(self, view, element, &mut w)?;
-                                elements_written = true;
-                            }
-                        }
-                    }
-                    Some(oxidizr_core::validate::ElementKind::Container) => {
-                        let customs = self.get_custom_elements(view);
-                        self.write_flat_leg(d, view, &customs, &mut w)?;
-                        let people = self.get_people(view);
-                        self.write_flat_leg(d, view, &people, &mut w)?;
-                        let systems = self.get_systems(view);
-                        self.write_flat_leg(d, view, &systems, &mut w)?;
-                        self.write_boundary_container_legs(d, view, &mut w)?;
-                        for element in self.view_elements(view) {
-                            // Java: `!(parent instanceof Container)` — the
-                            // kinds with a Container parent are components.
-                            if element.kind() != oxidizr_core::validate::ElementKind::Component {
-                                d.write_element(self, view, element, &mut w)?;
-                                elements_written = true;
-                            }
-                        }
-                    }
-                    Some(_) => {}
-                }
-                if elements_written {
-                    w.write_line(None);
-                }
-                self.write_relationships(d, view, &mut w)?;
-            }
-            View::Deployment(_) => {
-                // NO blank-line leg between elements and relationships.
-                let mut elements = self.get_groupable_elements(view, None)?;
-                self.write_elements(d, view, &mut elements, &mut w)?;
-                self.write_relationships(d, view, &mut w)?;
-            }
+            View::Container(_) => self.body_container(d, view, &mut w)?,
+            View::Component(_) => self.body_component(d, view, &mut w)?,
+            View::Dynamic(dv) => self.body_dynamic(d, view, dv, &mut w)?,
+            View::Deployment(_) => self.body_deployment(d, view, &mut w)?,
             View::Filtered(_) | View::Image(_) => {
                 return Err(ExportError::ReferenceAbort(
                     "filtered/image views are not exportable (Java throws)",
@@ -500,6 +415,142 @@ impl<'a> Engine<'a> {
         }
         d.write_footer(self, view, &mut w);
         Ok(d.create_diagram(self, view, w.to_string()))
+    }
+
+    /// `export(view)` for the Custom/Landscape/Context overloads: the
+    /// grouped elements, a blank line iff any were written, relationships.
+    fn body_flat<D: Dialect>(
+        &mut self,
+        d: &mut D,
+        view: View<'a>,
+        w: &mut IndentingWriter,
+    ) -> Result<(), ExportError> {
+        let mut elements = self.get_groupable_elements(view, None)?;
+        self.write_elements(d, view, &mut elements, w)?;
+        if !elements.is_empty() {
+            w.write_line(None);
+        }
+        self.write_relationships(d, view, w)
+    }
+
+    /// `export(view)` for the Container overload: the non-container
+    /// (system) elements, a blank line iff any, then one
+    /// software-system boundary per boundary-system.
+    fn body_container<D: Dialect>(
+        &mut self,
+        d: &mut D,
+        view: View<'a>,
+        w: &mut IndentingWriter,
+    ) -> Result<(), ExportError> {
+        let mut elements_written = false;
+        for element in self.view_elements(view) {
+            if element.kind() != oxidizr_core::validate::ElementKind::Container {
+                d.write_element(self, view, element, w)?;
+                elements_written = true;
+            }
+        }
+        if elements_written {
+            w.write_line(None);
+        }
+        for system in self.get_boundary_systems(view) {
+            d.start_software_system_boundary(self, view, system, w);
+            let mut scoped = self.get_groupable_elements(view, Some(system.id()))?;
+            self.write_elements(d, view, &mut scoped, w)?;
+            d.end_software_system_boundary(self, view, w);
+        }
+        self.write_relationships(d, view, w)
+    }
+
+    /// `export(view)` for the Component overload: the flat custom/people/
+    /// systems legs, the boundary + container legs, relationships.
+    fn body_component<D: Dialect>(
+        &mut self,
+        d: &mut D,
+        view: View<'a>,
+        w: &mut IndentingWriter,
+    ) -> Result<(), ExportError> {
+        let customs = self.get_custom_elements(view);
+        self.write_flat_leg(d, view, &customs, w)?;
+        let people = self.get_people(view);
+        self.write_flat_leg(d, view, &people, w)?;
+        let systems = self.get_systems(view);
+        self.write_flat_leg(d, view, &systems, w)?;
+        self.write_boundary_container_legs(d, view, w)?;
+        self.write_relationships(d, view, w)
+    }
+
+    /// `export(view)` for the Dynamic overload: the elements scoped by the
+    /// dynamic `elementId` (none → grouped; `SoftwareSystem` → boundaries
+    /// then rootless; `Container` → the component legs then
+    /// non-components), a blank line iff any were written, relationships.
+    fn body_dynamic<D: Dialect>(
+        &mut self,
+        d: &mut D,
+        view: View<'a>,
+        dv: &'a DynamicView,
+        w: &mut IndentingWriter,
+    ) -> Result<(), ExportError> {
+        let mut elements_written = false;
+        let scope = dv
+            .element_id
+            .as_ref()
+            .and_then(|id| element_by_id(self.model(), id));
+        match scope.map(ElemRef::kind) {
+            None => {
+                let mut elements = self.get_groupable_elements(view, None)?;
+                self.write_elements(d, view, &mut elements, w)?;
+                elements_written = !elements.is_empty();
+            }
+            Some(oxidizr_core::validate::ElementKind::SoftwareSystem) => {
+                for system in self.get_boundary_systems(view) {
+                    d.start_software_system_boundary(self, view, system, w);
+                    let mut scoped = self.get_groupable_elements(view, Some(system.id()))?;
+                    self.write_elements(d, view, &mut scoped, w)?;
+                    d.end_software_system_boundary(self, view, w);
+                }
+                for element in self.view_elements(view) {
+                    if element.parent_id().is_none() {
+                        d.write_element(self, view, element, w)?;
+                        elements_written = true;
+                    }
+                }
+            }
+            Some(oxidizr_core::validate::ElementKind::Container) => {
+                let customs = self.get_custom_elements(view);
+                self.write_flat_leg(d, view, &customs, w)?;
+                let people = self.get_people(view);
+                self.write_flat_leg(d, view, &people, w)?;
+                let systems = self.get_systems(view);
+                self.write_flat_leg(d, view, &systems, w)?;
+                self.write_boundary_container_legs(d, view, w)?;
+                for element in self.view_elements(view) {
+                    // Java: `!(parent instanceof Container)` — the
+                    // kinds with a Container parent are components.
+                    if element.kind() != oxidizr_core::validate::ElementKind::Component {
+                        d.write_element(self, view, element, w)?;
+                        elements_written = true;
+                    }
+                }
+            }
+            Some(_) => {}
+        }
+        if elements_written {
+            w.write_line(None);
+        }
+        self.write_relationships(d, view, w)
+    }
+
+    /// `export(view)` for the Deployment overload: grouped elements then
+    /// relationships — NO blank-line leg between them.
+    fn body_deployment<D: Dialect>(
+        &mut self,
+        d: &mut D,
+        view: View<'a>,
+        w: &mut IndentingWriter,
+    ) -> Result<(), ExportError> {
+        let mut elements = self.get_groupable_elements(view, None)?;
+        self.write_elements(d, view, &mut elements, w)?;
+        self.write_relationships(d, view, w)
     }
 
     /// A custom/people/systems leg: every element, then a blank line iff
@@ -565,7 +616,10 @@ impl<'a> Engine<'a> {
     /// (catalog §8): header, element set + boundary stack (or flat), blank
     /// line iff elements, relationships, footer, then the legend LAST.
     // Mirrors the single Java method; the boundary-stack walk stays inline.
-    #[allow(clippy::too_many_lines)]
+    /// 2R R-exp-11: the two inner blocks of this walk are the
+    /// `sequence_write_order` / `write_sequence_boundaries` siblings;
+    /// `export_dynamic_sequence` itself is cited by catalog name, so the
+    /// fn and its name stay.
     fn export_dynamic_sequence<D: Dialect>(
         &mut self,
         d: &mut D,
@@ -595,85 +649,12 @@ impl<'a> Engine<'a> {
             "true",
         ));
         if boundaries {
-            // elementsInWriteOrder: rootless elements first-seen; else the
-            // parent chain (root-last reversed) appended, then the element
-            // inserted after its last canonical-name "sibling" (the
-            // `contains(parentCanonical.substring(indexOf("://")))` test)
-            // or after its parent when there are none.
-            let mut order: Vec<ElemRef<'a>> = Vec::new();
-            for element in &elements {
-                let Some(parent_id) = element.parent_id().cloned() else {
-                    order.push(*element);
-                    continue;
-                };
-                let mut parents: Vec<ElemRef<'a>> = Vec::new();
-                let mut current = element_by_id(self.model(), &parent_id)
-                    .ok_or(ExportError::ReferenceAbort("dangling parent id"))?;
-                loop {
-                    parents.push(current);
-                    let Some(next) = current.parent_id().cloned() else {
-                        break;
-                    };
-                    current = element_by_id(self.model(), &next)
-                        .ok_or(ExportError::ReferenceAbort("dangling parent id"))?;
-                }
-                for p in parents.iter().rev() {
-                    if !order.iter().any(|e| e.id() == p.id()) {
-                        order.push(*p);
-                    }
-                }
-                let needle = parents.first().map_or(String::new(), |p| {
-                    self.canonical_name(*p)
-                        .split_once("://")
-                        .map_or(String::new(), |(_, rest)| format!("://{rest}"))
-                });
-                let siblings: Vec<usize> = order
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, e)| self.canonical_name(**e).contains(&needle))
-                    .map(|(i, _)| i)
-                    .collect();
-                let index = if let Some(last) = siblings.last() {
-                    *last + 1
-                } else {
-                    order
-                        .iter()
-                        .position(|e| e.id() == &parent_id)
-                        .ok_or(ExportError::ReferenceAbort("dangling parent id"))?
-                        + 1
-                };
-                order.insert(index, *element);
-            }
-
-            let mut stack: Vec<ElemRef<'a>> = Vec::new();
-            for element in &order {
-                let at_parent = |stack: &Vec<ElemRef<'a>>| {
-                    stack
-                        .last()
-                        .is_some_and(|top| element.parent_id() == Some(top.id()))
-                };
-                if elements.iter().any(|e| e.id() == element.id()) {
-                    if stack.is_empty() || at_parent(&stack) {
-                        d.write_element(self, view, *element, &mut w)?;
-                    } else {
-                        while !stack.is_empty() && !at_parent(&stack) {
-                            stack.pop();
-                            d.end_boundary(self, view, &mut w);
-                        }
-                        d.write_element(self, view, *element, &mut w)?;
-                    }
-                } else {
-                    while !stack.is_empty() && !at_parent(&stack) {
-                        stack.pop();
-                        d.end_boundary(self, view, &mut w);
-                    }
-                    d.start_boundary(self, view, *element, &mut w);
-                    stack.push(*element);
-                }
-            }
-            while stack.pop().is_some() {
-                d.end_boundary(self, view, &mut w);
-            }
+            // 2R R-exp-11: the ordering and the box walk of this leg are
+            // the `sequence_write_order` + `write_sequence_boundaries`
+            // siblings (the Java `elementsInWriteOrder` map walk, then
+            // the boundary open/close stack).
+            let order = self.sequence_write_order(&elements)?;
+            self.write_sequence_boundaries(d, view, &elements, &order, &mut w)?;
         } else {
             for element in &elements {
                 d.write_element(self, view, *element, &mut w)?;
@@ -690,6 +671,110 @@ impl<'a> Engine<'a> {
             diagram.set_legend(legend);
         }
         Ok(diagram)
+    }
+
+    /// The Java `elementsInWriteOrder` map walk of the dynamic-sequence
+    /// boundaries leg (2R R-exp-11 split of `export_dynamic_sequence`):
+    /// rootless elements first-seen; else the parent chain (root-last
+    /// reversed) appended, then the element inserted after its last
+    /// canonical-name "sibling" (the `contains(parentCanonical.
+    /// substring(indexOf("://")))` test) or after its parent when there
+    /// are none.
+    fn sequence_write_order(
+        &self,
+        elements: &[ElemRef<'a>],
+    ) -> Result<Vec<ElemRef<'a>>, ExportError> {
+        let mut order: Vec<ElemRef<'a>> = Vec::new();
+        for element in elements {
+            let Some(parent_id) = element.parent_id().cloned() else {
+                order.push(*element);
+                continue;
+            };
+            let mut parents: Vec<ElemRef<'a>> = Vec::new();
+            let mut current = element_by_id(self.model(), &parent_id)
+                .ok_or(ExportError::ReferenceAbort("dangling parent id"))?;
+            loop {
+                parents.push(current);
+                let Some(next) = current.parent_id().cloned() else {
+                    break;
+                };
+                current = element_by_id(self.model(), &next)
+                    .ok_or(ExportError::ReferenceAbort("dangling parent id"))?;
+            }
+            for p in parents.iter().rev() {
+                if !order.iter().any(|e| e.id() == p.id()) {
+                    order.push(*p);
+                }
+            }
+            let needle = parents.first().map_or(String::new(), |p| {
+                self.canonical_name(*p)
+                    .split_once("://")
+                    .map_or(String::new(), |(_, rest)| format!("://{rest}"))
+            });
+            let siblings: Vec<usize> = order
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| self.canonical_name(**e).contains(&needle))
+                .map(|(i, _)| i)
+                .collect();
+            let index = if let Some(last) = siblings.last() {
+                *last + 1
+            } else {
+                order
+                    .iter()
+                    .position(|e| e.id() == &parent_id)
+                    .ok_or(ExportError::ReferenceAbort("dangling parent id"))?
+                    + 1
+            };
+            order.insert(index, *element);
+        }
+        Ok(order)
+    }
+
+    /// The boundary open/close stack of the dynamic-sequence boundaries leg
+    /// (2R R-exp-11 split of `export_dynamic_sequence`): walk
+    /// `sequence_write_order` — a view element inside the current box (or
+    /// with no box open) writes directly, anything else unwinds the stack
+    /// to the matching parent first; non-view elements open boundary boxes
+    /// (`startBoundary`/`endBoundary`), drained at the end.
+    fn write_sequence_boundaries<D: Dialect>(
+        &mut self,
+        d: &mut D,
+        view: View<'a>,
+        elements: &[ElemRef<'a>],
+        order: &[ElemRef<'a>],
+        w: &mut IndentingWriter,
+    ) -> Result<(), ExportError> {
+        let mut stack: Vec<ElemRef<'a>> = Vec::new();
+        for element in order {
+            let at_parent = |stack: &Vec<ElemRef<'a>>| {
+                stack
+                    .last()
+                    .is_some_and(|top| element.parent_id() == Some(top.id()))
+            };
+            if elements.iter().any(|e| e.id() == element.id()) {
+                if stack.is_empty() || at_parent(&stack) {
+                    d.write_element(self, view, *element, w)?;
+                } else {
+                    while !stack.is_empty() && !at_parent(&stack) {
+                        stack.pop();
+                        d.end_boundary(self, view, w);
+                    }
+                    d.write_element(self, view, *element, w)?;
+                }
+            } else {
+                while !stack.is_empty() && !at_parent(&stack) {
+                    stack.pop();
+                    d.end_boundary(self, view, w);
+                }
+                d.start_boundary(self, view, *element, w);
+                stack.push(*element);
+            }
+        }
+        while stack.pop().is_some() {
+            d.end_boundary(self, view, w);
+        }
+        Ok(())
     }
 
     /// `writeElements` — the grouped pass (`findGroups` has already sorted
