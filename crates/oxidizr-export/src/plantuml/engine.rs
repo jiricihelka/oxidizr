@@ -897,10 +897,14 @@ impl<'a> Engine<'a> {
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError> {
         let rels = self.get_relationships_in_view(view);
-        for rv in rels.clone() {
+        // 2R R-exp-02: the emptiness test is hoisted before the loop, so the
+        // vec moves into the iterator — no `clone()` for a trailing
+        // `is_empty()` (the Java `isEmpty()` runs on the same list).
+        let non_empty = !rels.is_empty();
+        for rv in rels {
             d.write_relationship(self, view, rv, w)?;
         }
-        if !rels.is_empty() {
+        if non_empty {
             w.write_line(None);
         }
         Ok(())
@@ -1156,36 +1160,44 @@ impl<'a> Engine<'a> {
     /// [`ExportError::ReferenceAbort`] on a frame/view kind mismatch (the
     /// Java untyped-`frame` cast failing).
     pub fn is_visible(&self, view: View<'_>, element: ElemRef<'_>) -> Result<bool, ExportError> {
-        let Some(frame) = self.frame.clone() else {
+        // 2R R-exp-01: borrow the frame — the old shape cloned the whole
+        // Frame per element×frame call (the Java field read is a reference).
+        let Some(frame) = self.frame.as_ref() else {
             return Ok(true);
         };
         match frame {
-            Frame::Step(step) => match view {
-                View::Landscape(_) | View::Context(_) | View::Container(_) | View::Component(_) => {
-                    if step > 0 {
-                        Ok(Self::revealed_by_step(view, step, element.id().as_str()))
-                    } else {
-                        Ok(true)
+            Frame::Step(step) => {
+                let step = *step;
+                match view {
+                    View::Landscape(_)
+                    | View::Context(_)
+                    | View::Container(_)
+                    | View::Component(_) => {
+                        if step > 0 {
+                            Ok(Self::revealed_by_step(view, step, element.id().as_str()))
+                        } else {
+                            Ok(true)
+                        }
+                    }
+                    View::Deployment(v) => {
+                        if step > 0 {
+                            Ok(v.animations
+                                .iter()
+                                .filter(|a| a.order <= step)
+                                .flat_map(|a| a.element_ids.iter())
+                                .any(|id| id == element.id().as_str()))
+                        } else {
+                            Ok(true)
+                        }
+                    }
+                    View::Custom(_) => Ok(true),
+                    View::Dynamic(_) | View::Filtered(_) | View::Image(_) => {
+                        Err(ExportError::ReferenceAbort(
+                            "integer frame on a non-static view (Java ClassCastException)",
+                        ))
                     }
                 }
-                View::Deployment(v) => {
-                    if step > 0 {
-                        Ok(v.animations
-                            .iter()
-                            .filter(|a| a.order <= step)
-                            .flat_map(|a| a.element_ids.iter())
-                            .any(|id| id == element.id().as_str()))
-                    } else {
-                        Ok(true)
-                    }
-                }
-                View::Custom(_) => Ok(true),
-                View::Dynamic(_) | View::Filtered(_) | View::Image(_) => {
-                    Err(ExportError::ReferenceAbort(
-                        "integer frame on a non-static view (Java ClassCastException)",
-                    ))
-                }
-            },
+            }
             Frame::Order(order) => match view {
                 View::Dynamic(dv) => {
                     let mut ids: Vec<&str> = Vec::new();
@@ -1373,13 +1385,20 @@ impl<'a> Engine<'a> {
                 }
                 chain.reverse();
                 let env = element.environment().unwrap_or("");
-                let mut out = format!("DeploymentNode://{}/", format_name(env));
-                for name in chain {
-                    out.push_str(&name);
-                    out.push('/');
-                }
-                out.push_str(&format_name(element.name()));
-                out
+                // 2R R-exp-13: one `join` instead of the per-name push loop.
+                // The trailing slash belongs to the chain, so an EMPTY chain
+                // yields `env/<name>` (no `env//<name>`) — the byte shape of
+                // the old prefix-then-append loop, kept exactly.
+                let names = if chain.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}/", chain.join("/"))
+                };
+                format!(
+                    "DeploymentNode://{}/{names}{}",
+                    format_name(env),
+                    format_name(element.name())
+                )
             }
             K::InfrastructureNode => {
                 let tail = by_id(element.parent_id()).map_or(String::new(), node_tail);
@@ -1485,24 +1504,17 @@ fn element_view_cmp(a: &ElementView, b: &ElementView) -> std::cmp::Ordering {
 /// `RelationshipView.compareTo` key: `getId() + "/" + getOrder()` — a
 /// `None` order joins as the literal `null`.
 fn relationship_view_key(rv: &RelationshipView) -> String {
-    format!(
-        "{}/{}",
-        rv.id,
-        rv.order.clone().unwrap_or_else(|| "null".into())
-    )
+    // 2R R-exp-04: `as_deref()` feeds `format!` directly — no `order` clone
+    // per comparator call; the key stays a `String` (the TreeSet key shape).
+    format!("{}/{}", rv.id, rv.order.as_deref().unwrap_or("null"))
 }
 
 /// `TreeSet`-style dedup on a sorted vec (keeps the first of each
 /// equal-key run — the first ADDITION is what a `TreeSet` keeps).
 fn dedup_by_key<T, K: PartialEq, F: Fn(&T) -> K>(items: &mut Vec<T>, key: F) {
-    let mut i = 0;
-    while i + 1 < items.len() {
-        if key(&items[i]) == key(&items[i + 1]) {
-            items.remove(i + 1);
-        } else {
-            i += 1;
-        }
-    }
+    // 2R R-exp-03: `Vec::dedup_by` — same keep-first-of-run semantics as the
+    // old index-`remove` walk (which was O(n²) on a run of duplicates).
+    items.dedup_by(|a, b| key(a) == key(b));
 }
 
 #[cfg(test)]

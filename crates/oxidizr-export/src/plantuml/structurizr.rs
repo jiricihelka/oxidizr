@@ -1066,11 +1066,11 @@ impl PlantUMLStyle {
                 w.indent();
                 w.write_line(Some(&format!(
                     "BackgroundColor: {};",
-                    color_or_null(background.as_ref())
+                    color_or_null(background.as_deref())
                 )));
                 w.write_line(Some(&format!(
                     "LineColor: {};",
-                    color_or_null(stroke.as_ref())
+                    color_or_null(stroke.as_deref())
                 )));
                 w.write_line(Some(&format!("LineStyle: {line_style};")));
                 w.write_line(Some(&format!("LineThickness: {stroke_width};")));
@@ -1079,7 +1079,7 @@ impl PlantUMLStyle {
                 }
                 w.write_line(Some(&format!(
                     "FontColor: {};",
-                    color_or_null(color.as_ref())
+                    color_or_null(color.as_deref())
                 )));
                 w.write_line(Some(&format!("FontSize: {font_size};")));
                 w.write_line(Some("HorizontalAlignment: center;"));
@@ -1104,11 +1104,11 @@ impl PlantUMLStyle {
                 w.write_line(Some(&format!("LineStyle: {line_style};")));
                 w.write_line(Some(&format!(
                     "LineColor: {};",
-                    color_or_null(color.as_ref())
+                    color_or_null(color.as_deref())
                 )));
                 w.write_line(Some(&format!(
                     "FontColor: {};",
-                    color_or_null(color.as_ref())
+                    color_or_null(color.as_deref())
                 )));
                 w.write_line(Some(&format!("FontSize: {font_size};")));
                 w.write_line(Some(&format!("MaximumWidth: {width};")));
@@ -1130,17 +1130,17 @@ impl PlantUMLStyle {
                 w.indent();
                 w.write_line(Some(&format!(
                     "BackgroundColor: {};",
-                    color_or_null(background.as_ref())
+                    color_or_null(background.as_deref())
                 )));
                 w.write_line(Some(&format!(
                     "LineColor: {};",
-                    color_or_null(stroke.as_ref())
+                    color_or_null(stroke.as_deref())
                 )));
                 w.write_line(Some(&format!("LineStyle: {line_style};")));
                 w.write_line(Some(&format!("LineThickness: {stroke_width};")));
                 w.write_line(Some(&format!(
                     "FontColor: {};",
-                    color_or_null(color.as_ref())
+                    color_or_null(color.as_deref())
                 )));
                 w.write_line(Some(&format!("FontSize: {font_size};")));
                 w.write_line(Some("HorizontalAlignment: center;"));
@@ -1177,17 +1177,17 @@ impl PlantUMLStyle {
                 w.indent();
                 w.write_line(Some(&format!(
                     "BackgroundColor: {};",
-                    color_or_null(background.as_ref())
+                    color_or_null(background.as_deref())
                 )));
                 w.write_line(Some(&format!(
                     "LineColor: {};",
-                    color_or_null(stroke.as_ref())
+                    color_or_null(stroke.as_deref())
                 )));
                 w.write_line(Some(&format!("LineStyle: {line_style};")));
                 w.write_line(Some(&format!("LineThickness: {stroke_width};")));
                 w.write_line(Some(&format!(
                     "FontColor: {};",
-                    color_or_null(color.as_ref())
+                    color_or_null(color.as_deref())
                 )));
                 w.write_line(Some(&format!("FontSize: {font_size};")));
                 w.write_line(Some("HorizontalAlignment: center;"));
@@ -1250,8 +1250,8 @@ pub(crate) fn defaults(scheme: ColorScheme) -> (&'static str, &'static str) {
 
 /// The color/`null` formatter: `%s` on a null Java `String` renders the
 /// literal `null`.
-pub(crate) fn color_or_null(value: Option<&String>) -> String {
-    value.cloned().unwrap_or_else(|| "null".to_string())
+pub(crate) fn color_or_null(value: Option<&str>) -> &str {
+    value.unwrap_or("null")
 }
 
 /// The first non-empty string across the reference's three-source chain.

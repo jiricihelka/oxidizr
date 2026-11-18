@@ -245,9 +245,9 @@ impl C4PlantUmlDialect {
                 let thickness = style.stroke_width.unwrap_or(1);
                 let line = format!(
                     "AddElementTag(\"{tag}\", $bgColor=\"{}\", $borderColor=\"{}\", $fontColor=\"{}\", $sprite=\"{sprite}\", $shadowing=\"{}\", $borderStyle=\"{}\", $borderThickness=\"{thickness}\")",
-                    color_or_null(style.background.as_ref()),
-                    color_or_null(style.stroke.as_ref()),
-                    color_or_null(style.color.as_ref()),
+                    color_or_null(style.background.as_deref()),
+                    color_or_null(style.stroke.as_deref()),
+                    color_or_null(style.color.as_deref()),
                     style.properties.get(C4PLANTUML_SHADOW).unwrap_or(""),
                     border_lower(style.border),
                 );
@@ -265,7 +265,7 @@ impl C4PlantUmlDialect {
                     Some(LineStyle::Dotted) => "DottedLine()",
                     _ => "\"\"",
                 };
-                let color = color_or_null(style.color.as_ref());
+                let color = color_or_null(style.color.as_deref());
                 w.write_line(Some(&format!(
                     "AddRelTag(\"{tag}\", $textColor=\"{color}\", $lineColor=\"{color}\", $lineStyle = {line_style})"
                 )));
@@ -278,7 +278,7 @@ impl C4PlantUmlDialect {
                 let (tag_list, style) = &boundary_styles[index];
                 let tag = tag_list.replacen("Element,", "", 1);
                 let thickness = style.stroke_width.unwrap_or(1);
-                let stroke = color_or_null(style.stroke.as_ref());
+                let stroke = color_or_null(style.stroke.as_deref());
                 let line = format!(
                     "AddBoundaryTag(\"{tag}\", $bgColor=\"#ffffff\", $borderColor=\"{stroke}\", $fontColor=\"{stroke}\", $shadowing=\"{}\", $borderStyle=\"{}\", $borderThickness=\"{thickness}\")",
                     style.properties.get(C4PLANTUML_SHADOW).unwrap_or(""),

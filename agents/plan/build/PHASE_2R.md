@@ -210,19 +210,19 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 
 | ID | finding (file:line) | dis | wv |
 |---|---|---|---|
-| R-exp-01 | `is_visible` clones `Frame` per element×frame (`engine.rs:1159`) → `match &self.frame` | SW | 3 |
-| R-exp-02 | `rels.clone()` for a trailing `is_empty()` (`engine.rs:900`) — hoist flag, iterate by ref | SW | 3 |
-| R-exp-03 | index-`remove` dedup O(n²) (`engine.rs:1497-1506`) → `Vec::dedup_by` (same keep-first-of-run; run `bench cmp 2T`) | SW | 3 |
-| R-exp-04 | `order.clone()` per comparator call (`engine.rs:1487-1492`) — inline into `format!` with `as_deref()`; key shape stays a `String` (TreeSet key = contract) | SW | 3 |
+| R-exp-01 | `is_visible` clones `Frame` per element×frame (`engine.rs:1159`) → `match &self.frame` — **DONE PR3-a** (borrows `self.frame.as_ref()`) | SW | 3 |
+| R-exp-02 | `rels.clone()` for a trailing `is_empty()` (`engine.rs:900`) — hoist flag, iterate by ref — **DONE PR3-a** | SW | 3 |
+| R-exp-03 | index-`remove` dedup O(n²) (`engine.rs:1497-1506`) → `Vec::dedup_by` (same keep-first-of-run; run `bench cmp 2T`) — **DONE PR3-a** (covered by the wave-close `bench cmp 2T`) | SW | 3 |
+| R-exp-04 | `order.clone()` per comparator call (`engine.rs:1487-1492`) — inline into `format!` with `as_deref()`; key shape stays a `String` (TreeSet key = contract) — **DONE PR3-a** | SW | 3 |
 | R-exp-05 | `IndentingWriter` per-line: `padding()` String + `replace()` even w/o `\n` (`indent.rs:68-90`) — fill loop + `contains` guard; own commit + bench (bytes guarded by whole export net) | JU | 3 |
-| R-exp-06 | `color_or_null(Option<&String>) -> String` (`structurizr.rs:1253`) → `Option<&str> -> &str`, 9 callers `.as_deref()` | SW | 3 |
-| R-exp-07 | `to_string().into_bytes()` double copy (`naming.rs:75,84,95`) → `as_bytes().to_vec()` | SW | 3 |
+| R-exp-06 | `color_or_null(Option<&String>) -> String` (`structurizr.rs:1253`) → `Option<&str> -> &str`, 9 callers `.as_deref()` — **DONE PR3-a** (22 caller sites, not 9: structurizr 11, c4 5, mermaid 6) | SW | 3 |
+| R-exp-07 | `to_string().into_bytes()` double copy (`naming.rs:75,84,95`) → `as_bytes().to_vec()` — **DONE PR3-a** | SW | 3 |
 | R-exp-08 | `Engine::relationship()` linear scan per rv AND per is_visible leg; sequence sibling re-probes `canonical_name`; mermaid `sequence_document` `view_relationships()` ×2 — memoize (criterion-verifiable vs 2T) | JU | 3 |
 | R-exp-09 | pub shrink: only `ExportFormat`/`ExportError`/`ThemeStore`/`ThemeError`/`ExportedFile` cross the crate; `Engine::workspace()/frame()` have zero callers → `pub(crate)` (publish=true — shrink deliberately) | JU | 3 |
 | R-exp-10 | `render()` 174 ln → per-style `render_*` fns, each citing its `PlantUML*Style#toString`; allow gone; catalog docs don't cite `render()` — doc-safe | JU | 3 |
 | R-exp-11 | `body` (107 ln) split per view-kind leg citing Java overloads; `export_dynamic_sequence` inner blocks split (sibling-insert + boundary-stack = "Rust glue"); **keep fn names** — cited at `EXPORT-MERMAID.md:141,146`, `PHASE_2.md:321-322`; catalog refs same-commit | JU | 3 |
 | R-exp-12 | `type_of(_, include_metadata_symbols: bool)` — mirrors Java overload, doc-cited; prod calls all-`true` | KC | — |
-| R-exp-13 | `canonical_name` reverse+push join (`engine.rs:1367-82`) → `chain.join("/")` w/ trailing-slash care; golden-verify | SW | 3 |
+| R-exp-13 | `canonical_name` reverse+push join (`engine.rs:1367-82`) → `chain.join("/")` w/ trailing-slash care; golden-verify — **DONE PR3-a** (slash keyed on `chain.is_empty()`; bless no-op = the golden verify) | SW | 3 |
 | R-exp-14 | c4 color cascades ×4 near-identical (`c4.rs:582-603`) → `cascade_color` (two calls = the two Java cascades); drop `let element_to_write = element;`; `_view` param | SW | 3 |
 | R-exp-15 | `unwrap_or_default` on "unreachable" abort paths (`c4.rs:642,677`, `mermaid.rs:128`) — behavior is the contract; keep + cite | KC | — |
 | R-exp-16 | themes: 2-var env loop stringly branch; `load_themes` clone iteration; silent-skips need EXPORT-PROPERTIES §6 cites where missing | JU | 3 |

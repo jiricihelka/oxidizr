@@ -72,7 +72,7 @@ pub fn diagram_files(prefix: &str, diagrams: &[Diagram]) -> Vec<ExportedFile> {
     for diagram in diagrams {
         out.push(ExportedFile {
             name: format!("{prefix}-{}.{}", diagram.key(), diagram.file_extension()),
-            bytes: diagram.definition().to_string().into_bytes(),
+            bytes: diagram.definition().as_bytes().to_vec(),
         });
         if let Some(legend) = diagram.legend() {
             out.push(ExportedFile {
@@ -81,7 +81,7 @@ pub fn diagram_files(prefix: &str, diagrams: &[Diagram]) -> Vec<ExportedFile> {
                     diagram.key(),
                     diagram.file_extension()
                 ),
-                bytes: legend.definition().to_string().into_bytes(),
+                bytes: legend.definition().as_bytes().to_vec(),
             });
         }
         for (index, frame) in diagram.frames().iter().enumerate() {
@@ -92,7 +92,7 @@ pub fn diagram_files(prefix: &str, diagrams: &[Diagram]) -> Vec<ExportedFile> {
                     index + 1,
                     diagram.file_extension()
                 ),
-                bytes: frame.definition().to_string().into_bytes(),
+                bytes: frame.definition().as_bytes().to_vec(),
             });
         }
     }

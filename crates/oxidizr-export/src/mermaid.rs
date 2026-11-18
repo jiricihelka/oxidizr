@@ -126,7 +126,7 @@ impl MermaidDialect {
         // The abort leg of style resolution is unreachable: a boundary
         // element the engine resolved is never an instance (c4.rs idiom).
         let style = element_style_of(e, element).unwrap_or_default();
-        let color = color_or_null(style.stroke.as_ref());
+        let color = color_or_null(style.stroke.as_deref());
         w.write_line(Some(&format!(
             "subgraph {} [\"{}\"]",
             element.id(),
@@ -305,9 +305,9 @@ impl Dialect for MermaidDialect {
         w.write_line(Some(&format!(
             "style {} fill:{},stroke:{},color:{}",
             element.id(),
-            color_or_null(style.background.as_ref()),
-            color_or_null(style.stroke.as_ref()),
-            color_or_null(style.color.as_ref())
+            color_or_null(style.background.as_deref()),
+            color_or_null(style.stroke.as_deref()),
+            color_or_null(style.color.as_deref())
         )));
         Ok(())
     }
@@ -470,8 +470,8 @@ impl Dialect for MermaidDialect {
         w.write_line(Some(&format!(
             "style {} fill:#ffffff,stroke:{},color:{}",
             node.id(),
-            color_or_null(style.stroke.as_ref()),
-            color_or_null(style.color.as_ref())
+            color_or_null(style.stroke.as_deref()),
+            color_or_null(style.color.as_deref())
         )));
         w.write_line(None);
         Ok(())
