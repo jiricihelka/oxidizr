@@ -673,6 +673,10 @@ impl Dialect for C4PlantUmlDialect {
         container: ElemRef<'a>,
         w: &mut IndentingWriter,
     ) {
+        // The abort legs of `idOf`/style resolution are unreachable for a
+        // boundary element the engine resolved from the model (2R R-exp-15
+        // cite, same idiom as the system leg above: behavior is the
+        // contract, the `unwrap_or_default` stays).
         let id = id_of(e, container).unwrap_or_default();
         let tags = if Self::include_tags(e, view) {
             e.configuration()
