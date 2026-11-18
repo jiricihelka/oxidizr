@@ -65,15 +65,6 @@ impl IndentingWriter {
         self.indent -= 1;
     }
 
-    fn padding(&self) -> String {
-        let unit = match self.indent_type {
-            IndentType::Spaces => " ",
-            IndentType::Tabs => "\t",
-        };
-        let count = self.indent.saturating_mul(self.indent_quantity).max(0);
-        unit.repeat(usize::try_from(count).unwrap_or(0))
-    }
-
     /// `writeLine()` / `writeLine(content)` — `None` appends the bare
     /// newline, `Some` pads, writes (newlines inside the content become the
     /// literal `\n`), and terminates.
@@ -81,9 +72,24 @@ impl IndentingWriter {
         match content {
             None => self.buf.push('\n'),
             Some(text) => {
-                let pad = self.padding();
-                self.buf.push_str(&pad);
-                self.buf.push_str(&text.replace('\n', "\\n"));
+                // 2R R-exp-05: the pad is written straight into the buffer
+                // (the old `padding()` allocated a `String` per line) and
+                // the newline-escape copy runs ONLY when the content
+                // actually contains one. Same bytes either way.
+                let unit = match self.indent_type {
+                    IndentType::Spaces => ' ',
+                    IndentType::Tabs => '\t',
+                };
+                let count = self.indent.saturating_mul(self.indent_quantity).max(0);
+                self.buf.extend(std::iter::repeat_n(
+                    unit,
+                    usize::try_from(count).unwrap_or(0),
+                ));
+                if text.contains('\n') {
+                    self.buf.push_str(&text.replace('\n', "\\n"));
+                } else {
+                    self.buf.push_str(text);
+                }
                 self.buf.push('\n');
             }
         }
