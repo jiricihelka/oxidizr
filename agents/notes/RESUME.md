@@ -3,31 +3,29 @@
 ## State
 
 - **Phase 2 shipped**: tag `v0.2.0` (local, on `b735732`), gates + full oracle verify
-  green, nothing pushed (never push). P2 retrospective + P3 strategy proposals were
-  delivered in chat; adoption decision pending from the user (S1–S8).
-- **Now: P3 PLANNING** — no implementation until the plan is finalized.
+  green, nothing pushed (never push).
+- **Phase 3 plan FINAL** (`agents/plan/build/PHASE_3.md`): P3-D0 parity contract
+  (feature parity, NOT visual; editor rule = JSON values only, never .dsl) + P3-F
+  matrix signed off by user 2026-11-18: Q1 theme data drives canvas; Q2 PNG/SVG
+  export IN (M4); Q3 ALL viewing/navigation features IN incl. minimap + quick-nav;
+  Q4 custom/image views = placeholder boxes only. **Implementation may proceed
+  unsupervised from P3-M0** per milestones D9; open empirical items are P3-V1..V8
+  (V7 filter persistence, V8 export anatomy are new).
 - Gate: `cargo xtask ci`; oracle 2026.10.26 (slow — weekly); mmdc absent; NO DNS.
+- P2 retro strategy proposals S1–S8 were delivered in chat; the plan already encodes
+  S1 (geometry JSON = the parity contract, P3-D8) — adopt the rest into
+  `agents/notes/process/` only if the user greenlights.
 
-## In flight
+## Reference GUI facts (verified 2026-11-18, pinned monorepo)
 
-- `agents/plan/build/PHASE_3.md` now carries the ratified **P3-D0 parity contract**
-  (feature parity, NOT visual parity — GUI looks like us, canvas renders from theme
-  data) + **P3-F feature matrix** verified against the pinned monorepo
-  (`structurizr-application` diagrams fragments + `structurizr-diagram.js`).
-- **Waiting on the user's answers to Q1–Q4** (Q1 theme-driven canvas = ✅ data;
-  Q2 PNG/SVG export in P3?; Q3 extras bundle key/tooltips/tag-filter/align/canvas,
-  minimap+search→P4; Q4 custom/image view rendering depth). On answers: resolve the
-  ❓ rows + the "Open sign-offs" paragraph in PHASE_3.md, record outcomes as
-  P3-D items, commit plan: …
-- Reference GUI facts learned (verified): 9 view kinds (`ViewSet.java:735–860`);
-  editor = align/distribute/centre, canvas size ±/auto, auto-layout dialog
-  (direction, generate-vertices, separations, bring-back, remove-vertices);
-  viewer = key `[i]`, tooltips `[t]`, tag filter, navigator, animation (2 s),
-  PNG/SVG export, embed, perspectives/health/explore (service-side → N/A).
-  Layout storage: x/y per elementView + vertices/position(0–100)/routing/jump per
-  relationshipView, merged on push via `copyLayoutInformationFrom` /
-  `DefaultLayoutMergeStrategy` (elements by canonical name→name→description,
-  relationships by id) — this is the P3 geometry contract (P3-S1 from the retro).
+- 9 view kinds (`ViewSet.java:735–860`); editor = align/distribute/centre, canvas
+  size ±/auto, auto-layout dialog (direction, generate-vertices, separations,
+  bring-back, remove-vertices); viewer = key `[i]`, tooltips `[t]`, tag filter,
+  navigator, animation (2 s), PNG/SVG export, embed; perspectives/health/explore =
+  service-side (N/A). Layout storage: x/y per elementView +
+  vertices/position(0–100)/routing/jump per relationshipView, merged on push via
+  `copyLayoutInformationFrom` / `DefaultLayoutMergeStrategy` (elements by canonical
+  name→name→description, relationships by id).
 
 ## Workflow reminders
 

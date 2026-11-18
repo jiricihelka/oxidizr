@@ -9,8 +9,8 @@ follow-OS, save writes standard JSON geometry — so edited layouts stay readabl
 official tooling (the compat gate applies to every save).
 
 Single-binary promise: `oxidizr-viewer` is one self-contained executable — no Java, no
-browser, no mandatory external binaries. GUI export buttons and multi-window are
-**deferred** (out of this phase) — unless the export sign-off (Q2 below) adopts it.
+browser, no mandatory external binaries. GUI export is **in** (PNG/SVG with key/legend,
+signed off 2026-11-18, delivered at M4); multi-window stays deferred.
 
 ## P3-D0 Parity contract: feature parity, NOT visual parity (ratified 2026-11-18)
 
@@ -29,6 +29,18 @@ and wonky. We clone **what it can do** (feature parity), never **how it looks**:
   (view selector ergonomics, file dialogs), it goes through
   `ADDITIONAL_FEATURES.md` as usual.
 
+**Editor scope boundary (signed off 2026-11-18):** every editing feature ships only if
+it changes **values in the layout JSON** (view geometry, view settings) and **never
+the `.dsl` model**. Anything needing model edits is out of viewer scope, by rule.
+
+**Sign-offs Q1–Q4 (2026-11-18, user):** Q1 theme data drives the canvas (data-driven
+compat, not mimicry). Q2 PNG/SVG export **in P3** (diagram + key, M4). Q3 all viewing
+and navigation features are **in P3** — the boundary is the editor rule above, not
+effort: legend, tooltips, tag filter, align/distribute/centre, canvas size, **minimap
+and quick-navigation included** (P4 retains only polish). Q4 image views and custom
+views both render as **placeholder boxes** (no image loading, no embedded
+plantuml/mermaid/d2 renderers — single-binary promise).
+
 ## P3-F Feature parity matrix (verified against pinned monorepo, 2026-11-18)
 
 Sources: `webapp/WEB-INF/fragments/diagrams/*.jspf`, `webapp/WEB-INF/jsp/{diagrams,tree}.jsp`,
@@ -36,35 +48,33 @@ Sources: `webapp/WEB-INF/fragments/diagrams/*.jspf`, `webapp/WEB-INF/jsp/{diagra
 
 | #  | Reference feature                       | Source (line)                       | P3 stance                        |
 | -- | --------------------------------------- | ----------------------------------- | -------------------------------- |
-| 1  | All 9 view kinds render (landscape…image) | `ViewSet.java:735–860`             | ✅ all; custom/image depth = Q4   |
+| 1  | All 9 view kinds render (landscape…image) | `ViewSet.java:735–860`             | ✅ all; custom+image = placeholders |
 | 2  | View navigation tree / switching        | `tree.jsp`, `navigation.jspf`       | ✅ view selector (P3-D4)          |
 | 3  | Pan + wheel zoom                        | `structurizr-diagram.js` ZoomScale  | ✅ (P3-D4)                        |
-| 4  | Diagram key/legend overlay `[i]`        | `key.jspf`                          | ✅ — Q3 sign-off                  |
-| 5  | Tooltips on/off `[t]`                   | `tooltip.jspf`                      | ✅ — Q3 sign-off                  |
-| 6  | Interactive tag filter (client-side)    | `filter.jspf`                       | ✅ — Q3 sign-off                  |
+| 4  | Diagram key/legend overlay `[i]`        | `key.jspf`                          | ✅ IN (Q3, M1)                    |
+| 5  | Tooltips on/off `[t]`                   | `tooltip.jspf`                      | ✅ IN (Q3, M1)                    |
+| 6  | Interactive tag filter (client-side)    | `filter.jspf`                       | ✅ IN (Q3, M1; P3-V7 persistence) |
 | 7  | Dynamic-view animation (2 s autoplay)   | `structurizr-diagram.js:80–111`     | ✅ stepper (P3-D3) + play button  |
 | 8  | Edit mode (layout lock/unlock)          | `controls.jspf:61`                  | ✅ (P3-D4)                        |
 | 9  | Drag elements, lasso select, snap       | `lasso.jspf`, P3-D4                 | ✅ (P3-D4)                        |
-| 10 | Align L/C/R/T/M/B + distribute H/V + centre | `controls.jspf:85–111`          | ✅ — Q3 sign-off (new commands)   |
-| 11 | Canvas size ±/auto (view dimensions)    | `controls.jspf:74–76`               | ✅ — Q3 sign-off; writes JSON dims |
+| 10 | Align L/C/R/T/M/B + distribute H/V + centre | `controls.jspf:85–111`          | ✅ IN (Q3, M3 commands)           |
+| 11 | Canvas size ±/auto (view dimensions)    | `controls.jspf:74–76`               | ✅ IN (Q3, M3; writes JSON dims)  |
 | 12 | Auto-layout dialog (direction, generate vertices, rank/node separation) | `auto-layout.jspf` | ✅ dialog → P3-D5 params |
 | 13 | "Bring elements back" / "remove all vertices" | `auto-layout.jspf:53–54`     | ✅ commands (M3)                  |
 | 14 | Undo layout changes `[u]`               | `controls.jspf:116`                 | ✅ (P3-D4)                        |
 | 15 | Save workspace (layout survives)        | `controls.jspf:127`                 | ✅ (P3-D4; sidecar/in-place)      |
-| 16 | PNG/SVG export (diagram + key)          | `export.jspf`, `controls.jspf:45`   | ❓ **Q2**                         |
-| 17 | Diagram navigator (minimap modal)       | `navigator.jspf`                    | ❓ **Q3** (rec: P4)               |
-| 18 | Quick navigation (search)               | `quick-navigation.jspf`             | ❓ **Q3** (rec: P4)               |
+| 16 | PNG/SVG export (diagram + key)          | `export.jspf`, `controls.jspf:45`   | ✅ IN (Q2, M4; P3-V8 reference look) |
+| 17 | Diagram navigator (minimap modal)       | `navigator.jspf`                    | ✅ IN (Q3, M4)                    |
+| 18 | Quick navigation (search)               | `quick-navigation.jspf`             | ✅ IN (Q3, M4)                    |
 | 19 | Perspectives                            | `perspectives.jspf`                 | ❌ N/A — service-side feature     |
 | 20 | Health-check overlay                    | `structurizr-healthcheck.js`        | ❌ N/A — P4 `inspect` covers      |
 | 21 | Explore (adjacency walk)                | `controls.jspf:21`                  | ❌ out; 💡 P4+ candidate          |
 | 22 | Embed / share / home / summary          | web chrome                          | ❌ N/A — native app has files     |
 | 23 | Multi-user lock, git sync, DSL editing  | workspace services                  | ❌ N/A — CLI covers (`inspect`, P4) |
 
-Open sign-offs (Q1–Q4, asked 2026-11-18; resolve here before M0 starts):
-Q1 theme-driven canvas rendering stays data-✅ (recommended); Q2 PNG/SVG export in P3?;
-Q3 extras bundle (4/5/6/10/11 in; 17/18 to P4); Q4 depth for custom/image views
-(rec: image views render local files + remote with `--allow-net`; custom views render
-stored definitions where trivially renderable — SVG/text — else definition placeholder).
+Sign-offs closed 2026-11-18 — see P3-D0 (Q1 theme data ✅, Q2 export ✅ M4, Q3 all
+viewing/navigation ✅ incl. minimap + quick-nav, Q4 placeholders). The matrix is final;
+adding/removing a ✅ row now requires a user decision, not an implementation choice.
 
 ## P3-D1 Crate topology
 
@@ -125,17 +135,47 @@ Workspace + resolved styles (core::styles, P2-D2)
 - Filtered views compute their included set by evaluating the stored filter (core
   filter evaluator; if P1 stored filters unparsed, P3-M0 adds `core::filter::eval`
   reusing the DSL filter grammar — same code path `query` will use in P4).
-- Dynamic views: numbered sequential edges + prev/next animation stepper (frames =
-  `automaticLayout`-independent order/index); deployment views render nodes/instances
-  (nested containers); custom/image views: placeholder box with the stored definition
-  or image URL (full plantuml-in-view rendering deferred — note, not a layout case).
+- Dynamic views: numbered sequential edges + prev/next animation stepper **and an
+  autoplay toggle** (frames = `automaticLayout`-independent order/index; reference
+  cadence is 2 s/step, ours adjustable); deployment views render nodes/instances
+  (nested containers); custom/image views: **placeholder box only** (signed off Q4,
+  2026-11-18) — the box shows the kind, the stored definition or URL as text, and an
+  Info diagnostic; no image loading, no embedded plantuml/mermaid/d2 rendering.
+
+## P3-D3a Parity overlays & navigation (signed off Q3, 2026-11-18; chrome is ours)
+
+- **Diagram key/legend** `[i]`: toggleable side panel listing the view's rendered
+  element/relationship styles + names (P2 legend machinery reused; `createLegend`-off
+  views can still open the key locally — it's viewer-side, not a JSON write).
+- **Tooltips** `[t]`: hover card (name, description, technology, tags, owner); global
+  on/off toggle; native egui tooltips, no hover-delay tuning contests.
+- **Interactive tag filter**: toolbar chip-list of the view's tags, include/exclude
+  clicks re-render the scene. Persistence decision pinned by P3-V7 (reference behavior
+  — session-only vs writing the view's stored `filter` object); default is
+  session-only, **never** touching the model file (editor rule, P3-D0).
+- **Minimap navigator**: shrunken scene overview with viewport rect, click/drag to
+  jump; toggleable; cheap because the Scene is retained (re-rasterize at ≤ 1 fps).
+- **Quick navigation**: type-ahead element search across the current view (name /
+  description / technology substring, deterministic order) → Enter selects + centres.
+- **Export** (Q2): current view **with key appended** → SVG (hand-rolled writer off
+  the Scene — polylines/rects/text, no epaint involved) and PNG (same scene through
+  `tiny-skia`, one code path). Deterministic SVG → expect-test snapshot; PNG QA =
+  decodes + dimensions golden, no byte parity (encoder churn isn't a contract).
 
 ## P3-D4 Editing model: overlay + commands, immutable workspace untouched
 
 - The editor holds a `LayoutOverlay` (id → geometry deltas) on top of the read-only
   `Workspace`. All edits are invertible commands (`MoveElement`, `SetWaypoints`,
   `InsertWaypoint`, `DeleteWaypoint`, `SetAnchor`, `ClearViewLayout`, grouped
-  multi-select moves); `Vec` undo/redo stacks, cap 200, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y.
+  multi-select moves, plus the signed-off parity set: `AlignSelection` l/c/r/t/m/b,
+  `DistributeSelection` h/v, `CenterViewOrSelection`, `SetCanvasSize` ±/auto (writes
+  the view's stored dimensions — view-level overlay data), `BringOffCanvasBack`,
+  `RemoveAllEdgeWaypoints`); `Vec` undo/redo stacks, cap 200,
+  Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y. The auto-layout button opens a dialog mirroring
+  `auto-layout.jspf` (rank direction, generate-vertices on/off → overwrite vs keep
+  waypoints, rank/node separation → P3-D5 params, P3-V4 semantics).
+- Editor rule (P3-D0): commands may mutate overlay/JSON values only — the workspace
+  model and any DSL text are immutable in this app.
 - Save = clone workspace → apply overlay (elementViews x/y/width/height,
   relationshipViews waypoints/order/orientation) → **`oxidizr-json` writer** → byte-
   compatible standard JSON (WRITE-CATALOG rules apply unchanged; the save path adds no
@@ -218,14 +258,18 @@ Workspace + resolved styles (core::styles, P2-D2)
 - **M0** prep: move reconcile engine into core; `oxidizr-layout`/`oxidizr-viewer`
   scaffold; CI builds viewer on 3 OSes headless; core `filter::eval` if missing.
 - **M1** read-only viewer: open DSL/JSON, scene build, pan/zoom/select, all view
-  kinds render with full styling, light/dark, bundled font, icons (PNG+SVG).
+  kinds render with full styling (custom/image = placeholder boxes, Q4), light/dark,
+  bundled font, icons (PNG+SVG), + parity overlays: key/legend, tooltips, tag filter
+  (P3-D3a; P3-V7 checked before the persistence choice lands).
 - **M2** `Layered` engine **MVP scope** (P3-D5): pipeline complete, determinism
   property, benches + committed baseline (P3 joins the milestone baseline list),
-  auto-layout buttons. Quality-polish items are logged for P4-D13, not blockers here.
-- **M3** editing: overlay + commands, undo/redo, snap, waypoint editing, save →
-  byte-compatible JSON; oracle round-trip check green.
-- **M4** live reload + remap UX; DSL→sidecar-layout workflow; `dot-backend` feature
-  (optional) + docs.
+  auto-layout buttons + dialog. Quality-polish items are logged for P4-D13, not
+  blockers here.
+- **M3** editing: overlay + commands, undo/redo, snap, waypoint editing, the parity
+  command set (align/distribute/centre, canvas size, bring-back, remove-all-vertices),
+  save → byte-compatible JSON; oracle round-trip check green.
+- **M4** live reload + remap UX; DSL→sidecar-layout workflow; minimap + quick-nav;
+  **export** SVG+PNG with key (P3-D3a); `dot-backend` feature (optional) + docs.
 - **M5** hardening: perf pass against big-bank-plc/spring-petclinic/aws corpus
   (scene rebuild + paint budget: 60 fps at 200 visible elements — measured with
   `eframe` stats overlay, informational), docs, tag v0.3.0.
@@ -244,6 +288,13 @@ Workspace + resolved styles (core::styles, P2-D2)
   `directRelationshipsOnly`) vs `core::filter::eval`.
 - P3-V6 `notify` event coalescing behavior on each OS (debounce tuning), Windows
   rename semantics on save.
+- P3-V7 reference tag-filter persistence: does the web UI filter write the view's
+  stored `filter` object (workspace JSON) or stay session-only? → decides our default
+  (P3-D3a); check `filter.jspf` + `structurizr-diagram.js` filter wiring + whether a
+  filtered+saved workspace JSON changes.
+- P3-V8 reference PNG/SVG export anatomy: what "diagram and key" composition means
+  (key appended? margins?) — informational for our export design; NO pixel parity
+  implied (P3-D0).
 
 ## Risks
 
