@@ -27,7 +27,7 @@
 //! 4. The human report (remapped / dropped / ambiguous) is rendered by the
 //!    CLI; see [`reconcile`] and [`Report`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use oxidizr_core::Workspace;
 use oxidizr_core::builder::WorkspaceBuilder;
@@ -49,32 +49,38 @@ struct Index {
 }
 
 impl Index {
-    /// Build both tables for the elements (or relationships, `rels`) of `ws`.
-    fn build(ws: &Workspace, rels: bool, b: &WorkspaceBuilder) -> Index {
+    /// Build both tables for the RELATIONSHIPS of `ws` (2R R-mis-11: the
+    /// `rels: bool` switch split into the two named builders it dispatches
+    /// on — call sites pick the id space by name, never by flag).
+    fn build_relationships(ws: &Workspace, b: &WorkspaceBuilder) -> Index {
         let mut idx = Index::default();
-        if rels {
-            for r in &ws.model.relationships {
-                if let Some(ident) = r.properties.get(DSL_IDENTIFIER) {
-                    idx.by_ident
-                        .entry(ident.to_string())
-                        .or_default()
-                        .push(r.id.clone());
-                }
-                if let Some(cn) = b.relationship_canonical_name(&r.id) {
-                    idx.by_canonical.entry(cn).or_default().push(r.id.clone());
-                }
+        for r in &ws.model.relationships {
+            if let Some(ident) = r.properties.get(DSL_IDENTIFIER) {
+                idx.by_ident
+                    .entry(ident.to_string())
+                    .or_default()
+                    .push(r.id.clone());
             }
-        } else {
-            for (id, _, _) in flattened(&ws.model) {
-                if let Some(ident) = b.item(&id).and_then(|i| i.properties.get(DSL_IDENTIFIER)) {
-                    idx.by_ident
-                        .entry(ident.to_string())
-                        .or_default()
-                        .push(id.clone());
-                }
-                if let Some(cn) = b.canonical_name_full(&id) {
-                    idx.by_canonical.entry(cn).or_default().push(id.clone());
-                }
+            if let Some(cn) = b.relationship_canonical_name(&r.id) {
+                idx.by_canonical.entry(cn).or_default().push(r.id.clone());
+            }
+        }
+        idx
+    }
+
+    /// [`Self::build_relationships`] for the flattened-model ELEMENTS of
+    /// `ws` (2R R-mis-11 split).
+    fn build_elements(ws: &Workspace, b: &WorkspaceBuilder) -> Index {
+        let mut idx = Index::default();
+        for (id, _, _) in flattened(&ws.model) {
+            if let Some(ident) = b.item(&id).and_then(|i| i.properties.get(DSL_IDENTIFIER)) {
+                idx.by_ident
+                    .entry(ident.to_string())
+                    .or_default()
+                    .push(id.clone());
+            }
+            if let Some(cn) = b.canonical_name_full(&id) {
+                idx.by_canonical.entry(cn).or_default().push(id.clone());
             }
         }
         idx
@@ -136,44 +142,47 @@ impl Maps {
     }
 }
 
-/// Build the old→new maps for one id space (elements or relationships).
+type OldIds = Vec<(Id, Option<String>, Option<String>)>;
+
+/// The old-side relationship rows: id + identifier value + canonical name
+/// (2R R-mis-11: the `rels: bool` branch of `map_ids` became these two
+/// named collectors — the id space is chosen by name at the call site).
+fn old_relationship_ids(old_ws: &Workspace, old_b: &WorkspaceBuilder) -> OldIds {
+    old_ws
+        .model
+        .relationships
+        .iter()
+        .map(|r| {
+            (
+                r.id.clone(),
+                r.properties.get(DSL_IDENTIFIER).map(str::to_string),
+                old_b.relationship_canonical_name(&r.id),
+            )
+        })
+        .collect()
+}
+
+/// [`old_relationship_ids`] for the flattened-model elements (2R R-mis-11).
+fn old_element_ids(old_ws: &Workspace, old_b: &WorkspaceBuilder) -> OldIds {
+    flattened(&old_ws.model)
+        .into_iter()
+        .map(|(id, _, _)| {
+            let ident = old_b
+                .item(&id)
+                .and_then(|i| i.properties.get(DSL_IDENTIFIER))
+                .map(str::to_string);
+            let canonical = old_b.canonical_name_full(&id);
+            (id, ident, canonical)
+        })
+        .collect()
+}
+
+/// Build the old→new maps for one id space, given its old-side rows.
 ///
 /// Matching per old id: exact `structurizr.dsl.identifier` match first;
 /// then the canonical-name fallback (identifier absent or renamed away).
-fn map_ids(
-    old_ws: &Workspace,
-    new_idx: &Index,
-    old_b: &WorkspaceBuilder,
-    rels: bool,
-    what: &str,
-) -> Maps {
+fn map_ids(olds: OldIds, new_idx: &Index, what: &str) -> Maps {
     let mut maps = Maps::default();
-    let olds: Vec<(Id, Option<String>, Option<String>)> = if rels {
-        old_ws
-            .model
-            .relationships
-            .iter()
-            .map(|r| {
-                (
-                    r.id.clone(),
-                    r.properties.get(DSL_IDENTIFIER).map(str::to_string),
-                    old_b.relationship_canonical_name(&r.id),
-                )
-            })
-            .collect()
-    } else {
-        flattened(&old_ws.model)
-            .into_iter()
-            .map(|(id, _, _)| {
-                let ident = old_b
-                    .item(&id)
-                    .and_then(|i| i.properties.get(DSL_IDENTIFIER))
-                    .map(str::to_string);
-                let canonical = old_b.canonical_name_full(&id);
-                (id, ident, canonical)
-            })
-            .collect()
-    };
     for (old, ident, canonical) in olds {
         // (1) exact `structurizr.dsl.identifier` match.
         if let Some(ident) = ident.as_deref() {
@@ -260,17 +269,13 @@ pub fn reconcile(layout: &Workspace, updated: &Workspace) -> (Workspace, Report)
     old_b.adopt(layout.clone());
 
     let mut elems = map_ids(
-        layout,
-        &Index::build(updated, false, &new_b),
-        &old_b,
-        false,
+        old_element_ids(layout, &old_b),
+        &Index::build_elements(updated, &new_b),
         "element",
     );
     let mut rels = map_ids(
-        layout,
-        &Index::build(updated, true, &new_b),
-        &old_b,
-        true,
+        old_relationship_ids(layout, &old_b),
+        &Index::build_relationships(updated, &new_b),
         "relationship",
     );
     report.ambiguous.append(&mut elems.ambiguous);
@@ -342,8 +347,10 @@ fn graft_set(
     anim_kind!(views.component_views);
     anim_kind!(views.deployment_views);
 
-    // Layout views with no counterpart in the re-parsed workspace.
-    let new_keys: Vec<&str> = views.all_views().into_iter().map(View::key).collect();
+    // Layout views with no counterpart in the re-parsed workspace
+    // (2R R-mis-11: `HashSet` membership replaces the per-key `Vec::contains`
+    // scan — same answer, no quadratic re-scan).
+    let new_keys: HashSet<&str> = views.all_views().into_iter().map(View::key).collect();
     for key in old_by_key.keys() {
         if !new_keys.contains(key) {
             report
@@ -361,7 +368,8 @@ fn remap_animations(
     rels: &Maps,
     report: &mut Report,
 ) -> Vec<Animation> {
-    let mut map_ids = |ids: &[String], map: &Maps, what: &str, order: i32| -> Vec<String> {
+    // 2R R-mis-11: the closure shadows the module-level `map_ids` fn — `remap_ids`.
+    let mut remap_ids = |ids: &[String], map: &Maps, what: &str, order: i32| -> Vec<String> {
         ids.iter()
             .filter_map(|id| {
                 if let Some(new) = map.to_new.get(&Id::new(id.as_str())) {
@@ -379,8 +387,8 @@ fn remap_animations(
         .filter_map(|a| {
             let step = Animation {
                 order: a.order,
-                element_ids: map_ids(&a.element_ids, elems, "element", a.order),
-                relationship_ids: map_ids(&a.relationship_ids, rels, "relationship", a.order),
+                element_ids: remap_ids(&a.element_ids, elems, "element", a.order),
+                relationship_ids: remap_ids(&a.relationship_ids, rels, "relationship", a.order),
             };
             (!step.element_ids.is_empty() || !step.relationship_ids.is_empty()).then_some(step)
         })
@@ -396,10 +404,23 @@ fn graft_content(
     rels: &Maps,
     report: &mut Report,
 ) {
+    // 2R R-mis-11: id-keyed lookups replace the per-entry `find`/`any`
+    // scans. `entry().or_insert()` keeps the FIRST entry per id — exactly
+    // what the old `find` answered (duplicate view entries are a validation
+    // violation, but reconcile runs BEFORE validation, so the first-wins
+    // pick must stay).
+    let mut old_elem_by_id = HashMap::new();
+    for oe in &old.elements {
+        old_elem_by_id.entry(&oe.id).or_insert(oe);
+    }
+    let mut old_rel_by_id = HashMap::new();
+    for orv in &old.relationships {
+        old_rel_by_id.entry(&orv.id).or_insert(orv);
+    }
     // The new view's membership wins; geometry comes from the layout.
     for e in &mut new.elements {
         if let Some(old_id) = elems.to_old.get(&e.id)
-            && let Some(oe) = old.elements.iter().find(|oe| &oe.id == old_id)
+            && let Some(oe) = old_elem_by_id.get(old_id)
         {
             e.x = oe.x;
             e.y = oe.y;
@@ -408,7 +429,7 @@ fn graft_content(
     }
     for r in &mut new.relationships {
         if let Some(old_id) = rels.to_old.get(&r.id)
-            && let Some(or) = old.relationships.iter().find(|or| &or.id == old_id)
+            && let Some(or) = old_rel_by_id.get(old_id)
         {
             // Geometry fields only: description/url/order/response are the
             // DSL's statement of the view, not layout.
@@ -419,12 +440,15 @@ fn graft_content(
             report.relationships += 1;
         }
     }
-    // Dropped: layout entries the graft could not place.
+    // Dropped: layout entries the graft could not place (the id sets are
+    // built only HERE — after the graft loops' mutable borings of `new`).
+    let new_elem_ids: HashSet<&Id> = new.elements.iter().map(|e| &e.id).collect();
+    let new_rel_ids: HashSet<&Id> = new.relationships.iter().map(|r| &r.id).collect();
     for oe in &old.elements {
         if !elems
             .to_new
             .get(&oe.id)
-            .is_some_and(|nid| new.elements.iter().any(|e| e.id == *nid))
+            .is_some_and(|nid| new_elem_ids.contains(nid))
         {
             report.dropped.push(format!(
                 "view \"{view_key}\" element `{}` — no longer in the view",
@@ -436,7 +460,7 @@ fn graft_content(
         if !rels
             .to_new
             .get(&orv.id)
-            .is_some_and(|nid| new.relationships.iter().any(|r| r.id == *nid))
+            .is_some_and(|nid| new_rel_ids.contains(nid))
         {
             report.dropped.push(format!(
                 "view \"{view_key}\" relationship `{}` — no longer in the view",
