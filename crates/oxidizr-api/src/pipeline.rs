@@ -201,11 +201,34 @@ impl Default for Outcome {
     }
 }
 
+/// A command body's abort (2R R-mis-01): the [`Outcome`] as accumulated
+/// when the command stopped — the partial log included — with the failing
+/// issue appended and the exit class set. Exactly what the old
+/// `out.fail(issue, class); return out` ladders handed back as the final
+/// `Outcome`; [`execute`] flattens it at the frozen boundary.
+struct Fail(Outcome);
+
+impl Fail {
+    /// Abort from an empty outcome (the legs of helpers the command had
+    /// not emitted into yet).
+    fn new(issue: Issue, exit: ExitClass) -> Fail {
+        Fail(Outcome {
+            exit,
+            log: vec![LogItem::Issue(issue)],
+            bytes: None,
+        })
+    }
+}
+
 impl Outcome {
-    fn fail(&mut self, issue: Issue, exit: ExitClass) -> &Self {
-        self.log.push(LogItem::Issue(issue));
-        self.exit = exit;
-        self
+    /// Record the failing issue on the accumulated state and abort with
+    /// it (2R R-mis-01 — the `?` arm of every former fail ladder; takes a
+    /// copy so the accumulator itself is never half-mutated).
+    fn fail(&self, issue: Issue, exit: ExitClass) -> Fail {
+        let mut out = self.clone();
+        out.log.push(LogItem::Issue(issue));
+        out.exit = exit;
+        Fail(out)
     }
 }
 
@@ -213,10 +236,20 @@ impl Outcome {
 /// CLI contract already had (`-o` writes, `FmtMode::Write`).
 #[must_use]
 pub fn execute(request: Request, opts: &ApiOptions) -> Outcome {
+    // 2R R-mis-01: the bodies run in Result shape ([`Fail`] carries the
+    // partial outcome the old `out.fail(…); return out` ladders returned);
+    // the frozen byte contract flattens it back at this boundary.
+    command(request, opts).unwrap_or_else(|fail| fail.0)
+}
+
+/// Dispatch (2R R-mis-01): every former fail-laddered body returns the
+/// finished [`Outcome`] or the [`Fail`] it stopped at; `validate` has no
+/// fail legs (its per-file loop keeps the errors as data), so it wraps.
+fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
     match request {
         Request::Dsl2Json { input, output } => dsl2json(&input, output.as_deref(), opts),
         Request::Json2Json { input, output } => json2json(&input, output.as_deref(), opts),
-        Request::Validate { files } => validate(&files, opts),
+        Request::Validate { files } => Ok(validate(&files, opts)),
         Request::Fmt { inputs, mode } => fmt_cmd(inputs, mode, opts),
         Request::Reconcile {
             dsl,
@@ -407,6 +440,17 @@ fn push_issues(out: &mut Outcome, issues: Vec<Issue>) {
     out.log.extend(issues.into_iter().map(LogItem::Issue));
 }
 
+/// The D1 statement-error decoration ladder (2R R-mis-05: one helper for
+/// the old ×4 duplicate): every recorded statement error becomes a
+/// `did you mean`-decorated issue against the repaired workspace.
+fn statement_errors(result: &ParseResult) -> Vec<Issue> {
+    result
+        .errors
+        .iter()
+        .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&result.workspace)))
+        .collect()
+}
+
 /// Emit produced JSON/text: `-o` file write (side effect, like the CLI) or
 /// stdout payload on the outcome.
 fn emit_bytes(out: &mut Outcome, bytes: Vec<u8>, output: Option<&Path>) -> Result<(), Issue> {
@@ -423,113 +467,62 @@ fn emit_bytes(out: &mut Outcome, bytes: Vec<u8>, output: Option<&Path>) -> Resul
 // Command bodies (ported from oxidizr-cli; flow, order and messages identical)
 // ---------------------------------------------------------------------------
 
-fn dsl2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Outcome {
+fn dsl2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<Outcome, Fail> {
     let mut out = Outcome::default();
-    let source = match read_input(input, opts) {
-        Ok(s) => s,
-        Err(e) => {
-            out.fail(e, ExitClass::Io);
-            return out;
-        }
-    };
-    let result = match parse_dsl_input(&source, opts) {
-        Ok(r) => r,
-        Err(e) => {
-            out.fail(e, ExitClass::Diagnostics);
-            return out;
-        }
-    };
+    let source = read_input(input, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
+    let result = parse_dsl_input(&source, opts).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
     if !result.errors.is_empty() {
         // D1 recovery: all recorded statement errors render; the reference
         // export would have aborted on the first one — no partial output.
-        let issues: Vec<Issue> = result
-            .errors
-            .iter()
-            .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&result.workspace)))
-            .collect();
-        push_issues(&mut out, issues);
+        push_issues(&mut out, statement_errors(&result));
         out.exit = ExitClass::Diagnostics;
-        return out;
+        return Ok(out);
     }
     let mut workspace = result.workspace;
-    if let Err(e) = apply_default_views(&mut workspace) {
-        out.fail(e, ExitClass::Diagnostics);
-        return out;
-    }
-    let bytes = match oxidizr_json::to_vec(&workspace) {
-        Ok(b) => b,
-        Err(e) => {
-            out.fail(
-                Issue::from_json(&e, &source.text, &source.display),
-                ExitClass::Diagnostics,
-            );
-            return out;
-        }
-    };
-    if let Err(e) = emit_bytes(&mut out, bytes, output) {
-        out.fail(e, ExitClass::Io);
-    }
-    out
+    apply_default_views(&mut workspace).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
+    let bytes = oxidizr_json::to_vec(&workspace).map_err(|e| {
+        out.fail(
+            Issue::from_json(&e, &source.text, &source.display),
+            ExitClass::Diagnostics,
+        )
+    })?;
+    emit_bytes(&mut out, bytes, output).map_err(|e| out.fail(e, ExitClass::Io))?;
+    Ok(out)
 }
 
-fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Outcome {
+fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<Outcome, Fail> {
     let mut out = Outcome::default();
-    let source = match read_input(input, opts) {
-        Ok(s) => s,
-        Err(e) => {
-            out.fail(e, ExitClass::Io);
-            return out;
-        }
-    };
+    let source = read_input(input, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
     let bytes = source.text.as_bytes();
     if opts.keep_unknown {
         // D3 superset mode: unknown / legacy / writer-omitted members ride
         // through verbatim (output intentionally non-parity — the reference
         // load tail, default views included, is part of the parity contract
         // only).
-        match oxidizr_json::roundtrip_keep_unknown(bytes) {
-            Ok(b) => {
-                if let Err(e) = emit_bytes(&mut out, b, output) {
-                    out.fail(e, ExitClass::Io);
-                }
-            }
-            Err(e) => {
-                out.fail(
-                    Issue::from_json(&e, &source.text, &source.display),
-                    ExitClass::Diagnostics,
-                );
-            }
-        }
-        return out;
-    }
-    let mut workspace = match oxidizr_json::from_slice(bytes) {
-        Ok(ws) => ws,
-        Err(e) => {
+        let kept = oxidizr_json::roundtrip_keep_unknown(bytes).map_err(|e| {
             out.fail(
                 Issue::from_json(&e, &source.text, &source.display),
                 ExitClass::Diagnostics,
-            );
-            return out;
-        }
-    };
-    if let Err(e) = apply_default_views(&mut workspace) {
-        out.fail(e, ExitClass::Diagnostics);
-        return out;
+            )
+        })?;
+        emit_bytes(&mut out, kept, output).map_err(|e| out.fail(e, ExitClass::Io))?;
+        return Ok(out);
     }
-    match oxidizr_json::to_vec(&workspace) {
-        Ok(b) => {
-            if let Err(e) = emit_bytes(&mut out, b, output) {
-                out.fail(e, ExitClass::Io);
-            }
-        }
-        Err(e) => {
-            out.fail(
-                Issue::from_json(&e, &source.text, &source.display),
-                ExitClass::Diagnostics,
-            );
-        }
-    }
-    out
+    let mut workspace = oxidizr_json::from_slice(bytes).map_err(|e| {
+        out.fail(
+            Issue::from_json(&e, &source.text, &source.display),
+            ExitClass::Diagnostics,
+        )
+    })?;
+    apply_default_views(&mut workspace).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
+    let json = oxidizr_json::to_vec(&workspace).map_err(|e| {
+        out.fail(
+            Issue::from_json(&e, &source.text, &source.display),
+            ExitClass::Diagnostics,
+        )
+    })?;
+    emit_bytes(&mut out, json, output).map_err(|e| out.fail(e, ExitClass::Io))?;
+    Ok(out)
 }
 
 /// `reconcile` (F1, P1-D8): re-parse the edited DSL (the model authority),
@@ -538,77 +531,45 @@ fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Outcome
 /// guessed) and graft the layout. The standard JSON is emitted FIRST (the
 /// contract emits even when ambiguous), then the human report on stderr
 /// (`--quiet` silences it); ambiguous entries exit 1, I/O 3, else 0.
-fn reconcile_cmd(dsl: &Input, layout: &Input, output: Option<&Path>, opts: &ApiOptions) -> Outcome {
+fn reconcile_cmd(
+    dsl: &Input,
+    layout: &Input,
+    output: Option<&Path>,
+    opts: &ApiOptions,
+) -> Result<Outcome, Fail> {
     let mut out = Outcome::default();
-    let source = match read_input(dsl, opts) {
-        Ok(s) => s,
-        Err(e) => {
-            out.fail(e, ExitClass::Io);
-            return out;
-        }
-    };
-    let result = match parse_dsl_input(&source, opts) {
-        Ok(r) => r,
-        Err(e) => {
-            out.fail(e, ExitClass::Diagnostics);
-            return out;
-        }
-    };
+    let source = read_input(dsl, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
+    let result = parse_dsl_input(&source, opts).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
     if !result.errors.is_empty() {
-        let issues: Vec<Issue> = result
-            .errors
-            .iter()
-            .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&result.workspace)))
-            .collect();
-        push_issues(&mut out, issues);
+        push_issues(&mut out, statement_errors(&result));
         out.exit = ExitClass::Diagnostics;
-        return out;
+        return Ok(out);
     }
-    let layout_source = match read_input(layout, opts) {
-        Ok(s) => s,
-        Err(e) => {
-            out.fail(e, ExitClass::Io);
-            return out;
-        }
-    };
-    let mut layout_ws = match oxidizr_json::from_slice(layout_source.text.as_bytes()) {
-        Ok(ws) => ws,
-        Err(e) => {
-            out.fail(
-                Issue::from_json(&e, &layout_source.text, &layout_source.display),
-                ExitClass::Diagnostics,
-            );
-            return out;
-        }
-    };
+    let layout_source = read_input(layout, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
+    let mut layout_ws = oxidizr_json::from_slice(layout_source.text.as_bytes()).map_err(|e| {
+        out.fail(
+            Issue::from_json(&e, &layout_source.text, &layout_source.display),
+            ExitClass::Diagnostics,
+        )
+    })?;
     // The `AbstractCommand.loadWorkspace` tail (M1-e-B) on BOTH reconcile
     // sides: the reference creates default views after every load, so a
     // layout export carrying generated views must not drop them against a
     // DSL whose views would be generated (P2T full-tier catch, 2026-11-18).
     let mut updated = result.workspace;
-    if let Err(e) = apply_default_views(&mut updated) {
-        out.fail(e, ExitClass::Diagnostics);
-        return out;
-    }
-    if let Err(e) = apply_default_views(&mut layout_ws) {
-        out.fail(e, ExitClass::Diagnostics);
-        return out;
-    }
+    apply_default_views(&mut updated).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
+    apply_default_views(&mut layout_ws).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
     let (reconciled, report) = reconcile::reconcile(&layout_ws, &updated);
-    let bytes = match oxidizr_json::to_vec(&reconciled) {
-        Ok(b) => b,
-        Err(e) => {
-            out.fail(
-                Issue::from_json(&e, &source.text, &source.display),
-                ExitClass::Diagnostics,
-            );
-            return out;
-        }
-    };
-    if let Err(e) = emit_bytes(&mut out, bytes, output) {
-        out.fail(e, ExitClass::Io);
-        return out; // the contract: no report after a failed write
-    }
+    let bytes = oxidizr_json::to_vec(&reconciled).map_err(|e| {
+        out.fail(
+            Issue::from_json(&e, &source.text, &source.display),
+            ExitClass::Diagnostics,
+        )
+    })?;
+    // The contract: no report after a failed write — `?` aborts with the
+    // Io-classed failure before the report legs below (the old leg's
+    // `return out; // the contract: no report after a failed write`).
+    emit_bytes(&mut out, bytes, output).map_err(|e| out.fail(e, ExitClass::Io))?;
     out.log.push(LogItem::NoteLine(report.summary()));
     for line in &report.dropped {
         out.log.push(LogItem::NoteLine(format!("dropped: {line}")));
@@ -618,7 +579,7 @@ fn reconcile_cmd(dsl: &Input, layout: &Input, output: Option<&Path>, opts: &ApiO
     if blocked {
         out.exit = ExitClass::Diagnostics;
     }
-    out
+    Ok(out)
 }
 
 /// `validate`: format by extension (P1-D8), DSL parse or JSON read + hydrate,
@@ -660,11 +621,7 @@ fn validate(files: &[PathBuf], opts: &ApiOptions) -> Outcome {
             match parse_dsl_input(&source, opts) {
                 Ok(r) if r.errors.is_empty() => r.workspace,
                 Ok(r) => {
-                    let issues: Vec<Issue> = r
-                        .errors
-                        .iter()
-                        .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&r.workspace)))
-                        .collect();
+                    let issues = statement_errors(&r);
                     blocked |= blocks(&issues, strict);
                     push_issues(&mut out, issues);
                     continue;
@@ -711,29 +668,25 @@ fn validate(files: &[PathBuf], opts: &ApiOptions) -> Outcome {
 
 /// The `export` loader — the `validate` file loader for ONE path: read by
 /// extension (`.dsl` → parse, `.json` → `oxidizr_json::from_slice`),
-/// returning the source (for error spans) plus the workspace. Failures are
-/// recorded into `out` (the caller returns its [`Outcome`]); unblocked DSL
-/// statement errors are pushed there too but do NOT stop the export (D1
-/// recovery carries the repaired workspace, `--strict` blocks).
+/// returning the source (for error spans) plus the workspace. Failures
+/// RETURN as [`Fail`] (2R R-mis-01: the old shape mutated the caller's
+/// accumulator and answered `Option`); unblocked DSL statement errors ride
+/// out as the third tuple leg — they join the final log but do NOT stop
+/// the export (D1 recovery carries the repaired workspace, `--strict`
+/// blocks).
 fn load_export_workspace(
     workspace_file: &Path,
     opts: &ApiOptions,
-    out: &mut Outcome,
-) -> Option<(Source, Workspace)> {
+) -> Result<(Source, Workspace, Vec<Issue>), Fail> {
     let ext = workspace_file
         .extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase);
     let source = if matches!(ext.as_deref(), Some("dsl" | "json")) {
-        match read_input(&Input::File(workspace_file.to_path_buf()), opts) {
-            Ok(s) => s,
-            Err(e) => {
-                out.fail(e, ExitClass::Io);
-                return None;
-            }
-        }
+        read_input(&Input::File(workspace_file.to_path_buf()), opts)
+            .map_err(|e| Fail::new(e, ExitClass::Io))?
     } else {
-        out.fail(
+        return Err(Fail::new(
             Issue::error(
                 codes::CLI_IO,
                 format!(
@@ -742,48 +695,36 @@ fn load_export_workspace(
                 ),
             ),
             ExitClass::Diagnostics,
-        );
-        return None;
+        ));
     };
-    let mut workspace = if ext.as_deref() == Some("dsl") {
+    let (mut workspace, recovered) = if ext.as_deref() == Some("dsl") {
         match parse_dsl_input(&source, opts) {
-            Ok(r) if r.errors.is_empty() => r.workspace,
+            Ok(r) if r.errors.is_empty() => (r.workspace, Vec::new()),
             Ok(r) => {
-                let issues: Vec<Issue> = r
-                    .errors
-                    .iter()
-                    .map(|e| suggest::decorate(Issue::from_dsl(e), Some(&r.workspace)))
-                    .collect();
-                let blocked = blocks(&issues, opts.strict);
-                push_issues(out, issues);
-                if blocked {
+                let issues = statement_errors(&r);
+                if blocks(&issues, opts.strict) {
+                    let mut out = Outcome::default();
+                    push_issues(&mut out, issues);
                     out.exit = ExitClass::Diagnostics;
-                    return None;
+                    return Err(Fail(out));
                 }
-                r.workspace
+                (r.workspace, issues)
             }
-            Err(e) => {
-                out.fail(e, ExitClass::Diagnostics);
-                return None;
-            }
+            Err(e) => return Err(Fail::new(e, ExitClass::Diagnostics)),
         }
     } else {
         match oxidizr_json::from_slice(source.text.as_bytes()) {
-            Ok(ws) => ws,
+            Ok(ws) => (ws, Vec::new()),
             Err(e) => {
-                out.fail(
+                return Err(Fail::new(
                     Issue::from_json(&e, &source.text, &source.display),
                     ExitClass::Diagnostics,
-                );
-                return None;
+                ));
             }
         }
     };
-    if let Err(e) = apply_default_views(&mut workspace) {
-        out.fail(e, ExitClass::Diagnostics);
-        return None;
-    }
-    Some((source, workspace))
+    apply_default_views(&mut workspace).map_err(|e| Fail::new(e, ExitClass::Diagnostics))?;
+    Ok((source, workspace, recovered))
 }
 
 /// `export` (P2-D10, Phase 2 M0): load the workspace by extension (the
@@ -809,12 +750,12 @@ fn export_cmd(
     format: &str,
     output: Option<&Path>,
     opts: &ApiOptions,
-) -> Outcome {
+) -> Result<Outcome, Fail> {
+    // The loader's failures abort via `?` (they carry their own partial
+    // outcome); the recovered statement errors join the log up front.
+    let (source, mut workspace, recovered) = load_export_workspace(workspace_file, opts)?;
     let mut out = Outcome::default();
-    let Some((source, mut workspace)) = load_export_workspace(workspace_file, opts, &mut out)
-    else {
-        return out;
-    };
+    push_issues(&mut out, recovered);
 
     // `ExportCommand`: canonical parent of the workspace file; `mkdirs`
     // before the format dispatch (reference does it before `findExporter`).
@@ -828,14 +769,13 @@ fn export_cmd(
             .unwrap_or_default(),
     };
     if let Err(e) = std::fs::create_dir_all(&out_dir) {
-        out.fail(
+        return Err(out.fail(
             Issue::io(
                 &format!("failed to create output directory `{}`", out_dir.display()),
                 &e,
             ),
             ExitClass::Io,
-        );
-        return out;
+        ));
     }
 
     let export_format = oxidizr_export::ExportFormat::parse(format);
@@ -846,7 +786,7 @@ fn export_cmd(
             "Unknown export format: {}",
             export_format.label()
         )));
-        return out;
+        return Ok(out);
     }
     if export_format.is_diagram() {
         // `ExportCommand` 222-227: `ThemeUtils.loadThemes` BEFORE the export
@@ -859,8 +799,7 @@ fn export_cmd(
                 oxidizr_export::ThemeError::NetDisabled { .. } => codes::NET_DISABLED,
                 _ => codes::EXPORT_THEME,
             };
-            out.fail(Issue::error(code, e.to_string()), ExitClass::Diagnostics);
-            return out;
+            return Err(out.fail(Issue::error(code, e.to_string()), ExitClass::Diagnostics));
         }
         if workspace.views.all_views().is_empty() {
             // `ExportCommand` 233: the `DiagramExporter` branch logs the
@@ -868,7 +807,7 @@ fn export_cmd(
             out.log.push(LogItem::NoteLine(
                 "The workspace contains no views".to_string(),
             ));
-            return out;
+            return Ok(out);
         }
     }
     let file_name = workspace_file
@@ -878,39 +817,34 @@ fn export_cmd(
     let files = match export_format.export(&workspace, file_name) {
         Ok(files) => files,
         Err(e @ oxidizr_export::ExportError::NotImplemented { .. }) => {
-            out.fail(
+            return Err(out.fail(
                 Issue::error(codes::EXPORT_NOT_IMPLEMENTED, e.to_string()),
                 ExitClass::Diagnostics,
-            );
-            return out;
+            ));
         }
         Err(e @ oxidizr_export::ExportError::NoExtension { .. }) => {
-            out.fail(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io);
-            return out;
+            return Err(out.fail(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io));
         }
         Err(oxidizr_export::ExportError::Json(je)) => {
-            out.fail(
+            return Err(out.fail(
                 Issue::from_json(&je, &source.text, &source.display),
                 ExitClass::Diagnostics,
-            );
-            return out;
+            ));
         }
         Err(e @ oxidizr_export::ExportError::ReferenceAbort(_)) => {
-            out.fail(
+            return Err(out.fail(
                 Issue::error(codes::EXPORT_ABORT, e.to_string()),
                 ExitClass::Diagnostics,
-            );
-            return out;
+            ));
         }
     };
     for file in files {
         let path = out_dir.join(&file.name);
         if let Err(e) = std::fs::write(&path, &file.bytes) {
-            out.fail(
+            return Err(out.fail(
                 Issue::io(&format!("failed to write `{}`", path.display()), &e),
                 ExitClass::Io,
-            );
-            return out;
+            ));
         }
         // `writeToFile` logs the canonical path; fall back to the joined
         // path when canonicalization fails (never right after a write).
@@ -918,7 +852,7 @@ fn export_cmd(
         out.log
             .push(LogItem::NoteLine(format!("Writing {}", shown.display())));
     }
-    out
+    Ok(out)
 }
 
 /// `fmt`: reformat DSL sources to the canonical P1-D7 style. The printer is
@@ -931,21 +865,22 @@ fn export_cmd(
 /// `Write` with a stdin-semantics input is a usage error (exit `Usage`) —
 /// detected BEFORE reading the input (a live pipe must not block the exit).
 /// I/O and UTF-8 failures are OXZ-5006 → exit `Io`.
-fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Outcome {
+fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Result<Outcome, Fail> {
     let mut out = Outcome::default();
     let mut unformatted = false;
     let mut io_error = false;
     for input in inputs {
         let stdin_like = matches!(input, Input::Stdin | Input::Bytes(_));
         if mode == FmtMode::Write && stdin_like {
-            out.fail(
+            // usage error (P1-D8 code 2), not an I/O failure — 2R R-mis-01
+            // aborts with the partial outcome the earlier files emitted.
+            return Err(out.fail(
                 Issue::error(
                     codes::CLI_IO,
                     "`fmt --write` needs a file to rewrite (stdin has no in-place target)",
                 ),
                 ExitClass::Usage,
-            );
-            return out; // usage error (P1-D8 code 2), not an I/O failure
+            ));
         }
         let source = match read_input(&input, opts) {
             Ok(i) => i,
@@ -989,5 +924,5 @@ fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Outcome {
     } else {
         ExitClass::Ok
     };
-    out
+    Ok(out)
 }
