@@ -23,14 +23,13 @@ use super::{Archetype, Parser, Sec, Stmt, Tokens, eqi, tok};
 pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
     let raw = &stmt.tokens;
-    let top = p.top().cloned();
 
     // ------------------------------------------------------------------
     // archetypes scope (742–845)
     // ------------------------------------------------------------------
 
     // 742: `archetypes { … }` inside `model`.
-    if eqi(&first, tok::ARCHETYPES) && matches!(top, Some(Ctx::Model { .. })) {
+    if eqi(&first, tok::ARCHETYPES) && matches!(p.top(), Some(Ctx::Model { .. })) {
         p.start_context(Ctx::Archetypes);
         return Sec::Handled;
     }
@@ -40,7 +39,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // parent lookup (extend) and, for the keyword spelling, a miss (empty
     // throwaway parent). GROUP has NO context form — a `{` after a group
     // archetype opens nothing.
-    if matches!(top, Some(Ctx::Archetypes)) {
+    if matches!(p.top(), Some(Ctx::Archetypes)) {
         for kind in [
             tok::GROUP,
             tok::CUSTOM_ELEMENT,
@@ -78,11 +77,11 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // that HAVE one (plus relationship archetypes); `tag`/`tags` hit the
     // archetype LIST (the element `tags` arms in `stmt_props` exclude
     // archetype contexts, mirroring the reference class guards).
-    if let Some(idx) = top.as_ref().and_then(archetype_idx) {
+    if let Some(idx) = p.top().and_then(archetype_idx) {
         if eqi(&first, tok::METADATA)
             && matches!(
-                top,
-                Some(Ctx::ElementArchetype { ref kind, .. }) if kind == tok::CUSTOM_ELEMENT
+                p.top(),
+                Some(Ctx::ElementArchetype { kind, .. }) if kind == tok::CUSTOM_ELEMENT
             )
         {
             return (|| {
@@ -100,8 +99,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             })()
             .into();
         }
-        let technology_kind = match top {
-            Some(Ctx::ElementArchetype { ref kind, .. }) => matches!(
+        let technology_kind = match p.top() {
+            Some(Ctx::ElementArchetype { kind, .. }) => matches!(
                 kind.as_str(),
                 tok::CONTAINER | tok::COMPONENT | tok::DEPLOYMENT_NODE | tok::INFRASTRUCTURE_NODE
             ),
@@ -161,7 +160,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // ------------------------------------------------------------------
 
     // 847: `views { … }` — once only.
-    if eqi(&first, tok::VIEWS) && matches!(top, Some(Ctx::Workspace)) {
+    if eqi(&first, tok::VIEWS) && matches!(p.top(), Some(Ctx::Workspace)) {
         return (|| {
             if p.parsed_tokens.iter().any(|t| t == tok::VIEWS) {
                 return Err(DslError::stmt(
@@ -175,11 +174,11 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    if eqi(&first, tok::STYLES) && matches!(top, Some(Ctx::Views)) {
+    if eqi(&first, tok::STYLES) && matches!(p.top(), Some(Ctx::Views)) {
         p.start_context(Ctx::Styles { color_scheme: None });
         return Sec::Handled;
     }
-    if let Some(Ctx::Styles { .. }) = top {
+    if let Some(Ctx::Styles { .. }) = p.top() {
         if eqi(&first, tok::LIGHT) {
             p.start_context(Ctx::Styles {
                 color_scheme: Some(ColorScheme::Light),
@@ -201,8 +200,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // 862: `element <tag> {` — get-or-add per (tag, scheme); the context push
     // is UNCONDITIONAL (no `{` required).
     if eqi(&first, tok::ELEMENT_STYLE)
-        && let Some(Ctx::Styles { color_scheme }) = top
+        && let Some(Ctx::Styles { color_scheme }) = p.top()
     {
+        let color_scheme = *color_scheme;
         return (|| {
             let t = raw.without_context_start_token();
             let tag = style_tag(&t, "element")?;
@@ -213,7 +213,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    if let Some(Ctx::ElementStyle { idx }) = top {
+    if let Some(Ctx::ElementStyle { idx }) = p.top() {
+        let idx = *idx;
         // background/colour/stroke go through the Java setters' colour
         // normalization (`Color`): `#rrggbb` lowercased, HTML names mapped to
         // hex, anything else a statement error (T4 oracle-verified 2026-11-17
@@ -403,8 +404,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // ------------------------------------------------------------------
 
     if eqi(&first, tok::RELATIONSHIP_STYLE)
-        && let Some(Ctx::Styles { color_scheme }) = top
+        && let Some(Ctx::Styles { color_scheme }) = p.top()
     {
+        let color_scheme = *color_scheme;
         return (|| {
             let t = raw.without_context_start_token();
             let tag = style_tag(&t, "relationship")?;
@@ -415,7 +417,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    if let Some(Ctx::RelationshipStyle { idx }) = top {
+    if let Some(Ctx::RelationshipStyle { idx }) = p.top() {
+        let idx = *idx;
         if eqi(&first, tok::RELATIONSHIP_STYLE_THICKNESS) {
             return (|| {
                 let value = one_token(p, raw, "thickness <number>")?;

@@ -25,17 +25,18 @@ use super::{Parser, Sec, Stmt, eqi, java_split_str, tok};
 pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
     let raw = &stmt.tokens;
-    let top = p.top().cloned();
-
     // Guards — "top of stack" checks (`inContext`); `!isGroup` is the
     // reference `isGroup(getContext())`: the TOP groupable context carrying
-    // a group payload.
-    let no_group = top.as_ref().is_some_and(|c| c.group_payload().is_none());
-    let is_item_ng = top.as_ref().is_some_and(super::ctx::Ctx::is_model_item) && no_group;
-    let is_element_ng = top.as_ref().is_some_and(Ctx::is_element) && no_group;
-    let is_items = top.as_ref().is_some_and(Ctx::is_model_items);
-    let is_elements = matches!(top, Some(Ctx::Elements { .. }));
-    let is_workspace_ctx = matches!(top, Some(Ctx::Workspace));
+    // a group payload. Fresh `p.top()` reads (2R R-dsl-06): the reference
+    // re-reads `getContext()` per `else if`, and every arm that mutates the
+    // stack also returns, so each guard observes the same context the old
+    // whole-`Ctx` prelude clone snapshotted.
+    let no_group = p.top().is_some_and(|c| c.group_payload().is_none());
+    let is_item_ng = p.top().is_some_and(super::ctx::Ctx::is_model_item) && no_group;
+    let is_element_ng = p.top().is_some_and(Ctx::is_element) && no_group;
+    let is_items = p.top().is_some_and(Ctx::is_model_items);
+    let is_elements = matches!(p.top(), Some(Ctx::Elements { .. }));
+    let is_workspace_ctx = matches!(p.top(), Some(Ctx::Workspace));
 
     // 612/615: `tags <tags> [tags]` (`tag` is an alias) — a single model
     // item, or every item of a fan-out context.
@@ -82,7 +83,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // 624–639: `technology <technology>` — six context arms in chain order
     // (container and component only when their context carries NO group).
     if eqi(&first, tok::TECHNOLOGY) {
-        let single = match &top {
+        let single = match p.top() {
             Some(Ctx::Container { group, .. }) if group.is_none() => true,
             // The reference's `!hasGroup()` guard is vacuous for components
             // — no DSL path ever pushes a `ComponentDslContext` carrying a
@@ -92,12 +93,13 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             ) => true,
             _ => false,
         };
-        if single || is_elements || matches!(top, Some(Ctx::Relationships { .. })) {
+        if single || is_elements || matches!(p.top(), Some(Ctx::Relationships { .. })) {
             return (|| {
                 one_token(raw, "technology <technology>")?;
                 let technology = raw.get(1);
-                match p.top().cloned() {
+                match p.top() {
                     Some(Ctx::Elements { items }) => {
+                        let items = items.clone();
                         // `ElementsParser.parseTechnology` — only the four
                         // kinds with a technology field are set; the others
                         // are silently skipped.
@@ -118,6 +120,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                         }
                     }
                     Some(Ctx::Relationships { items }) => {
+                        let items = items.clone();
                         // `RelationshipsParser.parseTechnology` — only
                         // relationships between two instances are set.
                         let is_instance = |kind: Option<ElementKind>| {
@@ -171,7 +174,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // 642: `instances <number|range>` on a deployment node (the reference
     // stores the RAW string — `DeploymentNode.setInstances` does not
     // validate).
-    if eqi(&first, tok::INSTANCES) && matches!(top, Some(Ctx::DeploymentNode { .. })) {
+    if eqi(&first, tok::INSTANCES) && matches!(p.top(), Some(Ctx::DeploymentNode { .. })) {
         return (|| {
             let id = item_id(p)?;
             one_token(raw, "instances <number|range>")?;
@@ -203,7 +206,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // (`{` is neither required nor optional — extra tokens are ignored, a
     // missing `{` still opens the context).
     if eqi(&first, tok::PROPERTIES) {
-        if let Some(holder) = top.as_ref().and_then(properties_holder) {
+        if let Some(holder) = p.top().and_then(properties_holder) {
             p.start_context(Ctx::Properties {
                 holders: vec![holder],
             });
@@ -213,7 +216,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 
     // 671: inside a properties block ANY statement is a `<name> <value>`
     // pair (`PropertyParser` over the RAW tokens).
-    if let Some(Ctx::Properties { holders }) = top {
+    if let Some(Ctx::Properties { holders }) = p.top() {
+        let holders = holders.clone();
         return (|| {
             if raw.has_more_than(1) {
                 return Err(DslError::stmt("Too many tokens, expected: <name> <value>"));
@@ -259,7 +263,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // to the inline form below (`perspective X Y` defines a perspective
     // CALLED "perspective" — the reference quirk).
     if eqi(&first, tok::PERSPECTIVE)
-        && matches!(top, Some(Ctx::Perspectives { .. }))
+        && matches!(p.top(), Some(Ctx::Perspectives { .. }))
         && Parser::should_start_context(raw)
         && raw.size() == 3
     {
@@ -279,7 +283,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 
     // 683: inside a perspectives block, `<name> <description> [value]`
     // defines a perspective inline (`PerspectiveParser.parse(context, …)`).
-    if let Some(Ctx::Perspectives { holders }) = p.top().cloned() {
+    if let Some(Ctx::Perspectives { holders }) = p.top() {
+        let holders = holders.clone();
         return (|| {
             if raw.has_more_than(2) {
                 return Err(DslError::stmt(
@@ -316,7 +321,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 
     // 686–692: `value`/`description`/`url` statements inside a perspective
     // block (plain setters — empty strings land as-is).
-    if matches!(top, Some(Ctx::Perspective { .. })) {
+    if matches!(p.top(), Some(Ctx::Perspective { .. })) {
         let field = if eqi(&first, tok::PERSPECTIVE_VALUE) {
             Some(PerspectiveField::Value)
         } else if eqi(&first, tok::PERSPECTIVE_DESCRIPTION) {
@@ -352,7 +357,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // .parseProperty`, RAW tokens: a trailing `{` is "Too many tokens").
     // An existing group makes this a NESTED group: the separator property
     // joins `existing + separator + name`.
-    if eqi(&first, tok::GROUP) && matches!(top, Some(Ctx::Component { .. })) {
+    if eqi(&first, tok::GROUP) && matches!(p.top(), Some(Ctx::Component { .. })) {
         return (|| {
             if raw.includes(2) {
                 return Err(DslError::stmt("Too many tokens, expected: group <name>"));

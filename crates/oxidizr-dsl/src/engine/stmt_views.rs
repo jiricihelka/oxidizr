@@ -1566,10 +1566,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let raw = &stmt.tokens;
     let t = raw.without_context_start_token();
     let open = Parser::should_start_context(raw);
-    let top = p.top().cloned();
-    let top = top.as_ref();
-    let in_views = matches!(top, Some(Ctx::Views));
-    let views_or_styles = matches!(top, Some(Ctx::Views | Ctx::Styles { .. }));
+    let in_views = matches!(p.top(), Some(Ctx::Views));
+    let views_or_styles = matches!(p.top(), Some(Ctx::Views | Ctx::Styles { .. }));
 
     // -- view definitions (startContext is UNCONDITIONAL except filtered) --
     macro_rules! view_def {
@@ -1641,11 +1639,11 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // -- `{` opening a parallel sequence inside a dynamic view -----------
     if super::eqi(&first, tok::CONTEXT_START)
         && matches!(
-            top,
+            p.top(),
             Some(Ctx::DynamicView { .. } | Ctx::DynamicParallel { .. })
         )
     {
-        let view = top.and_then(Ctx::view).unwrap_or(ViewRef::Dynamic(0));
+        let view = p.top().and_then(Ctx::view).unwrap_or(ViewRef::Dynamic(0));
         p.seq_start_parallel(view);
         p.start_context(Ctx::DynamicParallel {
             view,
@@ -1656,40 +1654,45 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 
     // -- custom view content ---------------------------------------------
     if super::eqi(&first, tok::VIEW_INCLUDE) {
-        if let Some(Ctx::CustomView { view }) = top {
-            return Sec::from(custom_include(p, *view, raw));
+        if let Some(Ctx::CustomView { view }) = p.top() {
+            let view = *view;
+            return Sec::from(custom_include(p, view, raw));
         }
-        if let Some(Ctx::DeploymentView { view }) = top {
-            return Sec::from(deployment_include(p, *view, raw));
+        if let Some(Ctx::DeploymentView { view }) = p.top() {
+            let view = *view;
+            return Sec::from(deployment_include(p, view, raw));
         }
-        if top.is_some_and(super::ctx::Ctx::is_static_view) {
-            let view = top.and_then(Ctx::view).expect("static view");
+        if p.top().is_some_and(super::ctx::Ctx::is_static_view) {
+            let view = p.top().and_then(Ctx::view).expect("static view");
             return Sec::from(static_include(p, view, raw));
         }
     }
     if super::eqi(&first, tok::VIEW_EXCLUDE) {
-        if let Some(Ctx::CustomView { view }) = top {
-            return Sec::from(custom_exclude(p, *view, raw));
+        if let Some(Ctx::CustomView { view }) = p.top() {
+            let view = *view;
+            return Sec::from(custom_exclude(p, view, raw));
         }
-        if let Some(Ctx::DeploymentView { view }) = top {
-            return Sec::from(deployment_exclude(p, *view, raw));
+        if let Some(Ctx::DeploymentView { view }) = p.top() {
+            let view = *view;
+            return Sec::from(deployment_exclude(p, view, raw));
         }
-        if top.is_some_and(super::ctx::Ctx::is_static_view) {
-            let view = top.and_then(Ctx::view).expect("static view");
+        if p.top().is_some_and(super::ctx::Ctx::is_static_view) {
+            let view = p.top().and_then(Ctx::view).expect("static view");
             return Sec::from(static_exclude(p, view, raw));
         }
     }
     if super::eqi(&first, tok::VIEW_ANIMATION_STEP) {
-        if let Some(Ctx::CustomView { view }) = top {
+        if let Some(Ctx::CustomView { view }) = p.top() {
+            let view = *view;
             if !raw.includes(1) {
                 return Sec::Err(expected(
                     "animationStep <identifier|element expression> [identifier|element expression...]",
                 ));
             }
-            return Sec::from(custom_animation_step(p, *view, raw, 1));
+            return Sec::from(custom_animation_step(p, view, raw, 1));
         }
-        if top.is_some_and(super::ctx::Ctx::is_static_view) {
-            let view = top.and_then(Ctx::view).expect("static view");
+        if p.top().is_some_and(super::ctx::Ctx::is_static_view) {
+            let view = p.top().and_then(Ctx::view).expect("static view");
             if !raw.includes(1) {
                 return Sec::Err(expected(
                     "animationStep <identifier|element expression> [identifier|element expression...]",
@@ -1697,33 +1700,36 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             }
             return Sec::from(static_animation_step(p, view, raw, 1));
         }
-        if let Some(Ctx::DeploymentView { view }) = top {
+        if let Some(Ctx::DeploymentView { view }) = p.top() {
+            let view = *view;
             if !raw.includes(1) {
                 return Sec::Err(expected(
                     "animationStep <identifier|element expression> [identifier|element expression...]",
                 ));
             }
-            return Sec::from(deployment_animation_step(p, *view, raw, 1));
+            return Sec::from(deployment_animation_step(p, view, raw, 1));
         }
     }
     if super::eqi(&first, tok::VIEW_ANIMATION) {
-        if let Some(Ctx::CustomView { view }) = top {
-            p.start_context(Ctx::CustomViewAnimation { view: *view });
+        if let Some(Ctx::CustomView { view }) = p.top() {
+            let view = *view;
+            p.start_context(Ctx::CustomViewAnimation { view });
             return Sec::Handled;
         }
-        if top.is_some_and(super::ctx::Ctx::is_static_view) {
-            let view = top.and_then(Ctx::view).expect("static view");
+        if p.top().is_some_and(super::ctx::Ctx::is_static_view) {
+            let view = p.top().and_then(Ctx::view).expect("static view");
             p.start_context(Ctx::StaticViewAnimation { view });
             return Sec::Handled;
         }
-        if let Some(Ctx::DeploymentView { view }) = top {
-            p.start_context(Ctx::DeploymentViewAnimation { view: *view });
+        if let Some(Ctx::DeploymentView { view }) = p.top() {
+            let view = *view;
+            p.start_context(Ctx::DeploymentViewAnimation { view });
             return Sec::Handled;
         }
     }
     // animation-context catch-alls (match ANY token; the chain places each
     // right after its view family's arms, before the next family).
-    if let Some(Ctx::CustomViewAnimation { view }) = top {
+    if let Some(Ctx::CustomViewAnimation { view }) = p.top() {
         let view = *view;
         if !raw.includes(0) {
             return Sec::Err(expected(
@@ -1732,7 +1738,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         }
         return Sec::from(custom_animation_step(p, view, raw, 0));
     }
-    if let Some(Ctx::StaticViewAnimation { view }) = top {
+    if let Some(Ctx::StaticViewAnimation { view }) = p.top() {
         let view = *view;
         if !raw.includes(0) {
             return Sec::Err(expected(
@@ -1741,7 +1747,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         }
         return Sec::from(static_animation_step(p, view, raw, 0));
     }
-    if let Some(Ctx::DeploymentViewAnimation { view }) = top {
+    if let Some(Ctx::DeploymentViewAnimation { view }) = p.top() {
         let view = *view;
         if !raw.includes(0) {
             return Sec::Err(expected(
@@ -1752,41 +1758,41 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     }
 
     // -- autoLayout / default / title / description ----------------------
-    if super::eqi(&first, tok::VIEW_AUTOLAYOUT) && top.is_some_and(Ctx::is_view) {
+    if super::eqi(&first, tok::VIEW_AUTOLAYOUT) && p.top().is_some_and(Ctx::is_view) {
         return Sec::from(auto_layout(p, raw));
     }
-    if super::eqi(&first, tok::VIEW_DEFAULT) && top.is_some_and(Ctx::is_view) {
-        if let Some(view) = top.and_then(Ctx::view) {
+    if super::eqi(&first, tok::VIEW_DEFAULT) && p.top().is_some_and(Ctx::is_view) {
+        if let Some(view) = p.top().and_then(Ctx::view) {
             let key = p.builder.view_key(view);
             p.builder.views_mut().configuration.default_view = Some(key);
         }
         return Sec::Handled;
     }
-    if super::eqi(&first, tok::VIEW_TITLE) && top.is_some_and(Ctx::is_view) {
+    if super::eqi(&first, tok::VIEW_TITLE) && p.top().is_some_and(Ctx::is_view) {
         return Sec::from(view_text(p, raw, true));
     }
-    if super::eqi(&first, tok::VIEW_DESCRIPTION) && top.is_some_and(Ctx::is_view) {
+    if super::eqi(&first, tok::VIEW_DESCRIPTION) && p.top().is_some_and(Ctx::is_view) {
         return Sec::from(view_text(p, raw, false));
     }
 
     // -- image view content ----------------------------------------------
-    if super::eqi(&first, tok::PLANTUML) && matches!(top, Some(Ctx::ImageView { .. })) {
+    if super::eqi(&first, tok::PLANTUML) && matches!(p.top(), Some(Ctx::ImageView { .. })) {
         return Sec::from(plantuml_or_mermaid(p, raw, "plantuml"));
     }
-    if super::eqi(&first, tok::MERMAID) && matches!(top, Some(Ctx::ImageView { .. })) {
+    if super::eqi(&first, tok::MERMAID) && matches!(p.top(), Some(Ctx::ImageView { .. })) {
         return Sec::from(plantuml_or_mermaid(p, raw, "mermaid"));
     }
-    if super::eqi(&first, tok::KROKI) && matches!(top, Some(Ctx::ImageView { .. })) {
+    if super::eqi(&first, tok::KROKI) && matches!(p.top(), Some(Ctx::ImageView { .. })) {
         return Sec::from(kroki(p, raw));
     }
     if super::eqi(&first, tok::IMAGE)
-        && let Some(Ctx::ImageView { view, .. }) = top
+        && let Some(Ctx::ImageView { view, .. }) = p.top()
     {
         let view = *view;
         return Sec::from(image_content(p, view, raw));
     }
     if super::eqi(&first, tok::LIGHT)
-        && let Some(Ctx::ImageView { view, .. }) = top
+        && let Some(Ctx::ImageView { view, .. }) = p.top()
     {
         let view = *view;
         if open {
@@ -1796,7 +1802,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         return Sec::No;
     }
     if super::eqi(&first, tok::DARK)
-        && let Some(Ctx::ImageView { view, .. }) = top
+        && let Some(Ctx::ImageView { view, .. }) = p.top()
     {
         let view = *view;
         if open {
@@ -1807,12 +1813,12 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     }
 
     // -- dynamic relationship statements ----------------------------------
-    if let Some(Ctx::DynamicView { view } | Ctx::DynamicParallel { view, .. }) = top {
+    if let Some(Ctx::DynamicView { view } | Ctx::DynamicParallel { view, .. }) = p.top() {
         let view = *view;
         return Sec::from(dynamic_step(p, raw, view, open));
     }
     if super::eqi(&first, tok::URL)
-        && let Some(Ctx::DynamicRel { view, rel }) = top
+        && let Some(Ctx::DynamicRel { view, rel }) = p.top()
     {
         const G: &str = "url <url>";
         let view = *view;
@@ -1843,7 +1849,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         p.start_context(Ctx::Terminology);
         return Sec::Handled;
     }
-    if matches!(top, Some(Ctx::Terminology)) {
+    if matches!(p.top(), Some(Ctx::Terminology)) {
         if super::eqi(&first, tok::PERSON) {
             return Sec::from(term(p, raw, "person", |t, v| t.person = Some(v)));
         }
