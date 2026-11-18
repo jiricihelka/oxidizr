@@ -51,7 +51,30 @@ pub fn theme_from_slice(bytes: &[u8]) -> Result<Theme, JsonError> {
 /// Serialize the `Theme` bean exactly as `ThemeUtils.toJson` writes it.
 #[must_use]
 pub fn theme_write(theme: &Theme) -> Vec<u8> {
-    to_bytes(&theme_json(theme))
+    to_bytes(&theme_json(&ThemeView::of(theme)))
+}
+
+/// Borrowed `Theme` for serialization (2R R-mis-08): `theme_to_vec` feeds
+/// the live workspace fields directly; `theme_write` borrows a bean.
+struct ThemeView<'a> {
+    name: Option<&'a str>,
+    description: Option<&'a str>,
+    elements: &'a [ElementStyle],
+    relationships: &'a [RelationshipStyle],
+    license: Option<&'a str>,
+}
+
+impl ThemeView<'_> {
+    /// Borrow a loaded `Theme` bean (the `theme_write` path).
+    fn of(theme: &Theme) -> ThemeView<'_> {
+        ThemeView {
+            name: theme.name.as_deref(),
+            description: theme.description.as_deref(),
+            elements: &theme.elements,
+            relationships: &theme.relationships,
+            license: theme.license.as_deref(),
+        }
+    }
 }
 
 /// The `export --format theme` payload: `ThemeUtils.toJson(workspace)` —
@@ -60,23 +83,26 @@ pub fn theme_write(theme: &Theme) -> Vec<u8> {
 /// order for JSON-loaded ones — §5), `license` never set.
 #[must_use]
 pub fn theme_to_vec(workspace: &Workspace) -> Vec<u8> {
+    // 2R R-mis-08: the LIVE workspace fields serialize through a borrowed
+    // view — the old shape deep-cloned name/description/both style vectors
+    // into a throwaway `Theme` for one serialize pass.
     let styles = &workspace.views.configuration.styles;
-    theme_write(&Theme {
-        name: workspace.name.clone(),
-        description: workspace.description.clone(),
-        elements: styles.element_styles.clone(),
-        relationships: styles.relationship_styles.clone(),
+    to_bytes(&theme_json(&ThemeView {
+        name: workspace.name.as_deref(),
+        description: workspace.description.as_deref(),
+        elements: &styles.element_styles,
+        relationships: &styles.relationship_styles,
         license: None,
-    })
+    }))
 }
 
-fn theme_json(t: &Theme) -> Json {
+fn theme_json(t: &ThemeView<'_>) -> Json {
     // `Theme` declaration order (name, description, elements, relationships,
     // license); NON_EMPTY hides null/"" and empty arrays (a theme with no
     // styles serializes as `{ }` — witness out1-era probe).
     let mut entries = vec![
-        ("name", Json::opt_text(t.name.as_deref())),
-        ("description", Json::opt_text(t.description.as_deref())),
+        ("name", Json::opt_text(t.name)),
+        ("description", Json::opt_text(t.description)),
     ];
     if !t.elements.is_empty() {
         entries.push((
@@ -94,7 +120,7 @@ fn theme_json(t: &Theme) -> Json {
             )),
         ));
     }
-    entries.push(("license", Json::opt_text(t.license.as_deref())));
+    entries.push(("license", Json::opt_text(t.license)));
     Json::obj(entries)
 }
 

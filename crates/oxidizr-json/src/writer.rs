@@ -100,7 +100,28 @@ fn view_cmp(a: View<'_>, b: View<'_>) -> Ordering {
 
 /// Render a `TreeSet`-serialized list: sorted copy, `None` when empty
 /// (`NON_EMPTY`).
-fn set_list<T, F, R>(items: &[T], mut cmp: F, mut render: R) -> Result<Option<Json>, JsonError>
+///
+/// 2R R-mis-09: the infallible form — the old single `Result` shape forced
+/// every caller to answer an error that cannot happen (13 sites muted it
+/// with `.unwrap_or(None)`, and the `software_system`/`container` legs'
+/// `Result` proved phantom too — dropping those wrappers cascaded
+/// `model()` infallible); the legs that resolve model references (the
+/// view bodies) and dates (`decision`) live in [`try_set_list`].
+fn set_list<T, F, R>(items: &[T], mut cmp: F, mut render: R) -> Option<Json>
+where
+    F: FnMut(&T, &T) -> Ordering,
+    R: FnMut(&T) -> Json,
+{
+    if items.is_empty() {
+        return None;
+    }
+    let mut sorted: Vec<&T> = items.iter().collect();
+    sorted.sort_by(|a, b| cmp(*a, *b));
+    Some(Json::Arr(sorted.iter().map(|item| render(item)).collect()))
+}
+
+/// [`set_list`] for the genuinely fallible renderers (2R R-mis-09 split).
+fn try_set_list<T, F, R>(items: &[T], mut cmp: F, mut render: R) -> Result<Option<Json>, JsonError>
 where
     F: FnMut(&T, &T) -> Ordering,
     R: FnMut(&T) -> Result<Json, JsonError>,
@@ -122,18 +143,16 @@ where
 /// (no setter — the `TreeSet` is replaced, document order survives), while the
 /// DSL path adds into the `TreeSet` and the engine inserts sorted (§5, P2
 /// oracle probes 2026-11-17).
-fn list<T, R>(items: &[T], mut render: R) -> Result<Option<Json>, JsonError>
+///
+/// Infallible like [`set_list`] (2R R-mis-09).
+fn list<T, R>(items: &[T], mut render: R) -> Option<Json>
 where
-    R: FnMut(&T) -> Result<Json, JsonError>,
+    R: FnMut(&T) -> Json,
 {
     if items.is_empty() {
-        return Ok(None);
+        return None;
     }
-    items
-        .iter()
-        .map(&mut render)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|arr| Some(Json::Arr(arr)))
+    Some(Json::Arr(items.iter().map(&mut render).collect()))
 }
 
 /// A `TreeSet<String>` array (UTF-16 order), `None` when empty.
@@ -402,7 +421,7 @@ impl Ctx<'_> {
                 "lastModifiedUser",
                 Json::opt_text(ws.last_modified_user.as_deref()),
             ),
-            ("model", Some(self.model(&ws.model)?)),
+            ("model", Some(self.model(&ws.model))),
             ("name", Json::opt_text(ws.name.as_deref())),
             ("properties", Json::props(&ws.properties)),
             ("thumbnail", Json::opt_text(ws.thumbnail.as_deref())),
@@ -418,13 +437,12 @@ fn workspace_configuration(config: &WorkspaceConfiguration) -> Json {
         &config.users,
         |a, b| java_ord(&a.username, &b.username),
         |u| {
-            Ok(Json::obj(vec![
+            Json::obj(vec![
                 ("role", u.role.map(|r| Json::Str(r.as_str().to_string()))),
                 ("username", Json::text(&u.username)),
-            ]))
+            ])
         },
-    )
-    .unwrap_or(None); // infallible renderer
+    );
     Json::obj(vec![
         (
             "scope",
@@ -442,11 +460,22 @@ fn workspace_configuration(config: &WorkspaceConfiguration) -> Json {
 // Model (§2)
 // ---------------------------------------------------------------------------
 
+/// The shared `DeploymentElementInstance` fields of the two instance beans
+/// (`SoftwareSystemInstance`/`ContainerInstance`), borrowed for
+/// `deployment_instance_tail` (2R R-mis-02).
+struct InstanceTail<'a> {
+    environment: &'a str,
+    groups: &'a [String],
+    checks: &'a [HttpHealthCheck],
+    instance_id: i32,
+    group: Option<&'a str>,
+}
+
 impl Ctx<'_> {
-    fn model(&self, model: &Model) -> Result<Json, JsonError> {
+    fn model(&self, model: &Model) -> Json {
         // Alphabetical: customElements, deploymentNodes, people, properties,
         // softwareSystems (§2).
-        Ok(Json::obj(vec![
+        Json::obj(vec![
             (
                 "customElements",
                 // STORED order, not sorted: the reference writes the raw
@@ -454,23 +483,23 @@ impl Ctx<'_> {
                 // reverse-inserted (B,A witness 2026-11-17) while JSON imports
                 // re-sort ascending in the reader (`setCustomElements` TreeSet
                 // rebuild), which together explain every observed order.
-                list(&model.custom_elements, |e| Ok(self.custom_element(e)))?,
+                list(&model.custom_elements, |e| self.custom_element(e)),
             ),
             (
                 "deploymentNodes",
                 set_list(
                     &model.deployment_nodes,
                     |a, b| id_ord(&a.item.id, &b.item.id),
-                    |n| Ok(self.node(n)),
-                )?,
+                    |n| self.node(n),
+                ),
             ),
             (
                 "people",
                 set_list(
                     &model.people,
                     |a, b| id_ord(&a.item.id, &b.item.id),
-                    |p| Ok(self.person(p)),
-                )?,
+                    |p| self.person(p),
+                ),
             ),
             ("properties", Json::props(&model.properties)),
             (
@@ -479,9 +508,9 @@ impl Ctx<'_> {
                     &model.software_systems,
                     |a, b| id_ord(&a.item.id, &b.item.id),
                     |s| self.software_system(s),
-                )?,
+                ),
             ),
-        ]))
+        ])
     }
 
     /// `ModelItem` + `Element` shared keys (alphabetical, §2). `kind`
@@ -520,7 +549,7 @@ impl Ctx<'_> {
         Json::from_entries(&entries)
     }
 
-    fn software_system(&self, s: &SoftwareSystem) -> Result<Json, JsonError> {
+    fn software_system(&self, s: &SoftwareSystem) -> Json {
         let mut entries = self.item_entries(&s.item, TagKind::SoftwareSystem, &s.relationships);
         insert_sorted(&mut entries, ("group", Json::opt_text(s.group.as_deref())));
         insert_sorted(
@@ -531,17 +560,17 @@ impl Ctx<'_> {
                     &s.containers,
                     |a, b| id_ord(&a.item.id, &b.item.id),
                     |c| self.container(c),
-                )?,
+                ),
             ),
         );
         insert_sorted(
             &mut entries,
             ("documentation", Some(documentation(&s.documentation))),
         );
-        Ok(Json::from_entries(&entries))
+        Json::from_entries(&entries)
     }
 
-    fn container(&self, c: &Container) -> Result<Json, JsonError> {
+    fn container(&self, c: &Container) -> Json {
         let mut entries = self.item_entries(&c.item, TagKind::Container, &c.relationships);
         insert_sorted(&mut entries, ("group", Json::opt_text(c.group.as_deref())));
         insert_sorted(
@@ -551,8 +580,8 @@ impl Ctx<'_> {
                 set_list(
                     &c.components,
                     |a, b| id_ord(&a.item.id, &b.item.id),
-                    |k| Ok(self.component(k)),
-                )?,
+                    |k| self.component(k),
+                ),
             ),
         );
         insert_sorted(
@@ -563,7 +592,7 @@ impl Ctx<'_> {
             &mut entries,
             ("technology", Json::opt_text(c.technology.as_deref())),
         );
-        Ok(Json::from_entries(&entries))
+        Json::from_entries(&entries)
     }
 
     fn component(&self, k: &Component) -> Json {
@@ -590,9 +619,8 @@ impl Ctx<'_> {
                 set_list(
                     &n.children,
                     |a, b| id_ord(&a.item.id, &b.item.id),
-                    |c| Ok(self.node(c)),
-                )
-                .unwrap_or(None),
+                    |c| self.node(c),
+                ),
             ),
         );
         insert_sorted(
@@ -607,9 +635,8 @@ impl Ctx<'_> {
                 set_list(
                     &n.infrastructure_nodes,
                     |a, b| id_ord(&a.item.id, &b.item.id),
-                    |i| Ok(self.infra_node(i)),
-                )
-                .unwrap_or(None),
+                    |i| self.infra_node(i),
+                ),
             ),
         );
         // `instances` is a Java String; NON_EMPTY hides "", default "1".
@@ -621,9 +648,8 @@ impl Ctx<'_> {
                 set_list(
                     &n.software_system_instances,
                     |a, b| id_ord(&a.item.id, &b.item.id),
-                    |i| Ok(self.ssi(i)),
-                )
-                .unwrap_or(None),
+                    |i| self.ssi(i),
+                ),
             ),
         );
         insert_sorted(
@@ -633,9 +659,8 @@ impl Ctx<'_> {
                 set_list(
                     &n.container_instances,
                     |a, b| id_ord(&a.item.id, &b.item.id),
-                    |i| Ok(self.ci(i)),
-                )
-                .unwrap_or(None),
+                    |i| self.ci(i),
+                ),
             ),
         );
         insert_sorted(
@@ -667,14 +692,15 @@ impl Ctx<'_> {
                 Some(Json::Str(i.software_system_id.as_str().to_string())),
             ),
         );
-        Self::deployment_instance_tail(
-            &mut entries,
-            &i.environment,
-            &i.deployment_groups,
-            &i.health_checks,
-            i.instance_id,
-            i.group.as_ref(),
-        );
+        for entry in Self::deployment_instance_tail(&InstanceTail {
+            environment: &i.environment,
+            groups: &i.deployment_groups,
+            checks: &i.health_checks,
+            instance_id: i.instance_id,
+            group: i.group.as_deref(),
+        }) {
+            insert_sorted(&mut entries, entry);
+        }
         Json::from_entries(&entries)
     }
 
@@ -687,14 +713,15 @@ impl Ctx<'_> {
                 Some(Json::Str(i.container_id.as_str().to_string())),
             ),
         );
-        Self::deployment_instance_tail(
-            &mut entries,
-            &i.environment,
-            &i.deployment_groups,
-            &i.health_checks,
-            i.instance_id,
-            i.group.as_ref(),
-        );
+        for entry in Self::deployment_instance_tail(&InstanceTail {
+            environment: &i.environment,
+            groups: &i.deployment_groups,
+            checks: &i.health_checks,
+            instance_id: i.instance_id,
+            group: i.group.as_deref(),
+        }) {
+            insert_sorted(&mut entries, entry);
+        }
         Json::from_entries(&entries)
     }
 
@@ -712,23 +739,18 @@ impl Ctx<'_> {
         ]
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn deployment_instance_tail(
-        entries: &mut Vec<(&'static str, Option<Json>)>,
-        environment: &str,
-        groups: &[String],
-        checks: &[HttpHealthCheck],
-        instance_id: i32,
-        group: Option<&String>,
-    ) {
-        insert_sorted(entries, ("deploymentGroups", sorted_str_set(groups)));
-        insert_sorted(entries, ("environment", Json::text(environment)));
-        insert_sorted(entries, ("group", group.and_then(|g| Json::text(g))));
-        insert_sorted(entries, ("healthChecks", health_checks(checks)));
-        insert_sorted(
-            entries,
-            ("instanceId", Some(Json::Num(i64::from(instance_id)))),
-        );
+    /// The five shared `DeploymentElementInstance` keys. 2R R-mis-02: one
+    /// borrowed [`InstanceTail`] replaces the six-args-plus-out-vec shape
+    /// (with its unrationaled `too_many_arguments` allow) — the entries
+    /// RETURN for the callers' `insert_sorted` fold.
+    fn deployment_instance_tail(tail: &InstanceTail<'_>) -> [(&'static str, Option<Json>); 5] {
+        [
+            ("deploymentGroups", sorted_str_set(tail.groups)),
+            ("environment", Json::text(tail.environment)),
+            ("group", Json::opt_text(tail.group)),
+            ("healthChecks", health_checks(tail.checks)),
+            ("instanceId", Some(Json::Num(i64::from(tail.instance_id)))),
+        ]
     }
 
     /// Nested `relationships[]` (`TreeSet` numeric order, §2/§5).
@@ -782,15 +804,14 @@ fn perspectives(items: &[Perspective]) -> Option<Json> {
         items,
         |a, b| java_ord(&a.name, &b.name),
         |p| {
-            Ok(Json::obj(vec![
+            Json::obj(vec![
                 ("description", Json::opt_text(p.description.as_deref())),
                 ("name", Json::text(&p.name)),
                 ("url", Json::opt_text(p.url.as_deref())),
                 ("value", Json::opt_text(p.value.as_deref())),
-            ]))
+            ])
         },
     )
-    .unwrap_or(None) // infallible renderer
 }
 
 /// `TreeSet` by name then url (`HttpHealthCheck.compareTo`); `headers` keys go
@@ -830,10 +851,9 @@ fn health_checks(items: &[HttpHealthCheck]) -> Option<Json> {
                     ),
                 );
             }
-            Ok(Json::obj(entries))
+            Json::obj(entries)
         },
     )
-    .unwrap_or(None) // infallible renderer
 }
 
 // ---------------------------------------------------------------------------
@@ -846,7 +866,15 @@ fn documentation(doc: &Documentation) -> Json {
     Json::obj(vec![
         (
             "decisions",
-            set_list(&doc.decisions, |_, _| Ordering::Equal, decision).unwrap_or(None),
+            // `decision` is `documentation`'s only fallible renderer
+            // (out-of-range epoch seconds in `date_str`): the old
+            // `.unwrap_or(None)` DROPS the whole `decisions` key where a
+            // `?` would fail the write — pathological input, no golden
+            // coverage, and 2R forbids a behavior change, so the swallow
+            // is kept, honestly spelled (2R R-mis-09).
+            try_set_list(&doc.decisions, |_, _| Ordering::Equal, decision)
+                .ok()
+                .flatten(),
         ),
         (
             "images",
@@ -854,18 +882,17 @@ fn documentation(doc: &Documentation) -> Json {
                 &doc.images,
                 |_, _| Ordering::Equal,
                 |i| {
-                    Ok(Json::obj(vec![
+                    Json::obj(vec![
                         ("content", Json::text(&i.content)),
                         ("name", Json::text(&i.name)),
                         ("type", Json::opt_text(i.content_type.as_deref())),
-                    ]))
+                    ])
                 },
-            )
-            .unwrap_or(None),
+            ),
         ),
         (
             "sections",
-            set_list(&doc.sections, |_, _| Ordering::Equal, |s| Ok(section(s))).unwrap_or(None),
+            set_list(&doc.sections, |_, _| Ordering::Equal, section),
         ),
     ])
 }
@@ -905,10 +932,7 @@ fn decision(d: &Decision) -> Result<Json, JsonError> {
             d.format.map(|f| Json::Str(f.as_str().to_string())),
         ),
         ("id", Json::text(&d.id)),
-        (
-            "links",
-            set_list(&d.links, |_, _| Ordering::Equal, |l| Ok(link(l))).unwrap_or(None),
-        ),
+        ("links", set_list(&d.links, |_, _| Ordering::Equal, link)),
         ("status", Json::text(&d.status)),
         ("title", Json::text(&d.title)),
     ]))
@@ -930,7 +954,7 @@ impl Ctx<'_> {
         Ok(Json::obj(vec![
             (
                 "componentViews",
-                set_list(
+                try_set_list(
                     &views.component_views,
                     |a, b| view_cmp(View::Component(a), View::Component(b)),
                     |v| self.component_view(v),
@@ -942,7 +966,7 @@ impl Ctx<'_> {
             ),
             (
                 "containerViews",
-                set_list(
+                try_set_list(
                     &views.container_views,
                     |a, b| view_cmp(View::Container(a), View::Container(b)),
                     |v| self.container_view(v),
@@ -950,7 +974,7 @@ impl Ctx<'_> {
             ),
             (
                 "customViews",
-                set_list(
+                try_set_list(
                     &views.custom_views,
                     |a, b| view_cmp(View::Custom(a), View::Custom(b)),
                     |v| self.custom_view(v),
@@ -958,7 +982,7 @@ impl Ctx<'_> {
             ),
             (
                 "deploymentViews",
-                set_list(
+                try_set_list(
                     &views.deployment_views,
                     |a, b| view_cmp(View::Deployment(a), View::Deployment(b)),
                     |v| self.deployment_view(v),
@@ -966,7 +990,7 @@ impl Ctx<'_> {
             ),
             (
                 "dynamicViews",
-                set_list(
+                try_set_list(
                     &views.dynamic_views,
                     |a, b| view_cmp(View::Dynamic(a), View::Dynamic(b)),
                     |v| self.dynamic_view(v),
@@ -974,7 +998,7 @@ impl Ctx<'_> {
             ),
             (
                 "filteredViews",
-                set_list(
+                try_set_list(
                     &views.filtered_views,
                     |a, b| view_cmp(View::Filtered(a), View::Filtered(b)),
                     |v| self.filtered_view(v),
@@ -982,7 +1006,7 @@ impl Ctx<'_> {
             ),
             (
                 "imageViews",
-                set_list(
+                try_set_list(
                     &views.image_views,
                     |a, b| view_cmp(View::Image(a), View::Image(b)),
                     |v| self.image_view(v),
@@ -990,7 +1014,7 @@ impl Ctx<'_> {
             ),
             (
                 "systemContextViews",
-                set_list(
+                try_set_list(
                     &views.system_context_views,
                     |a, b| view_cmp(View::Context(a), View::Context(b)),
                     |v| self.context_view(v),
@@ -998,7 +1022,7 @@ impl Ctx<'_> {
             ),
             (
                 "systemLandscapeViews",
-                set_list(
+                try_set_list(
                     &views.system_landscape_views,
                     |a, b| view_cmp(View::Landscape(a), View::Landscape(b)),
                     |v| self.landscape_view(v),
@@ -1341,67 +1365,77 @@ fn element_views(items: &[ElementView]) -> Option<Json> {
         items,
         |a, b| id_ord(&a.id, &b.id),
         |e| {
-            Ok(Json::obj(vec![
+            Json::obj(vec![
                 ("id", Some(Json::Str(e.id.as_str().to_string()))),
                 ("x", Some(Json::Num(i64::from(e.x)))),
                 ("y", Some(Json::Num(i64::from(e.y)))),
-            ]))
+            ])
         },
     )
-    .unwrap_or(None) // infallible renderer
 }
 
 /// `relationships[]`: text `id + "/" + order` order; a null order
 /// concatenates as the literal `"null"` (§5).
 fn relationship_views(items: &[RelationshipView]) -> Option<Json> {
-    relationship_views_with(items, false)
+    let mut sorted = rv_sort_keys(items);
+    sorted.sort_by(|a, b| java_ord(&a.id_order, &b.id_order));
+    relationship_view_array(&sorted)
 }
 
 /// Dynamic views: Jackson serializes `DynamicView.getRelationships()`, which
 /// re-sorts the `TreeSet` list by numeric `order` (`Double.parseDouble`)
 /// when EVERY order is numeric, else by `order` text (2026-11-17 witness:
-/// `parallel1` → `7/1, 9/2, 10/3, 11/3`).
+/// `parallel1` → `7/1, 9/2, 10/3, 11/3`). A missing order joins the string
+/// branch as `""` where the reference NPEs (JSON import of a dynamic view
+/// without orders) - oxidizr never crashes on it.
 fn dynamic_relationship_views(items: &[RelationshipView]) -> Option<Json> {
-    relationship_views_with(items, true)
+    let mut sorted = rv_sort_keys(items);
+    sorted.sort_by(|a, b| java_ord(&a.id_order, &b.id_order));
+    if sorted.iter().all(|k| k.order_num.is_some()) {
+        sorted.sort_by(|a, b| {
+            a.order_num
+                .unwrap_or(0.0)
+                .total_cmp(&b.order_num.unwrap_or(0.0))
+        });
+    } else {
+        sorted.sort_by(|a, b| java_ord(a.order, b.order));
+    }
+    relationship_view_array(&sorted)
 }
 
-fn relationship_views_with(items: &[RelationshipView], dynamic: bool) -> Option<Json> {
-    let mut sorted: Vec<&RelationshipView> = items.iter().collect();
-    sorted.sort_by(|a, b| {
-        java_ord(
-            &format!("{}/{}", a.id, a.order.as_deref().unwrap_or("null")),
-            &format!("{}/{}", b.id, b.order.as_deref().unwrap_or("null")),
-        )
-    });
-    if dynamic {
-        // A missing order joins the string branch as `""` where the reference
-        // NPEs (JSON import of a dynamic view without orders) - oxidizr
-        // never crashes on it.
-        let order_key = |rv: &RelationshipView| rv.order.clone().unwrap_or_default();
-        let numeric = sorted.iter().all(|rv| {
-            rv.order
-                .as_deref()
-                .is_some_and(|o| o.parse::<f64>().is_ok())
-        });
-        if numeric {
-            sorted.sort_by(|a, b| {
-                order_key(a)
-                    .parse::<f64>()
-                    .unwrap_or(0.0)
-                    .total_cmp(&order_key(b).parse::<f64>().unwrap_or(0.0))
-            });
-        } else {
-            sorted.sort_by(|a, b| java_ord(&order_key(a), &order_key(b)));
-        }
-    }
+/// Sort keys precomputed ONCE per item (2R R-mis-03: the old comparator
+/// built two `format!` strings — and re-parsed the `f64` — PER COMPARISON;
+/// `sort_by` is stable, so hoisting the keys preserves the exact order,
+/// witness `7/1, 9/2, 10/3, 11/3`). 2R R-mis-03 also retired the
+/// `dynamic: bool` parameter: the two callers above ARE the two legs.
+struct RvSortKey<'a> {
+    rv: &'a RelationshipView,
+    /// `id + "/" + order` — a `None` order concatenates as `"null"` (§5).
+    id_order: String,
+    /// `order` text (`None` as `""`).
+    order: &'a str,
+    /// `order` as `Double.parseDouble` reads it (`None` = not numeric).
+    order_num: Option<f64>,
+}
+
+fn rv_sort_keys(items: &[RelationshipView]) -> Vec<RvSortKey<'_>> {
+    items
+        .iter()
+        .map(|rv| RvSortKey {
+            rv,
+            id_order: format!("{}/{}", rv.id, rv.order.as_deref().unwrap_or("null")),
+            order: rv.order.as_deref().unwrap_or_default(),
+            order_num: rv.order.as_deref().and_then(|o| o.parse::<f64>().ok()),
+        })
+        .collect()
+}
+
+fn relationship_view_array(sorted: &[RvSortKey<'_>]) -> Option<Json> {
     if sorted.is_empty() {
         return None;
     }
     Some(Json::Arr(
-        sorted
-            .iter()
-            .map(|r| relationship_view(r))
-            .collect::<Vec<_>>(),
+        sorted.iter().map(|k| relationship_view(k.rv)).collect(),
     ))
 }
 
@@ -1445,13 +1479,10 @@ fn relationship_view(r: &RelationshipView) -> Json {
 
 fn styles(styles: &Styles) -> Json {
     Json::obj(vec![
-        (
-            "elements",
-            list(&styles.element_styles, |s| Ok(element_style(s))).unwrap_or(None),
-        ),
+        ("elements", list(&styles.element_styles, element_style)),
         (
             "relationships",
-            list(&styles.relationship_styles, |s| Ok(relationship_style(s))).unwrap_or(None),
+            list(&styles.relationship_styles, relationship_style),
         ),
     ])
 }
