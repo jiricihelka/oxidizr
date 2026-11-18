@@ -571,7 +571,7 @@ fn reconcile_cmd(dsl: &Input, layout: &Input, output: Option<&Path>, opts: &ApiO
             return out;
         }
     };
-    let layout_ws = match oxidizr_json::from_slice(layout_source.text.as_bytes()) {
+    let mut layout_ws = match oxidizr_json::from_slice(layout_source.text.as_bytes()) {
         Ok(ws) => ws,
         Err(e) => {
             out.fail(
@@ -581,7 +581,20 @@ fn reconcile_cmd(dsl: &Input, layout: &Input, output: Option<&Path>, opts: &ApiO
             return out;
         }
     };
-    let (reconciled, report) = reconcile::reconcile(&layout_ws, &result.workspace);
+    // The `AbstractCommand.loadWorkspace` tail (M1-e-B) on BOTH reconcile
+    // sides: the reference creates default views after every load, so a
+    // layout export carrying generated views must not drop them against a
+    // DSL whose views would be generated (P2T full-tier catch, 2026-11-18).
+    let mut updated = result.workspace;
+    if let Err(e) = apply_default_views(&mut updated) {
+        out.fail(e, ExitClass::Diagnostics);
+        return out;
+    }
+    if let Err(e) = apply_default_views(&mut layout_ws) {
+        out.fail(e, ExitClass::Diagnostics);
+        return out;
+    }
+    let (reconciled, report) = reconcile::reconcile(&layout_ws, &updated);
     let bytes = match oxidizr_json::to_vec(&reconciled) {
         Ok(b) => b,
         Err(e) => {
