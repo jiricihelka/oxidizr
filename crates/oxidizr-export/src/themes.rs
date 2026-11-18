@@ -110,24 +110,26 @@ impl ThemeStore {
         env: &dyn Fn(&str) -> Option<String>,
         allow_net: bool,
     ) -> Self {
+        // 2R R-exp-16: the source chain written out in its documented
+        // order (module docs, catalog §6.2) — the old shape looped the two
+        // env-var NAMES and string-compared `var == "OXIDZR_THEMES_DIR"` to
+        // splice the workspace `themes/` dir in after the first leg (the
+        // reference order puts that dir BEFORE its env var, our env var
+        // before both).
+        let env_dir = |var: &str| {
+            env(var)
+                .filter(|value| !value.trim().is_empty())
+                .map(PathBuf::from)
+        };
         let mut candidates: Vec<PathBuf> = Vec::new();
         if let Some(dir) = themes_dir {
             candidates.push(dir.to_path_buf());
         }
-        for var in ["OXIDZR_THEMES_DIR", "STRUCTURIZR_THEMES"] {
-            if let Some(value) = env(var) {
-                if !value.trim().is_empty() {
-                    candidates.push(PathBuf::from(value));
-                }
-            }
-            // The reference order puts the workspace `themes/` dir BEFORE
-            // its env var, and our env var before both.
-            if var == "OXIDZR_THEMES_DIR"
-                && let Some(parent) = workspace_parent
-            {
-                candidates.push(parent.join("themes"));
-            }
+        candidates.extend(env_dir("OXIDZR_THEMES_DIR"));
+        if let Some(parent) = workspace_parent {
+            candidates.push(parent.join("themes"));
         }
+        candidates.extend(env_dir("STRUCTURIZR_THEMES"));
         let mut store = ThemeStore {
             cache_dir: paths::themes_cache_dir(),
             allow_net,
@@ -175,9 +177,14 @@ impl ThemeStore {
     /// [`ThemeError`] on the first leg that fails (the reference throws
     /// `RuntimeException` and the CLI aborts likewise).
     pub fn load_themes(&self, workspace: &mut Workspace) -> Result<(), ThemeError> {
-        let locations: Vec<String> = workspace.views.configuration.themes.clone();
-        for location in locations {
-            if let Some(theme) = self.load_one(&location)? {
+        // 2R R-exp-16: iterate `configuration.themes` directly — the clone
+        // guarded against a borrow that never overlaps: `add_styles_from_theme`
+        // appends to the SIBLING `styles.themes` field (catalog §6.1-3), so
+        // the two field borrows are disjoint. Error timing unchanged: the
+        // first failing location aborts with the earlier themes appended
+        // (the reference throws mid-loop the same way).
+        for location in &workspace.views.configuration.themes {
+            if let Some(theme) = self.load_one(location)? {
                 workspace
                     .views
                     .configuration
@@ -211,6 +218,8 @@ impl ThemeStore {
             })?;
             Ok(Some(parse_theme(location, &text)?))
         } else {
+            // Not a URL, not installed: the reference `loadThemes` SILENTLY
+            // skips the entry (catalog §6.1-3) — no warning, no error.
             Ok(None)
         }
     }
