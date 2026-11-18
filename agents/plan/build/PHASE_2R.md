@@ -172,7 +172,7 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 |---|---|---|---|
 | R-dsl-01 | dispatch preamble re-clones tokens/ctx 7× per line (`engine/mod.rs:69`, 7 × `section` heads) — share borrows (`section(p, &stmt)`); no section mutates `stmt` | SW | 2 |
 | R-dsl-02 | `Tokens::get` allocates 2 Strings per read (`tokens.rs:22`) → `Cow<str>` (skip replace when no `\\`), `eq_at` for compare-sites; `last()` re-entry fix; keep double-pass ORDER (erratum 26) — **DONE PR2-b** (Cow get/last/first + `eq_at` at the two `==` compare-sites; validate_view_key takes Cow, owns on success) | JU | 2 |
-| R-dsl-03 | `if let (true, pat) = (cond, val)` tuple hack (`find.rs:43`) → let-chain | SW | 2 |
+| R-dsl-03 | `if let (true, pat) = (cond, val)` tuple hack (`find.rs:43`) → let-chain — **DONE PR2-c** | SW | 2 |
 | R-dsl-04 | `Option<&String>` params ×4 (`stmt_views.rs:552,600,710,882`) → `Option<&str>` — **DONE PR2-b** (folded into the Cow conversion: `Some(&token)` sites) | SW | 2 |
 | R-dsl-05 | `java_trim(…).to_string()` per line (`stmt_line.rs:30`) — borrow is enough | SW | 2 |
 | R-dsl-06 | `p.top().cloned()` heavyweight Ctx clones (`stmt_props.rs:99,282`, `stmt_deployment.rs:100`, `stmt_model.rs:361`, `stmt_style.rs:26`, `stmt_views.rs:1562`) — extract only the payload Copy fields, re-borrow | JU | 2 |
@@ -180,9 +180,9 @@ Waves: 1 core · 2 dsl · 3 export · 4 json/api/cli · 5 tooling · 6 ratchet/c
 | R-dsl-08 | stringly archetype `kind: String` ladder (`ctx.rs:60`, `stmt_style.rs:85-108`, `mod.rs:1790-1798`) — enum would surface the `_ =>` InfrastructureNode fallback but rewrites the hot parse path; LSP (P4) is the natural owner | DF | — |
 | R-dsl-09 | engine `pub use` sprawl (`engine/mod.rs:50-55`, `KindFilter`) — externals consume only parse surface → `pub(crate)` demotions | JU | 2 |
 | R-dsl-10 | Java getter names (`Parser::get_*`, whole `Tokens` API) — rustdoc cites `Tokens.java`/`context.getElement`; ratify keep | KC | — |
-| R-dsl-11 | `push_str(&line.to_string())` (`error.rs:109-110`) → `write!` (text identical, golden-guarded) | SW | 2 |
-| R-dsl-12 | Java `count` counter lockstep (`rel.rs:457-475`) → `removed.is_empty()`; `stmt_views.rs:1290` clone shrinks with R-dsl-02 | SW | 2 |
-| R-dsl-13 | `.to_lowercase().ends_with(".json")` computed twice (`mod.rs:1452,1499`) — hoist once; do NOT `Path::extension`-ify (reference shape) | SW | 2 |
+| R-dsl-11 | `push_str(&line.to_string())` (`error.rs:109-110`) → `write!` (text identical, golden-guarded) — **DONE PR2-c** | SW | 2 |
+| R-dsl-12 | Java `count` counter lockstep (`rel.rs:457-475`) → `removed.is_empty()`; `stmt_views.rs:1290` clone shrinks with R-dsl-02 — **DONE PR2-c** (`:1290` clone already gone: PR2-a borrow slice + PR2-b Cow) | SW | 2 |
+| R-dsl-13 | `.to_lowercase().ends_with(".json")` computed twice (`mod.rs:1452,1499`) — hoist once; do NOT `Path::extension`-ify (reference shape) — **DONE PR2-c** (`is_json`) | SW | 2 |
 | R-dsl-14 | bool-flag params (`apply_text title`, `dynamic_step open`, `relationship_endpoint source`…) — all in byte-contract chains; ratify skip | KC | — |
 | R-dsl-15 | 31 `#[allow]` sites: all narrow + rationaled — model for other crates | KC | — |
 

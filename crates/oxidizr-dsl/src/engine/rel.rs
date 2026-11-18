@@ -459,7 +459,6 @@ impl Parser<'_> {
         let description = tokens.includes(3).then(|| tokens.get(3));
         let mut removed: Vec<Id> = Vec::new();
         let mut first_linked: Option<Id> = None;
-        let mut count = 0usize;
         for s in &sources {
             for d in &destinations {
                 loop {
@@ -476,11 +475,10 @@ impl Parser<'_> {
                     }
                     self.builder.remove_relationship(&rel);
                     removed.push(rel.clone());
-                    count += 1;
                 }
             }
         }
-        if count == 0 {
+        if removed.is_empty() {
             return Err(match &description {
                 Some(desc) => DslError::stmt(format!(
                     "A relationship between \"{source_id}\" and \"{destination_id}\" with description \"{desc}\" does not exist"

@@ -1456,7 +1456,9 @@ impl<'a> Parser<'a> {
             )));
         }
 
-        let loaded = if source.to_lowercase().ends_with(".json") {
+        // 2R R-dsl-13: the `.json` test was computed twice in this path.
+        let is_json = source.to_lowercase().ends_with(".json");
+        let loaded = if is_json {
             // `WorkspaceUtils.loadWorkspaceFromJson(file)` — via the
             // injected loader (topology: no `json` dep in this crate).
             let Some(loader) = self.opts.json_loader else {
@@ -1503,7 +1505,7 @@ impl<'a> Parser<'a> {
         // JSON bases: `WorkspaceParser.registerIdentifiers` — elements AND
         // relationships carrying `structurizr.dsl.identifier` enter the
         // (context-shared) register so `!element <identifier>` finds them.
-        if source.to_lowercase().ends_with(".json") {
+        if is_json {
             let (elements, relationships) = json_dsl_identifiers(self.builder.workspace());
             for (identifier, item) in elements {
                 self.ids

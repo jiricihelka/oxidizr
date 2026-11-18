@@ -40,8 +40,8 @@ impl Parser<'_> {
         // StaticStructureElement` — instances and custom elements are
         // excluded (their contexts/element classes are not groupable /
         // static-structure resp.).
-        if let (true, RegItem::Element(id)) =
-            (self.top().is_some_and(super::ctx::Ctx::is_groupable), &item)
+        if self.top().is_some_and(super::ctx::Ctx::is_groupable)
+            && let RegItem::Element(id) = &item
             && matches!(
                 self.builder.element_kind(id),
                 Some(

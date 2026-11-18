@@ -8,7 +8,7 @@
 //! the reference embeds them IN the message, we keep them separate so the
 //! text stays comparable).
 
-use std::fmt;
+use std::fmt::{self, Write as _};
 
 use oxidizr_core::CoreError;
 use oxidizr_diag::Code;
@@ -106,8 +106,7 @@ impl DslError {
         let msg = self.message.strip_suffix('.').unwrap_or(&self.message);
         out.push_str(msg);
         if let Some(line) = self.line {
-            out.push_str(" at line ");
-            out.push_str(&line.to_string());
+            let _ = write!(out, " at line {line}");
             if let Some(file) = &self.file {
                 out.push_str(" of ");
                 out.push_str(file);
