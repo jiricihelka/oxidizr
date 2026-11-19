@@ -12,14 +12,17 @@
 //! Modules: [`diagnostic`] — the pure [`Issue`] data type (T0-b);
 //! [`suggest`] — the `did you mean …?` decoration (T0-c); [`reconcile`] —
 //! the F1 geometry re-attach (T0-d); [`pipeline`] — the command bodies
-//! behind [`execute`] (T0-d).
+//! behind [`execute`] (T0-d); [`open`] — the viewer-facing load entry
+//! (P3-M1-1, not a byte-contract path).
 
 pub mod diagnostic;
+pub mod open;
 pub mod pipeline;
 pub mod reconcile;
 pub mod suggest;
 
 pub use diagnostic::{Issue, Snippet};
+pub use open::{Opened, open};
 pub use pipeline::{
     ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request, StdinReader, execute,
 };

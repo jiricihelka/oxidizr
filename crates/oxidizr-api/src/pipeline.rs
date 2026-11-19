@@ -278,15 +278,15 @@ fn json_loader(path: &str) -> Result<Workspace, String> {
 
 /// One decoded input: engine-visible file path (canonical, `None` for stdin
 /// so the reference `parse(String)` quirks hold) + UTF-8 text + display name.
-struct Source {
-    file: Option<String>,
-    text: String,
-    display: String,
+pub(crate) struct Source {
+    pub(crate) file: Option<String>,
+    pub(crate) text: String,
+    pub(crate) display: String,
 }
 
 /// Resolve an [`Input`]: stdin via the injected reader, bytes decoded, or
 /// file read; errors are OXZ-5006 issues (exit 3 family).
-fn read_input(input: &Input, opts: &ApiOptions) -> Result<Source, Issue> {
+pub(crate) fn read_input(input: &Input, opts: &ApiOptions) -> Result<Source, Issue> {
     match input {
         Input::Stdin => {
             let buf = match opts.stdin {
@@ -353,7 +353,7 @@ fn write_output_file(bytes: &[u8], path: &Path) -> Result<(), Issue> {
 /// Parse a DSL input with pipeline options (JSON-base loader injected,
 /// hermetic env map when [`ApiOptions::env`] is set). The `Err` arm is the
 /// fatal statement-level failure (empty source) — exit 1.
-fn parse_dsl_input(input: &Source, opts: &ApiOptions) -> Result<ParseResult, Issue> {
+pub(crate) fn parse_dsl_input(input: &Source, opts: &ApiOptions) -> Result<ParseResult, Issue> {
     let env_lookup = opts.env.as_ref().map(|map| {
         let map = map.clone();
         EnvLookup::new(move |name| map.get(name).cloned())
@@ -396,7 +396,7 @@ fn parse_dsl_input(input: &Source, opts: &ApiOptions) -> Result<ParseResult, Iss
 /// diagnostics. `create_default_views` mirrors `ViewSet.createDefaultViews`;
 /// its `Err` is the reference's unguarded throw (aborts the command there),
 /// so the workspace is restored and the failure surfaces as exit 1.
-fn apply_default_views(workspace: &mut Workspace) -> Result<(), Issue> {
+pub(crate) fn apply_default_views(workspace: &mut Workspace) -> Result<(), Issue> {
     let model_empty = workspace.model.people.is_empty()
         && workspace.model.software_systems.is_empty()
         && workspace.model.deployment_nodes.is_empty();
@@ -443,7 +443,7 @@ fn push_issues(out: &mut Outcome, issues: Vec<Issue>) {
 /// The D1 statement-error decoration ladder (2R R-mis-05: one helper for
 /// the old ×4 duplicate): every recorded statement error becomes a
 /// `did you mean`-decorated issue against the repaired workspace.
-fn statement_errors(result: &ParseResult) -> Vec<Issue> {
+pub(crate) fn statement_errors(result: &ParseResult) -> Vec<Issue> {
     result
         .errors
         .iter()
