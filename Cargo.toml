@@ -63,3 +63,9 @@ unused_workspace_dependencies = "allow"
 [workspace.lints.clippy]
 all = "warn"
 pedantic = "warn"
+# 2R PR6 ratchet (PHASE_2R.md §D4, V-R2 decision table): the last-use
+# `x.clone()` family stable clippy does not cover. Nursery = unstable, so
+# this line is nightly-only (rust-toolchain.toml pin; NIGHTLY.md register
+# row). Measured: 11/11 genuine sites (all fixed in that commit), ≈ +4 %
+# cold-clippy cost, ranges overlapping. CI `-D warnings` makes it binding.
+redundant_clone = "warn"

@@ -94,6 +94,15 @@ unstable, so it needs a `NIGHTLY.md` register row + measured compile-time hit) a
 nothing else workspace-wide; `&x.clone()`-style waste and accessor naming stay
 survey+review territory (no lint exists). Kept additions land as workspace-lint rows +
 a WORKFLOW.md §Code style note.
+
+**V-R2 decision table (measured 2026-11-18, post-PR5 tree, pinned nightly):**
+
+| Probe | Result |
+|---|---|
+| Fired sites, `-W clippy::redundant_clone` over `--workspace --all-targets` | **11** — `stmt_deployment.rs:380,390,445` (`technology` after its match/leg tail: never used again), `engine/mod.rs:1746–1772` ×6 (`start_group_context`: one of six exclusive arms runs, each can MOVE the by-value `group` — the crate comment already says callers hand it over done), `oxidizr-api/tests/default_views.rs:179`, `oxidizr-e2e/tests/full.rs:229` (last-use clones in test bodies) |
+| Site audit | **11/11 genuine last-use clones, 0 false positives, 0 allows needed** (kill switch ≤ 10 → far below). Fixes are `clone()` → move — the `&x.clone()`-waste family 2R sweeps by hand anyway. |
+| Compile-time delta (cold `cargo clippy --workspace --all-targets`, deps warm, 51 units/rebuild verified, n=3 each) | baseline 2367/2161/2365 ms (med 2365) vs nursery 2612/2466/2398 ms (med 2466) → **≈ +100 ms (+4 %), ranges overlapping — noise-level** |
+| Verdict | **KEEP**: `redundant_clone = "warn"` joins `[workspace.lints.clippy]` (CI `-D warnings` binds), `NIGHTLY.md` register row added (nursery = unstable; drop the row + the lint if it ever stabilizes), the 11 sites fixed in the same commit. |
 Related hygiene the survey found (folded into PR1/PR3): `faithful-port.md`'s
 narrowest-scope rule is violated by the module-level
 `#![allow(missing_errors_doc, missing_panics_doc)]` in core `builder.rs:14`/
@@ -127,7 +136,8 @@ file before starting.
 - **V-R2** (before PR6) — ratchet measurement: try `redundant_clone` (nursery) on the
   post-sweep tree; record (a) fired-site count, (b) compile-time delta, (c) false-
   positive notes → keep/drop decision table under §D4. Decision table recorded even
-  when the verdict is drop.
+  when the verdict is drop. **CLOSED 2026-11-18**: 11 fired sites, all genuine; ≈ +4 %
+  cold-clippy cost (noise); verdict **KEEP** — table under §D4.
 - **V-R3** (per wave) — bench review: `bench cmp 2T` numbers posted in the wave's
   commit message (one line), regressions > ~10 % block until explained or reverted.
 

@@ -22,7 +22,7 @@ library code itself is plain-stable-compatible (`rust-version = 1.85`).
 
 | Feature | Crate(s) | Rationale | Stabilization status | Added | Removed |
 |---|---|---|---|---|---|
-| _(none yet)_ | | | | | |
+| `clippy::redundant_clone` (nursery LINT, `[workspace.lints.clippy]`) | workspace-wide | 2R PR6 ratchet: catches the last-use-`clone()` family stable clippy misses — keep verdict + measurements in `agents/plan/build/PHASE_2R.md` §D4 (V-R2 table) | nursery = unstable on the pinned nightly; drop this row AND the Cargo.toml line the day it stabilizes | 2026-11-19 | |
 
 Category A tests, benches and the shipped binary must build on the pinned nightly;
 downstream stable builds are a non-goal while pinned (recorded deviation for

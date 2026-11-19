@@ -1737,25 +1737,25 @@ impl Parser<'_> {
     /// context of the stack carrying a FRESH `ElementGroup` object (the
     /// five groupable context classes, each reconstructed with the new
     /// payload — reference `new SoftwareSystemDslContext(ss, group)`).
-    // Justified: the group is cloned into the replacement frame; callers
-    // hand over a group they no longer use (reference `new X(group)`).
-    #[allow(clippy::needless_pass_by_value)]
+    // 2R PR6 (`redundant_clone` ratchet): exactly one of the six exclusive
+    // arms runs and it MOVES the by-value group into the replacement frame —
+    // callers hand over a group they no longer use (reference `new X(group)`),
+    // so the per-arm `clone()` was redundant and `needless_pass_by_value`
+    // has nothing to ask for (its allow removed with it).
     pub(crate) fn start_group_context(&mut self, top: &Ctx, group: DslGroup) {
         let replacement = match top {
-            Ctx::Model { .. } => Ctx::Model {
-                group: Some(group.clone()),
-            },
+            Ctx::Model { .. } => Ctx::Model { group: Some(group) },
             Ctx::SoftwareSystem { id, .. } => Ctx::SoftwareSystem {
                 id: id.clone(),
-                group: Some(group.clone()),
+                group: Some(group),
             },
             Ctx::Container { id, .. } => Ctx::Container {
                 id: id.clone(),
-                group: Some(group.clone()),
+                group: Some(group),
             },
             Ctx::Environment { env, .. } => Ctx::Environment {
                 env: env.clone(),
-                group: Some(group.clone()),
+                group: Some(group),
             },
             // A `group` inside `source -/> destination {` matches the
             // ENVIRONMENT arm (subclass instanceof) and re-pushes a PLAIN
@@ -1765,11 +1765,11 @@ impl Parser<'_> {
                 env: DslEnvironment {
                     name: environment.clone(),
                 },
-                group: Some(group.clone()),
+                group: Some(group),
             },
             Ctx::DeploymentNode { id, .. } => Ctx::DeploymentNode {
                 id: id.clone(),
-                group: Some(group.clone()),
+                group: Some(group),
             },
             other => {
                 // Unreachable: callers only pass groupable payload-bearing

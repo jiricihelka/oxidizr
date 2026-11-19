@@ -226,7 +226,7 @@ fn fmt_is_fixpoint_and_semantic() {
     let problems = fan_out(&entries, |e| {
         let name = e.full_name();
         let source = std::fs::read(e.dsl.as_ref().unwrap()).unwrap();
-        let Some(once) = fmt_print(source.clone()) else {
+        let Some(once) = fmt_print(source) else {
             return Err(format!("{name}: fmt produced no output"));
         };
         let twice = fmt_print(once.clone());

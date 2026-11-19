@@ -176,7 +176,7 @@ fn export_json_leg_materializes_default_views() {
     std::fs::write(&ws, NO_VIEWS_DSL).unwrap();
     let out = execute(
         Request::Export {
-            workspace: ws.clone(),
+            workspace: ws,
             format: "json".to_string(),
             output: None,
         },

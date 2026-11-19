@@ -377,7 +377,7 @@ fn def_deployment_node(
                 environment.unwrap_or_default(),
                 &name,
                 Some(description.clone()),
-                Some(technology.clone()),
+                Some(technology),
                 None,
             )
             .map_err(|e| DslError::core(&e))?,
@@ -387,7 +387,7 @@ fn def_deployment_node(
                 parent,
                 &name,
                 Some(description.clone()),
-                Some(technology.clone()),
+                Some(technology),
                 None,
             )
             .map_err(|e| DslError::core(&e))?,
@@ -442,7 +442,7 @@ fn def_infrastructure_node(
             node,
             &name,
             Some(description.clone()),
-            Some(technology.clone()),
+            Some(technology),
             None,
         )
         .map_err(|e| DslError::core(&e))?;
