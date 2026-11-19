@@ -243,6 +243,9 @@ enum Step {
     Test,
     Refs,
     Lint,
+    /// viewer GUI shell (eframe) clippy — the default quartet omits it (keeps
+    /// `cargo test --workspace` headless, P3-D1); CI runs it as an extra leg.
+    Gui,
     /// windows-latest matrix leg approximated via the windows-gnu + Wine dev leg.
     Windows,
 }
@@ -255,6 +258,7 @@ impl Step {
             "test" => Some(Self::Test),
             "refs" => Some(Self::Refs),
             "lint" => Some(Self::Lint),
+            "gui" => Some(Self::Gui),
             "windows" => Some(Self::Windows),
             _ => None,
         }
@@ -267,6 +271,7 @@ impl Step {
             Self::Test => "test",
             Self::Refs => "refs",
             Self::Lint => "lint",
+            Self::Gui => "gui",
             Self::Windows => "windows",
         }
     }
@@ -286,6 +291,17 @@ impl Step {
             Self::Test => &["test", "--workspace"],
             Self::Refs => &["xtask", "refs"],
             Self::Lint => &["xtask", "lint"],
+            Self::Gui => &[
+                "clippy",
+                "-p",
+                "oxidizr-viewer",
+                "--all-targets",
+                "--features",
+                "gui",
+                "--",
+                "-D",
+                "warnings",
+            ],
             Self::Windows => &["test", "--workspace", "--target", "x86_64-pc-windows-gnu"],
         }
     }
@@ -301,7 +317,7 @@ fn resolve_ci_steps(args: &[String]) -> Result<Vec<Step>> {
     let mut out = Vec::new();
     for arg in args {
         let step = Step::parse(arg).with_context(|| {
-            format!("unknown CI step `{arg}` (fmt|clippy|test|refs|lint|windows)")
+            format!("unknown CI step `{arg}` (fmt|clippy|test|refs|lint|gui|windows)")
         })?;
         if !out.contains(&step) {
             out.push(step);

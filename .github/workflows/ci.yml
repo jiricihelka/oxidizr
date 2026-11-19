@@ -44,6 +44,10 @@ jobs:
       - uses: ./.github/actions/toolchain-cache
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # P3 viewer GUI shell (eframe): the workspace clippy above skips the
+      # `gui`-gated bin (P3-D1 keeps `cargo test --workspace` headless), so
+      # the shell gets its own leg — `cargo xtask ci gui` mirrors it locally.
+      - run: cargo clippy -p oxidizr-viewer --all-targets --features gui -- -D warnings
 
   test:
     # Category A only (agents/plan/TESTING.md): pure Rust, no network/Java, 3-OS matrix.
@@ -58,6 +62,10 @@ jobs:
       - uses: ./.github/actions/toolchain-cache
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+      # P3-M0-4: the viewer must BUILD on all 3 OSes (headless — check does
+      # not link, so no GPU/window system deps needed; nothing GUI ever runs
+      # here, P3-D8).
+      - run: cargo check -p oxidizr-viewer --features gui
 
   bench:
     # Informational (agents/plan/TESTING.md §Benchmarks): posts numbers, flags >~10% regressions for

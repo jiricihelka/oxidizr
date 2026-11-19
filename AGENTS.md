@@ -42,9 +42,11 @@ JSON level where the format defines it. Status: Phase 1 — milestone log in
 - Before implementing any behavior → check `agents/plan/DEVIATIONS.md` (its Locked
   list never deviates). Before building anything Structurizr lacks → check
   `agents/plan/ADDITIONAL_FEATURES.md` and get sign-off for 💡 ideas.
-- No `unsafe`; std-only; `#[cfg(target_…)]` only with a justifying comment; errors
-  as values (`thiserror` in libs, `anyhow` in binaries); `unwrap()`/`panic!` only
-  in tests. Nightly pin in `rust-toolchain.toml`, usages registered in `NIGHTLY.md`.
+- No `unsafe` in oxidizr code (dependency-internal `unsafe`, e.g. the wgpu/eframe
+  stack, is outside this rule — the constraint is on code we write, PHASE_3.md §P3-D2);
+  std-only; `#[cfg(target_…)]` only with a justifying comment; errors as values
+  (`thiserror` in libs, `anyhow` in binaries); `unwrap()`/`panic!` only in tests.
+  Nightly pin in `rust-toolchain.toml`, usages registered in `NIGHTLY.md`.
   More: `agents/plan/WORKFLOW.md` §Code quality / §Code style.
 - Commit only after the gates are green; **never push** unless explicitly asked.
 
