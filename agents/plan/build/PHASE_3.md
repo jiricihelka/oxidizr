@@ -294,7 +294,7 @@ NOT an M0 gate (no byte-path change); V-R1-style bench sanity at close.
 | **M0-2** | `oxidizr-layout` crate: workspace member, **zero deps** (std only), neutral graph surface per §P3-D5 — `LayoutGraph { nodes, edges, rank_direction, rank_separation, node_separation }`, `LayoutResult`, `trait LayoutEngine`; `Layered`/`Dot` impls are M2/M4 — here: types + trait + doc + unit tests for the types' invariants | P3-D5; `cargo xtask ci` covers new members automatically (workspace-wide) | quartet green |
 | **M0-3** | `oxidizr-viewer` crate: lib core modules `scene`/`hit`/`commands`/`reload` as compiling stubs importing NO eframe (P3-D1 boundary), thin `main.rs` eframe bin; deps core+api+json+layout + eframe (wgpu)/notify/usvg/tiny-skia/dark-light; version pins recorded in the crate's `DEPENDENCIES` rustdoc (P3-D2); `cargo add` works — network verified 2026-11-19 (toolbox.md corrected) | registry cache lacks the GUI stack → first fetch pulls; `unused_dependencies` lint is allowed (P1-D9 pattern) so declaring the agreed set early is safe | quartet + full tier (workspace test surface grows) |
 | **M0-4** | CI headless builds: existing check/clippy jobs are workspace-wide so the new members ride for free — verify argv; extend `cargo xtask ci windows` leg check for viewer (eframe/winit/wgpu on `x86_64-pc-windows-gnu` mingw — pure-Rust bindings expected); darwin stays CI-only | P3-D8 "CI builds but runs no GUI"; no xvfb | quartet + `xtask ci windows` |
-| **M0-5** | `core::filter::eval` — pure evaluator `(&Workspace, base view content, mode, tags) → included element/relationship sets` over core types only (core stays dependency-free ✓); **implement only after P3-V5** settles reference semantics (include=any-tag, exclude semantics, relationship keep-rule incl. endpoint survival + `directRelationshipsOnly` corners) against the pinned monorepo/`filter.jspf`; unit tests incl. determinism; NOT wired into the JSON writer (bytes contract untouched — the writer stores mode+tags as today, matching the golden) | verified: `create_filtered_view` stores mode+tags; writer emits them un-evaluated; no evaluator exists | quartet + full tier + bless no-op |
+| **M0-5** | `core::filter::eval` — pure evaluator `(&Workspace, base view content, mode, tags) → included element/relationship sets` over core types only (core stays dependency-free ✓); **implement only after P3-V5** settles reference semantics (include=any-tag, exclude semantics, relationship keep-rule incl. endpoint survival + `directRelationshipsOnly` corners) against the pinned monorepo/`filter.jspf`; unit tests incl. determinism; NOT wired into the JSON writer (bytes contract untouched — the writer stores mode+tags as today, matching the golden) | verified: `create_filtered_view` stores mode+tags; writer emits them un-evaluated; no evaluator exists | **DONE 2026-11-19** — V5 verdict above; `crates/oxidizr-core/src/filter.rs` (`eval` + `Included`, order-preserving, cycle-guarded chain walk, stale-id rule documented) + 8 unit tests; writer untouched |
 | **M0-6** | AGENTS.md one-sentence clarification: `unsafe` rule covers oxidizr code, dependency-internal unsafe (wgpu) is out of scope (P3-D2) | charter touch-up, no behavior | with M0-3 or its own docs commit |
 | **M0 close** | PROGRESS board + log M0 row; PHASE_3 M0 DONE; RESUME → M1 entry point; quick `bench cmp 2R` sanity (engine untouched) | — | quartet + full tier + bless corpus-diff=0 |
 
@@ -312,7 +312,23 @@ but its V-item gate is hard.
 - P3-V4 `automaticLayout` fields honored by reference consumers when geometry exists
   (do we clear or keep the block on manual edit? match Lite behavior).
 - P3-V5 filtered-view evaluation semantics corner cases (relationship filters,
-  `directRelationshipsOnly`) vs `core::filter::eval`.
+  `directRelationshipsOnly`) vs `core::filter::eval`. **CLOSED 2026-11-19** against
+  monorepo `ad34036`: the reference evaluates client-side ONLY (Java `FilteredView`/
+  `ViewSet.newFilteredView` just stores mode+tags; `structurizr-export` has zero
+  `FilterMode` consumers). Webapp evaluator (`structurizr-diagram.js`
+  `includeOnDiagram`/`createArrow`, `structurizr-workspace.js` `getAllTagsFor*`):
+  **Include** = keep iff ANY filter tag (each trimmed) hits the effective stack —
+  empty tag list keeps NOTHING; **Exclude** (and any absent/non-Include mode —
+  the reference tests `mode === "Include"` and `else`s everything else) = drop on
+  ANY hit, empty keeps everything. Effective stacks: element = kind defaults +
+  stored, deployment instances ALSO match the linked software-system/container
+  stack; relationship = its defaults+stored, any `linkedRelationshipId`-chain hop
+  can supply the hit. Keep-rule: a relationship survives only when it passes its
+  own filter AND both endpoint elements survive (arrows are gated on the rendered
+  boxes). Filter tags trim; item tags match verbatim. `directRelationshipsOnly`:
+  ZERO hits in the whole monorepo — no such reference option, N/A. (The
+  `filter.jspf` tag toolbar is the session-side UI feeding the SAME evaluator —
+  its persistence question is P3-V7.) Cloned in `oxidizr-core::filter`.
 - P3-V6 `notify` event coalescing behavior on each OS (debounce tuning), Windows
   rename semantics on save.
 - P3-V7 reference tag-filter persistence: does the web UI filter write the view's

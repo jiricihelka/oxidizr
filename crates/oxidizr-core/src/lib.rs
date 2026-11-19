@@ -13,6 +13,7 @@ pub mod colors;
 pub mod configuration;
 pub mod docs;
 pub mod error;
+pub mod filter;
 pub mod ids;
 pub mod model;
 pub mod properties;
