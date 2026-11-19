@@ -154,9 +154,10 @@ Workspace + resolved styles (core::styles, P2-D2)
 - **Tooltips** `[t]`: hover card (name, description, technology, tags, owner); global
   on/off toggle; native egui tooltips, no hover-delay tuning contests.
 - **Interactive tag filter**: toolbar chip-list of the view's tags, include/exclude
-  clicks re-render the scene. Persistence decision pinned by P3-V7 (reference behavior
-  — session-only vs writing the view's stored `filter` object); default is
-  session-only, **never** touching the model file (editor rule, P3-D0).
+  clicks re-render the scene. Pinned by P3-V7 (**CLOSED 2026-11-19**: reference is
+  session-only — the toolbar mutates a JS session object, never the stored filter):
+  ours is session-only too, **never** touching the model file (editor rule, P3-D0);
+  include-side matching reuses `core::filter::eval`.
 - **Minimap navigator**: shrunken scene overview with viewport rect, click/drag to
   jump; toggleable; cheap because the Scene is retained (re-rasterize at ≤ 1 fps).
 - **Quick navigation**: type-ahead element search across the current view (name /
@@ -301,14 +302,49 @@ NOT an M0 gate (no byte-path change); V-R1-style bench sanity at close.
 Order: M0-1 → M0-2 → M0-3 (+M0-6) → M0-4 → M0-5 → close. M0-5 may parallel M1 work
 but its V-item gate is hard.
 
+## P3-M1 decomposition (charter: >4-module milestone; written 2026-11-19 before code)
+
+Read-only viewer (§M1). Gating V-items all CLOSED 2026-11-19: V2 (bundled font
+substitution confirmed — the reference never loads web fonts at all), V3 (icons =
+PNG-only corpus → atlas), V5 (filter semantics → `core::filter::eval`), V7 (tag
+filter session-only). Boundary guard: it forbids `eframe`/`egui` tokens in lib
+sources; **`epaint` is allowed** (pure-Rust, headless) — the scene keeps the P3-D3
+promise using `epaint::LayoutJob` text runs with no shell dependency.
+
+| Item | Deliverable | Premise / verified | Exit gate |
+| --- | --- | --- | --- |
+| **M1-1** | `oxidizr-api::open(input, &ApiOptions) -> Opened { workspace, log }` — public entry mirroring the `dsl2json`/`json2json` workspace build (read → parse: DSL partial-on-error OK, JSON strict → `apply_default_views` → validate), errors as values, `execute`/CLI untouched | pipeline stages exist but are private (`read_input`/`parse_dsl_input`/`json_loader`, pipeline.rs:274-420) | quartet + full tier + bless no-op (no byte path) |
+| **M1-2** | `scene` core (headless): `Scene { boundaries, items (rect + text runs), edges (polyline + label), key entries }` + `build(&Workspace, view key, Option<&Included>)`; geometry = stored `x/y` (read-only M1 — no auto-layout yet); text via `epaint` (new unconditional lib dep — guard stays eframe/egui-only); styles via `core::styles` resolution (P2-D2), light + dark schemes; deterministic (same input → identical scene) | P3-D3; `epaint` already in tree via eframe 0.37; guard test updated to state the epaint allowance | quartet + full tier + guard green |
+| **M1-3** | `hit` core (headless): `Viewport` transform (world↔screen, zoom clamp) + AABB element hit + point-to-segment edge hit; unit tests incl. clamp bounds + degenerate segments | hand-rolled geometry per P3-D3 (no geom crate) | quartet + full tier |
+| **M1-4** | gui shell render + navigate: open via argv/menu (`File → Open`), view list, canvas pan/zoom/select wired to `hit`, full styling paint (fill/stroke/dash/opacity/font size, group labels), all view kinds incl. custom/image → placeholder boxes (Q4), light/dark toggle + `dark-light` startup detection, tooltips, key/legend panel, tag-filter chips (session-only per V7; include/exclude via `core::filter::eval`) | eframe-0.37 patterns already proven in `main.rs` scaffold; shell stays presentation-only | quartet + `cargo xtask ci gui`; manual smoke where a display exists (CI never runs GUI, P3-D8) |
+| **M1-5** | icons: PNG decode (`png` pin recorded) + foreign SVGs via usvg → tiny-skia; one texture atlas (V3-confirmed); missing/broken → placeholder box; element icon slots + key rows | V3 CLOSED: bundled themes are 100% PNG, zero SVG-with-text | quartet + `cargo xtask ci gui` |
+| **M1 close** | PROGRESS board + log M1 row; PHASE_3 M1 DONE; RESUME → M2 entry point | — | full ritual (bench N/A — engine untouched, noted) |
+
+Order: M1-1 → M1-2 → M1-3 → M1-4 → M1-5 → close. M1-4 is the big-bang commit; if it
+drags, split at the canvas-vs-overlays seam (each half still gates green).
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
   representative C4 views (rank direction per view type, boundary nesting) — drives
   `Layered` tuning; result is our {x,y}, contract-safe by definition.
 - P3-V2 reference font/theme loading (offline story) → confirm bundled-substitution
-  policy in P3-D2.
+  policy in P3-D2. **CLOSED 2026-11-19** (monorepo `ad34036`): the reference **never
+  loads web fonts** — `fontUrl` has ZERO consumers (JS/Java/CSS/JSPF); everything
+  renders in the system stack `structurizr.ui.DEFAULT_FONT_NAME` =
+  `'Tahoma, Verdana, Helvetica, Arial'` (`structurizr-ui.js:1`), and
+  `views.configuration.branding.font` (JSON schema 1309) is stored but never read.
+  Themes: built-in names resolve to the app-BUNDLED `/static/themes/<name>/theme.json`
+  (`structurizr-ui.js` `loadThemes` — offline by construction); only `http…` entries
+  are fetched, and a failed fetch pushes an EMPTY theme stub (graceful,
+  diagram renders with base styles). → P3-D2 bundled-substitution policy CONFIRMED
+  (parity-plus: we never need the network).
 - P3-V3 theme icon corpus scan: SVG-with-text frequency; confirm atlas approach.
+  **CLOSED 2026-11-19**: the bundled theme corpus (`structurizr-themes/`) holds
+  16 themes / 5509 icon files, **100% PNG** (5485 theme.json icon refs, all
+  relative `.png`; ZERO SVG files, hence ZERO SVG-with-text). → raster texture-atlas
+  approach CONFIRMED; usvg/tiny-skia only ever rasterizes foreign/custom-theme
+  icons; no text-in-SVG special case.
 - P3-V4 `automaticLayout` fields honored by reference consumers when geometry exists
   (do we clear or keep the block on manual edit? match Lite behavior).
 - P3-V5 filtered-view evaluation semantics corner cases (relationship filters,
@@ -334,7 +370,17 @@ but its V-item gate is hard.
 - P3-V7 reference tag-filter persistence: does the web UI filter write the view's
   stored `filter` object (workspace JSON) or stay session-only? → decides our default
   (P3-D3a); check `filter.jspf` + `structurizr-diagram.js` filter wiring + whether a
-  filtered+saved workspace JSON changes.
+  filtered+saved workspace JSON changes. **CLOSED 2026-11-19** (monorepo `ad34036`):
+  **SESSION-ONLY**. The toolbar (`filter.jspf`) mutates the diagram module's session
+  object (`structurizr-diagram.js:89` `var filter = { id, active, tags }`) through
+  `setFilter`/`filterOff`, which only bump `filter.id` and re-render (`runFilter`) —
+  no write to any view's stored `filter`, no localStorage/sessionStorage anywhere in
+  the wiring. Seeding: `?tags=` URL param or `structurizr.filter.tags` config property
+  (which also picks the chip list via `getUserDefinedTags()` = all tags minus the
+  kind defaults). Active filter = ANY selected tag hits the effective stack (same
+  include-side semantics `includeOnDiagram` uses — already cloned in
+  `core::filter::eval`); inactive = keep everything. → Our P3-D3a default is pinned:
+  session-only, model file never touched.
 - P3-V8 reference PNG/SVG export anatomy: what "diagram and key" composition means
   (key appended? margins?) — informational for our export design; NO pixel parity
   implied (P3-D0).
