@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | pending |
+| P3 | viewer+layout | **M0 COMPLETE 2026-11-19** — scaffold wave: layout crate (zero-dep graph + trait), viewer crate (headless lib core + `gui`-gated eframe shell, CI legs on 3 OSes), reconcile-stays-in-api decision, `core::filter::eval` per P3-V5 verdict. Next: M1 read-only viewer. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,45 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M0 — viewer + layout scaffold ✅ (2026-11-19, COMPLETE)
+
+Open Phase 3 (`build/PHASE_3.md`, decisions P3-D0..D10) with the
+decomposition its charter demands (§P3-M0 table, written before code).
+Six deliverables, each a green commit riding the ritual (quartet + full
+tier 8/8 + bless no-op — no byte path was touched all milestone):
+
+- **M0-1** `e3f81e6` — plan-only: reconcile **stays in `oxidizr-api`**
+  (premise correction verified against the tree: it was never in `cli`;
+  core's LOCKED P1-D1 zero-dep promise vs the engine's `diag::codes` +
+  `api::Issue` use; the viewer consumes the pipeline anyway) +
+  `core::filter::eval` confirmed as real scope (no evaluator existed).
+- **M0-2** `3775a38` — `oxidizr-layout` workspace member: ZERO deps
+  (even `thiserror` skipped; `LayoutError` hand-rolls std traits),
+  neutral graph (`LayoutGraph`/`LayoutConfig`/`Anchor`/`RankDirection`,
+  defaults mirrored from the reference `AutomaticLayout`),
+  `trait LayoutEngine` + the hard determinism contract; 7 tests.
+- **M0-3** `d7fcf01` — `oxidizr-viewer`: lib core `scene`/`hit`/
+  `commands`/`reload` boundary stubs importing NO eframe — guarded by a
+  test that forbids the tokens in lib sources — + `gui`-gated eframe
+  shell (`default OFF`, `[[bin]] required-features`): `cargo test
+  --workspace` never compiles the GUI tree; pins eframe 0.37 (wgpu),
+  notify 8, usvg 0.50, tiny-skia 0.12, dark-light 3 recorded in-crate.
+- **M0-4 + M0-6** `c6e6bd6` — `cargo xtask ci gui` step + CI legs (clippy
+  `gui` leg, 3-OS `cargo check -p oxidizr-viewer --features gui`; headless
+  by construction — check does not link, no GUI ever runs, P3-D8);
+  windows-gnu cross-check green locally (19 s); AGENTS.md `unsafe` rule
+  scoped to our code (dependency-internal unsafe exempt, P3-D2).
+- **M0-5** `3c742ac` — P3-V5 CLOSED against monorepo `ad34036` (the
+  reference filters client-side only; full verdict in PHASE_3 §P3-D10) +
+  `oxidizr-core::filter::eval` cloning it (any-tag-include / exclude,
+  instance & linked-relationship stack inheritance, endpoint-survival
+  keep-rule, order-preserving determinism, 8 tests). NOT wired into the
+  JSON writer — byte contract untouched, bless no-op proves it.
+
+Verification: every commit full tier + bless `corpus-diff=0`; close
+`bench cmp 2R` sanity green (no engine code); `cargo xtask ci gui` +
+windows-gnu viewer check green. No tag (M5 is the v0.3.0 point).
 
 ### P2R — small-scope refactor interlude ✅ (2026-11-19, COMPLETE)
 
