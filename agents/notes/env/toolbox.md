@@ -15,6 +15,13 @@ notes — this is the map, don't re-derive here.
 | `cargo xtask vendor --src <clone>` | (re)vendoring reference fixtures into testdata/ | testdata/README.md contract |
 
 Absent on this machine — do NOT chase: miri, cargo-nextest, cargo-edit,
-cargo-audit, sccache, mold, hyperfine, just, cargo-outdated.
+cargo-audit, sccache, mold, hyperfine, just, cargo-outdated, `/usr/bin/time`
+(silently missing in `2>` captures — time with `date +%s%N`,
+pitfalls/shell-timing-and-cargo-clean.md).
+
+NETWORK IS available (verified 2026-11-19: DNS resolves, `static.crates.io`
+answers HTTP) — `cargo add`/fetch works for new deps; the old "no DNS" note was
+wrong. `~/.cargo/registry` cache also holds foreign trees (egui, wgpu, winit,
+tiny-skia — bevy leftovers), but NOT `eframe`/`notify`/`usvg`/`dark-light`.
 
 Last useful: never

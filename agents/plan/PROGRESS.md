@@ -28,7 +28,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M4 Mermaid + theme goldens + CI render + bench | **M4 COMPLETE 2026-11-18** (M4-d: goldens + oracle legs + golden tests + render smokes + bench). Log below |
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
-| P2R | small-scope refactors (interlude) | **planning 2026-11-18** — charter + decisions ratified (user Q&A); findings survey in flight; plan `build/PHASE_2R.md` |
+| P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
 | P3 | viewer+layout | pending |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -150,6 +150,49 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P2R — small-scope refactor interlude ✅ (2026-11-19, COMPLETE)
+
+Zero-behavior-change between P2T and P3: clean the port scars while P3 (viewer +
+layout engine) is about to consume core/api/export as libraries. A four-crate-group
+survey filled a 65-row findings register (SW 32 / JU 22 / KC 9 / DF 1 + SW/DF 1);
+five sweep waves + a ratchet/close wave cleared it. Every commit rode the ritual:
+quartet + full tier (8 `test result: ok`) + `e2e bless` no-op (corpus-diff=0) — the
+net was first proven against the UNMODIFIED tree (V-R1). Plan + full register:
+`build/PHASE_2R.md`. No tag (1T/2T precedent).
+
+- **PR0** — register populated + survey premise corrections (lint bar already
+  `all + pedantic`; ast has no `RefCell`; brace-tool long-fn measures discarded).
+  `21a5144`.
+- **PR1 core** `2359084`/`cb9cbdd`/`2b8d43a`/`1b90568` + close `3a6a4eb` —
+  constructor clone storm, gate-path `flattened()` re-run, error-shape reshapes.
+- **PR2 dsl** `c09bbcd`/`0d8026a`/`6cc507f`/`63cbc5a`/`fd3c257` + close `89989d6` —
+  borrow-shared dispatch preamble, `Cow<str>` `Tokens::get` + `eq_at`, Ctx payload
+  extraction, `pub(crate)` demotions; all R-dsl rows.
+- **PR3 export** `b1b295e`/`a64da54` (+ bench record `041ff22`)/`7bfbac8`/`8a1e763`/
+  `70ccde4`/`daf8e24`/`307518b` + close `a3d73ed` — all 18 R-exp rows (writer
+  plumbing, `&x.clone()` demotions, theme/style dedupe).
+- **PR4 json/api/cli** (the byte-path wave) `81eb675`/`139581d`/`a371afc`/`1db1b5c`/
+  `ea9ad45`/`8a67f7a` + close `679564a` — phantom-Result cascade (`unnecessary_wraps`
+  as oracle), partial logs carried inside error arms; 13 R-mis rows; R-mis-12 audit
+  ratified.
+- **PR5 tooling** `371a593` xtask (shared oracle-export prologue, `Vec<String>`
+  verify legs, ZERO non-test `unwrap`/`expect` incl. the wave-close
+  `cargo_cmd() -> Result`) / `42bff5b` e2e (explicit json2json feed,
+  `codes_from_value`, mutate `pick_index`/`pick_line` with the seeded rng-draw
+  sequence bit-preserved — blessed corpus byte-identical) + close `1c3fcd9`.
+- **PR6** `d890ef9` V-R2 KEEP: `redundant_clone = "warn"` (nursery, `NIGHTLY.md`
+  row) + the 11 fired sites → move + §D4 decision table (11/11 genuine, ≈ +4 %
+  cold-clippy) / `6baa7b4` `2R` baseline + README context rows / close docs.
+
+Verification closed: V-R1 harness no-op ✓; V-R2 KEEP table ✓; V-R3 per-wave bench
+reviews ✓ — cumulative `bench cmp 2T` at PR6 close **23/23 groups faster-or-equal**
+(`m7_dsl_parse_corpus` 13.7→7.1 ms, `m7_dsl_parse_big-bank-plc` 3.0→1.0 ms,
+`m7_reconcile_cross_corpus` 441→188 µs, `e2e_dsl2json_all` 14.6→10.1 ms); exit-gate
+`oracle verify` 4 json + 90 diagram + 6 theme golden sets match — which was also the
+first real exercise of PR5's refactored verify legs. Durable pattern harvest went to
+`agents/notes/process/refactor-patterns.md`; measurement traps to
+`pitfalls/shell-timing-and-cargo-clean.md`.
 
 ### P2T — e2e export-coverage interlude ✅ (2026-11-18, COMPLETE)
 

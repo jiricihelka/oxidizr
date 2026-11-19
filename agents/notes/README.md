@@ -26,6 +26,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [fmt-line-end-guards.md](pitfalls/fmt-line-end-guards.md) | fmt: CR-split contract, `\`/`"""` end guards, joiner-only stripLeading |
 | [reconcile-ambiguity-fixtures.md](pitfalls/reconcile-ambiguity-fixtures.md) | duplicate names die at parse/hydrate; contest needs identifier-vs-canonical |
 | [dsl-corpus-grammar-gotchas.md](pitfalls/dsl-corpus-grammar-gotchas.md) | e2e-corpus grammar traps: own-line comments, identifier charsets, context-statement tables, dotted scopes, extends-env via `!element` |
+| [shell-timing-and-cargo-clean.md](pitfalls/shell-timing-and-cargo-clean.md) | `/usr/bin/time` absent silently; `cargo clean --workspace` keeps deps warm; n≥3 timings |
 
 ## testing/ — test architecture ([index](testing/README.md))
 
@@ -43,6 +44,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | note | one-liner |
 |---|---|
 | [commit-discipline.md](process/commit-discipline.md) | gate trio; commit EVERY green sub-piece; never push |
+| [refactor-patterns.md](process/refactor-patterns.md) | P2R's zero-behavior-change playbook: phantom-Result cascade, push-order, rng-draw dedupe, bless-as-net |
 | [resume-ritual.md](process/resume-ritual.md) | rewrite `RESUME.md` at each green commit; resume from it |
 | [faithful-port.md](process/faithful-port.md) | engine = port of pinned Java, lint allows need rationale |
 | [notes-policy.md](process/notes-policy.md) | when and how to write notes |

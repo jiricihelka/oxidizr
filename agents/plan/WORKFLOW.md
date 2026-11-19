@@ -95,7 +95,10 @@ expense of the compatibility contract (`COMPAT.md`).
 
 ## Code style
 
-- Rust edition 2024, `rustfmt` defaults, clippy clean with `-D warnings`.
+- Rust edition 2024, `rustfmt` defaults, clippy clean with `-D warnings`. The workspace
+  lint bar is clippy `all + pedantic` plus the 2R ratchet `redundant_clone` (nursery =
+  nightly-only: `NIGHTLY.md` register row, keep verdict + measurements in
+  `build/PHASE_2R.md` §D4).
 - Library crates use `thiserror` error types; the CLI uses `anyhow`. Parser diagnostics
   carry source spans.
 - Domain model types mirror Structurizr concepts (names like `SoftwareSystem`,
@@ -106,3 +109,9 @@ expense of the compatibility contract (`COMPAT.md`).
   harness.
 - Lint suppressions for faithful-port reasons need an inline rationale comment
   (`agents/notes/process/faithful-port.md`).
+- Recorded crate/test conventions (2R R-core-13 ratification, not faithful-port
+  suppressions): core `builder.rs`/`viewops.rs` carry module-scope
+  `#![allow(missing_errors_doc, missing_panics_doc)]` — failure modes are enumerated by
+  the shared `CoreError` enum, not repeated per method; and every test module carries
+  `#![allow(clippy::unwrap_used)]` (28 files — the `unwrap`-only-in-tests charter's
+  guard), so a test-module `unwrap` needs no new allow.
