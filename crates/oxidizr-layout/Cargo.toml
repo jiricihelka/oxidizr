@@ -1,0 +1,17 @@
+[package]
+name = "oxidizr-layout"
+description = "oxidizr layout: neutral graph types + the LayoutEngine trait — pure, dependency-free (P3-D1/P3-D5)"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# NO dependencies — not even thiserror (P3-D1 zero-dep promise beats the
+# thiserror convention for THIS crate; the error type hand-rolls Display +
+# Error, std-only). Neutral graph types in/out: no oxidizr-core, no IO, no GUI.

@@ -7,6 +7,7 @@ members = [
     "crates/oxidizr-dsl",
     "crates/oxidizr-json",
     "crates/oxidizr-export",
+    "crates/oxidizr-layout",
     "crates/oxidizr-api",
     "crates/oxidizr-cli",
     "crates/oxidizr-e2e",
