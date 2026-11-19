@@ -10,6 +10,7 @@ members = [
     "crates/oxidizr-layout",
     "crates/oxidizr-api",
     "crates/oxidizr-cli",
+    "crates/oxidizr-viewer",
     "crates/oxidizr-e2e",
     "crates/xtask",
 ]
@@ -31,6 +32,7 @@ oxidizr-diag = { path = "crates/oxidizr-diag", version = "0.1.0" }
 oxidizr-dsl = { path = "crates/oxidizr-dsl", version = "0.1.0" }
 oxidizr-json = { path = "crates/oxidizr-json", version = "0.1.0" }
 oxidizr-export = { path = "crates/oxidizr-export", version = "0.1.0" }
+oxidizr-layout = { path = "crates/oxidizr-layout", version = "0.1.0" }
 oxidizr-api = { path = "crates/oxidizr-api", version = "0.1.0" }
 oxidizr-e2e = { path = "crates/oxidizr-e2e", version = "0.1.0" }
 
@@ -48,6 +50,15 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 expect-test = "1"
 criterion = "0.5"
 proptest = "1"
+
+# P3 viewer GUI stack (P3-D2 pins; recorded in the viewer's DEPENDENCIES
+# rustdoc). `eframe` carries egui + the wgpu renderer. `notify` stays on the
+# stable series — 9.x is rc at pin time (2026-11-19).
+eframe = "0.37"
+notify = "8"
+usvg = "0.50"
+tiny-skia = "0.12"
+dark-light = "3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

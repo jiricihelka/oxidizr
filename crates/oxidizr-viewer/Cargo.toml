@@ -1,0 +1,38 @@
+[package]
+name = "oxidizr-viewer"
+description = "oxidizr-viewer: native workspace viewer + layout editor (P3) — headless lib core + thin eframe shell"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# The eframe shell is the ONLY windowing/GPU surface (P3-D1, risk R-2).
+# Gated so `cargo test --workspace` and the quartet build and run the lib
+# core with ZERO GPU/windowing need; `cargo build --features gui` (CI
+# M0-4 leg, and end-user builds) compiles the binary.
+default = []
+gui = ["dep:eframe"]
+
+[[bin]]
+name = "oxidizr-viewer"
+required-features = ["gui"]
+
+[dependencies]
+oxidizr-core = { workspace = true }
+oxidizr-api = { workspace = true }
+oxidizr-json = { workspace = true }
+oxidizr-layout = { workspace = true }
+# Headless members of the P3 stack (P3-D7): notify powers `reload`,
+# usvg/tiny-skia rasterize SVG icons without any GUI. Pre-declared per the
+# P1-D9 pattern (unused-dep cargo lints are allowed at the workspace).
+notify = { workspace = true }
+usvg = { workspace = true }
+tiny-skia = { workspace = true }
+dark-light = { workspace = true }
+eframe = { workspace = true, optional = true }
