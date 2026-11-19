@@ -83,7 +83,7 @@ crates/
   oxidizr-layout   pure graph + layered (Sugiyama-style) layout engine; deps: none
                    (neutral graph types in/out; no core dep, no IO, no GUI)
   oxidizr-viewer   BINARY: eframe/egui app — scene, interaction, editing, watching;
-                   deps: core, json, styles(core), layout, notify, usvg/tiny-skia,
+                   deps: core, api, json, styles(core), layout, notify, usvg/tiny-skia,
                    dark-light; NEVER depended on by other crates
 ```
 
@@ -95,11 +95,15 @@ crates/
   test time (eframe behind the bin target only).
 - `oxidizr-cli` gains no GUI dependency; a future `oxidizr view` launcher is out of
   scope (💡 idea if demanded).
-- **Reconcile engine relocation:** the id-remap matching logic from P1-D8 (currently in
-  `cli`) moves to `oxidizr-core::reconcile` (pure model operations; core stays
-  dependency-free) at P3-M0 so viewer and CLI share one implementation. Tests move
-  with it. Noted in DEVIATIONS.md? No — internal structure, not behavior; recorded
-  here only.
+- **Reconcile engine — NO relocation (ratified 2026-11-19, M0 planning).** Premise
+  correction: the P1-D8 id-remap engine has lived in `oxidizr-api/src/reconcile.rs`
+  since P1-M7 — never in `cli` — and is already `pub`, shared by the CLI via
+  `api::pipeline`. A move to core is off the table: `oxidizr-core` carries the LOCKED
+  zero-dependency promise (P1-D1) while the engine consumes `oxidizr_diag::codes` and
+  api's `Issue`. The viewer depends on `oxidizr-api` anyway (it opens files through
+  the pipeline — the deps list above gained `api`), so "viewer and CLI share one
+  implementation" already holds; M0-1 only records this decision. Internal structure,
+  not behavior — DEVIATIONS.md untouched.
 
 ## P3-D2 egui stack specifics
 
@@ -255,8 +259,12 @@ Workspace + resolved styles (core::styles, P2-D2)
 
 ## P3-D9 Milestones (ordered, each ends green)
 
-- **M0** prep: move reconcile engine into core; `oxidizr-layout`/`oxidizr-viewer`
-  scaffold; CI builds viewer on 3 OSes headless; core `filter::eval` if missing.
+- **M0** prep: decide reconcile home (§P3-D1: stays in api — relocation cancelled by
+  the 2026-11-19 premise correction); `oxidizr-layout`/`oxidizr-viewer` scaffold; CI
+  builds viewer on 3 OSes headless; `core::filter::eval` **is needed** (verified
+  2026-11-19: nothing evaluates `FilteredView` mode+tags anywhere — JSON stores them
+  and the reference evaluates client-side) — lands gated on P3-V5. Decomposition:
+  §P3-M0 below.
 - **M1** read-only viewer: open DSL/JSON, scene build, pan/zoom/select, all view
   kinds render with full styling (custom/image = placeholder boxes, Q4), light/dark,
   bundled font, icons (PNG+SVG), + parity overlays: key/legend, tooltips, tag filter
@@ -273,6 +281,25 @@ Workspace + resolved styles (core::styles, P2-D2)
 - **M5** hardening: perf pass against big-bank-plc/spring-petclinic/aws corpus
   (scene rebuild + paint budget: 60 fps at 200 visible elements — measured with
   `eframe` stats overlay, informational), docs, tag v0.3.0.
+
+## P3-M0 decomposition (charter: >4-module milestone; written 2026-11-19 before code)
+
+Each row = one green commit unless stated; ritual = quartet + full tier + bless
+no-op (byte paths untouched, but the workspace test surface grows). `oracle verify`
+NOT an M0 gate (no byte-path change); V-R1-style bench sanity at close.
+
+| # | Deliverable | Facts driving it | Exit |
+|---|---|---|---|
+| **M0-1** | Reconcile decision recorded (this file, §P3-D1) — **no code move** | ratified 2026-11-19: engine already `oxidizr-api::reconcile` (pub, CLI-shared), core's LOCKED P1-D1 zero-dep promise blocks the move, viewer gains the `api` dep anyway | docs commit (this one) |
+| **M0-2** | `oxidizr-layout` crate: workspace member, **zero deps** (std only), neutral graph surface per §P3-D5 — `LayoutGraph { nodes, edges, rank_direction, rank_separation, node_separation }`, `LayoutResult`, `trait LayoutEngine`; `Layered`/`Dot` impls are M2/M4 — here: types + trait + doc + unit tests for the types' invariants | P3-D5; `cargo xtask ci` covers new members automatically (workspace-wide) | quartet green |
+| **M0-3** | `oxidizr-viewer` crate: lib core modules `scene`/`hit`/`commands`/`reload` as compiling stubs importing NO eframe (P3-D1 boundary), thin `main.rs` eframe bin; deps core+api+json+layout + eframe (wgpu)/notify/usvg/tiny-skia/dark-light; version pins recorded in the crate's `DEPENDENCIES` rustdoc (P3-D2); `cargo add` works — network verified 2026-11-19 (toolbox.md corrected) | registry cache lacks the GUI stack → first fetch pulls; `unused_dependencies` lint is allowed (P1-D9 pattern) so declaring the agreed set early is safe | quartet + full tier (workspace test surface grows) |
+| **M0-4** | CI headless builds: existing check/clippy jobs are workspace-wide so the new members ride for free — verify argv; extend `cargo xtask ci windows` leg check for viewer (eframe/winit/wgpu on `x86_64-pc-windows-gnu` mingw — pure-Rust bindings expected); darwin stays CI-only | P3-D8 "CI builds but runs no GUI"; no xvfb | quartet + `xtask ci windows` |
+| **M0-5** | `core::filter::eval` — pure evaluator `(&Workspace, base view content, mode, tags) → included element/relationship sets` over core types only (core stays dependency-free ✓); **implement only after P3-V5** settles reference semantics (include=any-tag, exclude semantics, relationship keep-rule incl. endpoint survival + `directRelationshipsOnly` corners) against the pinned monorepo/`filter.jspf`; unit tests incl. determinism; NOT wired into the JSON writer (bytes contract untouched — the writer stores mode+tags as today, matching the golden) | verified: `create_filtered_view` stores mode+tags; writer emits them un-evaluated; no evaluator exists | quartet + full tier + bless no-op |
+| **M0-6** | AGENTS.md one-sentence clarification: `unsafe` rule covers oxidizr code, dependency-internal unsafe (wgpu) is out of scope (P3-D2) | charter touch-up, no behavior | with M0-3 or its own docs commit |
+| **M0 close** | PROGRESS board + log M0 row; PHASE_3 M0 DONE; RESUME → M1 entry point; quick `bench cmp 2R` sanity (engine untouched) | — | quartet + full tier + bless corpus-diff=0 |
+
+Order: M0-1 → M0-2 → M0-3 (+M0-6) → M0-4 → M0-5 → close. M0-5 may parallel M1 work
+but its V-item gate is hard.
 
 ## P3-D10 Verification list (empirical, before dependent code)
 
