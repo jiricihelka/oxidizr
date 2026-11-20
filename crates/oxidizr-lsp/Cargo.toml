@@ -1,0 +1,30 @@
+[package]
+name = "oxidizr-lsp"
+description = "oxidizr-lsp: language server for the Structurizr DSL (P4 §P4-LSP, F5) — headless server core + thin stdio binary"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# The core (server.rs) is the headless state machine: lsp-types are
+# plain data; lsp-server appears only in `run()` and `main.rs` (the
+# single stdio surface — the viewer's R-2 ritual mirrored for the LSP,
+# §P4-LSP L-1). The feature crates (api/dsl) join with their items
+# (L1/L2), never up front.
+lsp-types = { workspace = true }
+lsp-server = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+expect-test = { workspace = true }
+
+[[bin]]
+name = "oxidizr-lsp"
+path = "src/main.rs"

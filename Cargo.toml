@@ -10,6 +10,7 @@ members = [
     "crates/oxidizr-layout",
     "crates/oxidizr-api",
     "crates/oxidizr-cli",
+    "crates/oxidizr-lsp",
     "crates/oxidizr-viewer",
     "crates/oxidizr-e2e",
     "crates/xtask",
@@ -51,6 +52,16 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 expect-test = "1"
 criterion = "0.5"
 proptest = "1"
+
+# P4 §P4-LSP (F5, P4-D5): rust-analyzer-lineage LSP plumbing — sync,
+# crossbeam-channel based, NO tokio (the lean-deps decision: tower-lsp
+# would drag async machinery for zero benefit at DSL file sizes).
+# `lsp-types` = the wire types; `lsp-server` = stdio framing + a
+# channel pair (`Connection::memory()` makes the transcript harness
+# in-process). Resolved + built on the pinned nightly 2026-11-21
+# (P4-V5 part 1).
+lsp-types = "0.97"
+lsp-server = "0.10"
 
 # P3 viewer GUI stack (P3-D2 pins; recorded in the viewer's DEPENDENCIES
 # rustdoc). `eframe` carries egui + the wgpu renderer. `epaint` is the
