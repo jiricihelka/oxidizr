@@ -35,11 +35,12 @@ toolbar path field + Enter / **Open**.
   Deployment → Dynamic → Filtered → Image → Custom, each under its own
   heading) plus a search that jumps to elements (select + center) or
   switches to matching views.
-- Navigation: wheel zoom, `−`/`+`/`Fit`, **right-drag** (or middle-button
-  / Space-drag) to pan, minimap (click/drag recenters). Per-view undo
-  history (cap 200).
-- Editing: drag a box to move (optional **Snap**, 10 px grid), drag empty
-  canvas to lasso, click/Shift-click to select, click an edge to select,
+- Navigation: wheel zoom (pinch too — two-finger trackpad scroll
+  pans), `−`/`+`/`Fit`, drag on empty canvas pans (middle-button or
+  Space-drag too), **right-drag** lassos, minimap (click/drag
+  recenters). Per-view undo history (cap 200).
+- Editing: drag a box to move (optional **Snap**, 10 px grid),
+  right-drag empty canvas to lasso, click/Shift-click to select, click an edge to select,
   drag its handles to reroute, double-click inserts a handle,
   Alt+click deletes one. Views whose file carries NO element coordinates
   open laid out by the bundled engine automatically (the view's

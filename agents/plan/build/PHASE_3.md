@@ -560,6 +560,46 @@ the §P3-M3 press state machine; `?` hover text + viewer README updated.
 | **M10-1** | `DISPLAY_FALLBACK` + separation floor in `display_params`; two exact-placement display tests re-pinned (pitch 450 → 550) + `display_params_floor_the_separations_only_upwards` | quartet + `ci gui` + full tier + bless; clippy × 4; **DONE 2026-11-20** |
 | **M10-2** | right-button pan in `shell.rs` (press chain + `Drag`/`?` docs) + README nav bullet | same + live window smoke — **DONE 2026-11-20** |
 
+## §P3-M11 — post-v0.3.0 follow-up: input/rendering UX batch (decomposition, 2026-11-20)
+
+Eleven live-use reports on the shipped viewer, all presentation-only
+session-state surfaces (no bytes contract, no V-item — the JSON stays
+the writer's output regardless of anchors, z-order or gesture handling;
+M11-6 changes only what OUR display engine produces for the DISPLAY
+pass, and dialog runs were always engine-defined). More than four
+modules (shell, paint, scene, commands, oxidizr-layout), so the charter
+requires this decomposition before implementation. Commit grouping in
+the `C` column — each C lands on green gates.
+
+| Item | Deliverable | C |
+|---|---|---|
+| **M11-1** | Swap canvas button roles: left-drag on empty canvas PANS, right-drag LASSOS (press chain + `press_mode` empty branch + `Drag` doc). Click/select/move/waypoint stay left; Middle/Space keep panning — **DONE 2026-11-20** | C1 |
+| **M11-4** | Trackpad: pinch zooms at the pointer (egui folds ctrl-scroll/magnify into `zoom_delta()`), two-finger scroll PANS, wheel keeps zooming (per-event `MouseWheelUnit`: `Line`/`Page`=wheel→zoom, `Point`=trackpad→pan) — **DONE 2026-11-20** | C1 |
+| **M11-10** | Hover tooltip restored: hand-rolled `Area::new(Id::unique(..))` block (fresh id every frame — the flicker) becomes egui's `response.on_hover_ui_at_pointer` (stable identity, 12 px gap, same `tooltip_text`) — **DONE 2026-11-20** | C1 |
+| **M11-2** | Remove arrow handles: **Delete/Backspace** clears ALL waypoints of the selected edge; handles now also PAINT on edge hover and `waypoint_hit` accepts the hovered edge, so Alt+click deletes without selecting first | C2 |
+| **M11-8** | Moving boxes carries their arrowheads: dragging N boxes translates the interior waypoints of edges whose BOTH ends move; **Ctrl+drag detaches** (waypoints stay). Preview==commit via one `Command::Group` | C2 |
+| **M11-3** | Arrows land on box SIDES, not centres: `scene::build` replaces centre endpoints with the centre→next-point ray clipped to the rect border (same dx/dy rule as the engine's `endpoint(None)`, so engine-routed sides agree) | C3 |
+| **M11-5** | Text never covered: `paint_scene` z-order split — all fills/strokes, then edges, then ALL galleys (nested boxes no longer paint over a parent's label) | C4 |
+| **M11-7** | Search result rows show the element's icon (`icon_cell`, `▪` fallback) | C5 |
+| **M11-9** | Opened-file path appears ONLY in the toolbar edit: window Title and status bar drop it (status keeps the view key + dirty state) | C5 |
+| **M11-11** | Click object → right panel shows an **Info** block (kind/id/name/metadata/description/group/tags/URL; edges: source → destination + labels) above the Key | C6 |
+| **M11-6** | Engine routes stop stacking: port spread in `layered.rs` — edges sharing a (node, side) distribute their anchor along the side by far-end cross order (N edges → N+1 slots), replacing the shared side-midpoint anchor | C7 |
+| **M11-12** | Oxidizr-only sidecar: non-contract per-file data persists in `<stem>.oxidizr.json` (versioned envelope, atomic write, our own JSON — NEVER fed to or from the contract writer, NEVER adopted as an open/reload source); first user = per-view viewport memory (zoom + centre restored on reopen). User directive 2026-11-20, registered in ADDITIONAL_FEATURES.md | C8 |
+
+Decisions: button swap = pan↔lasso only (draw.io keeps select/edit on
+left — click, box-move, waypoint drag, URL-click all stay Primary; a
+right-press with zero motion clears the selection, mirroring the old
+left-lasso behavior); wheel-vs-trackpad is distinguished by scroll
+UNIT (winit maps wheel→Line, touchpad→Pixel; no `MouseWheelSource` on
+Linux — unit is the portable signal); the `zoom_modifier` fold in egui
+means ctrl-scroll events must be SKIPPED in our loop to avoid
+double-zoom; waypoint carry moves only fully-contained edges (an edge
+leaving the moved group keeps its stored waypoints — rerouting them
+would fight the user's stored geometry); M11-3 recomputes anchors in
+SCENE, not per engine, so hand-placed views without vertices benefit
+too; M11-6 anchor spread is engine-side because only the engine knows
+the rank geometry.
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for

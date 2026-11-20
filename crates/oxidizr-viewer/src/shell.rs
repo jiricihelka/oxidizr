@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use crate::{commands, export, hit, icons, key, layout, overview, paint, reload, scene};
 use clap::ValueEnum;
-use eframe::egui::{self, Id, Pos2, Vec2};
+use eframe::egui::{self, Pos2, Vec2};
 use oxidizr_api::{ApiOptions, Input, LogItem, Opened, Outcome};
 use oxidizr_core::views::{
     AutomaticLayout, ColorScheme, FilterMode, LineStyle, RankDirection, View,
@@ -196,10 +196,10 @@ struct Viewer {
 }
 
 /// The in-flight canvas interaction (P3-M3). The mode is decided at
-/// PRESS time and can no longer change: dragging a box moves the
-/// selection, dragging empty canvas lassos, panning rides
-/// right/middle-button or Space so the left button is free for editing
-/// (right-drag added in §P3-M10).
+/// PRESS time and can no longer change: a left-drag moves the boxes
+/// under it or pans (empty canvas), a right-drag lassos, Middle and
+/// Space+Left pan too — §P3-M11 swapped the plain-drag roles (pan ↔
+/// lasso) at the user's request.
 enum Drag {
     /// No press, or a press still undecided (a click is still
     /// possible): nothing mutates the scene.
@@ -709,8 +709,10 @@ impl Viewer {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label("?").on_hover_text(
-                    "Drag box: move · Drag empty: lasso · Right/Middle/Space-drag: \
-                     pan · Wheel: zoom · Click: select · Shift-click: add/toggle · \
+                    "Drag box: move · Drag empty: pan · Right-drag: lasso · \
+                     Middle/Space-drag: pan too · Wheel: zoom · \
+                     Trackpad: pinch zooms, two-finger scroll pans · \
+                     Click: select · Shift-click: add/toggle · \
                      Click edge: select · Drag handle: reroute · Double-click edge: \
                      insert handle · Alt+click handle: delete · Ctrl+Z / Ctrl+Y: \
                      undo/redo · Ctrl+S: save layout JSON · Layout dialog: \
@@ -852,11 +854,11 @@ impl Viewer {
         let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
         // §P3-M3 input state machine: the drag MODE is decided at press
-        // (pan = right/middle button or Space, move = left on a box,
-        // lasso = left on background) and every frame of that mode acts
-        // on it. Right-drag joins pan in §P3-M10 (user report: the
-        // middle-button binding was undiscoverable; right-drag is the
-        // draw.io/Visio convention and the button had no other use).
+        // and every frame of that mode acts on it. §P3-M11 SWAPPED the
+        // button roles (user request): left-drag on empty canvas PANS,
+        // right-drag LASSOS — panning is what the free button should do
+        // on background; selection/edit (click, box-move, waypoint
+        // drag) all stay Left. Middle and Space+Left keep panning.
         let space = ui.input(|i| i.key_down(egui::Key::Space));
         let minimap_press = response.drag_started_by(egui::PointerButton::Primary)
             && ui
@@ -864,8 +866,15 @@ impl Viewer {
                 .is_some_and(|origin| self.minimap_contains(origin));
         if minimap_press {
             self.drag = Drag::Minimap;
+        } else if response.drag_started_by(egui::PointerButton::Secondary) {
+            // The lasso never hit-tests: a right-press always drags a
+            // marquee (zero motion clears the selection, exactly as the
+            // left-lasso of §P3-M3..M10 did).
+            if let Some(origin) = ui.input(|i| i.pointer.press_origin()) {
+                let shift = ui.input(|i| i.modifiers.shift);
+                self.drag = lasso_drag(self.selection.as_ref(), origin, shift);
+            }
         } else if response.drag_started_by(egui::PointerButton::Middle)
-            || response.drag_started_by(egui::PointerButton::Secondary)
             || (space && response.drag_started_by(egui::PointerButton::Primary))
         {
             self.drag = Drag::Pan;
@@ -1002,12 +1011,52 @@ impl Viewer {
                 }
             }
         }
-        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll.abs() > f32::EPSILON && response.hovered() {
+        // §P3-M11 gestures, split by scroll UNIT (winit reports the
+        // mouse WHEEL in Line/Page notches and touchpad scroll/pinch in
+        // Points): wheel zooms at the pointer as before; two-finger
+        // scroll PANS (natural direction — egui's delta already states
+        // how the content should move); pinch — a ctrl-scroll synthesis
+        // on Linux/Windows, a magnify gesture on macOS — is folded into
+        // `zoom_delta()` by egui itself, so ctrl-scroll events are
+        // SKIPPED here to avoid double-zooming.
+        if response.hovered() {
+            let (zoom, pan) = ui.input(|i| {
+                let mut zoom = i.zoom_delta();
+                let mut pan = Vec2::ZERO;
+                let mut wheel = 0.0_f32;
+                for event in &i.events {
+                    if let egui::Event::MouseWheel {
+                        unit,
+                        delta,
+                        modifiers,
+                        ..
+                    } = event
+                    {
+                        if modifiers.command {
+                            continue; // egui already counted it as zoom
+                        }
+                        match unit {
+                            egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => {
+                                wheel += delta.y;
+                            }
+                            egui::MouseWheelUnit::Point => pan += *delta,
+                        }
+                    }
+                }
+                if wheel.abs() > f32::EPSILON {
+                    zoom *= (wheel * 0.05).exp();
+                }
+                (zoom, pan)
+            });
             if let Some(pt) = ui.input(|i| i.pointer.hover_pos()) {
-                let factor = (scroll * 0.005_f32).exp();
-                self.viewport
-                    .zoom_at(f64::from(factor), (f64::from(pt.x), f64::from(pt.y)));
+                if (f64::from(zoom) - 1.0).abs() > f64::EPSILON {
+                    self.viewport
+                        .zoom_at(f64::from(zoom), (f64::from(pt.x), f64::from(pt.y)));
+                }
+                let pan_by = (f64::from(pan.x), f64::from(pan.y));
+                if pan.x.abs() + pan.y.abs() > f32::EPSILON {
+                    self.viewport.pan_by(pan_by);
+                }
             }
         }
         if response.clicked() {
@@ -1155,20 +1204,18 @@ impl Viewer {
                 );
             }
         }
-        // Hover tooltip (fg order, next to the cursor).
-        if let (Some(hit), Some(pos), Some(scene)) =
-            (self.hover, ui.input(|i| i.pointer.hover_pos()), &self.scene)
-        {
+        // Hover tooltip (§P3-M11): egui's own tooltip machinery instead
+        // of the hand-rolled Area — the old `Id::unique` gave every
+        // frame a brand-new tooltip identity (no state to stabilise on),
+        // which is exactly what made it flicker away. `on_hover_ui_at_pointer`
+        // rides this response's stable id, follows the pointer and keeps
+        // the same 12 px gap.
+        if let (Some(hit), Some(scene)) = (self.hover, &self.scene) {
             let text = tooltip_text(scene, hit);
             if !text.is_empty() {
-                egui::Area::new(Id::unique("hover-tip"))
-                    .order(egui::Order::Foreground)
-                    .fixed_pos(pos + Vec2::new(12.0, 12.0))
-                    .show(&ctx, |ui| {
-                        egui::Frame::popup(ui.style()).show(ui, |ui| {
-                            ui.label(text);
-                        });
-                    });
+                response.on_hover_ui_at_pointer(move |ui| {
+                    ui.label(text);
+                });
             }
         }
     }
@@ -1178,7 +1225,8 @@ impl Viewer {
     /// deletes that vertex, a plain press drags it), then a box under
     /// the cursor begins a group MOVE (the box joins the selection
     /// first; Shift keeps the group, a plain press elsewhere selects
-    /// just it), anything else begins a LASSO rubber band.
+    /// just it), anything else PANS (§P3-M11: the LASSO moved to the
+    /// right button and never hit-tests).
     fn press_mode(&mut self, origin: Pos2, shift: bool, alt: bool) -> Drag {
         let screen = (f64::from(origin.x), f64::from(origin.y));
         if let Some((id, mut from, index)) = self.waypoint_hit(screen) {
@@ -1215,18 +1263,9 @@ impl Viewer {
             _ => None,
         };
         let Some(id) = item else {
-            let base = if shift {
-                match &self.selection {
-                    Some(paint::Selection::Items(ids)) => ids.clone(),
-                    _ => Vec::new(),
-                }
-            } else {
-                Vec::new()
-            };
-            return Drag::Lasso {
-                anchor: origin,
-                base,
-            };
+            // §P3-M11 swapped roles: a left-press on empty canvas PANS
+            // (the lasso rides the right button, see the press chain).
+            return Drag::Pan;
         };
         let mut ids: Vec<ModelId> = match &self.selection {
             Some(paint::Selection::Items(ids)) => ids.clone(),
@@ -2511,6 +2550,21 @@ fn icon_cell(
             );
         }
     }
+}
+
+/// Press snapshot starting a LASSO (§P3-M3; the right button's job
+/// since the §P3-M11 swap): Shift keeps the current Items selection
+/// as the additive base, anything else lassos from empty.
+fn lasso_drag(selection: Option<&paint::Selection>, anchor: Pos2, shift: bool) -> Drag {
+    let base = if shift {
+        match selection {
+            Some(paint::Selection::Items(ids)) => ids.clone(),
+            _ => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+    Drag::Lasso { anchor, base }
 }
 
 /// Shorten a data-URI-ish string for the diagnostics list.
