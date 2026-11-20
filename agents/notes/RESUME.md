@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 M3-1 docs → M3-2 code next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 M3-2 done → M3-3 shell next**)
 
 ## State
 
@@ -13,16 +13,27 @@
   -p oxidizr-e2e` → 8 ok) + `cargo xtask e2e bless` → 307×unchanged +
   clean `testdata/`; **never push**.
 - **M3 plan (§P3-M3 table in PHASE_3.md — authoritative, read it):**
-  - **M3-2 NEXT**: headless `commands` — `LayoutOverlay { elements
-    top-lefts, relationship interiors, dimensions }` + invertible
-    `Command` (MoveElements group / SetWaypoints / ClearView snapshot /
-    SetCanvasSize) + factories (align 6, distribute 2, centre,
-    bring-back, remove-all) + `History` (Vec stacks cap 200, apply/undo
-    symmetric via from/to swap) + `snap_grid` (10 px) +
-    `as_overrides()` → `scene::build`; `hit::items_in_rect` helper.
-  - **M3-3** shell: drag-move + box-select + pan→middle/space +
+  - **M3-2 DONE (this commit)**: headless `commands` —
+    `LayoutOverlay { view_key, elements, relationships, dimensions }`
+    (`for_view`, `is_empty`, `as_overrides`, `position`/`rect`/
+    `interior` read overlay-first-then-scene); `Command`
+    (MoveElements{moves}/SetWaypoints{changes}/SetCanvasSize{from,to}/
+    ClearView{snapshot}) with symmetric `apply(forward)` — `from`/`to`
+    travel in the command, no closures; factories `move_by`(snap flag,
+    GRID_PX 10), `align`(AlignEdge l/c/r/t/m/b, bbox target),
+    `distribute`(Axis, needs ≥3, extremes fixed, equal gaps incl.
+    negative), `centre_view`(bounds centre), `bring_back`(page Rect,
+    minimal delta), `remove_all_vertices`, `set_waypoints`,
+    `set_canvas_size`, `clear_view` — ALL return `Option<Command>`
+    (None = no-op, never pushed); `History` run/undo/redo/reset/
+    can_*, HISTORY_CAP 200 (drop-oldest, run clears redo); type
+    aliases `ElementMove`/`WaypointChange`; 8 unit tests (round-trip
+    per variant, cap, fixture-factory math). Viewer lib now 62 tests.
+  - **M3-3 NEXT** shell: drag-move + box-select + pan→middle/space +
     Ctrl+Z/Y keys + per-view overlay map (replaces
-    `Viewer.layout_overrides`) + dirty badge + Apply/Reset as commands.
+    `Viewer.layout_overrides`) + dirty badge + Apply/Reset as commands;
+    add `hit::items_in_rect(scene, Rect) -> Vec<Id>` headless helper
+    (content order, INTERSECTS semantics) for box-select.
   - **M3-4** waypoint handles (drag/insert/Alt-delete) + dialog footer
     buttons (magnet bring-back, remove-vertices) + align/distribute row.
   - **M3-5** SAVE: `apply_overlay` (clone workspace, write x/y +
