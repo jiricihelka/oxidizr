@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
+| P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,19 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M7 — post-v0.3.0: view list grouped by kind ✅ (2026-11-20, COMPLETE)
+
+Same report thread as M6: "the views should be graphically split into
+what type of view it is". §P3-M7 in PHASE_3.md.
+
+- **M7-1** — headless `overview::section` (kind → `(rank, header)`,
+  C4-granularity canonical order) + `overview::grouped` (stable
+  `(rank, order, key)` partition into `(header, members)` runs); the
+  sidebar renders separator + uppercase-heading blocks per kind
+  (row rendering split into `view_row`). Unit test `NineKinds`
+  (all nine variants, scrambled in, sections + intra-section
+  (order, key) ranking asserted); 93 lib tests.
 
 ### P3-M6 — post-v0.3.0: display auto-layout ✅ (2026-11-20, COMPLETE)
 

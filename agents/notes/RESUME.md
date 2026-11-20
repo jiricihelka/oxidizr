@@ -9,7 +9,8 @@
   bench baseline); M3 (`4fcb235`→`d39ebdc`); M4 (`81b0a3d`→`dc5d840`);
   M5: M5-0 `5f1dd32`, M5-1 `0842dbd`, M5-2 `2325947`, M5-3 `ff2b8b5`,
   close + tag. **Post-tag M6** (display auto-layout, §P3-M6): code
-  `a1e7dfc`, docs follow. **Nothing pushed; tags
+  `a1e7dfc`, docs follow. **Post-tag M7** (§P3-M7): sidebar view list
+  grouped per view kind. **Nothing pushed; tags
   v0.1.0/v0.2.0/v0.3.0.**
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
@@ -176,6 +177,10 @@
   UNDER the overlay; `save_workspace` seeds untouched ids so the JSON
   persists what was displayed. Guard test: `tests/auto_display.rs`
   (big-bank-plc Components: pile → spread → pin → seed).
+- **M7**: the sidebar list is partitioned by kind — `overview::section`
+  (rank+header per `View` variant, C4 granularity first) +
+  `overview::grouped` (stable `(rank, order, key)` sort → header runs);
+  the shell renders separator + uppercase headings, rows via `view_row`.
 
 ## Viewer orientation (M1/M2 shipped)
 
@@ -191,7 +196,7 @@
   `ComboBox::from_id_salt`; click after a MOVED drag never fires;
   bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"` ==
   307 + clean `git status testdata/`.
-- `cargo test -p oxidizr-viewer` = 92 lib + 1 auto_display + 3 golden
+- `cargo test -p oxidizr-viewer` = 93 lib + 1 auto_display + 3 golden
   (+2 ignored perf);
   `cargo test -p oxidizr-layout --features dot-backend` = 31.
   Viewer usage lives in `crates/oxidizr-viewer/README.md` (M5-3).

@@ -13,12 +13,14 @@
 //!
 //! Quick-nav rides the same module: [`nav_matches`] is the pure filter
 //! the shell's search field runs over element names/ids and view
-//! titles.
+//! titles. So does the sidebar's kind split: [`section`] + [`grouped`]
+//! partition the view list into per-type sections (§P3-M7).
 
 use epaint::{Color32, Rect as ERect, Shape, Stroke, pos2};
 
 use crate::paint::Selection;
 use crate::scene::{Rect, Scene};
+use oxidizr_core::views::View;
 
 /// Minimap box width in screen px (bottom-right of the canvas).
 pub const MAP_WIDTH_PX: f32 = 220.0;
@@ -185,13 +187,57 @@ pub fn nav_matches(query: &str, name: &str, id: &str) -> bool {
     name.to_lowercase().contains(&needle) || id.to_lowercase().contains(&needle)
 }
 
+/// The sidebar section of one view kind (§P3-M7, user request: split
+/// the view list by view type): `(rank, header)`. The order is C4
+/// granularity first (landscape → context → container → component),
+/// then deployment and dynamic, then the derived kinds (filtered,
+/// image) and custom last.
+#[must_use]
+pub const fn section(view: View<'_>) -> (u8, &'static str) {
+    match view {
+        View::Landscape(_) => (0, "System landscape"),
+        View::Context(_) => (1, "System context"),
+        View::Container(_) => (2, "Container"),
+        View::Component(_) => (3, "Component"),
+        View::Deployment(_) => (4, "Deployment"),
+        View::Dynamic(_) => (5, "Dynamic"),
+        View::Filtered(_) => (6, "Filtered"),
+        View::Image(_) => (7, "Image"),
+        View::Custom(_) => (8, "Custom"),
+    }
+}
+
+/// Group `views` by kind for the sidebar (§P3-M7): `(header, members)`
+/// runs in [`section`] order, empty kinds skipped. Inside a section the
+/// input's (order, key) ranking survives — each block keeps the file's
+/// own view order (`sort_by_key` is STABLE and the key carries the
+/// ranking).
+#[must_use]
+pub fn grouped<'a>(views: &[View<'a>]) -> Vec<(&'static str, Vec<View<'a>>)> {
+    let mut sorted = views.to_vec();
+    sorted.sort_by_key(|view| (section(*view).0, view.base().order, view.key().to_owned()));
+    let mut runs: Vec<(&'static str, Vec<View<'_>>)> = Vec::new();
+    for view in sorted {
+        let header = section(view).1;
+        match runs.last_mut() {
+            Some((last, members)) if *last == header => members.push(view),
+            _ => runs.push((header, vec![view])),
+        }
+    }
+    runs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::scene::{Boundary, BoundaryKind, Item};
     use oxidizr_core::Id;
     use oxidizr_core::validate::ElementKind;
-    use oxidizr_core::views::{IconPosition, LineStyle, Shape as ElementShape};
+    use oxidizr_core::views::{
+        ComponentView, ContainerView, CustomView, DeploymentView, DynamicView, FilteredView,
+        IconPosition, ImageView, LineStyle, Shape as ElementShape, SystemContextView,
+        SystemLandscapeView, ViewBase, ViewContent,
+    };
 
     /// Positional scene-rect constructor (keeps fixtures readable).
     fn wr(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -328,5 +374,138 @@ mod tests {
         );
         assert!(!nav_matches("   ", "Alice", "1"));
         assert!(!nav_matches("zed", "Alice", "1"));
+    }
+
+    #[test]
+    fn grouped_splits_the_view_list_by_kind() {
+        // Sections in canonical order; inside a section the (order, key)
+        // ranking survives, not the (scrambled) input order.
+        let kinds = NineKinds::new();
+        let shape: Vec<(&str, Vec<&str>)> = grouped(&kinds.scrambled())
+            .iter()
+            .map(|(header, members)| (*header, members.iter().map(|view| view.key()).collect()))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                ("System landscape", vec!["L1", "L2"]),
+                ("System context", vec!["C1"]),
+                ("Container", vec!["CT1"]),
+                ("Component", vec!["P1"]),
+                ("Deployment", vec!["D1"]),
+                ("Dynamic", vec!["Y1"]),
+                ("Filtered", vec!["F1"]),
+                ("Image", vec!["I1"]),
+                ("Custom", vec!["X1"]),
+            ]
+        );
+        assert!(grouped(&[]).is_empty());
+    }
+
+    /// Exhaustive §P3-M7 fixture: one view per `View` variant, plus TWO
+    /// landscape views to pin the (order, key) ranking inside a section.
+    struct NineKinds {
+        land_a: SystemLandscapeView,
+        land_b: SystemLandscapeView,
+        ctx: SystemContextView,
+        cont: ContainerView,
+        comp: ComponentView,
+        dep: DeploymentView,
+        dynv: DynamicView,
+        flt: FilteredView,
+        img: ImageView,
+        custom: CustomView,
+    }
+
+    impl NineKinds {
+        fn new() -> Self {
+            let content = ViewContent::default;
+            Self {
+                land_a: SystemLandscapeView {
+                    base: ViewBase::new("L2", 2),
+                    content: content(),
+                    enterprise_boundary_visible: false,
+                    animations: Vec::new(),
+                },
+                land_b: SystemLandscapeView {
+                    base: ViewBase::new("L1", 1),
+                    content: content(),
+                    enterprise_boundary_visible: false,
+                    animations: Vec::new(),
+                },
+                ctx: SystemContextView {
+                    base: ViewBase::new("C1", 9),
+                    content: content(),
+                    software_system_id: Id::new("1"),
+                    enterprise_boundary_visible: false,
+                    animations: Vec::new(),
+                },
+                cont: ContainerView {
+                    base: ViewBase::new("CT1", 9),
+                    content: content(),
+                    software_system_id: Id::new("1"),
+                    external_software_system_boundaries_visible: false,
+                    animations: Vec::new(),
+                },
+                comp: ComponentView {
+                    base: ViewBase::new("P1", 9),
+                    content: content(),
+                    container_id: Id::new("2"),
+                    external_container_boundaries_visible: false,
+                    animations: Vec::new(),
+                },
+                dep: DeploymentView {
+                    base: ViewBase::new("D1", 9),
+                    content: content(),
+                    environment: "Default".to_owned(),
+                    software_system_id: None,
+                    animations: Vec::new(),
+                },
+                dynv: DynamicView {
+                    base: ViewBase::new("Y1", 9),
+                    content: content(),
+                    element_id: None,
+                    deployment_environment: None,
+                    external_boundaries_visible: false,
+                },
+                flt: FilteredView {
+                    base: ViewBase::new("F1", 9),
+                    base_view_key: "L1".to_owned(),
+                    mode: None,
+                    tags: Vec::new(),
+                },
+                img: ImageView {
+                    base: ViewBase::new("I1", 9),
+                    element_id: None,
+                    content: None,
+                    content_light: None,
+                    content_dark: None,
+                    content_type: None,
+                },
+                custom: CustomView {
+                    base: ViewBase::new("X1", 9),
+                    content: content(),
+                    animations: Vec::new(),
+                    software_system_id: None,
+                },
+            }
+        }
+
+        /// Input with scrambled ranks: filtered/image/custom lead and
+        /// `land_a` (rank 2) precedes `land_b` (rank 1).
+        fn scrambled(&self) -> Vec<View<'_>> {
+            vec![
+                View::Filtered(&self.flt),
+                View::Landscape(&self.land_a),
+                View::Image(&self.img),
+                View::Landscape(&self.land_b),
+                View::Context(&self.ctx),
+                View::Container(&self.cont),
+                View::Component(&self.comp),
+                View::Deployment(&self.dep),
+                View::Dynamic(&self.dynv),
+                View::Custom(&self.custom),
+            ]
+        }
     }
 }

@@ -802,32 +802,29 @@ impl Viewer {
         let Some(workspace) = &self.workspace else {
             return;
         };
-        let mut views = workspace.views.all_views();
-        views.sort_by_key(|view| (view.base().order, view.key().to_owned()));
+        // §P3-M7: the list is graphically split per view KIND (C4
+        // granularity first) — `overview::grouped` owns the partition +
+        // the (order, key) ranking inside each section.
+        let views = workspace.views.all_views();
+        let groups = overview::grouped(&views);
         let mut chosen: Option<String> = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                for view in views {
-                    let mut label = view_label(view);
-                    if self.dirty.contains(view.key()) {
-                        label.push_str(" ●");
-                    }
-                    let response = ui.selectable_label(
-                        self.view_key.as_deref() == Some(view.key()),
-                        egui::RichText::new(label).small(),
+                for (header, members) in &groups {
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new(header.to_ascii_uppercase())
+                            .size(10.0)
+                            .weak(),
                     );
-                    if response.clicked() {
-                        chosen = Some(view.key().to_owned());
+                    for view in members {
+                        let selected = self.view_key.as_deref() == Some(view.key());
+                        let dirty = self.dirty.contains(view.key());
+                        if view_row(ui, *view, selected, dirty) {
+                            chosen = Some(view.key().to_owned());
+                        }
                     }
-                    response.on_hover_text(format!(
-                        "key: {}\n{}",
-                        view.key(),
-                        view.base()
-                            .description
-                            .as_deref()
-                            .unwrap_or("(no description)")
-                    ));
                 }
             });
         if let Some(key) = chosen.or(nav_view) {
@@ -2410,6 +2407,27 @@ fn view_label(view: View<'_>) -> String {
         .title
         .clone()
         .unwrap_or_else(|| view.key().to_owned())
+}
+
+/// One sidebar row (§P3-M7): title + dirty dot, selection state, the
+/// key/description hover detail; `true` when clicked. Split out of
+/// `view_list` (the kind sections) for the line budget.
+fn view_row(ui: &mut egui::Ui, view: View<'_>, selected: bool, dirty: bool) -> bool {
+    let mut label = view_label(view);
+    if dirty {
+        label.push_str(" ●");
+    }
+    let response = ui.selectable_label(selected, egui::RichText::new(label).small());
+    let clicked = response.clicked();
+    response.on_hover_text(format!(
+        "key: {}\n{}",
+        view.key(),
+        view.base()
+            .description
+            .as_deref()
+            .unwrap_or("(no description)")
+    ));
+    clicked
 }
 
 /// Dialog label for a rank direction (`None` reads as the reference

@@ -462,6 +462,20 @@ No V-item needed: no bytes contract touched (the display pass is
 session state, like the M2-5 `Overrides` stance; `oxidizr-json` output
 stays file-driven — bless 307×unchanged held).
 
+## §P3-M7 — post-v0.3.0 follow-up: view list grouped by kind (2026-11-20)
+
+Second half of the same user report: the sidebar view list is a flat
+column, so a workspace with a dozen views across five kinds is hard to
+scann — "the views should be graphically split into what type of view it
+is". The structurizr web UI's selector is likewise per-type; our list
+now is too.
+
+| Item | Deliverable | Exit gate |
+|---|---|---|
+| **M7-1** | headless seam `overview::section` (kind → `(rank, header)`, C4 granularity first: landscape → context → container → component → deployment → dynamic → filtered → image → custom) + `overview::grouped` (stable `(rank, order, key)` sort partitioned into `(header, members)` runs); shell renders `── HEADING ──` separator blocks, row rendering split into `view_row` for the line budget; `view_list`'s own sort gone (subsumed) | `overview.rs` unit over all nine kinds (fixture `NineKinds`, scrambled input, section + intra-section ranking asserted); quartet + `ci gui` + full tier + bless; clippy × 4 combos — **DONE 2026-11-20** |
+
+UI presentation only — no bytes contract, no V-item.
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for

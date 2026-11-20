@@ -23,8 +23,11 @@ toolbar path field + Enter / **Open**.
 
 - Every view kind renders with full styling (custom/image views are
   placeholder boxes), light/dark themes, the bundled font, key/legend and
-  tooltips, a tag filter, and the left panel: view selector + search that
-  jumps to elements (select + center) or switches to matching views.
+  tooltips, a tag filter, and the left panel: a **view selector grouped by
+  view type** (System landscape → context → Container → Component →
+  Deployment → Dynamic → Filtered → Image → Custom, each under its own
+  heading) plus a search that jumps to elements (select + center) or
+  switches to matching views.
 - Navigation: wheel zoom, `−`/`+`/`Fit`, middle-button or Space-drag pan,
   minimap (click/drag recenters). Per-view undo history (cap 200).
 - Editing: drag a box to move (optional **Snap**, 10 px grid), drag empty
