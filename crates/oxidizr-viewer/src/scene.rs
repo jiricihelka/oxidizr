@@ -8,8 +8,10 @@
 //!
 //! Decisions baked in here (§P3-M1, pinned 2026-11-19):
 //!
-//! - **Geometry** is the stored `x/y` (top-left) — M1 is read-only, no
-//!   auto-layout yet. **Size** is the resolved style's `width`/`height`,
+//! - **Geometry** is the stored `x/y` (top-left), except where a session
+//!   [`Overrides`] (P3-M2-5 auto-layout) replaces it — build-time only,
+//!   the stored workspace is never touched (editor rule, P3-D0).
+//!   **Size** is the resolved style's `width`/`height`,
 //!   else the [`DEFAULT_ITEM_WIDTH`]×[`DEFAULT_ITEM_HEIGHT`] box: the
 //!   reference auto-sizes boxes by measuring text on a canvas
 //!   (`structurizr-diagram.js` `calculateWidth`/`calculateHeight`), which
@@ -290,6 +292,26 @@ pub struct Scene {
     pub bounds: Rect,
 }
 
+/// Session auto-layout geometry (P3-M2-5): what the [`layout`] module
+/// produced for the current view, overlaid on the stored values at
+/// [`build`] time. NEVER persisted (the editor rule, P3-D0: session
+/// geometry only until M3 owns saving) and per-view (the shell clears
+/// it on every view change).
+///
+/// [`layout`]: crate::layout
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Overrides {
+    /// Element id → box TOP-LEFT (world px) replacing the stored
+    /// `x/y`. Deployment-node ids never appear: those elements are
+    /// boundaries whose rects follow their members.
+    pub elements: HashMap<Id, (f64, f64)>,
+    /// Relationship id → INTERIOR waypoints. The scene edge polyline is
+    /// `[source centre, …waypoints…, destination centre]`, so the stored
+    /// relationship-view vertices are REPLACED wholesale — an empty vec
+    /// straightens the edge.
+    pub relationships: HashMap<Id, Vec<(f64, f64)>>,
+}
+
 /// Why a scene could not be built. Bad model ids are never an error here
 /// (they are skipped) — only un-renderable views are.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -333,8 +355,10 @@ pub enum SceneError {
 /// `mask` is the optional session tag-filter inclusion ([`Included`],
 /// pre-evaluated by the caller with [`oxidizr_core::filter::eval`]); it
 /// INTERSECTS the view's own filter (a filtered view is resolved against
-/// its base here, P3-V5). Geometry is the stored layout; see the module
-/// docs for every resolution rule.
+/// its base here, P3-V5). `overrides` is the optional session auto-layout
+/// geometry ([`Overrides`], P3-M2-5): element top-lefts and relationship
+/// interior waypoints OVERLAID on the stored values — boundaries follow
+/// their members automatically. Geometry resolution rules: module docs.
 ///
 /// # Errors
 ///
@@ -351,6 +375,7 @@ pub fn build(
     view_key: &str,
     color_scheme: ColorScheme,
     mask: Option<&Included>,
+    overrides: Option<&Overrides>,
 ) -> Result<Scene, SceneError> {
     let views = workspace.views.all_views();
     let Some(view) = views.iter().find(|v| v.key() == view_key).copied() else {
@@ -484,9 +509,14 @@ pub fn build(
             dns.push(spec);
             Placement::Dn(dn_idx)
         } else {
+            // Session auto-layout wins over the stored top-left (P3-M2-5);
+            // sizes stay style-resolved either way.
+            let (x, y) = overrides
+                .and_then(|o| o.elements.get(id))
+                .map_or((f64::from(element.x), f64::from(element.y)), |p| *p);
             let rect = Rect {
-                x: f64::from(element.x),
-                y: f64::from(element.y),
+                x,
+                y,
                 width: style
                     .width
                     .map_or(DEFAULT_ITEM_WIDTH, |w| f64::from(w.max(1))),
@@ -721,7 +751,12 @@ pub fn build(
         };
         let style = styles.relationship_style(rel, model, color_scheme);
         let mut points = vec![source.center()];
-        points.extend(rv.vertices.iter().map(|v| (f64::from(v.x), f64::from(v.y))));
+        // Session auto-layout replaces the stored vertices wholesale
+        // (P3-M2-5) — an empty override vec straightens the edge.
+        match overrides.and_then(|o| o.relationships.get(&rv.id)) {
+            Some(waypoints) => points.extend(waypoints.iter().copied()),
+            None => points.extend(rv.vertices.iter().map(|v| (f64::from(v.x), f64::from(v.y)))),
+        }
         points.push(destination.center());
         edges.push(Edge {
             id: rv.id.clone(),
@@ -1489,7 +1524,7 @@ mod tests {
                 ..ViewContent::default()
             },
         );
-        let scene = build(&ws, "L1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(scene.view_key, "L1");
         assert_eq!(scene.title, "System Landscape View");
         assert_eq!(scene.background, "#ffffff");
@@ -1525,7 +1560,7 @@ mod tests {
                 ..ViewContent::default()
             },
         );
-        let scene = build(&ws, "L1", ColorScheme::Dark, None).unwrap();
+        let scene = build(&ws, "L1", ColorScheme::Dark, None, None).unwrap();
         assert_eq!(scene.background, "#111111");
         assert_eq!(scene.items[0].color, "#cccccc");
     }
@@ -1541,14 +1576,14 @@ mod tests {
             },
         );
         // getMetadataForElement includes the technology suffix (diagram.js:3305).
-        let scene = build(&ws, "L1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(
             scene.items[0].metadata.as_deref(),
             Some("[Container: Spring Boot]")
         );
         // views.configuration.terminology overrides the term.
         ws.views.configuration.terminology.container = Some("Service".to_string());
-        let scene = build(&ws, "L1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(
             scene.items[0].metadata.as_deref(),
             Some("[Service: Spring Boot]")
@@ -1585,7 +1620,7 @@ mod tests {
             software_system_id: None,
             animations: Vec::new(),
         });
-        let scene = build(&ws, "D1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "D1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(scene.title, "Deployment View: Default");
         // Items: infra nodes + container instance only (diagram.js:558).
         let ids: Vec<&str> = scene.items.iter().map(|i| i.id.as_str()).collect();
@@ -1624,7 +1659,7 @@ mod tests {
                 ..ViewContent::default()
             },
         );
-        let scene = build(&ws, "L1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
         // Only bob+carol carry the "Team" group; alice is single.
         assert_eq!(scene.boundaries.len(), 1);
         let group = &scene.boundaries[0];
@@ -1652,7 +1687,7 @@ mod tests {
             external_software_system_boundaries_visible: true,
             animations: Vec::new(),
         });
-        let scene = build(&ws, "C1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "C1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(scene.title, "Container View: Internet Banking");
         // removeIllegalElements: foreign parent `mail(7)` drops out.
         let ids: Vec<&str> = scene.items.iter().map(|i| i.id.as_str()).collect();
@@ -1680,7 +1715,7 @@ mod tests {
             external_container_boundaries_visible: true,
             animations: Vec::new(),
         });
-        let scene = build(&ws, "P1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "P1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(
             scene.title,
             "Component View: Internet Banking - Web Application"
@@ -1709,7 +1744,7 @@ mod tests {
             mode: Some(oxidizr_core::views::FilterMode::Include),
             tags: vec!["Customer".to_string()],
         });
-        let scene = build(&ws, "F1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "F1", ColorScheme::Light, None, None).unwrap();
         // The filtered view's own key, the base view's title.
         assert_eq!(scene.view_key, "F1");
         assert_eq!(scene.title, "System Landscape View");
@@ -1723,7 +1758,7 @@ mod tests {
             element_ids: vec![id(1)],
             relationship_ids: Vec::new(),
         };
-        let masked = build(&ws, "L1", ColorScheme::Light, Some(&mask)).unwrap();
+        let masked = build(&ws, "L1", ColorScheme::Light, Some(&mask), None).unwrap();
         assert_eq!(masked.items.len(), 1);
         assert_eq!(masked.edges, [] as [Edge; 0]);
     }
@@ -1731,7 +1766,7 @@ mod tests {
     #[test]
     fn unknown_image_and_dangling_base_are_errors() {
         let mut ws = with_landscape(workspace(), ViewContent::default());
-        let err = build(&ws, "nope", ColorScheme::Light, None).unwrap_err();
+        let err = build(&ws, "nope", ColorScheme::Light, None, None).unwrap_err();
         assert!(matches!(err, SceneError::ViewNotFound { key } if key == "nope"));
 
         ws.views.image_views.push(ImageView {
@@ -1742,7 +1777,7 @@ mod tests {
             content_dark: None,
             content_type: None,
         });
-        let err = build(&ws, "I1", ColorScheme::Light, None).unwrap_err();
+        let err = build(&ws, "I1", ColorScheme::Light, None, None).unwrap_err();
         assert!(matches!(err, SceneError::NotRenderable { .. }));
 
         ws.views.filtered_views.push(FilteredView {
@@ -1751,7 +1786,7 @@ mod tests {
             mode: None,
             tags: Vec::new(),
         });
-        let err = build(&ws, "F2", ColorScheme::Light, None).unwrap_err();
+        let err = build(&ws, "F2", ColorScheme::Light, None, None).unwrap_err();
         assert!(matches!(err, SceneError::BaseViewNotFound { .. }));
     }
 
@@ -1766,7 +1801,7 @@ mod tests {
             },
         );
         ws.views.system_landscape_views[0].base.title = Some("  My Landscape  ".to_string());
-        let scene = build(&ws, "L1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(scene.title, "  My Landscape  ");
         // Stale element + relationship: rendered content stays valid.
         assert_eq!(scene.items.len(), 1);
@@ -1797,11 +1832,11 @@ mod tests {
             relationships: vec![rel_view(20)],
             ..ViewContent::default()
         }));
-        let a = build(&ws, "D1", ColorScheme::Light, None).unwrap();
-        let b = build(&ws, "D1", ColorScheme::Light, None).unwrap();
+        let a = build(&ws, "D1", ColorScheme::Light, None, None).unwrap();
+        let b = build(&ws, "D1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(a, b);
-        let l1 = build(&ws, "L1", ColorScheme::Dark, None).unwrap();
-        let l2 = build(&ws, "L1", ColorScheme::Dark, None).unwrap();
+        let l1 = build(&ws, "L1", ColorScheme::Dark, None, None).unwrap();
+        let l2 = build(&ws, "L1", ColorScheme::Dark, None, None).unwrap();
         assert_eq!(l1, l2);
     }
 
@@ -1821,7 +1856,7 @@ mod tests {
                 ..ViewContent::default()
             },
         );
-        let scene = build(&ws, "L1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
         let edge = &scene.edges[0];
         assert_eq!(edge.label.as_deref(), Some("Uses banking"));
         assert_eq!(edge.order.as_deref(), Some("1"));
@@ -1846,11 +1881,108 @@ mod tests {
             deployment_environment: None,
             external_boundaries_visible: false,
         });
-        let scene = build(&ws, "Y1", ColorScheme::Light, None).unwrap();
+        let scene = build(&ws, "Y1", ColorScheme::Light, None, None).unwrap();
         assert_eq!(scene.title, "Dynamic View: Internet Banking");
         assert_eq!(scene.items.len(), 3);
         // Container 5 on a dynamic view: parent-SS boundary (bank 4).
         let bs: Vec<&str> = scene.boundaries.iter().map(|b| b.id.as_str()).collect();
         assert_eq!(bs, ["software-system:4"]);
+    }
+
+    #[test]
+    fn overrides_replace_stored_geometry() {
+        // P3-M2-5 seam: element top-lefts and relationship INTERIOR
+        // waypoints overlay the stored values (the workspace is never
+        // touched — session state, like the tag mask).
+        let ws = with_landscape(
+            workspace(),
+            ViewContent {
+                elements: vec![element(1, 0, 0), element(4, 400, 0), element(5, 800, 0)],
+                relationships: vec![rel_view(20), rel_view(21)],
+                ..ViewContent::default()
+            },
+        );
+        let overrides = Overrides {
+            elements: HashMap::from([(id(1), (2000.0, 600.0))]),
+            relationships: HashMap::from([(id(20), vec![(2100.0, 300.0), (300.0, 300.0)])]),
+        };
+        let scene = build(&ws, "L1", ColorScheme::Light, None, Some(&overrides)).unwrap();
+        // Rel 20 (alice → bank): alice moved, stored geometry kept for
+        // the bank; interior replaced wholesale.
+        let alice = scene.items.iter().find(|i| i.id == id(1)).unwrap();
+        assert_eq!((alice.rect.x, alice.rect.y), (2000.0, 600.0));
+        let edge = scene.edges.iter().find(|e| e.id == id(20)).unwrap();
+        assert_eq!(
+            edge.points,
+            vec![
+                (2175.0, 675.0),
+                (2100.0, 300.0),
+                (300.0, 300.0),
+                (575.0, 75.0),
+            ]
+        );
+        // Bounds follow the moved item (union + margin recomputed).
+        assert!(scene.bounds.x + scene.bounds.width > 2350.0);
+        // An absent relationship keeps its stored vertices (rel 21 has
+        // none in the fixture): still a straight centre pair.
+        let kept = scene.edges.iter().find(|e| e.id == id(21)).unwrap();
+        assert_eq!(kept.points.len(), 2);
+    }
+
+    #[test]
+    fn overrides_group_boundary_follows_moved_member() {
+        // Boundaries are member unions recomputed AFTER the overlay
+        // (V1): moving both Team members moves the group box.
+        let ws = with_landscape(
+            workspace(),
+            ViewContent {
+                elements: vec![element(2, 400, 0), element(3, 400, 200)],
+                relationships: Vec::new(),
+                ..ViewContent::default()
+            },
+        );
+        let overrides = Overrides {
+            elements: HashMap::from([(id(2), (0.0, 0.0)), (id(3), (0.0, 200.0))]),
+            relationships: HashMap::new(),
+        };
+        let before = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
+        let after = build(&ws, "L1", ColorScheme::Light, None, Some(&overrides)).unwrap();
+        let group = |scene: &Scene| {
+            scene
+                .boundaries
+                .iter()
+                .find(|b| b.id.starts_with("group:"))
+                .unwrap()
+                .rect
+        };
+        // Stored bob(2)/carol(3) sit at (400,0)/(400,200) (fixture):
+        // moved to x=0, the union starts 400 px earlier.
+        assert_eq!(group(&before).x, 400.0 - BOUNDARY_PADDING);
+        assert_eq!(group(&after).x, 0.0 - BOUNDARY_PADDING);
+    }
+
+    #[test]
+    fn empty_waypoint_override_straightens_edge() {
+        // `relationships[id] == []` (the engine's 2-point route) drops
+        // the stored vertices — the "remove vertices" contract of M3.
+        let ws = with_landscape(
+            workspace(),
+            ViewContent {
+                elements: vec![element(1, 0, 0), element(4, 400, 0)],
+                relationships: vec![RelationshipView {
+                    vertices: vec![oxidizr_core::views::Vertex { x: 300, y: 200 }],
+                    ..rel_view(20)
+                }],
+                ..ViewContent::default()
+            },
+        );
+        let stored = build(&ws, "L1", ColorScheme::Light, None, None).unwrap();
+        assert_eq!(stored.edges[0].points.len(), 3);
+        let overrides = Overrides {
+            relationships: HashMap::from([(id(20), Vec::new())]),
+            ..Overrides::default()
+        };
+        let straight = build(&ws, "L1", ColorScheme::Light, None, Some(&overrides)).unwrap();
+        assert_eq!(straight.edges[0].points, vec![(175.0, 75.0), (575.0, 75.0)]);
     }
 }

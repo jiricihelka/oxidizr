@@ -379,6 +379,7 @@ mod tests {
             "L1",
             oxidizr_core::views::ColorScheme::Light,
             None,
+            None,
         )
         .unwrap()
     }

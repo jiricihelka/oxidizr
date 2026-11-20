@@ -21,14 +21,17 @@ use clap::{Parser, ValueEnum};
 use eframe::egui::{self, Id, Pos2, Vec2};
 use oxidizr_api::{ApiOptions, Input, LogItem, Opened, Outcome};
 use oxidizr_core::Workspace;
-use oxidizr_core::views::{ColorScheme, FilterMode, LineStyle, View};
+use oxidizr_core::views::{
+    AutomaticLayout, ColorScheme, FilterMode, LineStyle, RankDirection, View,
+};
 use oxidizr_diag::Severity;
-use oxidizr_viewer::{hit, icons, key, paint, scene};
+use oxidizr_viewer::{hit, icons, key, layout, paint, scene};
 
 /// Storage keys (§P3-D2: eframe storage only, no config files).
 const KEY_THEME: &str = "oxidizr.viewer/theme";
 const KEY_ZOOM: &str = "oxidizr.viewer/zoom";
 const KEY_VIEW: &str = "oxidizr.viewer/view";
+const KEY_LAYOUT: &str = "oxidizr.viewer/layout";
 
 /// CLI arguments (flags + positional only, `agents/plan/WORKFLOW.md`).
 #[derive(Parser)]
@@ -150,6 +153,16 @@ struct Viewer {
     icon_errors: Vec<(String, String)>,
     /// Icons are stale wrt the scene (set on open/rebuild).
     icons_dirty: bool,
+    /// Session auto-layout geometry for the current view (P3-M2-5);
+    /// NEVER persisted — M3 owns saving (editor rule, P3-D0).
+    layout_overrides: Option<scene::Overrides>,
+    /// Last auto-layout failure (dialog + status bar).
+    layout_error: Option<String>,
+    /// Auto-layout dialog visibility.
+    show_layout: bool,
+    /// Dialog parameters — a persisted preference (§P3-D2), mirroring
+    /// the reference `auto-layout.jspf` fields.
+    layout_params: AutomaticLayout,
 }
 
 impl Viewer {
@@ -184,6 +197,10 @@ impl Viewer {
             icon_pixels: Vec::new(),
             icon_errors: Vec::new(),
             icons_dirty: false,
+            layout_overrides: None,
+            layout_error: None,
+            show_layout: false,
+            layout_params: AutomaticLayout::default(),
         }
     }
 
@@ -206,6 +223,11 @@ impl Viewer {
             .and_then(|s| s.get_string(KEY_ZOOM))
             .and_then(|zoom| zoom.parse::<f64>().ok());
         self.pending_view = storage.and_then(|s| s.get_string(KEY_VIEW));
+        self.layout_params = storage
+            .and_then(|s| s.get_string(KEY_LAYOUT))
+            .as_deref()
+            .and_then(layout::decode)
+            .unwrap_or_default();
         self.path_edit = path_shown;
         match opened {
             Some(Ok(opened)) => self.adopt(opened),
@@ -239,9 +261,12 @@ impl Viewer {
         };
         self.tag_inventory = key::tags(&opened.workspace);
         self.tag_sel.clear();
+        self.layout_overrides = None;
+        self.layout_error = None;
         self.workspace = Some(opened.workspace);
         self.needs_fit = self.restore_scale.is_none();
         self.rebuild_scene();
+        self.autolayout_once();
     }
 
     /// Re-run `scene::build` for the current workspace/view/scheme,
@@ -260,6 +285,7 @@ impl Viewer {
                     view_key,
                     self.scheme,
                     mask.as_ref(),
+                    self.layout_overrides.as_ref(),
                 ))
             }
             _ => None,
@@ -356,6 +382,7 @@ impl eframe::App for Viewer {
         self.sync_icons(&ctx);
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.diagnostics_window(&ctx);
+        self.layout_window(&ctx);
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -373,6 +400,7 @@ impl eframe::App for Viewer {
         if let Some(key) = &self.view_key {
             storage.set_string(KEY_VIEW, key.clone());
         }
+        storage.set_string(KEY_LAYOUT, layout::encode(&self.layout_params));
     }
 }
 
@@ -401,6 +429,9 @@ impl Viewer {
                 }
                 if ui.button("Fit").clicked() {
                     self.needs_fit = true;
+                }
+                if ui.button("Layout").clicked() {
+                    self.show_layout = true;
                 }
             });
             ui.separator();
@@ -461,7 +492,10 @@ impl Viewer {
             self.selection = None;
             self.needs_fit = true;
             self.restore_scale = None;
+            self.layout_overrides = None;
+            self.layout_error = None;
             self.rebuild_scene();
+            self.autolayout_once();
         }
         self.tag_filter(ui);
     }
@@ -655,7 +689,12 @@ impl Viewer {
                         self.show_diagnostics = !self.show_diagnostics;
                     }
                 }
-                if let Some(error) = self.open_error.as_ref().or(self.scene_error.as_ref()) {
+                if let Some(error) = self
+                    .open_error
+                    .as_ref()
+                    .or(self.scene_error.as_ref())
+                    .or(self.layout_error.as_ref())
+                {
                     ui.colored_label(egui::Color32::DARK_RED, truncate(error, 90))
                         .on_hover_text(error.clone());
                 }
@@ -824,6 +863,104 @@ impl Viewer {
         self.show_diagnostics = open;
     }
 
+    /// §P3-M2 M2-5: a view that CARRIES an `automaticLayout` request
+    /// gets EXACTLY ONE engine pass at adopt/view-change; further runs
+    /// are the dialog's job. The workspace file is never touched
+    /// (session geometry only — M3 owns saving, P3-D0).
+    fn autolayout_once(&mut self) {
+        let stored = match (&self.workspace, &self.view_key) {
+            (Some(workspace), Some(view_key)) => layout::stored_for(workspace, view_key),
+            _ => None,
+        };
+        if let Some(params) = stored {
+            self.run_layout(params);
+        }
+    }
+
+    /// One headless engine run over the current scene: [`layout::apply`]
+    /// plus [`scene::build`] with the result as overrides, then a refit.
+    /// A failing engine keeps the previous geometry and lands in
+    /// [`Self::layout_error`] — errors as values (P3 charter).
+    fn run_layout(&mut self, params: AutomaticLayout) {
+        let applied = self
+            .scene
+            .as_ref()
+            .map(|scene| layout::apply(scene, &params));
+        match applied {
+            Some(Ok(overrides)) => {
+                self.layout_overrides = Some(overrides);
+                self.layout_error = None;
+                self.rebuild_scene();
+                self.needs_fit = true;
+            }
+            Some(Err(error)) => self.layout_error = Some(error.to_string()),
+            None => {}
+        }
+    }
+
+    /// The auto-layout dialog — mirrors the reference `auto-layout.jspf`
+    /// (direction, rank/node/edge separation, route vertices). `Apply`
+    /// runs the engine on the CURRENT scene; `Reset` drops the session
+    /// geometry. Only the PARAMETERS persist (§P3-D2); the engine
+    /// ignores edge separation at MVP scope (parity field only).
+    fn layout_window(&mut self, ctx: &egui::Context) {
+        if !self.show_layout {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Automatic layout")
+            .open(&mut open)
+            .resizable(false)
+            .default_pos([420.0, 120.0])
+            .show(ctx, |ui| {
+                let mut params = self.layout_params;
+                ui.horizontal(|ui| {
+                    ui.label("Direction:");
+                    egui::ComboBox::from_id_salt("layout-direction")
+                        .selected_text(direction_label(params.rank_direction))
+                        .show_ui(ui, |ui| {
+                            for direction in [
+                                RankDirection::TopBottom,
+                                RankDirection::BottomTop,
+                                RankDirection::LeftRight,
+                                RankDirection::RightLeft,
+                            ] {
+                                ui.selectable_value(
+                                    &mut params.rank_direction,
+                                    Some(direction),
+                                    direction_label(Some(direction)),
+                                );
+                            }
+                        });
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Rank sep:");
+                    ui.add(egui::DragValue::new(&mut params.rank_separation).range(0..=1000));
+                    ui.label("Node sep:");
+                    ui.add(egui::DragValue::new(&mut params.node_separation).range(0..=1000));
+                    ui.label("Edge sep:");
+                    ui.add(egui::DragValue::new(&mut params.edge_separation).range(0..=1000));
+                });
+                ui.checkbox(&mut params.vertices, "Route vertices");
+                ui.horizontal(|ui| {
+                    if ui.button("Apply").clicked() {
+                        self.layout_params = params;
+                        self.run_layout(params);
+                    }
+                    if ui.button("Reset").clicked() {
+                        self.layout_overrides = None;
+                        self.layout_error = None;
+                        self.rebuild_scene();
+                    }
+                });
+                if let Some(error) = &self.layout_error {
+                    ui.colored_label(egui::Color32::DARK_RED, error);
+                }
+                ui.weak("Session geometry — not saved to the workspace (M3).");
+            });
+        self.show_layout = open;
+    }
+
     /// Rebuild the icon atlas when the scene changed (M1-5): rasterize
     /// headlessly with [`icons::build_atlas`], re-upload the single
     /// texture only when its pixels actually changed, and remap the
@@ -895,6 +1032,17 @@ fn view_label(view: View<'_>) -> String {
         .title
         .clone()
         .unwrap_or_else(|| view.key().to_owned())
+}
+
+/// Dialog label for a rank direction (`None` reads as the reference
+/// default, Left-Right — P3-M2-5).
+fn direction_label(direction: Option<RankDirection>) -> &'static str {
+    match direction.unwrap_or_default() {
+        RankDirection::TopBottom => "Top → Bottom",
+        RankDirection::BottomTop => "Bottom → Top",
+        RankDirection::LeftRight => "Left → Right",
+        RankDirection::RightLeft => "Right → Left",
+    }
 }
 
 /// The click-through URL behind a hit (`None` = plain selection).

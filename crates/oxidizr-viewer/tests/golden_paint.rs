@@ -42,7 +42,7 @@ fn paint_first_view(topic: &str, scheme: ColorScheme) -> (scene::Scene, Vec<Shap
         .first()
         .map(|view| view.key().to_owned())
         .unwrap();
-    let scene = scene::build(&opened.workspace, &key, scheme, None).unwrap();
+    let scene = scene::build(&opened.workspace, &key, scheme, None, None).unwrap();
     let viewport = hit::Viewport::fit(scene.bounds, (1200.0, 800.0));
     let mut atlas = Fonts::new(TextOptions::default(), FontDefinitions::default());
     let shapes = {
