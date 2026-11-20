@@ -639,8 +639,8 @@ mod tests {
         }
         assert_eq!(
             laid.edges[0].points,
-            vec![(175.0, 75.0), (625.0, 75.0)],
-            "centres re-derived from the moved boxes, no interior"
+            vec![(350.0, 75.0), (450.0, 75.0)],
+            "facing side anchors from the moved boxes, no interior"
         );
     }
 

@@ -120,7 +120,7 @@ impl Rect {
         }
     }
 
-    /// Geometric centre (the edge anchor point, like the reference).
+    /// Geometric centre (the origin of the edge-anchor ray, §P3-M11).
     #[must_use]
     pub fn center(self) -> (f64, f64) {
         (self.x + self.width / 2.0, self.y + self.height / 2.0)
@@ -240,7 +240,9 @@ pub struct Edge {
     pub source: Id,
     /// Destination element id.
     pub destination: Id,
-    /// Polyline: source box centre → stored vertices → destination centre.
+    /// Polyline: source box SIDE → stored vertices → destination side
+    /// (§P3-M11 M11-3: endpoints are the centre rays clipped to the
+    /// box borders, so arrows never land on the middle).
     pub points: Vec<(f64, f64)>,
     /// Label (the relationship description; the relationship view's
     /// `description` overrides the model's). `None` when absent or the
@@ -306,7 +308,7 @@ pub struct Overrides {
     /// boundaries whose rects follow their members.
     pub elements: HashMap<Id, (f64, f64)>,
     /// Relationship id → INTERIOR waypoints. The scene edge polyline is
-    /// `[source centre, …waypoints…, destination centre]`, so the stored
+    /// `[source side, …waypoints…, destination side]`, so the stored
     /// relationship-view vertices are REPLACED wholesale — an empty vec
     /// straightens the edge.
     pub relationships: HashMap<Id, Vec<(f64, f64)>>,
@@ -751,7 +753,8 @@ pub fn build(
     pending.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.id.cmp(&b.1.id)));
     let boundaries: Vec<Boundary> = pending.into_iter().map(|(_, b)| b).collect();
 
-    // Edges: source centre → stored vertices → destination centre.
+    // Edges: source side → stored vertices → destination side
+    // (§P3-M11 M11-3, see `border_anchor`).
     let mut edges: Vec<Edge> = Vec::new();
     for rv in &content.relationships {
         if !keep_relationship(&rv.id) {
@@ -766,14 +769,36 @@ pub fn build(
             continue; // endpoint not an item (stale, filtered, deployment node)
         };
         let style = styles.relationship_style(rel, model, color_scheme);
-        let mut points = vec![source.center()];
-        // Session auto-layout replaces the stored vertices wholesale
-        // (P3-M2-5) — an empty override vec straightens the edge.
-        match overrides.and_then(|o| o.relationships.get(&rv.id)) {
-            Some(waypoints) => points.extend(waypoints.iter().copied()),
-            None => points.extend(rv.vertices.iter().map(|v| (f64::from(v.x), f64::from(v.y)))),
-        }
-        points.push(destination.center());
+        // §P3-M11 M11-3: arrows LAND ON BOX SIDES, not centres — each
+        // endpoint is the ray from its box centre toward the next route
+        // point, clipped where it exits the box (the dx/dy exit rule
+        // matches the engine's `endpoint(None)`, so an engine-routed
+        // view enters the same side the engine chose). With no
+        // waypoints the pair is the two facing border points.
+        let waypoints: Vec<(f64, f64)> = match overrides.and_then(|o| o.relationships.get(&rv.id)) {
+            // Session auto-layout replaces the stored vertices
+            // wholesale (P3-M2-5) — an empty override vec
+            // straightens the edge.
+            Some(points) => points.clone(),
+            None => rv
+                .vertices
+                .iter()
+                .map(|v| (f64::from(v.x), f64::from(v.y)))
+                .collect(),
+        };
+        let mut points = Vec::with_capacity(waypoints.len() + 2);
+        points.push(border_anchor(
+            source,
+            waypoints
+                .first()
+                .copied()
+                .unwrap_or_else(|| destination.center()),
+        ));
+        points.extend(waypoints.iter().copied());
+        points.push(border_anchor(
+            destination,
+            waypoints.last().copied().unwrap_or_else(|| source.center()),
+        ));
         edges.push(Edge {
             id: rv.id.clone(),
             source: rel.source.clone(),
@@ -1333,6 +1358,25 @@ fn default_title(workspace: &Workspace, view: View<'_>) -> String {
 }
 
 /// The rect an id rendered as, when it became an item.
+/// Edge endpoint (§P3-M11 M11-3): where the ray from `rect`'s centre
+/// toward `toward` exits `rect` — the arrow lands on a SIDE (and
+/// slides along it toward the neighbour, like the reference's facing
+/// anchors). Divisions by zero become `inf`, which `min` discards, so
+/// a degenerate ray (both deltas zero, or a zero-sized box) falls
+/// back to the centre. The axis that binds agrees with the engine's
+/// `endpoint(None)`, so engine-routed views enter the side it chose.
+fn border_anchor(rect: Rect, toward: (f64, f64)) -> (f64, f64) {
+    let mid = rect.center();
+    let (dx, dy) = (toward.0 - mid.0, toward.1 - mid.1);
+    let sx = (rect.width / 2.0) / dx.abs();
+    let sy = (rect.height / 2.0) / dy.abs();
+    let t = sx.min(sy);
+    if !t.is_finite() {
+        return mid;
+    }
+    (mid.0 + dx * t, mid.1 + dy * t)
+}
+
 fn placement_rect(
     placements: &[Option<Placement>],
     elements: &[ElementView],
@@ -1555,9 +1599,9 @@ mod tests {
             Some("[Software System]")
         );
         assert_eq!(scene.boundaries, [] as [Boundary; 0]);
-        // Edge = source centre → destination centre.
+        // Edge = facing box SIDES (§P3-M11 M11-3, not centres).
         assert_eq!(scene.edges.len(), 1);
-        assert_eq!(scene.edges[0].points, vec![(175.0, 75.0), (575.0, 75.0)]);
+        assert_eq!(scene.edges[0].points, vec![(350.0, 75.0), (400.0, 75.0)]);
         assert_eq!(scene.edges[0].label.as_deref(), Some("Uses"));
         assert_eq!(scene.edges[0].metadata.as_deref(), Some("[HTTPS]"));
         assert_eq!(scene.edges[0].line_style, LineStyle::Dashed);
@@ -1879,7 +1923,10 @@ mod tests {
         assert_eq!(edge.url.as_deref(), Some("https://example.test"));
         assert_eq!(
             edge.points,
-            vec![(175.0, 75.0), (300.0, 200.0), (575.0, 75.0)]
+            // Ray anchors on the box SIDES (§P3-M11 M11-3): both legs
+            // leave toward the waypoint below, so both endpoints sit
+            // on the facing bottom borders, not on the centres.
+            vec![(250.0, 150.0), (300.0, 200.0), (410.0, 150.0)]
         );
     }
 
@@ -1928,19 +1975,21 @@ mod tests {
         let alice = scene.items.iter().find(|i| i.id == id(1)).unwrap();
         assert_eq!((alice.rect.x, alice.rect.y), (2000.0, 600.0));
         let edge = scene.edges.iter().find(|e| e.id == id(20)).unwrap();
+        // Endpoints ride the side rays (§P3-M11 M11-3): alice exits
+        // the top toward (2100,300); the bank's ray toward (300,300)
+        // binds on the bottom at x = 575 − 275/3 (repeating — the ray
+        // parameter is 1/3, so compare with a tolerance).
         assert_eq!(
-            edge.points,
-            vec![
-                (2175.0, 675.0),
-                (2100.0, 300.0),
-                (300.0, 300.0),
-                (575.0, 75.0),
-            ]
+            &edge.points[..3],
+            &[(2160.0, 600.0), (2100.0, 300.0), (300.0, 300.0)]
         );
+        let (ax, ay) = edge.points[3];
+        assert!((ax - (575.0 - 275.0 / 3.0)).abs() < 1e-9);
+        assert!((ay - 150.0).abs() < 1e-9);
         // Bounds follow the moved item (union + margin recomputed).
         assert!(scene.bounds.x + scene.bounds.width > 2350.0);
         // An absent relationship keeps its stored vertices (rel 21 has
-        // none in the fixture): still a straight centre pair.
+        // none in the fixture): still a straight side pair.
         let kept = scene.edges.iter().find(|e| e.id == id(21)).unwrap();
         assert_eq!(kept.points.len(), 2);
     }
@@ -1999,6 +2048,6 @@ mod tests {
             ..Overrides::default()
         };
         let straight = build(&ws, "L1", ColorScheme::Light, None, Some(&overrides)).unwrap();
-        assert_eq!(straight.edges[0].points, vec![(175.0, 75.0), (575.0, 75.0)]);
+        assert_eq!(straight.edges[0].points, vec![(350.0, 75.0), (400.0, 75.0)]);
     }
 }
