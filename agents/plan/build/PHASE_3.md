@@ -424,6 +424,25 @@ raw events ⇒ the 250 ms per-path-set settle-debounce is mandatory.
 Windows/macOS coalescing + rename semantics: CI-observed, not
 blocking (the filter+debounce+hash posture is OS-agnostic).
 
+## §P3-M5 — hardening + v0.3.0 (decomposition, 2026-11-20)
+
+M5 = the P3-D9 M5 bullet: oracle pass (incl. the saved-sidecar A/B leg
+deferred from M3-5), perf pass, docs, tag. Small surface (xtask + docs
++ notes), so the table is short; no V-items open — P3-D0 keeps the
+perf numbers INFORMATIONAL (no golden byte contracts here).
+
+| Item | Deliverable | Premise / verified | Exit gate |
+|---|---|---|---|
+| **M5-0** | docs: this table | oracle verify core legs already green 2026-11-20 (`4 json + 90 diagram + 6 theme golden set(s) match`); perf corpora located: `big-bank-plc.dsl`, `spring-petclinic/`, `amazon-web-services.dsl` | docs commit |
+| **M5-1** | saved-sidecar A/B leg in `xtask oracle verify` (deferred from M3-5): for each top-level JSON golden fixture open via `oxidizr_api`, run the viewer save path (`commands::write_workspace`) → IDENTITY sidecar; the reference's json→json export of (a) our sidecar and (b) the committed golden must normalize BYTE-EQUAL — comparing the two re-exports isolates our writer from any reference json→json quirk. EDITED leg: `layout::apply` on the first non-filtered view with ≥ 2 items → `LayoutOverlay` → `apply_overlay` → save → reference load SUCCEEDS, `model` Value unchanged, per-id `x/y` map of our edited sidecar == the reference re-export's map, and differs from the stored one | the reference loads `.json` inputs already (the `m3b-defaults` golden's fixture IS a probe JSON — `verify_json_legs` runs it today) | `cargo xtask oracle verify` green incl. the new leg line |
+| **M5-2** | perf pass (informational, P3-D0): headless `scene::build` + `paint::paint_scene` timings, release, n ≥ 3 per figure, corpora big-bank-plc + spring-petclinic + amazon-web-services; note ≤ 25 lines under `agents/notes/perf/` + indexed, with the 60 fps / 200-visible-elements budget called out per corpus <!-- refs:ignore forward reference, created by M5-2 --> | paint runs headless (M4-5 export rides it — `golden_paint.rs` proves the no-GPU path) | note committed (no gate on numbers) |
+| **M5-3** | docs: `crates/oxidizr-viewer/README.md` (open/save/sidecar rule, edit + auto-layout + engines, export, shortcuts, feature flags incl. `dot-backend` + `$OXIDZR_DOT_BIN`) <!-- refs:ignore forward reference, created by M5-3 -->; check `docs/diagnostics.md` mentions nothing false about the viewer | viewer README absent today; RESUME holds the authoritative surface list | docs commit |
+| **M5 close** | PROGRESS board + log M5 row; PHASE_3 M5 DONE; RESUME → post-P3 (P4) entry point; full ritual; local tag `v0.3.0` — never push | — | docs landed + tag exists locally |
+
+Order: M5-0 → M5-1 → M5-2 → M5-3 → close. The oracle binary is slow
+(~1 s JVM start) — M5-1's legs ride the existing Category B job
+posture, never the per-PR quartet.
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
