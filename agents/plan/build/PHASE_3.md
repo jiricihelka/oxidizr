@@ -323,11 +323,58 @@ promise using `epaint::LayoutJob` text runs with no shell dependency.
 Order: M1-1 → M1-2 → M1-3 → M1-4 → M1-5 → close. M1-4 is the big-bang commit; if it
 drags, split at the canvas-vs-overlays seam (each half still gates green).
 
+## P3-M2 decomposition (charter: >4-module milestone; written 2026-11-20 before code)
+
+`Layered` engine MVP (§P3-D5; P3-D9 M2 bullet): pipeline complete,
+determinism property, benches + committed `P3` baseline, viewer
+auto-layout buttons + dialog. V1 CLOSED (§P3-D10) drives the tuning.
+The engine consumes the M0-2 neutral graph (`LayoutGraph`/
+`LayoutConfig`/`trait LayoutEngine`, ZERO deps) and knows NOTHING of
+boundaries: the viewer contracts them by construction — boundary
+elements are not layout nodes, the scene recomputes boundary rects
+from member unions (scene.rs), which IS the naive super-node contract
+with the V1 50 px pad. Layout is NOT persisted in M2 — session
+geometry only (M3 owns save); byte contract untouched all milestone.
+
+| Item | Deliverable | Premise / verified | Exit gate |
+|---|---|---|---|
+| **M2-1** | docs: §P3-M2 decomposition (this table) + P3-V1 CLOSED verdict | V1: dagre 1.1.8 client layout; dialog defaults LR/100/50/50 + vertices = core defaults; cluster padding 50; no per-view-type direction | docs commit |
+| **M2-2** | `oxidizr-layout::Layered` pipeline half 1: prep (graph-order stable ids) + cycle removal (DFS reversal, first-edge tie-breaks) + layering (longest-path, iteration cap) + long-edge dummies; unit tests (cycle, diamond, chain, disconnected, cap) | §P3-D5 MVP steps; dagre-family phases per V1 | quartet + full tier + bless (workspace test surface grows) |
+| **M2-3** | pipeline half 2: ordering (barycenter sweeps, FIXED count, deterministic tie-breaks) + coordinates (priority pass honoring rank/node separation) + orthogonal-ish edge routing along rank gaps (points only when `generate_vertices`); `impl LayoutEngine for Layered`; determinism property test (same input ⇒ identical `LayoutResult`, 1k-node synthetic) | §P3-D5 determinism hard contract (no randomness, stable sorts, fixed iterations) | quartet + full tier + bless |
+| **M2-4** | benches: criterion targets in `oxidizr-layout` (`harness = false` per the `reconcile` pattern) — 1k-node synthetic + fan/chain shapes; committed as the `P3` baseline at close | §P3-D5 bench mandate; P3 joins the milestone baseline list (P3-D9 M2 bullet) | quartet + bench run |
+| **M2-5** | viewer integration: new headless `layout` module (scene→`LayoutGraph`, engine run, `Overrides { element rects, edge waypoints }`) + `scene::build` gains `Option<&Overrides>` (session-live, NEVER persisted, V7-style stance); auto-layout BUTTON + dialog mirroring `auto-layout.jspf` (direction, vertices, rank/node/edge separation; localStorage→our eframe-storage); views with a STORED `automaticLayout` get ONE engine pass per (view, params) at open; boundaries follow via member unions + 50 px pad | V1 (dialog = stored `AutomaticLayout`, oxidizr-core mirror verified); scene seam = `element.x/y` rect construction (scene.rs ~487) | quartet + `ci gui` + full tier + bless |
+| **M2 close** | PROGRESS board + log M2 row; PHASE_3 M2 DONE; `bench save P3` + `bench cmp P3` sanity; RESUME → M3 entry point | — | full ritual |
+
+Order: M2-1 → M2-2 → M2-3 → M2-4 → M2-5 → close. Engine internals stay
+module-private: the public surface remains `Layered` + the M0-2 types.
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
   representative C4 views (rank direction per view type, boundary nesting) — drives
   `Layered` tuning; result is our {x,y}, contract-safe by definition.
+  **CLOSED 2026-11-20** (monorepo `ad34036`): the web tool lays out
+  **client-side** via JointJS DirectedGraph = **dagre 1.1.8**
+  (`structurizr-diagram.js:6844` `applyAutomaticLayout` →
+  `joint.layout.DirectedGraph.layout(graph, {rankSep, nodeSep, edgeSep,
+  setLinkVertices, setLabels, rankDir, marginX/marginY 0, resizeClusters,
+  clusterPadding 50})`); `dot` exists only as the server-side
+  `GraphvizAutomaticLayout` (`dot -Tsvg` + SVGReader read-back, margin 400 —
+  the M4 `dot-backend` reference). **No per-view-type rank direction**: every
+  view type uses the dialog choice, default **LeftRight**
+  (`structurizr-ui.js:8-12`); a stored `configuration.automaticLayout`
+  re-runs the layout EVERY render with stored params and locks the diagram
+  non-editable (`structurizr-diagram.js:399` — M3 decision open: oxidizr may
+  stay editable). Reference defaults (`AutomaticLayout.java:8-12`) =
+  LR / rankSep 100 / nodeSep 50 / edgeSep 50 / vertices true — already
+  mirrored in `oxidizr-core::AutomaticLayout::default()` (verified 1:1).
+  dagre's phase list (greedy DFS cycle removal → ranking (network-simplex
+  default) → merge ordering + priority coords) **is** the §P3-D5 MVP step
+  list; our longest-path cap + fixed barycenter sweeps are the SANCTIONED
+  MVP simplification (quality bar "usable C4", Graphviz parity P4-D13,
+  P3-D0 visual parity out of contract). Boundaries lay out as dagre
+  CLUSTERS (resize to children + 50 px padding) — reproduced naively by the
+  scene's member-union boundary rects + 50 px pad (M2-5).
 - P3-V2 reference font/theme loading (offline story) → confirm bundled-substitution
   policy in P3-D2. **CLOSED 2026-11-19** (monorepo `ad34036`): the reference **never
   loads web fonts** — `fontUrl` has ZERO consumers (JS/Java/CSS/JSPF); everything
