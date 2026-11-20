@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 M3-4 done → M3-5 SAVE next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 M3-5 done → M3 close next**)
 
 ## State
 
@@ -33,15 +33,38 @@
       canvas WORLD rect, Remove vertices) — all through `run_edit`
       (overlay clone → factory → `edit_current_view`); `WaypointHit`
       type alias for the hit tuple; help text updated.
-  - **M3-5 NEXT** SAVE: headless `apply_overlay(&Workspace, view_key,
-    &LayoutOverlay) -> Workspace` (elementViews x/y, relationshipViews
-    vertices, view `dimensions` — clone-and-write, model untouched) +
-    `oxidizr_json::to_vec` (NO new serializer) + temp+rename write;
-    Ctrl+S + toolbar Save; target = opened `.json` in place, DSL →
-    `<stem>.json` sidecar; Save BLOCKED (status note) on filtered
-    views; Category A round-trip test. Remember: undo leaves map
-    ENTRIES at stored values (`is_empty` is map-based) — the save
-    guard must compare GEOMETRY, not `is_empty` alone.
+  - **M3-5 DONE (this commit)** SAVE:
+    - `commands::apply_overlay(&Workspace, view_key, &LayoutOverlay) ->
+      Workspace` — clone-and-write into `elementViews x/y`,
+      `relationshipViews vertices` (wholesale), view `dimensions`;
+      `to_px` rounds+clamps to the stored i32 grid; walks `ViewSet`
+      via local `content_of_key` (the 7 MODEL-view vecs by
+      `base.key` — filtered/image have NO content → key lands
+      nowhere); model/styles/automaticLayout untouched (V4).
+    - `commands::save_target(display)`: `.json` in place, `.dsl` →
+      `<stem>.json` sidecar (case-insensitive), `"-"` stdin → None.
+    - `commands::write_workspace(path, ws)`: `oxidizr_json::to_vec`
+      (NO second serializer) → `{name}.{pid}.tmp` → rename (P3-D6);
+      `SaveError { Json(#[from] JsonError), Io { path, source } }`.
+    - Shell: `save_note: Option<String>` (status bar: dark_red only on
+      `serialize:`/`write ` prefixes, else dark_green; cleared per
+      attempt + at adopt); `save_workspace()` blocks on
+      `current_view_filtered()` (`View::Filtered` via `all_views()`)
+      and stdin, folds ALL dirty overlays, success → `dirty.clear()`;
+      Ctrl+S in the undo/redo block (path-focus guarded); toolbar
+      "Save" enabled iff dirty non-empty; help text lists Ctrl+S.
+    - Category A test: open temp DSL → ids from FIRST view content →
+      overlay (222.4,333.6)→(222,334) rounds → ghost key == workspace
+      → sidecar write → `from_slice` → **byte-stability** re-write
+      `to_vec(parsed) == bytes` (NOT struct equality: JSON read
+      normalizes absent description → `Some("")` + rebuilds tags, the
+      writer sorts entry arrays by id — idempotent saves is the
+      contract). `save_target` unit test.
+    - Also: hit.rs lasso-empty test needed `let empty: Vec<usize>`
+      (E0282 with the new generic inference context).
+  - **M3 CLOSE NEXT**: PROGRESS board + log M3 row; PHASE_3 M3 DONE
+    stamps; RESUME → M4 entry; bench sanity = `cmp P3` spot-check
+    only (engine untouched).
   - V4 verdict (§P3-D10): stored `automaticLayout` block PERMANENT,
     honored at render, we stay EDITABLE; save writes GEOMETRY ONLY,
     never the block.

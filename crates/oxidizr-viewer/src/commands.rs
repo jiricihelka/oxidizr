@@ -23,9 +23,11 @@
 //! nothing.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use oxidizr_core::Id;
-use oxidizr_core::views::Dimensions;
+use oxidizr_core::Workspace;
+use oxidizr_core::views::{Dimensions, Vertex, ViewContent};
 
 use crate::scene::{Overrides, Rect, Scene};
 
@@ -729,6 +731,134 @@ fn non_empty_moves(moves: Vec<ElementMove>) -> Option<Command> {
     }
 }
 
+/// A save failure (§P3-M5) — errors as values, presented verbatim.
+#[derive(Debug, thiserror::Error)]
+pub enum SaveError {
+    /// The shared `oxidizr_json` writer refused the workspace.
+    #[error("serialize: {0}")]
+    Json(#[from] oxidizr_json::JsonError),
+    /// The temp write or the rename onto the target failed.
+    #[error("write {}: {source}", .path.display())]
+    Io {
+        /// The intended target (not the temp name).
+        path: PathBuf,
+        /// The OS-level reason.
+        source: std::io::Error,
+    },
+}
+
+/// Round world px onto the reference's integer grid — `elementViews`,
+/// `vertices` and `dimensions` all store `Integer`s and overlay values
+/// come from grid-snapped or pixel drags.
+#[allow(clippy::cast_possible_truncation)] // clamped into i32::MIN..=MAX first
+fn to_px(value: f64) -> i32 {
+    value
+        .round()
+        .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
+}
+
+/// The stored content of one MODEL view by key — `None` for filtered
+/// and image views, which carry no geometry of their own to save
+/// (§P3-M5: saving them is blocked, the base view holds the layout).
+fn content_of_key<'a>(workspace: &'a mut Workspace, key: &str) -> Option<&'a mut ViewContent> {
+    let views = &mut workspace.views;
+    macro_rules! find {
+        ($field:ident) => {
+            if let Some(view) = views.$field.iter_mut().find(|view| view.base.key == key) {
+                return Some(&mut view.content);
+            }
+        };
+    }
+    find!(custom_views);
+    find!(system_landscape_views);
+    find!(system_context_views);
+    find!(container_views);
+    find!(component_views);
+    find!(dynamic_views);
+    find!(deployment_views);
+    None
+}
+
+/// Clone `workspace` and write `overlay`'s deltas into the stored
+/// geometry of `view_key`: element-view `x`/`y`, relationship-view
+/// `vertices` (replaced wholesale — an empty vec straightens) and the
+/// view `dimensions` (§P3-M5). The write direction is the read path
+/// inverted and NARROWER: only these three geometry slots change —
+/// the model, styles and the permanent `automaticLayout` block
+/// round-trip untouched (V4: save writes GEOMETRY, never the block).
+/// A key without a content slot changes nothing.
+#[must_use]
+pub fn apply_overlay(workspace: &Workspace, view_key: &str, overlay: &LayoutOverlay) -> Workspace {
+    let mut workspace = workspace.clone();
+    if let Some(content) = content_of_key(&mut workspace, view_key) {
+        for (id, (x, y)) in &overlay.elements {
+            if let Some(view) = content.elements.iter_mut().find(|view| view.id == *id) {
+                view.x = to_px(*x);
+                view.y = to_px(*y);
+            }
+        }
+        for (id, route) in &overlay.relationships {
+            if let Some(view) = content.relationships.iter_mut().find(|view| view.id == *id) {
+                view.vertices = route
+                    .iter()
+                    .map(|(x, y)| Vertex {
+                        x: to_px(*x),
+                        y: to_px(*y),
+                    })
+                    .collect();
+            }
+        }
+        if overlay.dimensions.is_some() {
+            content.dimensions = overlay.dimensions;
+        }
+    }
+    workspace
+}
+
+/// The save target for a displayed input (§P3-M5): the opened `.json`
+/// in place, a `<stem>.json` SIDE CAR next to a `.dsl` source (the DSL
+/// text is never rewritten, P3-D0), `None` for stdin (`"-"`).
+#[must_use]
+pub fn save_target(display: &str) -> Option<PathBuf> {
+    if display == "-" {
+        return None;
+    }
+    let path = PathBuf::from(display);
+    if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("dsl"))
+    {
+        Some(path.with_extension("json"))
+    } else {
+        Some(path)
+    }
+}
+
+/// Serialize with the SHARED JSON writer (the save path adds no second
+/// serializer — byte contract, COMPAT.md) to a temp file next to the
+/// target, then rename it into place: a crash or a full disk never
+/// leaves a truncated workspace behind (P3-D6 posture, shared with the
+/// M4 reload writer).
+///
+/// # Errors
+///
+/// [`SaveError::Json`] when the writer refuses the workspace,
+/// [`SaveError::Io`] when the temp write or rename fails.
+pub fn write_workspace(path: &Path, workspace: &Workspace) -> Result<(), SaveError> {
+    let bytes = oxidizr_json::to_vec(workspace)?;
+    let name = path.file_name().map_or_else(
+        || "workspace.json".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let temp = path.with_file_name(format!("{name}.{}.tmp", std::process::id()));
+    let io = |source: std::io::Error| SaveError::Io {
+        path: path.to_path_buf(),
+        source,
+    };
+    std::fs::write(&temp, &bytes).map_err(io)?;
+    std::fs::rename(&temp, path).map_err(io)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)] // test fixtures
 #[allow(clippy::float_cmp)] // exact geometry: equality IS the contract (§P3-D3)
@@ -1216,5 +1346,110 @@ mod tests {
                 .collect(),
             _ => Vec::new(),
         }
+    }
+
+    #[test]
+    fn save_target_maps_sources_onto_json() {
+        // An opened .json is rewritten in place.
+        assert_eq!(
+            save_target("/tmp/workspace.json"),
+            Some(PathBuf::from("/tmp/workspace.json"))
+        );
+        // A .dsl never gains new bytes — the sidecar takes the geometry.
+        assert_eq!(
+            save_target("/tmp/demo.dsl"),
+            Some(PathBuf::from("/tmp/demo.json"))
+        );
+        // Uppercase extension still recognised; stdin has no target.
+        assert_eq!(
+            save_target("/tmp/Demo.DSL"),
+            Some(PathBuf::from("/tmp/Demo.json"))
+        );
+        assert_eq!(save_target("-"), None);
+    }
+
+    #[test]
+    fn apply_overlay_then_write_saves_idempotent_json() {
+        use oxidizr_api::open;
+        use oxidizr_api::pipeline::{ApiOptions, Input};
+
+        // A real open (not a hand-built model): `from_slice` runs the
+        // hydrate-equivalent validation, so the fixture must be a real
+        // workspace the same way the golden_paint tests are (Category A).
+        let dir = std::env::temp_dir().join(format!("oxidizr-m35-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dsl = dir.join("demo.dsl");
+        std::fs::write(
+            &dsl,
+            "workspace \"Save Demo\" {\n    model {\n        alice = person \"Alice\"\n        \
+             bank = softwaresystem \"Bank\"\n        alice -> bank \"Uses\"\n    }\n}",
+        )
+        .unwrap();
+        let opened = open(&Input::File(dsl), &ApiOptions::default()).unwrap();
+        let first = opened.workspace.views.all_views().remove(0);
+        let key = first.key().to_owned();
+        let content = first.content().unwrap();
+        let element = content.elements[0].id.clone();
+        let relationship = content.relationships[0].id.clone();
+
+        // The write direction is the read path inverted: top-lefts,
+        // interiors, dimensions — rounded to the stored i32 grid.
+        let mut overlay = LayoutOverlay::for_view(&key);
+        overlay.elements.insert(element.clone(), (222.4, 333.6));
+        overlay
+            .relationships
+            .insert(relationship.clone(), vec![(10.0, 20.0), (30.0, 40.0)]);
+        overlay.dimensions = Some(Dimensions {
+            width: 1234,
+            height: 567,
+        });
+        let applied = apply_overlay(&opened.workspace, &key, &overlay);
+        let views = applied.views.all_views();
+        let view = views.first().unwrap();
+        let saved = view.content().unwrap();
+        let stored = saved.elements.iter().find(|v| v.id == element).unwrap();
+        assert_eq!((stored.x, stored.y), (222, 334), "0.5 away rounds");
+        let stored = saved
+            .relationships
+            .iter()
+            .find(|v| v.id == relationship)
+            .unwrap();
+        assert_eq!(
+            stored
+                .vertices
+                .iter()
+                .map(|v| (v.x, v.y))
+                .collect::<Vec<_>>(),
+            vec![(10, 20), (30, 40)]
+        );
+        assert_eq!(
+            saved.dimensions,
+            Some(Dimensions {
+                width: 1234,
+                height: 567
+            })
+        );
+        // An unknown key (a filtered view, stdin) changes nothing.
+        assert_eq!(
+            apply_overlay(&opened.workspace, "ghost", &overlay),
+            opened.workspace
+        );
+
+        // Sidecar target, temp+rename write, reader round-trip. The
+        // JSON READ applies the reference bean normalizations (an empty
+        // `description` string binds as `Some("")`, tags are rebuilt
+        // from the serialized form) and the writer sorts the entry
+        // arrays by id — so the contract is not struct equality but
+        // BYTE stability: re-writing the re-read workspace reproduces
+        // the file exactly (the property that makes repeated saves
+        // idempotent).
+        let target = save_target(&opened.display).unwrap();
+        assert_eq!(target, dir.join("demo.json"));
+        write_workspace(&target, &applied).unwrap();
+        let bytes = std::fs::read(&target).unwrap();
+        let parsed = oxidizr_json::from_slice(&bytes).unwrap();
+        assert_eq!(parsed.name.as_deref(), Some("Save Demo"), "model untouched");
+        assert_eq!(oxidizr_json::to_vec(&parsed).unwrap(), bytes);
     }
 }

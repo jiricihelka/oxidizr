@@ -526,10 +526,8 @@ mod tests {
             vec![0, 1]
         );
         // A lasso over empty canvas grabs nothing.
-        assert_eq!(
-            items_in_rect(&s, lasso(120.0, 120.0, 60.0, 20.0)),
-            Vec::new()
-        );
+        let empty: Vec<usize> = Vec::new();
+        assert_eq!(items_in_rect(&s, lasso(120.0, 120.0, 60.0, 20.0)), empty);
     }
 
     #[test]

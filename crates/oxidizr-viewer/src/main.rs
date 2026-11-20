@@ -167,6 +167,9 @@ struct Viewer {
     drag: Drag,
     /// Views edited since the last adopt (dirty marker; M3-5 save).
     dirty: BTreeSet<String>,
+    /// Last Save outcome line (M3-5): green in the status bar, cleared
+    /// by the next save attempt and by any adopt.
+    save_note: Option<String>,
     /// Last auto-layout failure (dialog + status bar).
     layout_error: Option<String>,
     /// Auto-layout dialog visibility.
@@ -265,6 +268,7 @@ impl Viewer {
             snap: false,
             drag: Drag::Idle,
             dirty: BTreeSet::new(),
+            save_note: None,
             layout_error: None,
             show_layout: false,
             layout_params: AutomaticLayout::default(),
@@ -333,6 +337,7 @@ impl Viewer {
         self.overlays.clear();
         self.histories.clear();
         self.dirty.clear();
+        self.save_note = None;
         self.drag = Drag::Idle;
         self.layout_error = None;
         self.workspace = Some(opened.workspace);
@@ -447,15 +452,20 @@ impl eframe::App for Viewer {
         // Undo/redo (M3-3): Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk the
         // CURRENT view's history — skipped while the toolbar path field
         // owns the keyboard (Ctrl+Z inside the path edit is egui's).
+        // Ctrl+S saves (M3-5) under the same focus guard.
         if self.scene.is_some() && !self.path_focus {
-            let (undo, redo) = ctx.input(|i| {
+            let (undo, redo, save) = ctx.input(|i| {
                 let command = i.modifiers.command;
                 let z = i.key_pressed(egui::Key::Z);
                 (
                     command && z && !i.modifiers.shift,
                     (command && z && i.modifiers.shift) || (command && i.key_pressed(egui::Key::Y)),
+                    command && i.key_pressed(egui::Key::S),
                 )
             });
+            if save {
+                self.save_workspace();
+            }
             if undo {
                 self.step_history(false);
             } else if redo {
@@ -531,6 +541,18 @@ impl Viewer {
                 }
                 ui.toggle_value(&mut self.snap, "Snap")
                     .on_hover_text("Grid-snap element drags to 10 px steps");
+                let edits = !self.dirty.is_empty();
+                if ui
+                    .add_enabled(edits, egui::Button::new("Save"))
+                    .on_hover_text(
+                        "Write the layout back as JSON (Ctrl+S): the opened .json in \
+                         place, a <stem>.json sidecar for DSL sources — the DSL text \
+                         is never rewritten",
+                    )
+                    .clicked()
+                {
+                    self.save_workspace();
+                }
             });
             ui.separator();
             let dark = self.scheme == ColorScheme::Dark;
@@ -552,7 +574,8 @@ impl Viewer {
                      Wheel: zoom · Click: select · Shift-click: add/toggle · \
                      Click edge: select · Drag handle: reroute · Double-click edge: \
                      insert handle · Alt+click handle: delete · Ctrl+Z / Ctrl+Y: \
-                     undo/redo · Layout dialog: align/distribute/bring-back · \
+                     undo/redo · Ctrl+S: save layout JSON · Layout dialog: \
+                     align/distribute/bring-back · \
                      Ctrl/⌘-click: open element URL · Esc: deselect",
                 );
             });
@@ -1195,6 +1218,21 @@ impl Viewer {
                         self.show_diagnostics = !self.show_diagnostics;
                     }
                 }
+                if let Some(note) = &self.save_note {
+                    // Real failures are the SaveError texts ("serialize:
+                    // …", "write <path>: …"); "save blocked"/"nothing to
+                    // save" are guarded no-ops, "saved …" success.
+                    let bad = note.starts_with("serialize:") || note.starts_with("write ");
+                    ui.colored_label(
+                        if bad {
+                            egui::Color32::DARK_RED
+                        } else {
+                            egui::Color32::DARK_GREEN
+                        },
+                        truncate(note, 90),
+                    )
+                    .on_hover_text(note.clone());
+                }
                 if let Some(error) = self
                     .open_error
                     .as_ref()
@@ -1406,6 +1444,71 @@ impl Viewer {
         history.run(overlay, command);
         self.dirty.insert(view_key);
         self.rebuild_scene();
+    }
+
+    /// Save every dirty view's overlay into the workspace's stored
+    /// geometry and write the JSON (§P3-M5): the target comes from
+    /// [`commands::save_target`] (opened `.json` in place, `<stem>.json`
+    /// sidecar for DSL sources — the DSL text is never rewritten,
+    /// P3-D0), the bytes from the SHARED `oxidizr_json` writer through
+    /// [`commands::write_workspace`] (temp+rename, P3-D6 posture). The
+    /// current view being FILTERED blocks the save: a filtered view has
+    /// no content of its own, its base view owns the layout (a silent
+    /// save there would write the wrong geometry or nothing). A failed
+    /// write keeps `dirty` — the note explains, the edit survives.
+    fn save_workspace(&mut self) {
+        self.save_note = None;
+        let Some(workspace) = &self.workspace else {
+            self.save_note = Some("nothing to save — open a workspace first".to_owned());
+            return;
+        };
+        if self.current_view_filtered() {
+            self.save_note =
+                Some("save blocked: a filtered view has no layout of its own".to_owned());
+            return;
+        }
+        let Some(target) = commands::save_target(&self.display) else {
+            self.save_note = Some("save blocked: stdin has no file to write".to_owned());
+            return;
+        };
+        let keys: Vec<String> = self
+            .dirty
+            .iter()
+            .filter(|key| self.overlays.contains_key(key.as_str()))
+            .cloned()
+            .collect();
+        if keys.is_empty() {
+            self.save_note = Some("nothing to save — no layout edits".to_owned());
+            return;
+        }
+        let mut applied = workspace.clone();
+        for key in &keys {
+            let Some(overlay) = self.overlays.get(key) else {
+                continue;
+            };
+            applied = commands::apply_overlay(&applied, key, overlay);
+        }
+        match commands::write_workspace(&target, &applied) {
+            Ok(()) => {
+                self.dirty.clear();
+                self.save_note = Some(format!("saved {}", target.display()));
+            }
+            Err(error) => self.save_note = Some(error.to_string()),
+        }
+    }
+
+    /// Whether the CURRENT view is a `FilteredView` (no content slot —
+    /// the §P3-M5 save guard).
+    fn current_view_filtered(&self) -> bool {
+        self.view_key.as_deref().is_some_and(|key| {
+            self.workspace.as_ref().is_some_and(|workspace| {
+                workspace
+                    .views
+                    .all_views()
+                    .iter()
+                    .any(|view| view.key() == key && matches!(view, View::Filtered(_)))
+            })
+        })
     }
 
     /// Undo/redo one step of the current view (Ctrl+Z / Ctrl+Y).
