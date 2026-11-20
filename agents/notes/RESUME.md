@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6/M7/M8 complete, tagged v0.3.0 → P4 next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6/M7/M8/M9 complete, tagged v0.3.0 → P4 next**)
 
 ## State
 
@@ -12,8 +12,10 @@
   `a1e7dfc`, docs `0083fe6`. **Post-tag M7** (§P3-M7): sidebar view list
   grouped per view kind, `e60dcba`. **Post-tag M8** (§P3-M8, F10):
   `oxidizr view` in-binary GUI subcommand — shell→lib `shell.rs`
-  `55a0219`, cli entry `6bd7073`, gates/docs (this commit). **Nothing
-  pushed; tags v0.1.0/v0.2.0/v0.3.0.**
+  `55a0219`, cli entry `6bd7073`, gates/docs (this commit). **Post-tag
+  M9** (§P3-M9): Windows CI reload fix — notify `Modify(Any)` class
+  accepted on windows-cfg only + platform-mapping test (this commit).
+  **Nothing pushed; tags v0.1.0/v0.2.0/v0.3.0.**
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
   -p oxidizr-e2e` → 8 ok) + `cargo xtask e2e bless` → 307×unchanged +
@@ -103,9 +105,13 @@
   `Opened.includes` carries it (empty for JSON/stdin).
 - `reload.rs::ReloadDriver` (headless, notify, 250 ms settle-debounce,
   parent-dir NonRecursive + exact-path filter, SipHash baselines are
-  the authority). `Wake = Arc<dyn Fn() + Send + Sync>` (eframe 0.37
-  has NO RepaintSignal; shell passes `move || ctx.request_repaint()`,
-  `repaint_ctx` stored first frame). R-2 guard scans doc literals.
+  the authority — `interesting()` is a PRE-filter only; on Windows the
+  backend never emits `Modify(Data)`, plain writes are `Modify(Any)`, so
+  that class is accepted under `#[cfg(target_os = "windows")]` (§P3-M9,
+  pitfalls/notify-windows-modify-any.md). `Wake = Arc<dyn Fn() + Send +
+  Sync>` (eframe 0.37 has NO RepaintSignal; shell passes `move ||
+  ctx.request_repaint()`, `repaint_ctx` stored first frame). R-2 guard
+  scans doc literals.
 - Shell: poll hook + re-arm guard in `App::ui`; `adopt` drops the
   driver; save Ok-arm `restart_watch()` re-baselines (self-save
   hash-matches ⇒ no self-reload); watch failure ⇒ `reload_disabled`.
@@ -219,7 +225,7 @@
   `ComboBox::from_id_salt`; click after a MOVED drag never fires;
   bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"` ==
   307 + clean `git status testdata/`.
-- `cargo test -p oxidizr-viewer` = 93 lib + 1 auto_display + 3 golden
+- `cargo test -p oxidizr-viewer` = 94 lib + 1 auto_display + 3 golden
   (+2 ignored perf);
   `cargo test -p oxidizr-layout --features dot-backend` = 31.
   Viewer usage lives in `crates/oxidizr-viewer/README.md` (M5-3).

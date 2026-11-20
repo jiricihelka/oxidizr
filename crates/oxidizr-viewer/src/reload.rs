@@ -235,16 +235,41 @@ fn pump(rx: mpsc::Receiver<notify::Result<notify::Event>>, inner: Arc<Mutex<Inne
     }
 }
 
-/// Content-relevant kinds only (V6): data writes, create/remove and
-/// the rename both-ends; access/other kinds are noise (`Access(Open)`
-/// fires on every plain read, ours included).
+/// Content-relevant kinds (V6): data writes, create/remove and the
+/// rename both-ends; access/other kinds are noise (`Access(Open)` fires
+/// on every plain read, ours included).
+///
+/// The path filter + settle + content-hash diff in
+/// [`ReloadDriver::poll`] is the edge contract; this is only a
+/// per-backend noise pre-filter. The Windows backend (`ReadDirectory
+/// ChangesW`, notify 8.2.1 `windows.rs`) maps EVERY `FILE_ACTION_
+/// MODIFIED` — content write or mtime touch alike — to `Modify(Any)`
+/// and never to `Modify(Data)`, so the inotify/fsevent data classes
+/// alone drop all plain writes there (the CI symptom: four reload
+/// tests never see an edge). Accepting `Any` on Windows cannot fire a
+/// false edge — a metadata-only write still hash-matches in `poll` and
+/// stays silent — while Linux/macOS keep the D6 classes verbatim.
 fn interesting(kind: EventKind) -> bool {
-    matches!(
+    #[cfg(not(target_os = "windows"))]
+    if matches!(
         kind,
         EventKind::Modify(notify::event::ModifyKind::Data(_) | notify::event::ModifyKind::Name(_))
-            | EventKind::Create(_)
-            | EventKind::Remove(_)
-    )
+    ) {
+        return true;
+    }
+    // Windows: `Modify(Any)` IS the data-write class (comment above).
+    #[cfg(target_os = "windows")]
+    if matches!(
+        kind,
+        EventKind::Modify(
+            notify::event::ModifyKind::Any
+                | notify::event::ModifyKind::Data(_)
+                | notify::event::ModifyKind::Name(_),
+        )
+    ) {
+        return true;
+    }
+    matches!(kind, EventKind::Create(_) | EventKind::Remove(_))
 }
 
 #[cfg(test)]
@@ -273,6 +298,40 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         false
+    }
+
+    #[test]
+    fn interesting_maps_the_per_backend_event_classes() {
+        use notify::event::{
+            AccessKind, AccessMode, CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind,
+            RenameMode,
+        };
+        // Cross-platform classes (V6/D6): data writes, create/remove,
+        // rename both-ends are relevant; access/other/metadata are not.
+        assert!(interesting(EventKind::Modify(ModifyKind::Data(
+            DataChange::Content
+        ))));
+        assert!(interesting(EventKind::Modify(ModifyKind::Name(
+            RenameMode::To
+        ))));
+        assert!(interesting(EventKind::Create(CreateKind::File)));
+        assert!(interesting(EventKind::Remove(RemoveKind::File)));
+        assert!(!interesting(EventKind::Access(AccessKind::Open(
+            AccessMode::Read
+        ))));
+        assert!(!interesting(EventKind::Other));
+        assert!(!interesting(EventKind::Any));
+        assert!(!interesting(EventKind::Modify(ModifyKind::Metadata(
+            MetadataKind::WriteTime
+        ))));
+        assert!(!interesting(EventKind::Modify(ModifyKind::Other)));
+        // The §P3-M9 Windows seam: the reference backend reports every
+        // plain write as `Modify(Any)`, so only that OS accepts it here
+        // (the hash layer in `poll` is the cross-platform authority).
+        assert_eq!(
+            interesting(EventKind::Modify(ModifyKind::Any)),
+            cfg!(target_os = "windows")
+        );
     }
 
     #[test]

@@ -19,4 +19,6 @@ WINEPREFIX is `$HOME/wine64-drives`. It does NOT simulate the Windows *checkout*
 (EOL/autocrlf, NTFS) — for EOL use `git -c core.autocrlf=true clone`; macOS stays CI-only.
 Windows-native arm64 is unsupported tier-2 → CI matrix uses windows-latest x86_64 only.
 
-Last useful: never
+Last useful: 2026-11-20 — reproduced the Windows-CI reload failures on the
+pre-fix code and proved the fix (§P3-M9); see
+[pitfalls/notify-windows-modify-any.md](../pitfalls/notify-windows-modify-any.md).

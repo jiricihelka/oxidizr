@@ -507,6 +507,28 @@ bless 307×unchanged tripwire and all byte-parity paths are untouched.
 Standalone `oxidizr-viewer` binary is RETAINED (the GUI's default entry;
 the flake runs it). No V-item: no bytes contract touched.
 
+## §P3-M9 — post-v0.3.0 follow-up: Windows CI reload failures (2026-11-20)
+
+The windows-latest CI leg failed the four event-driven reload tests
+(`wait_for_edge` 5 s timeouts); the silence-only sibling test passed —
+the signature of "no event ever sets `pending`", not timing. The
+reference decides: notify 8.2.1 `src/windows.rs` maps EVERY
+`FILE_ACTION_MODIFIED` (the only action `ReadDirectoryChangesW` reports
+for a content write OR an mtime touch) to `EventKind::Modify(ModifyKind::Any)` —
+it NEVER emits `Modify(Data)` the way inotify/fsevent do. `interesting()`
+accepted only `Modify(Data|Name) | Create | Remove`, so plain `fs::write`
+events were dropped pre-filter on Windows. (The save tests rode the
+rename `Modify(Name(To))`/`Create` classes and survived; the same
+signature fits the CI report exactly.)
+
+| Item | Deliverable | Exit gate |
+|---|---|---|
+| **M9-1** | `interesting()` accepts `ModifyKind::Any` under `#[cfg(target_os = "windows")]` ONLY (justifying comment; `#[cfg]` is illegal inside `matches!` patterns → two cfg-gated arms) — safe because the P3-D6 edge contract is the path filter + settle + content-hash diff in `poll()`: a metadata-only `Modify(Any)` still hash-matches and stays silent; Linux/macOS keep the D6 classes verbatim. Unit test `interesting_maps_the_per_backend_event_classes` pins the platform mapping (Category A, all OSes) | Linux quartet + `ci gui` + full tier + bless; **negative control on the wine windows-gnu leg: pre-fix code reproduces the exact 4 CI failures, post-fix 6/6 reload tests + full 94-lib viewer suite green**; windows-latest CI re-run is the authoritative NTFS check (wine synthesizes RDCW from inotify — caveat noted) — **DONE 2026-11-20** |
+
+No bytes contract, no V-item (viewer-internal watch filter); D6 text
+stands — the hash compare was always the authority. Notes:
+`pitfalls/notify-windows-modify-any.md`, wine-leg "Last useful" stamped.
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
