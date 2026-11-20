@@ -1358,23 +1358,35 @@ fn default_title(workspace: &Workspace, view: View<'_>) -> String {
 }
 
 /// The rect an id rendered as, when it became an item.
-/// Edge endpoint (§P3-M11 M11-3): where the ray from `rect`'s centre
-/// toward `toward` exits `rect` — the arrow lands on a SIDE (and
-/// slides along it toward the neighbour, like the reference's facing
-/// anchors). Divisions by zero become `inf`, which `min` discards, so
-/// a degenerate ray (both deltas zero, or a zero-sized box) falls
-/// back to the centre. The axis that binds agrees with the engine's
-/// `endpoint(None)`, so engine-routed views enter the side it chose.
+/// Edge endpoint (§P3-M11 M11-3, spread-aware since M11-6): the ray
+/// from `rect`'s centre toward `toward` CHOOSES the exit side (the
+/// exact `endpoint(None)` rule, so engine-routed views enter the side
+/// it chose), but the anchor then sits where `toward` FACES that side
+/// — its cross coordinate projected onto the side and clamped to the
+/// side's extent. Axis-parallel route legs therefore stay
+/// axis-parallel after re-anchoring, which is what re-adds the engine
+/// §P3-M11 port-spread anchors EXACTLY (an engine leg shares its cross
+/// coordinate with the port). Pure centre→centre pairs still meet at
+/// the facing midpoints; a degenerate ray (both deltas zero) falls
+/// back to the centre.
 fn border_anchor(rect: Rect, toward: (f64, f64)) -> (f64, f64) {
     let mid = rect.center();
     let (dx, dy) = (toward.0 - mid.0, toward.1 - mid.1);
     let sx = (rect.width / 2.0) / dx.abs();
     let sy = (rect.height / 2.0) / dy.abs();
-    let t = sx.min(sy);
-    if !t.is_finite() {
+    if !(sx.is_finite() || sy.is_finite()) {
         return mid;
     }
-    (mid.0 + dx * t, mid.1 + dy * t)
+    let (top, bottom) = (rect.y, rect.y + rect.height);
+    let (left, right) = (rect.x, rect.x + rect.width);
+    if sx <= sy {
+        // The ray exits a VERTICAL side: slide along it to face `toward`.
+        let x = if dx >= 0.0 { right } else { left };
+        (x, toward.1.clamp(top, bottom))
+    } else {
+        let y = if dy >= 0.0 { bottom } else { top };
+        (toward.0.clamp(left, right), y)
+    }
 }
 
 fn placement_rect(
@@ -1923,10 +1935,10 @@ mod tests {
         assert_eq!(edge.url.as_deref(), Some("https://example.test"));
         assert_eq!(
             edge.points,
-            // Ray anchors on the box SIDES (§P3-M11 M11-3): both legs
-            // leave toward the waypoint below, so both endpoints sit
-            // on the facing bottom borders, not on the centres.
-            vec![(250.0, 150.0), (300.0, 200.0), (410.0, 150.0)]
+            // Ray-picked sides, then the anchor SLIDES to face the
+            // waypoint (§P3-M11 M11-6): both legs become axis-parallel
+            // — bottom facing x 300, bottom facing x 400.
+            vec![(300.0, 150.0), (300.0, 200.0), (400.0, 150.0)]
         );
     }
 
@@ -1975,17 +1987,20 @@ mod tests {
         let alice = scene.items.iter().find(|i| i.id == id(1)).unwrap();
         assert_eq!((alice.rect.x, alice.rect.y), (2000.0, 600.0));
         let edge = scene.edges.iter().find(|e| e.id == id(20)).unwrap();
-        // Endpoints ride the side rays (§P3-M11 M11-3): alice exits
-        // the top toward (2100,300); the bank's ray toward (300,300)
-        // binds on the bottom at x = 575 − 275/3 (repeating — the ray
-        // parameter is 1/3, so compare with a tolerance).
+        // Endpoints land on the sides, slid to face the adjacent vertex
+        // (§P3-M11 M11-6): alice exits the TOP directly above (2100,300);
+        // the bank enters from the BOTTOM at its near corner — toward.x
+        // (300) is left of the bank (x starts at 400), so it clamps to
+        // the bank's bottom-left corner.
         assert_eq!(
-            &edge.points[..3],
-            &[(2160.0, 600.0), (2100.0, 300.0), (300.0, 300.0)]
+            edge.points,
+            vec![
+                (2100.0, 600.0),
+                (2100.0, 300.0),
+                (300.0, 300.0),
+                (400.0, 150.0),
+            ]
         );
-        let (ax, ay) = edge.points[3];
-        assert!((ax - (575.0 - 275.0 / 3.0)).abs() < 1e-9);
-        assert!((ay - 150.0).abs() < 1e-9);
         // Bounds follow the moved item (union + margin recomputed).
         assert!(scene.bounds.x + scene.bounds.width > 2350.0);
         // An absent relationship keeps its stored vertices (rel 21 has

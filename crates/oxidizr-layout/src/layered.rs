@@ -37,7 +37,7 @@
 //! sorts only, fixed passes — the same input graph always produces an
 //! identical [`LayoutResult`].
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use crate::engine::{EdgePlacement, LayoutEngine, LayoutError, LayoutResult, NodePlacement, Point};
 use crate::graph::{Anchor, Edge, LayoutGraph, RankDirection};
@@ -602,6 +602,17 @@ impl Skeleton {
             .collect();
 
         let generate_vertices = graph.config.generate_vertices;
+        // §P3-M11 M11-6 port spread: edges that land on the SAME
+        // (node, side) fan out along it by the far end's cross order,
+        // so arrows stop stacking on one midpoint. A lone edge keeps ½.
+        let alongs = port_spread(
+            &self.chains,
+            &graph.edges,
+            &verts,
+            &centers,
+            &boxes,
+            generate_vertices,
+        );
         let mut edges = Vec::with_capacity(graph.edges.len());
         for (idx, edge) in graph.edges.iter().enumerate() {
             let points = route(
@@ -612,6 +623,7 @@ impl Skeleton {
                 &boxes,
                 generate_vertices,
                 horizontal,
+                alongs[idx],
             );
             edges.push(EdgePlacement {
                 id: edge.id.clone(),
@@ -667,6 +679,95 @@ enum SideKind {
     Neutral,
 }
 
+/// §P3-M11 M11-6 port spread (user: arrows "should prefer to not land
+/// in each other"): every edge endpoint attaches to one of its box's
+/// four sides ([`pick_side`] — the exact rule [`endpoint`] applies);
+/// edges sharing a (node, side) then SLIDE apart — ordered by the far
+/// box centre's coordinate PARALLEL to that side (ties → edge input
+/// order, determinism contract) and placed in N+1 equally spaced slots
+/// along it. The order preserves the far ends' cross order, so the
+/// fanned bundle keeps its (already minimised) crossing structure;
+/// N = 1 stays on the midpoint, so lone edges route exactly as before.
+/// Returns the per-edge `(from, to)` fractions along the attach side.
+#[allow(clippy::cast_precision_loss)] // slot ranks/sizes are tiny counts
+fn port_spread(
+    chains: &[Chain],
+    edges: &[Edge],
+    verts: &[Vertex],
+    centers: &[Point],
+    boxes: &[(f64, f64, f64, f64)],
+    generate_vertices: bool,
+) -> Vec<(f64, f64)> {
+    let mut alongs = vec![(0.5, 0.5); chains.len()];
+    let mut from_groups: BTreeMap<(usize, Side4), Vec<(f64, usize)>> = BTreeMap::new();
+    let mut to_groups: BTreeMap<(usize, Side4), Vec<(f64, usize)>> = BTreeMap::new();
+    for (idx, chain) in chains.iter().enumerate() {
+        let last = chain.verts.len() - 1;
+        let (start_vid, end_vid) = if chain.reversed {
+            (chain.verts[last], chain.verts[0])
+        } else {
+            (chain.verts[0], chain.verts[last])
+        };
+        let (si, ti) = (verts[start_vid].real, verts[end_vid].real);
+        if si == ti {
+            continue; // the self-loop stub pair owns its own anchors
+        }
+        // `toward`/`back` EXACTLY as `route` computes them (the first/
+        // last interior point IN THE INPUT DIRECTION, else the far
+        // centre) — the side must be the one `endpoint` will pick.
+        let skipped: &[usize] = if generate_vertices {
+            &chain.verts[1..last]
+        } else {
+            &[]
+        };
+        let (first_in_dir, last_in_dir) = if chain.reversed {
+            (skipped.last().copied(), skipped.first().copied())
+        } else {
+            (skipped.first().copied(), skipped.last().copied())
+        };
+        let toward = first_in_dir.map_or_else(|| center(boxes[ti]), |vid| centers[vid]);
+        let back = last_in_dir.map_or_else(|| center(boxes[si]), |vid| centers[vid]);
+        let from_side = pick_side(boxes[si], edges[idx].from, toward);
+        let to_side = pick_side(boxes[ti], edges[idx].to, back);
+        let far_from = center(boxes[ti]);
+        let far_to = center(boxes[si]);
+        let key = |side: Side4, far: Point| {
+            if side.slides_x() { far.x } else { far.y }
+        };
+        from_groups
+            .entry((si, from_side))
+            .or_default()
+            .push((key(from_side, far_from), idx));
+        to_groups
+            .entry((ti, to_side))
+            .or_default()
+            .push((key(to_side, far_to), idx));
+    }
+    for (groups, which) in [(&to_groups, 1_usize), (&from_groups, 0)] {
+        for members in groups.values() {
+            if members.len() < 2 {
+                continue;
+            }
+            let mut sorted = members.clone();
+            sorted.sort_by(|a, b| {
+                a.0.partial_cmp(&b.0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(a.1.cmp(&b.1))
+            });
+            let slots = sorted.len() + 1;
+            for (rank, (_, edge_idx)) in sorted.iter().enumerate() {
+                let fraction = (rank + 1) as f64 / slots as f64;
+                if which == 0 {
+                    alongs[*edge_idx].0 = fraction;
+                } else {
+                    alongs[*edge_idx].1 = fraction;
+                }
+            }
+        }
+    }
+    alongs
+}
+
 /// Step 6: anchor → dummy centres (only when `generate_vertices`) →
 /// anchor, walked in the INPUT direction — chains are stored
 /// acyclic-oriented, so a reversed edge's chain runs backwards here.
@@ -684,6 +785,7 @@ fn route(
     boxes: &[(f64, f64, f64, f64)],
     generate_vertices: bool,
     horizontal: bool,
+    along: (f64, f64),
 ) -> Vec<Point> {
     let last = chain.verts.len() - 1;
     let (start_vid, end_vid) = if chain.reversed {
@@ -720,11 +822,11 @@ fn route(
     let toward = interior
         .first()
         .map_or_else(|| center(boxes[ti]), |&vid| centers[vid]);
-    let from = endpoint(boxes[si], edge.from, toward, horizontal);
+    let from = endpoint(boxes[si], edge.from, toward, horizontal, along.0);
     let back = interior
         .last()
         .map_or_else(|| center(boxes[si]), |&vid| centers[vid]);
-    let to = endpoint(boxes[ti], edge.to, back, horizontal);
+    let to = endpoint(boxes[ti], edge.to, back, horizontal, along.1);
     if !generate_vertices {
         return vec![from.0, to.0];
     }
@@ -823,14 +925,60 @@ fn center(box_rect: (f64, f64, f64, f64)) -> Point {
     }
 }
 
-/// The anchor point of `box_rect` with its side kind: the named
-/// side's midpoint when pinned, otherwise the side facing `toward`
-/// (dominant delta wins, exact ties take the horizontal sides).
+/// The four box sides, as an anchor attaches to one (§P3-M11 M11-6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Side4 {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+impl Side4 {
+    /// Whether the anchor SLIDES along this side by the x coordinate
+    /// (Top/Bottom) or the y coordinate (Left/Right).
+    fn slides_x(self) -> bool {
+        matches!(self, Self::Top | Self::Bottom)
+    }
+}
+
+/// The side of `box_rect` an anchor attaches to: the named side when
+/// pinned, otherwise the side facing `toward` (dominant delta wins,
+/// exact ties take the horizontal sides). Shared by [`endpoint`] and
+/// the §P3-M11 port-spread prepass so BOTH agree which side an edge
+/// lands on (the spread order is only meaningful if it matches).
+fn pick_side(box_rect: (f64, f64, f64, f64), anchor: Option<Anchor>, toward: Point) -> Side4 {
+    match anchor {
+        Some(Anchor::Top) => Side4::Top,
+        Some(Anchor::Bottom) => Side4::Bottom,
+        Some(Anchor::Left) => Side4::Left,
+        Some(Anchor::Right) => Side4::Right,
+        None => {
+            let mid = center(box_rect);
+            let dx = toward.x - mid.x;
+            let dy = toward.y - mid.y;
+            if dx.abs() >= dy.abs() {
+                if dx >= 0.0 { Side4::Right } else { Side4::Left }
+            } else if dy >= 0.0 {
+                Side4::Bottom
+            } else {
+                Side4::Top
+            }
+        }
+    }
+}
+
+/// The anchor point of `box_rect` with its side kind: the side from
+/// [`pick_side`], positioned `along` it (0 = one end, 1 = the other,
+/// ½ = the midpoint the pinned anchors keep). §P3-M11 M11-6 feeds a
+/// per-edge `along` so edges sharing a (node, side) fan out instead of
+/// stacking on the midpoint; a lone edge keeps ½ = the old behaviour.
 fn endpoint(
     box_rect: (f64, f64, f64, f64),
     anchor: Option<Anchor>,
     toward: Point,
     horizontal: bool,
+    along: f64,
 ) -> (Point, SideKind) {
     let (bx, by, bw, bh) = box_rect;
     let (rank_side, cross_side) = if horizontal {
@@ -838,58 +986,34 @@ fn endpoint(
     } else {
         (SideKind::Cross, SideKind::Rank)
     };
-    match anchor {
-        Some(Anchor::Top) => (
-            Point {
-                x: bx + bw / 2.0,
-                y: by,
-            },
-            cross_side,
-        ),
-        Some(Anchor::Bottom) => (
-            Point {
-                x: bx + bw / 2.0,
-                y: by + bh,
-            },
-            cross_side,
-        ),
-        Some(Anchor::Left) => (
-            Point {
-                x: bx,
-                y: by + bh / 2.0,
-            },
-            rank_side,
-        ),
-        Some(Anchor::Right) => (
-            Point {
-                x: bx + bw,
-                y: by + bh / 2.0,
-            },
-            rank_side,
-        ),
-        None => {
-            let mid = center(box_rect);
-            let dx = toward.x - mid.x;
-            let dy = toward.y - mid.y;
-            if dx.abs() >= dy.abs() {
-                (
-                    Point {
-                        x: if dx >= 0.0 { bx + bw } else { bx },
-                        y: by + bh / 2.0,
-                    },
-                    rank_side,
-                )
-            } else {
-                (
-                    Point {
-                        x: bx + bw / 2.0,
-                        y: if dy >= 0.0 { by + bh } else { by },
-                    },
-                    cross_side,
-                )
-            }
-        }
-    }
+    let point = |side: Side4| match side {
+        Side4::Top => Point {
+            x: bx + along * bw,
+            y: by,
+        },
+        Side4::Bottom => Point {
+            x: bx + along * bw,
+            y: by + bh,
+        },
+        Side4::Left => Point {
+            x: bx,
+            y: by + along * bh,
+        },
+        Side4::Right => Point {
+            x: bx + bw,
+            y: by + along * bh,
+        },
+    };
+    let side = pick_side(box_rect, anchor, toward);
+    // The leg axis keys off the SIDE (horizontal sides ride the rank
+    // axis, vertical sides the cross axis) — matching the pre-M11 rule
+    // where the dominant-delta side chose rank vs cross.
+    let kind = if side.slides_x() {
+        cross_side
+    } else {
+        rank_side
+    };
+    (point(side), kind)
 }
 
 #[cfg(test)]
@@ -1044,18 +1168,44 @@ mod tests {
         assert_eq!(pos(&r, "b"), Point { x: 220.0, y: 0.0 });
         assert_eq!(pos(&r, "c"), Point { x: 440.0, y: 40.0 });
         // Orthogonal route a → dummy → c: two rank-gap channels at
-        // x 200 / x 360 around the dummy's 110 line.
+        // x 200 / x 360 around the dummy's 110 line. §P3-M11 port
+        // spread: a's RIGHT side hosts a→b too and c's LEFT side hosts
+        // b→c, so a→c takes the lower slot of both sides (its far ends
+        // sit below b's centre line) — y 80 instead of the 70 midpoint.
         assert_eq!(
             pts(&r, "ac"),
             vec![
-                Point { x: 120.0, y: 70.0 },
-                Point { x: 200.0, y: 70.0 },
+                Point { x: 120.0, y: 80.0 },
+                Point { x: 200.0, y: 80.0 },
                 Point { x: 200.0, y: 110.0 },
                 Point { x: 360.0, y: 110.0 },
-                Point { x: 360.0, y: 70.0 },
-                Point { x: 440.0, y: 70.0 },
+                Point { x: 360.0, y: 80.0 },
+                Point { x: 440.0, y: 80.0 },
             ]
         );
+    }
+
+    #[test]
+    fn edges_sharing_a_side_spread_into_thirds() {
+        // §P3-M11 M11-6 (user: arrows "should prefer to not land in
+        // each other"): a→h and b→h both enter h's LEFT side, so they
+        // take the ⅓ / ⅔ slots in source-centre order — never the
+        // shared midpoint.
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "h"] {
+            g.add_node(node(id));
+        }
+        g.add_edge(edge("ah", "a", "h"));
+        g.add_edge(edge("bh", "b", "h"));
+        let r = layout(&g);
+        let h = pos(&r, "h");
+        let mut ends = vec![
+            *pts(&r, "ah").last().unwrap(),
+            *pts(&r, "bh").last().unwrap(),
+        ];
+        ends.sort_by(|p, q| p.y.total_cmp(&q.y));
+        assert_eq!(ends[0], Point { x: h.x, y: h.y + 20.0 });
+        assert_eq!(ends[1], Point { x: h.x, y: h.y + 40.0 });
     }
 
     #[test]
