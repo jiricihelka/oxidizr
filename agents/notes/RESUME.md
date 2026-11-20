@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6/M7/M8/M9 complete, tagged v0.3.0 → P4 next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6–M10 complete, tagged v0.3.0 → P4 next**)
 
 ## State
 
@@ -14,7 +14,9 @@
   `oxidizr view` in-binary GUI subcommand — shell→lib `shell.rs`
   `55a0219`, cli entry `6bd7073`, gates/docs (this commit). **Post-tag
   M9** (§P3-M9): Windows CI reload fix — notify `Modify(Any)` class
-  accepted on windows-cfg only + platform-mapping test (this commit).
+  accepted on windows-cfg only + platform-mapping test. **Post-tag
+  M10** (§P3-M10): display-layout separation floor (`DISPLAY_FALLBACK`
+  200/120, graphviz lower-bound) + right-button pan (this commit).
   **Nothing pushed; tags v0.1.0/v0.2.0/v0.3.0.**
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
@@ -179,8 +181,11 @@
   session-only, NEVER dirty; views WITH stored coords render verbatim
   (`autolayout_once` is GONE — it dirtied on open and only fired with a
   stored `automaticLayout`). Params = view `automaticLayout` else the
-  reference LR defaults — NEVER the dialog's session params; engine =
-  Layered only, never `dot`.
+  reference LR defaults, separations FLOORED at `DISPLAY_FALLBACK`
+  (rank 200/node 120, graphviz lower-bound §P3-M10: cramped `autoLayout`
+  100/50 rides up; direction/vertices stay the file's; dialog +
+  `AutomaticLayout::default` untouched) — NEVER the dialog's session
+  params; engine = Layered only, never `dot`.
 - Seam: `view_needs_layout` / `display_params` / `auto_display` /
   `seed_overlay` (save-side); `Overrides::display(auto, user)` merges the
   overlay OVER the engine PER ID. Shell: `rebuild_scene` runs the pass
@@ -225,7 +230,7 @@
   `ComboBox::from_id_salt`; click after a MOVED drag never fires;
   bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"` ==
   307 + clean `git status testdata/`.
-- `cargo test -p oxidizr-viewer` = 94 lib + 1 auto_display + 3 golden
+- `cargo test -p oxidizr-viewer` = 95 lib + 1 auto_display + 3 golden
   (+2 ignored perf);
   `cargo test -p oxidizr-layout --features dot-backend` = 31.
   Viewer usage lives in `crates/oxidizr-viewer/README.md` (M5-3).

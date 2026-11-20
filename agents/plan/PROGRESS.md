@@ -151,6 +151,23 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
 
 ## Milestone log
 
+### P3-M10 — post-v0.3.0: roomier display layout + right-drag pan ✅ (2026-11-20, COMPLETE)
+
+Two viewer UX reports: the auto layout "doesn't leave much space", and
+mouse pan controls are "missing". §P3-M10. Both presentation-only,
+session-state (no bytes contract, no V-item).
+
+- **M10-1** — a DSL `autoLayout` stores rank 100 / node 50, which packs
+  350 px boxes to a 450 px pitch (measured 50 px min gap) — cramped vs the
+  web app. `display_params` now floors the separations at a new
+  `DISPLAY_FALLBACK` (LR, rank 200 / node 120, edge 50) with graphviz
+  lower-bound semantics; direction + vertex routing stay the file's, the
+  dialog path + `AutomaticLayout::default` (a JSON default) untouched. Two
+  placement tests re-pinned (pitch 450 → 550) + a new floor test (95 lib).
+- **M10-2** — pan now also rides the **right button** (`Secondary`) in the
+  §P3-M3 press state machine, the draw.io/Visio convention; `?` hover +
+  README nav updated. 95 lib; live window smoke on big-bank-plc.
+
 ### P3-M9 — post-v0.3.0: Windows CI reload failures fixed ✅ (2026-11-20, COMPLETE)
 
 windows-latest failed the four event-driven `reload` tests (edge never

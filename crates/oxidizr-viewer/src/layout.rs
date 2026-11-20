@@ -150,13 +150,37 @@ pub fn view_needs_layout(workspace: &Workspace, view_key: &str) -> bool {
             .all(|element| element.x == 0 && element.y == 0)
 }
 
+/// Generous display fallback spacing (§P3-M10, user report: the JSON
+/// defaults of 100/50 read as cramped to the bundled engine next to
+/// 350 px-wide boxes). Applies ONLY when the rendered view carries no
+/// `automaticLayout` at all — a stored one stays authoritative, file for
+/// file. The geometry is session display state (§P3-M6), so no byte is
+/// touched and the core's [`AutomaticLayout::default`] (a JSON default)
+/// stands untouched.
+pub const DISPLAY_FALLBACK: AutomaticLayout = AutomaticLayout {
+    rank_direction: Some(RankDirection::LeftRight),
+    rank_separation: 200,
+    node_separation: 120,
+    edge_separation: 50,
+    vertices: true,
+};
+
 /// Parameters for the display pass: the view's stored `automaticLayout`
-/// (filtered → base), else the reference defaults (LR, 100/50/50,
-/// vertices) — never the dialog's session params: display stays
-/// deterministic and file-driven (§P3-M6).
+/// (filtered → base), else [`DISPLAY_FALLBACK`], with the separations
+/// raised to the [`DISPLAY_FALLBACK`] floors (§P3-M10, user report: 100/50
+/// reads as cramped against 350 px-wide boxes — the DSL `autoLayout`
+/// statement stores exactly those defaults). Semantics follow graphviz,
+/// where ranksep/nodesep are LOWER bounds: a file asking for more gets
+/// more; the direction and vertex routing stay the file's. The dialog
+/// path is untouched — an explicit dialog run is precise, file for file.
+/// Display stays deterministic and file-driven (§P3-M6): no byte of any
+/// output changes (geometry is session state until a save seeds it).
 #[must_use]
 pub fn display_params(workspace: &Workspace, view_key: &str) -> AutomaticLayout {
-    stored_for(workspace, view_key).unwrap_or_default()
+    let mut params = stored_for(workspace, view_key).unwrap_or(DISPLAY_FALLBACK);
+    params.rank_separation = params.rank_separation.max(DISPLAY_FALLBACK.rank_separation);
+    params.node_separation = params.node_separation.max(DISPLAY_FALLBACK.node_separation);
+    params
 }
 
 /// The §P3-M6 display auto-layout for an un-laid-out view: `Some(engine
@@ -526,12 +550,38 @@ mod tests {
         // Stored placements → render verbatim.
         let ws = chain(None);
         assert!(auto_display(&ws, "L1", &scene_of(&ws, None)).is_none());
-        // All-zero stored geometry → the engine's exact placements.
+        // All-zero stored geometry → the engine's exact placements AT
+        // the §P3-M10 display floors (rank 200 → box pitch 350 + 200).
         let ws = stacked();
         let auto = auto_display(&ws, "L1", &scene_of(&ws, None)).unwrap();
         assert_eq!(auto.elements.get(&id(1)), Some(&(0.0, 0.0)));
-        assert_eq!(auto.elements.get(&id(2)), Some(&(450.0, 0.0)));
-        assert_eq!(auto.elements.get(&id(3)), Some(&(900.0, 0.0)));
+        assert_eq!(auto.elements.get(&id(2)), Some(&(550.0, 0.0)));
+        assert_eq!(auto.elements.get(&id(3)), Some(&(1100.0, 0.0)));
+    }
+
+    #[test]
+    fn display_params_floor_the_separations_only_upwards() {
+        // §P3-M10: stored separations are LOWER bounds (graphviz
+        // semantics) — a cramped `autoLayout` (100/50) rides up to the
+        // floors, a generous one survives untouched, and the direction
+        // + vertex routing always stay the file's.
+        let cramped = chain(Some(AutomaticLayout::default()));
+        let params = display_params(&cramped, "L1");
+        assert_eq!(params.rank_separation, DISPLAY_FALLBACK.rank_separation);
+        assert_eq!(params.node_separation, DISPLAY_FALLBACK.node_separation);
+        let generous = chain(Some(AutomaticLayout {
+            rank_direction: Some(RankDirection::TopBottom),
+            rank_separation: 400,
+            node_separation: 300,
+            edge_separation: 90,
+            vertices: false,
+        }));
+        let params = display_params(&generous, "L1");
+        assert_eq!((params.rank_separation, params.node_separation), (400, 300));
+        assert_eq!(params.rank_direction, Some(RankDirection::TopBottom));
+        assert!(!params.vertices);
+        // No stored layout at all → the full fallback.
+        assert_eq!(display_params(&chain(None), "L1"), DISPLAY_FALLBACK);
     }
 
     #[test]
@@ -558,8 +608,8 @@ mod tests {
         overlay.elements.insert(id(1), (7.0, 7.0));
         let seeded = seed_overlay(&stacked(), "L1", &overlay).unwrap();
         assert_eq!(seeded.elements.get(&id(1)), Some(&(7.0, 7.0))); // the pin wins
-        assert_eq!(seeded.elements.get(&id(2)), Some(&(450.0, 0.0))); // the rest rides the engine
-        assert_eq!(seeded.elements.get(&id(3)), Some(&(900.0, 0.0)));
+        assert_eq!(seeded.elements.get(&id(2)), Some(&(550.0, 0.0))); // the rest rides the engine
+        assert_eq!(seeded.elements.get(&id(3)), Some(&(1100.0, 0.0)));
         // A laid-out view has nothing to seed.
         let ws = chain(None);
         assert!(seed_overlay(&ws, "L1", &overlay).is_none());

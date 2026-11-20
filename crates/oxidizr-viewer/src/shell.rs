@@ -195,10 +195,11 @@ struct Viewer {
     layout_engine: layout::Engine,
 }
 
-/// The in-flight left-button canvas interaction (P3-M3). The mode is
-/// decided at PRESS time and can no longer change: dragging a box
-/// moves the selection, dragging empty canvas lassos, panning moved to
-/// middle-button/Space so the left button is free for editing.
+/// The in-flight canvas interaction (P3-M3). The mode is decided at
+/// PRESS time and can no longer change: dragging a box moves the
+/// selection, dragging empty canvas lassos, panning rides
+/// right/middle-button or Space so the left button is free for editing
+/// (right-drag added in §P3-M10).
 enum Drag {
     /// No press, or a press still undecided (a click is still
     /// possible): nothing mutates the scene.
@@ -708,8 +709,8 @@ impl Viewer {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label("?").on_hover_text(
-                    "Drag box: move · Drag empty: lasso · Middle/Space-drag: pan · \
-                     Wheel: zoom · Click: select · Shift-click: add/toggle · \
+                    "Drag box: move · Drag empty: lasso · Right/Middle/Space-drag: \
+                     pan · Wheel: zoom · Click: select · Shift-click: add/toggle · \
                      Click edge: select · Drag handle: reroute · Double-click edge: \
                      insert handle · Alt+click handle: delete · Ctrl+Z / Ctrl+Y: \
                      undo/redo · Ctrl+S: save layout JSON · Layout dialog: \
@@ -851,8 +852,11 @@ impl Viewer {
         let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
         // §P3-M3 input state machine: the drag MODE is decided at press
-        // (pan = middle button or Space, move = left on a box, lasso =
-        // left on background) and every frame of that mode acts on it.
+        // (pan = right/middle button or Space, move = left on a box,
+        // lasso = left on background) and every frame of that mode acts
+        // on it. Right-drag joins pan in §P3-M10 (user report: the
+        // middle-button binding was undiscoverable; right-drag is the
+        // draw.io/Visio convention and the button had no other use).
         let space = ui.input(|i| i.key_down(egui::Key::Space));
         let minimap_press = response.drag_started_by(egui::PointerButton::Primary)
             && ui
@@ -861,6 +865,7 @@ impl Viewer {
         if minimap_press {
             self.drag = Drag::Minimap;
         } else if response.drag_started_by(egui::PointerButton::Middle)
+            || response.drag_started_by(egui::PointerButton::Secondary)
             || (space && response.drag_started_by(egui::PointerButton::Primary))
         {
             self.drag = Drag::Pan;

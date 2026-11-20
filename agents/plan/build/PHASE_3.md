@@ -529,6 +529,37 @@ No bytes contract, no V-item (viewer-internal watch filter); D6 text
 stands — the hash compare was always the authority. Notes:
 `pitfalls/notify-windows-modify-any.md`, wine-leg "Last useful" stamped.
 
+## §P3-M10 — post-v0.3.0 follow-up: roomier display layout + right-drag pan (2026-11-20)
+
+Two UX reports on the shipped viewer: (a) "the automatic layout looks
+weird, it doesn't leave much space"; (b) "mouse controls for moving are
+missing". Both are presentation-only, session-state surfaces (the display
+geometry is §P3-M6 session state until a save seeds it) — no bytes
+contract, no V-item.
+
+(a) Cause: a DSL `autoLayout` statement stores `AutomaticLayout` at the
+reference defaults **rank 100 / node 50**; with the 350 px-wide default
+boxes that packs ranks to a 450 px pitch and stacks same-rank boxes edge
+to edge (measured min box gap 50 px) — cramped next to the web app's
+generous Graphviz output. Fix: `display_params` floors the separations at
+the new `DISPLAY_FALLBACK` (LR, rank **200** / node **120**, edge 50,
+vertices) with graphviz LOWER-bound semantics — a file asking for more
+keeps its value, the direction and vertex routing always stay the file's;
+no stored layout → the full fallback. The floor applies to the DISPLAY
+pass only: the dialog path and `AutomaticLayout::default` (a JSON default,
+reference-verified) are untouched, so an explicit dialog run is still
+precise file-for-file and no output byte changes.
+
+(b) Cause: pan rode middle-button/Space only — undiscoverable on a
+two-button mouse; right-drag (the draw.io/Visio convention) was unused.
+Fix: `PointerButton::Secondary` joins Middle/Space as a pan trigger in
+the §P3-M3 press state machine; `?` hover text + viewer README updated.
+
+| Item | Deliverable | Exit gate |
+|---|---|---|
+| **M10-1** | `DISPLAY_FALLBACK` + separation floor in `display_params`; two exact-placement display tests re-pinned (pitch 450 → 550) + `display_params_floor_the_separations_only_upwards` | quartet + `ci gui` + full tier + bless; clippy × 4; **DONE 2026-11-20** |
+| **M10-2** | right-button pan in `shell.rs` (press chain + `Drag`/`?` docs) + README nav bullet | same + live window smoke — **DONE 2026-11-20** |
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
