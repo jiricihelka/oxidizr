@@ -123,6 +123,27 @@
             mkdir -p "$out"
             ln -s "${nightly}"/lib/rustlib/x86_64-pc-windows-gnu/lib/self-contained/libpthread.a "$out/libpthread.a"
           '';
+
+          # GUI runtime libs for `cargo run -p oxidizr-viewer --features gui` on
+          # NixOS hosts: winit/x11-dl/xkbcommon-dl/ash dlopen these at RUNTIME
+          # (they never appear at link time, so `ci gui` stays green without
+          # them), and NixOS has no system-wide loader dir to find them in —
+          # absent means `NoWaylandLib` on a Wayland session (agents/notes/env/
+          # gui-runtime-nixos.md). Exported on LD_LIBRARY_PATH by shellHook
+          # below: that is what glibc dlopen consults; mkShell membership or
+          # buildInputs alone bake nothing in (`ci gui` links nothing that
+          # needs them, so no RUNPATH either). Rebuild NOT required — the env
+          # alone fixes an already-built binary. GPU drivers ride the system's
+          # hardware.graphics (/run/opengl-driver), not this list.
+          guiRuntime = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+            pkgs.wayland # libwayland-client + libwayland-cursor (winit backend)
+            pkgs.libxkbcommon # keyboard (xkbcommon-dl)
+            pkgs.vulkan-loader # libvulkan.so.1 for wgpu/ash
+            pkgs.xorg.libX11 # x11-dl fallback (WINIT_UNIX_BACKEND=x11, xwayland)
+            pkgs.xorg.libXcursor
+            pkgs.xorg.libXi
+            pkgs.xorg.libXrandr
+          ];
         in
         {
           default = pkgs.mkShell {
@@ -175,6 +196,9 @@
 
             shellHook = ''
               echo "oxidizr dev shell: $(rustc --version) · oracle: structurizr ${structurizrVersion} (\$OXIDZR_STRUCTURIZR_BIN)"
+              # Viewer runtime (see the guiRuntime binding): the dlopen targets
+              # for the eframe shell, see agents/notes/env/gui-runtime-nixos.md.
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath guiRuntime}''${LD_LIBRARY_PATH:+:''${LD_LIBRARY_PATH}}"
               # Wine needs a writable prefix + runtime dir; first use self-initializes.
               export WINEPREFIX="''${XDG_CACHE_HOME:-''${HOME:-/tmp}/.cache}/oxidizr/wine64"
               mkdir -p "$WINEPREFIX"

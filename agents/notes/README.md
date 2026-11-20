@@ -13,6 +13,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [nix-flake.md](env/nix-flake.md) | what the dev shell provides; nightly double-pin |
 | [toolbox.md](env/toolbox.md) | gates + verification tools on PATH, when/how; what's absent |
 | [triage-toolkit.md](env/triage-toolkit.md) | inspection/search tools + env knobs |
+| [gui-runtime-nixos.md](env/gui-runtime-nixos.md) | viewer `NoWaylandLib` on NixOS — dev-shell `LD_LIBRARY_PATH` feeds winit's runtime dlopens |
 
 ## pitfalls/ — traps already paid for ([index](pitfalls/README.md))
 

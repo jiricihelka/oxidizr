@@ -8,3 +8,4 @@
 | [toolbox.md](toolbox.md) | gates + verification-loop tools on PATH, when/how; what's absent |
 | [triage-toolkit.md](triage-toolkit.md) | inspection/search tools (jq, ast-grep, …) + env knobs |
 | [fuzz-host-toolchain.md](fuzz-host-toolchain.md) | `cargo xtask fuzz` strips the shell's mingw `CC/CXX/AR/RANLIB` (cc-rs leak) |
+| [gui-runtime-nixos.md](gui-runtime-nixos.md) | viewer `NoWaylandLib` on NixOS — shellHook `LD_LIBRARY_PATH` feeds winit's runtime dlopens |
