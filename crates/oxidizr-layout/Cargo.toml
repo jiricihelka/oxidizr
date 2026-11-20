@@ -11,6 +11,13 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+# M4-6: the graphviz `dot` backend (oxidizr_layout::Dot shelling to
+# $OXIDZR_DOT_BIN, `-Tplain`). OFF by default — the shipped crate stays
+# the zero-dep pure engine; enabling only adds std::process usage.
+default = []
+dot-backend = []
+
 [dependencies]
 # NO dependencies — not even thiserror (P3-D1 zero-dep promise beats the
 # thiserror convention for THIS crate; the error type hand-rolls Display +

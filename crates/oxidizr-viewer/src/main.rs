@@ -199,6 +199,9 @@ struct Viewer {
     /// Dialog parameters — a persisted preference (§P3-D2), mirroring
     /// the reference `auto-layout.jspf` fields.
     layout_params: AutomaticLayout,
+    /// Dialog engine choice (M4-6) — SESSION-only: the selection
+    /// deliberately stays out of the persisted parameter string.
+    layout_engine: layout::Engine,
 }
 
 /// The in-flight left-button canvas interaction (P3-M3). The mode is
@@ -304,6 +307,7 @@ impl Viewer {
             layout_error: None,
             show_layout: false,
             layout_params: AutomaticLayout::default(),
+            layout_engine: layout::Engine::default(),
         }
     }
 
@@ -2041,7 +2045,7 @@ impl Viewer {
         let applied = self
             .scene
             .as_ref()
-            .map(|scene| layout::apply(scene, &params));
+            .map(|scene| layout::apply_with(self.layout_engine, scene, &params));
         match applied {
             Some(Ok(overrides)) => {
                 self.layout_error = None;
@@ -2202,6 +2206,25 @@ impl Viewer {
             .default_pos([420.0, 120.0])
             .show(ctx, |ui| {
                 let mut params = self.layout_params;
+                let engines = layout::Engine::available();
+                if engines.len() > 1 {
+                    // M4-6: the choice appears exactly when a second
+                    // engine CAN run (feature + $OXIDZR_DOT_BIN).
+                    ui.horizontal(|ui| {
+                        ui.label("Engine:");
+                        egui::ComboBox::from_id_salt("layout-engine")
+                            .selected_text(self.layout_engine.label())
+                            .show_ui(ui, |ui| {
+                                for engine in engines {
+                                    ui.selectable_value(
+                                        &mut self.layout_engine,
+                                        engine,
+                                        engine.label(),
+                                    );
+                                }
+                            });
+                    });
+                }
                 ui.horizontal(|ui| {
                     ui.label("Direction:");
                     egui::ComboBox::from_id_salt("layout-direction")

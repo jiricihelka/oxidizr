@@ -19,6 +19,12 @@ workspace = true
 # shell (argv parsing) so the headless dep graph stays lean.
 default = []
 gui = ["dep:eframe", "dep:clap"]
+# M4-6: the optional graphviz `dot` layout backend — pure passthrough to
+# `oxidizr-layout/dot-backend` (which is itself OFF by default). The
+# dialog's engine combo lists `Dot` only when this is compiled in AND
+# `$OXIDZR_DOT_BIN` names a binary; the shipped default build has zero
+# subprocess surface.
+dot-backend = ["oxidizr-layout/dot-backend"]
 
 [[bin]]
 name = "oxidizr-viewer"

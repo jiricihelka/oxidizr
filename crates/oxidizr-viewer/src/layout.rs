@@ -20,16 +20,62 @@
 //!   by the scene, so only `points[1..len-1]` become interior waypoints.
 //! - The engine ignores `edge_separation` at MVP scope; the dialog
 //!   keeps the field for reference parity (`auto-layout.jspf`).
+//! - M4-6: the ENGINE is a session choice ([`Engine`]) — the dialog
+//!   combo lists [`Engine::available`], so graphviz `dot` appears only
+//!   when the `dot-backend` feature is compiled in AND `$OXIDZR_DOT_BIN`
+//!   names a binary. The choice is deliberately NOT persisted:
+//!   `encode`/`decode` keep their pre-M4 `"LR|100|50|50|1"` format.
 
 use oxidizr_core::Id;
 use oxidizr_core::Workspace;
 use oxidizr_core::views::{AutomaticLayout, RankDirection, View};
+#[cfg(feature = "dot-backend")]
+use oxidizr_layout::Dot;
 use oxidizr_layout::{
     Edge as GraphEdge, EdgeId, Layered, LayoutConfig, LayoutEngine, LayoutError, LayoutGraph,
-    Node as GraphNode, NodeId, RankDirection as EngineDirection,
+    LayoutResult, Node as GraphNode, NodeId, RankDirection as EngineDirection,
 };
 
 use crate::scene::{Overrides, Scene};
+
+/// Which engine a layout run uses (M4-6). `Layered` is the bundled
+/// MVP engine (P3-D5); `Dot` exists only behind the viewer's
+/// `dot-backend` feature and shells to graphviz (P3-D5 neutral trait).
+/// Session-only: the selection is never persisted.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Engine {
+    /// The bundled layered engine — always available.
+    #[default]
+    Layered,
+    /// The external graphviz `dot` (feature `dot-backend` only).
+    #[cfg(feature = "dot-backend")]
+    Dot,
+}
+
+impl Engine {
+    /// The engines THIS build+environment can actually run: `Layered`
+    /// always, `Dot` only when compiled in and `$OXIDZR_DOT_BIN` is
+    /// set (the oracle posture — the dialog lists exactly these).
+    #[must_use]
+    pub fn available() -> Vec<Self> {
+        // Shape avoids `mut` in the feature-OFF build (no unused-mut).
+        #[cfg(feature = "dot-backend")]
+        if Dot::from_env().is_some() {
+            return vec![Self::Layered, Self::Dot];
+        }
+        vec![Self::Layered]
+    }
+
+    /// The dialog label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Layered => "Layered",
+            #[cfg(feature = "dot-backend")]
+            Self::Dot => "Graphviz dot",
+        }
+    }
+}
 
 /// The engine config a stored `automaticLayout` (or the dialog's
 /// working copy) maps to. A null `rankDirection` falls to the reference
@@ -99,17 +145,47 @@ pub fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
     graph
 }
 
-/// Run the MVP engine over `scene` and translate the result into scene
+/// Run [`Engine::Layered`] over `scene` — the dialog default and the
+/// headless-test entry point (module docs for the translation).
+///
+/// # Errors
+///
+/// As [`apply_with`].
+pub fn apply(scene: &Scene, layout: &AutomaticLayout) -> Result<Overrides, LayoutError> {
+    apply_with(Engine::Layered, scene, layout)
+}
+
+/// Run `engine` over `scene` and translate the result into scene
 /// [`Overrides`]: node placements become element top-lefts, route
 /// interiors become relationship waypoints (module docs).
 ///
 /// # Errors
 ///
-/// Any [`LayoutError`] from graph validation — unreachable for a scene
-/// built by [`crate::scene::build`] (unique item ids, finite positive
-/// sizes), but errors stay values (P3 charter).
-pub fn apply(scene: &Scene, layout: &AutomaticLayout) -> Result<Overrides, LayoutError> {
-    let result = Layered::new().layout(&graph_for(scene, config_for(layout)))?;
+/// Any [`LayoutError`] from graph validation or the engine run;
+/// [`Engine::Dot`] with `$OXIDZR_DOT_BIN` unset reports
+/// [`LayoutError::DotBackend`] rather than spawning nothing silently.
+pub fn apply_with(
+    engine: Engine,
+    scene: &Scene,
+    layout: &AutomaticLayout,
+) -> Result<Overrides, LayoutError> {
+    let graph = graph_for(scene, config_for(layout));
+    let result = match engine {
+        Engine::Layered => Layered::new().layout(&graph)?,
+        #[cfg(feature = "dot-backend")]
+        Engine::Dot => {
+            let dot = Dot::from_env()
+                .ok_or_else(|| LayoutError::DotBackend("OXIDZR_DOT_BIN is not set".to_owned()))?;
+            dot.layout(&graph)?
+        }
+    };
+    Ok(translate(&result))
+}
+
+/// Engine placements → scene overrides (module docs): endpoints of
+/// every route are re-derived by the scene, so only the interior
+/// points transfer.
+fn translate(result: &LayoutResult) -> Overrides {
     let mut overrides = Overrides::default();
     for place in &result.nodes {
         overrides.elements.insert(
@@ -130,7 +206,7 @@ pub fn apply(scene: &Scene, layout: &AutomaticLayout) -> Result<Overrides, Layou
             .relationships
             .insert(Id::new(route.id.as_str()), interior);
     }
-    Ok(overrides)
+    overrides
 }
 
 /// The persisted form of the dialog parameters (§P3-D2: eframe storage
@@ -413,6 +489,44 @@ mod tests {
             overrides.relationships.values().all(Vec::is_empty),
             "generate_vertices=false ⇒ no interior points"
         );
+    }
+
+    #[test]
+    fn apply_with_layered_is_apply() {
+        // The session-engine seam (M4-6) must not change the default
+        // path at all — byte-identical overrides.
+        let ws = chain(None);
+        let scene = scene_of(&ws, None);
+        let plain = apply(&scene, &AutomaticLayout::default()).unwrap();
+        let layered = apply_with(Engine::Layered, &scene, &AutomaticLayout::default()).unwrap();
+        assert_eq!(plain, layered);
+    }
+
+    #[test]
+    fn layered_is_always_available_and_default() {
+        assert_eq!(Engine::available().first(), Some(&Engine::Layered));
+        assert_eq!(Engine::default(), Engine::Layered);
+        assert_eq!(Engine::Layered.label(), "Layered");
+    }
+
+    #[cfg(feature = "dot-backend")]
+    #[test]
+    fn dot_without_the_env_is_an_error_value() {
+        // Only the UNSET leg is testable in-process (Category B owns
+        // the real binary); a set var just skips this leg.
+        if std::env::var_os("OXIDZR_DOT_BIN").is_some_and(|v| !v.is_empty()) {
+            eprintln!("OXIDZR_DOT_BIN set — skipping unset-leg check");
+            return;
+        }
+        let ws = chain(None);
+        assert!(matches!(
+            apply_with(
+                Engine::Dot,
+                &scene_of(&ws, None),
+                &AutomaticLayout::default()
+            ),
+            Err(LayoutError::DotBackend(_))
+        ));
     }
 
     #[test]

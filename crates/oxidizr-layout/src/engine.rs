@@ -78,6 +78,11 @@ pub enum LayoutError {
     /// the DFS reversal guarantees a DAG, so reaching this means an
     /// engine bug, never bad input.
     CycleRemovalFailed,
+    /// `dot-backend` only: the external `dot` binary could not be
+    /// spawned, exited non-zero, or emitted `-Tplain` output this
+    /// parser rejects.
+    #[cfg(feature = "dot-backend")]
+    DotBackend(String),
 }
 
 impl fmt::Display for LayoutError {
@@ -94,6 +99,8 @@ impl fmt::Display for LayoutError {
                 write!(f, "config separation {name} must be >= 0, got {value}")
             }
             Self::CycleRemovalFailed => write!(f, "layering did not converge"),
+            #[cfg(feature = "dot-backend")]
+            Self::DotBackend(message) => write!(f, "dot backend: {message}"),
         }
     }
 }
