@@ -2970,6 +2970,7 @@ dependencies = [
  "oxidizr-diag",
  "oxidizr-dsl",
  "oxidizr-json",
+ "oxidizr-viewer",
 ]
 
 [[package]]

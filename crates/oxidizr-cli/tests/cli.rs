@@ -565,3 +565,28 @@ fn version_and_help_exit_0() {
     let out = run(&["dsl2json", "--help"], None);
     assert!(out.status.success());
 }
+
+// §P3-M8 / F10 — the `view` subcommand is stable `--help` surface in
+// EVERY build; only its runtime behavior is feature-gated.
+#[test]
+fn view_help_is_stable_surface() {
+    let out = run(&["view", "--help"], None);
+    assert!(out.status.success(), "`view` is advertised without `gui`");
+    let help = String::from_utf8_lossy(&out.stdout);
+    assert!(help.contains("--theme"), "`--theme` documented: {help}");
+}
+
+#[cfg(not(feature = "gui"))]
+#[test]
+fn view_without_gui_feature_exits_1_with_rebuild_hint() {
+    // Default (no `gui`) build: valid argv, but no shell is linked — the
+    // request is unserveable (P1-D8 exit 1) with a rebuild hint.
+    let out = run(&["view"], None);
+    assert_eq!(out.status.code(), Some(1));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("gui"), "hint names the feature: {err}");
+    assert!(
+        err.contains("cargo build --features gui"),
+        "hint names the flag: {err}"
+    );
+}

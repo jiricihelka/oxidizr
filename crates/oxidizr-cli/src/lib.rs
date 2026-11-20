@@ -35,7 +35,8 @@ use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
+use clap::{Parser, Subcommand, ValueEnum};
 use oxidizr_api::{ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request};
 
 use report::{Issue, Renderer};
@@ -145,6 +146,31 @@ pub enum Command {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
+    /// Open the workspace in the native viewer window (F10, §P3-M8) —
+    /// needs the cli `gui` feature at BUILD time; without it the
+    /// subcommand stays in `--help` but exits with a rebuild hint.
+    View {
+        /// Workspace file to open (`.dsl` or `.json`; omitted = empty
+        /// window, open it from the toolbar).
+        file: Option<PathBuf>,
+        /// Color scheme; `system` consults the OS preference, then the
+        /// persisted runtime toggle (§P3-D7).
+        #[arg(long, value_enum, default_value_t = ViewTheme::System)]
+        theme: ViewTheme,
+    },
+}
+
+/// `oxidizr view --theme` values (F10) — mirrors the viewer's own
+/// `ThemeArg` so both entries read alike; mapped when the `gui`
+/// feature links the shell.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug)]
+pub enum ViewTheme {
+    /// Force the light scheme.
+    Light,
+    /// Force the dark scheme.
+    Dark,
+    /// Persisted toggle, else the OS preference, else light.
+    System,
 }
 
 /// Run the CLI. Returns the process exit code (usage errors exit via clap with `2`).
@@ -157,14 +183,21 @@ pub enum Command {
 ///
 /// Pipeline (T0-d): argv → [`Request`] → [`oxidizr_api::execute`] → replay
 /// the [`Outcome`] (stdout bytes, then the ordered log) → exit code. No
-/// command logic here.
+/// command logic here — EXCEPT F10 (§P3-M8): `view` is the GUI shell,
+/// dispatched before the pipeline and never a [`Request`].
 ///
 /// # Errors
 ///
-/// [`anyhow::Error`] only for unimplemented milestones / internal faults.
+/// [`anyhow::Error`] only for unimplemented milestones / internal faults
+/// and — in builds WITHOUT the `gui` feature — the `view` rebuild hint.
 pub fn run() -> anyhow::Result<i32> {
     let cli = Cli::parse();
     let renderer = Renderer::new(cli.no_color, cli.quiet);
+    // §P3-M8 / F10: `view` is the GUI shell, not a pipeline command —
+    // it dispatches before anything touches `oxidizr-api`.
+    if let Command::View { file, theme } = &cli.command {
+        return run_view(file.as_deref(), *theme);
+    }
     let options = ApiOptions {
         strict: cli.strict,
         keep_unknown: cli.keep_unknown,
@@ -174,7 +207,9 @@ pub fn run() -> anyhow::Result<i32> {
         allow_net: cli.allow_net,
         themes_dir: cli.themes_dir,
     };
-    let outcome = oxidizr_api::execute(to_request(cli.command), &options);
+    let request =
+        to_request(cli.command).context("internal: `view` must dispatch before the pipeline")?;
+    let outcome = oxidizr_api::execute(request, &options);
     Ok(replay(&renderer, outcome))
 }
 
@@ -182,9 +217,11 @@ pub fn run() -> anyhow::Result<i32> {
 /// variant (nothing is read before `execute` decides — a `fmt --write -`
 /// usage exit must not block on an open pipe). 2R R-mis-10: the `Command`
 /// MOVES into the [`Request`] — the old `&Cli` leg cloned every path the
-/// caller was about to drop anyway.
-fn to_request(command: Command) -> Request {
-    match command {
+/// caller was about to drop anyway. `None` ONLY for the §P3-M8 `view`
+/// shell: [`run`] dispatches it BEFORE the pipeline — the GUI entry (F10)
+/// is not a byte-contract command and never becomes a [`Request`].
+fn to_request(command: Command) -> Option<Request> {
+    Some(match command {
         Command::Dsl2Json { dsl, output } => Request::Dsl2Json {
             input: input_of(dsl.as_deref()),
             output,
@@ -231,7 +268,36 @@ fn to_request(command: Command) -> Request {
             format,
             output,
         },
-    }
+        // §P3-M8: dispatched in `run` before the pipeline is reached.
+        Command::View { .. } => return None,
+    })
+}
+
+/// §P3-M8 / F10: `oxidizr view` opens the native viewer window
+/// IN-PROCESS when the cli is built with `gui` — the SAME
+/// `oxidizr_viewer::shell::run` the standalone `oxidizr-viewer` binary
+/// drives, so the entries cannot drift. eframe faults (no display)
+/// travel through `anyhow` to the binary's exit-1 error arm.
+#[cfg(feature = "gui")]
+fn run_view(file: Option<&Path>, theme: ViewTheme) -> anyhow::Result<i32> {
+    let theme = match theme {
+        ViewTheme::Light => oxidizr_viewer::shell::ThemeArg::Light,
+        ViewTheme::Dark => oxidizr_viewer::shell::ThemeArg::Dark,
+        ViewTheme::System => oxidizr_viewer::shell::ThemeArg::System,
+    };
+    oxidizr_viewer::shell::run(file, theme)?;
+    Ok(0)
+}
+
+/// The `gui`-less build (§P3-M8): the argv is valid clap surface, but
+/// this binary links no shell — exit 1 via the binary's error arm with
+/// the rebuild hint (the request is unserveable, P1-D8 codes).
+#[cfg(not(feature = "gui"))]
+fn run_view(_file: Option<&Path>, _theme: ViewTheme) -> anyhow::Result<i32> {
+    anyhow::bail!(
+        "`view` needs the `gui` feature: rebuild with `cargo build --features gui` \
+         (or run the standalone `oxidizr-viewer` binary)"
+    )
 }
 
 fn input_of(path: Option<&Path>) -> Input {
@@ -306,6 +372,7 @@ mod tests {
             Command::Fmt { .. } => "fmt",
             Command::Reconcile { .. } => "reconcile",
             Command::Export { .. } => "export",
+            Command::View { .. } => "view",
         }
     }
 
@@ -352,6 +419,10 @@ mod tests {
         // `--format` is required (reference parity: the option is REQUIRED);
         // missing it is a clap usage error, exit 2.
         assert!(Cli::try_parse_from(["oxidizr", "export", "-w", "ws.dsl"]).is_err());
+        // §P3-M8 / F10: `view` parses with and without its optional file.
+        Cli::try_parse_from(["oxidizr", "view"]).unwrap();
+        Cli::try_parse_from(["oxidizr", "view", "ws.dsl", "--theme", "dark"]).unwrap();
+        assert!(Cli::try_parse_from(["oxidizr", "view", "--theme", "sepia"]).is_err());
         assert!(Cli::try_parse_from(["oxidizr", "merge"]).is_err());
         // `validate` needs at least one file (clap usage error, exit 2).
         assert!(Cli::try_parse_from(["oxidizr", "validate"]).is_err());

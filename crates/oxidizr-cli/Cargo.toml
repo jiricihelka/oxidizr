@@ -1,6 +1,6 @@
 [package]
 name = "oxidizr-cli"
-description = "oxidizr CLI: dsl2json, json2json, validate, fmt, reconcile (P1-D8)"
+description = "oxidizr CLI: dsl2json, json2json, validate, fmt, reconcile, view (F10, gui-gated)"
 publish = false
 edition.workspace = true
 version.workspace = true
@@ -14,6 +14,11 @@ workspace = true
 [features]
 default = []
 reference = []
+# F10 (§P3-M8): the GUI entry `oxidizr view` — OPTIONAL so the default
+# build keeps a ZERO eframe/GPU dependency tree (P3-D1 amended); with
+# the feature off the subcommand stays in `--help` but exits with a
+# rebuild hint.
+gui = ["dep:oxidizr-viewer", "oxidizr-viewer/gui"]
 
 [dependencies]
 oxidizr-api = { workspace = true }
@@ -21,6 +26,7 @@ oxidizr-core = { workspace = true }
 oxidizr-diag = { workspace = true }
 oxidizr-dsl = { workspace = true }
 oxidizr-json = { workspace = true }
+oxidizr-viewer = { workspace = true, optional = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 miette = { workspace = true }
