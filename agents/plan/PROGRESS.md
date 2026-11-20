@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | **M3 COMPLETE 2026-11-20** — editing + SAVE: headless `commands` (`LayoutOverlay`/`Command`/`History`), shell drag/lasso/waypoint interactions, parity UI (align/distribute/centre/bring-back), `apply_overlay` → sidecar JSON via the shared writer (Ctrl+S). M2 COMPLETE 2026-11-20 (`Layered` engine + auto-layout dialog, `P3` baseline); M1 read-only viewer COMPLETE 2026-11-20; M0 scaffold 2026-11-19. Next: M4 live reload + export (V6). Log below (`build/PHASE_3.md`) |
+| P3 | viewer+layout | **M4 COMPLETE 2026-11-20** — live reload (parent-dir watch + debounce + hash authority; `reconcile` remap keeps the session layout), sidecar-preferred workflow, minimap + quick-nav, SVG+PNG export with the key, optional `dot-backend`. M3 COMPLETE editing + SAVE; M2 COMPLETE (`Layered` engine + auto-layout dialog, `P3` baseline); M1 COMPLETE read-only viewer; M0 scaffold 2026-11-19. Next: M5 hardening + v0.3.0. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,66 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M4 — live reload + navigation + export ✅ (2026-11-20, COMPLETE)
+
+Navigation/UX milestone (§P3-M4 decomposition; V6 CLOSED on the Linux
+leg at M4-0): external edits flow into the live session without
+losing the session layout, the sidecar becomes a first-class file,
+the diagram leaves the app as SVG+PNG with the key, and graphviz can
+serve as an optional second layout engine.
+
+- **M4-0** `81b0a3d` — docs: §P3-M4 table + the P3-V6 verdict: notify
+  8 on Linux = inotify on the parent DIRECTORY (single-file watches
+  die on save's rename-swap) — it set the watch/filter/debounce/hash
+  design.
+- **M4-1** `60fbdc4` — file-set plumbing + headless `reload`:
+  `ParseResult.includes`/`Opened.includes` (FS `!include` files, parse
+  order), `ReloadDriver`: parent-dir NonRecursive watches of display +
+  sidecar + includes, exact-path filter (`.{pid}.tmp` never matches),
+  250 ms settle-debounce, SipHash baselines as the authority (P3-D6:
+  a self-save IS an external-looking event — only the hash tells).
+- **M4-2** `4439931` — shell wiring + remap UX: `Wake = Arc<dyn Fn()>`
+  (eframe 0.37 has no `RepaintSignal`), reload = dirty overlays
+  folded into the layout side → `oxidizr_api::reconcile` → overlays
+  re-keyed via the PER-KIND `Report.remapped_elements`/
+  `remapped_relationships` (ambiguous/removed ⇒ conservative drop,
+  R-3), last-good kept on a failed reparse, watch re-armed after save.
+- **M4-3** `cba1f4b` — sidecar workflow: open/reload prefer the NEWEST
+  of `.dsl`/sidecar (ties ⇒ sidecar); an opened sidecar keeps its
+  companion `.dsl` watched; help overlay states the rule.
+- **M4-4** `e33c675` — minimap + quick-nav: headless `overview.rs`
+  (fit transform, boundary/item shapes + viewport rect, inverse
+  `map_to_world`), `Drag::Minimap` recenter; search matching element
+  names/ids + view titles ⇒ select + center / switch view;
+  `text_focus` guards Ctrl+Z/Y/S.
+- **M4-5** `ca4221f` — export: headless `export.rs` — `compose` rides
+  `paint::paint_scene` at a fitted viewport (1:1→4096 px cap, floor
+  0.25, 80 MP; selection NEVER painted), the key band is composed
+  BELOW the diagram (P3-V8); own Shape→SVG translator; text =
+  per-glyph OUTLINE paths (companion `ab_glyph` over the SAME bundled
+  Ubuntu-Light — epaint 0.37 renders via skrifa, font-stack reality
+  in `pitfalls/epaint-037-font-stack.md`); PNG = the pinned
+  usvg/resvg/tiny-skia trio; toolbar Export writes `<stem>.svg/.png`
+  beside the save target via `commands::write_atomic`. Gate per
+  P3-D0: usvg-parseable + PNG magic — the bytes are NOT goldens.
+- **M4-6** `dc5d840` — `dot-backend` (OFF by default):
+  `oxidizr_layout::Dot` spawns `$OXIDZR_DOT_BIN -Tplain` (format
+  reality vs the man page, graphviz 15.1.1: node rows carry FULL
+  extents, edge points are two plain numbers, the first component
+  starts at the origin; components stack left-to-right, 50 px gap),
+  viewer `Engine`/`apply_with` seam + dialog combo listing exactly the
+  engines that CAN run (session-only; `encode`/`decode` format
+  unchanged).
+
+Verification: quartet every commit; `ci gui` on every shell commit;
+full e2e tier 8/8 + bless 307×unchanged every commit; viewer lib 89
+tests + 3 golden; layout 31 tests with `--features dot-backend`
+(gated real-binary leg green on graphviz 15.1.1); clippy clean in
+default/gui/dot-backend/gui+dot-backend. No tag (M5 is the v0.3.0
+point). Next: M5 hardening — `oracle verify` (incl. the saved-sidecar
+JSON-load A/B leg deferred from M3-5), perf pass (200 elements @
+60 fps, informational), docs, tag v0.3.0.
 
 ### P3-M3 — editing commands + shell interactions + SAVE ✅ (2026-11-20, COMPLETE)
 
