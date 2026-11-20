@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3-M1 in progress → M1-3 next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3-M1 in progress → M1-4 next**)
 
 ## State
 
@@ -19,15 +19,20 @@
     bounds }`. Deviation recorded on the §P3-M1 row: text = plain
     `String` runs, epaint layout jobs deferred to M1-4 (no epaint dep,
     guard unchanged). `thiserror` is now a viewer-lib dep.
-  - **M1-3 NEXT**: `hit` core — `Viewport` (world↔screen, zoom clamp) +
-    AABB item hit + point-to-segment edge hit; tests incl. clamp bounds
-    + degenerate segments (row in §P3-M1; `hit.rs` is the M0 stub).
-  - M1-4 gui shell (open argv/menu, view list, pan/zoom/select, full
-    styling paint incl. opacity shading, light/dark + `dark-light`,
-    tooltips, key panel, session tag-filter chips via `filter::eval`,
-    custom/image placeholder) — big-bang commit, split canvas-vs-
-    overlays seam if big; gate also `cargo xtask ci gui`. M1-5 icons
-    (usvg 0.50 + tiny-skia 0.12 atlas, placeholder on missing).
+  - **M1-3 DONE 2026-11-20**: `src/hit.rs` — `Viewport` (screen =
+    world*scale + offset; `MIN/MAX_SCALE` 0.05/20 NaN-safe; pivot-
+    preserving `zoom_at`; `fit` + `FIT_PADDING_PX` 40), `pick` (items
+    last-drawn win, then FIRST edge within `HIT_TOLERANCE_PX` 6 px ÷
+    scale; boundaries not pickable until M3), `distance_to_polyline`/
+    `_segment` degenerate-safe; 10 unit tests incl. clamp bounds +
+    zero-length segments.
+  - **M1-4 NEXT**: gui shell (open argv/menu, view list, pan/zoom/select
+    via `hit`, full styling paint incl. opacity shading + the epaint
+    text layout deferred from M1-2, light/dark + `dark-light`, tooltips,
+    key panel, session tag-filter chips via `filter::eval`, custom/image
+    placeholder) — big-bang commit, split canvas-vs-overlays seam if
+    big; gate also `cargo xtask ci gui`. M1-5 icons (usvg 0.50 +
+    tiny-skia 0.12 atlas, placeholder on missing).
 - **P3-V items**: V2/V3/V5/V7 CLOSED (verdicts in §P3-D10 + code
   rustdoc); **open: V1 (M2 Layered), V4 + V6 (M3), V8 (M4)**. Monorepo
   clone (`ad34036`) under `/tmp/opencode/structurizr-ref` — recreate per

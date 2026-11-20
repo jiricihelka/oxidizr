@@ -123,6 +123,16 @@ impl Rect {
     pub fn center(self) -> (f64, f64) {
         (self.x + self.width / 2.0, self.y + self.height / 2.0)
     }
+
+    /// Inclusive containment of a point (hit-test semantics: edges of the
+    /// box count, matching the reference's `includePoints` boxes).
+    #[must_use]
+    pub fn contains(self, point: (f64, f64)) -> bool {
+        point.0 >= self.x
+            && point.0 <= self.x + self.width
+            && point.1 >= self.y
+            && point.1 <= self.y + self.height
+    }
 }
 
 /// Fold an iterator of rects; empty in, `None` out.
