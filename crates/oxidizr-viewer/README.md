@@ -39,10 +39,12 @@ toolbar path field + Enter / **Open**.
   pans), `−`/`+`/`Fit`, drag on empty canvas pans (middle-button or
   Space-drag too), **right-drag** lassos, minimap (click/drag
   recenters). Per-view undo history (cap 200).
-- Editing: drag a box to move (optional **Snap**, 10 px grid),
-  right-drag empty canvas to lasso, click/Shift-click to select, click an edge to select,
-  drag its handles to reroute, double-click inserts a handle,
-  Alt+click deletes one. Views whose file carries NO element coordinates
+- Editing: drag a box to move (optional **Snap**, 10 px grid) — the arrow
+  handles of its fully-contained edges move with it, **Ctrl+drag**
+  leaves them behind. Right-drag empty canvas to lasso, click/Shift-click
+  to select, click an edge to select, drag its handles to reroute,
+  double-click inserts a handle, Alt+click deletes one and **Delete**
+  drops them all. Views whose file carries NO element coordinates
   open laid out by the bundled engine automatically (the view's
   `autolayout` settings when present) — a display default, never marked
   dirty; it is written out when you save. The **Layout** dialog runs the

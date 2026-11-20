@@ -88,6 +88,10 @@ pub struct PaintOptions<'a> {
     pub screen: ERect,
     /// The current selection, painted as an accent outline.
     pub selection: Option<&'a Selection>,
+    /// Edge whose waypoint handles paint WITHOUT a selection (§P3-M11
+    /// M11-2): hovering advertises the handles, so they can be dragged
+    /// or Alt+deleted before the edge is even selected.
+    pub hover_edge: Option<&'a Id>,
 }
 
 /// Paint one scene into a shape list, background first, then boundaries,
@@ -268,28 +272,28 @@ fn paint_edge(
         let head_len = (ARROW_LEN * f(viewport.scale())).clamp(5.0, 40.0);
         out.push(arrow_head(tip, from, color, head_len));
     }
-    if let Some(Selection::Edge(id)) = options.selection
-        && *id == edge.id
-    {
+    let selected = matches!(options.selection, Some(Selection::Edge(id)) if *id == edge.id);
+    if selected {
         out.push(Shape::line(
             points.clone(),
             Stroke::new(width + 2.0, SELECTION_COLOR),
         ));
-        // P3-M4: one handle circle per INTERIOR vertex — the endpoints
-        // belong to the boxes and never get one.
-        if points.len() >= 3 {
-            for at in &points[1..points.len() - 1] {
-                out.push(Shape::circle_filled(
-                    *at,
-                    WAYPOINT_HANDLE_PX,
-                    SELECTION_COLOR,
-                ));
-                out.push(Shape::circle_stroke(
-                    *at,
-                    WAYPOINT_HANDLE_PX,
-                    Stroke::new(1.0, Color32::WHITE),
-                ));
-            }
+    }
+    // P3-M4: one handle circle per INTERIOR vertex — the endpoints
+    // belong to the boxes and never get one. §P3-M11: the hovered edge
+    // shows them too (delete/drag without selecting first).
+    if (selected || options.hover_edge == Some(&edge.id)) && points.len() >= 3 {
+        for at in &points[1..points.len() - 1] {
+            out.push(Shape::circle_filled(
+                *at,
+                WAYPOINT_HANDLE_PX,
+                SELECTION_COLOR,
+            ));
+            out.push(Shape::circle_stroke(
+                *at,
+                WAYPOINT_HANDLE_PX,
+                Stroke::new(1.0, Color32::WHITE),
+            ));
         }
     }
     let px = scaled_px(edge.font_size, viewport);
@@ -956,7 +960,40 @@ mod tests {
         }
     }
 
+    #[test]
+    fn hover_edge_paints_handles_without_selection() {
+        // §P3-M11 M11-2: the hovered edge advertises its route.
+        let mut s = scene();
+        s.edges[0].points = vec![(175.0, 75.0), (500.0, 300.0), (900.0, 75.0)];
+        let hover = s.edges[0].id.clone();
+        let circles = |shapes: &[Shape]| {
+            shapes
+                .iter()
+                .filter(|shape| matches!(shape, Shape::Circle(_)))
+                .count()
+        };
+        // The fixture paints a circle-shaped item — measure the DELTA.
+        let base = circles(&painted(&s, None));
+        let hovered = painted_with(&s, None, Some(&hover));
+        assert_eq!(
+            circles(&hovered) - base,
+            2,
+            "one filled + one outlined handle"
+        );
+        // The selected edge keeps its handles (and the accent line).
+        let selected = painted(&s, Some(&Selection::Edge(hover)));
+        assert!(circles(&selected) - base >= 2);
+    }
+
     fn painted(s: &Scene, selection: Option<&Selection>) -> Vec<Shape> {
+        painted_with(s, selection, None)
+    }
+
+    fn painted_with(
+        s: &Scene,
+        selection: Option<&Selection>,
+        hover_edge: Option<&Id>,
+    ) -> Vec<Shape> {
         let mut fonts = Fonts::new(TextOptions::default(), FontDefinitions::default());
         let mut view = fonts.with_pixels_per_point(10.0);
         paint_scene(
@@ -966,6 +1003,7 @@ mod tests {
             &PaintOptions {
                 screen: erct(-100.0, -100.0, 2000.0, 1500.0),
                 selection,
+                hover_edge,
             },
         )
     }

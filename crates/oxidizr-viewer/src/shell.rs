@@ -209,10 +209,17 @@ enum Drag {
     /// Move the selected boxes: `origins` are their effective top-lefts
     /// captured at press; every frame writes `drag_target(origin,
     /// delta, snap)` into the overlay, so preview frames equal the
-    /// geometry the release commits.
+    /// geometry the release commits. §P3-M11: `carries` are the press-time
+    /// routes of fully-contained edges (`commands::carried_interiors`) —
+    /// by default they translate with the boxes, `carry: false`
+    /// (Ctrl+drag) leaves them behind.
     Move {
         /// Press-time selection: id + effective top-left (content order).
         origins: Vec<(ModelId, (f64, f64))>,
+        /// Press-time interior routes that move along (M11-8).
+        carries: Vec<(ModelId, Vec<(f64, f64)>)>,
+        /// Whether the drag carries those routes (false = Ctrl held).
+        carry: bool,
         /// Press point (screen px) — frame deltas measure from here.
         press: (f64, f64),
         /// Latest preview delta (world px); release commits exactly it.
@@ -599,6 +606,14 @@ impl eframe::App for Viewer {
             } else if redo {
                 self.step_history(true);
             }
+            // Delete/Backspace (§P3-M11 M11-2): strip the selected
+            // edge's handles — the discoverable counterpart of the
+            // Alt+click-per-handle and double-click-to-insert bindings.
+            let del = ctx
+                .input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace));
+            if del {
+                self.clear_selected_waypoints();
+            }
         }
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status(ui));
@@ -709,12 +724,14 @@ impl Viewer {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label("?").on_hover_text(
-                    "Drag box: move · Drag empty: pan · Right-drag: lasso · \
+                    "Drag box: move — its arrow handles follow (Ctrl detaches) · \
+                     Drag empty: pan · Right-drag: lasso · \
                      Middle/Space-drag: pan too · Wheel: zoom · \
                      Trackpad: pinch zooms, two-finger scroll pans · \
                      Click: select · Shift-click: add/toggle · \
                      Click edge: select · Drag handle: reroute · Double-click edge: \
-                     insert handle · Alt+click handle: delete · Ctrl+Z / Ctrl+Y: \
+                     insert handle · Alt+click handle: delete · Delete: drop all \
+                     handles of the selected edge · Ctrl+Z / Ctrl+Y: \
                      undo/redo · Ctrl+S: save layout JSON · Layout dialog: \
                      align/distribute/bring-back · \
                      Ctrl/⌘-click: open element URL · Esc: deselect · edits to the \
@@ -880,8 +897,9 @@ impl Viewer {
             self.drag = Drag::Pan;
         } else if response.drag_started_by(egui::PointerButton::Primary) {
             if let Some(origin) = ui.input(|i| i.pointer.press_origin()) {
-                let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
-                self.drag = self.press_mode(origin, shift, alt);
+                let (shift, alt, ctrl) =
+                    ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.command));
+                self.drag = self.press_mode(origin, shift, alt, ctrl);
             }
         }
         let cursor = response
@@ -920,6 +938,8 @@ impl Viewer {
             }
             Drag::Move {
                 origins,
+                carries,
+                carry,
                 press,
                 delta: last,
             } => {
@@ -932,26 +952,36 @@ impl Viewer {
                     (world.0 - press.0, world.1 - press.1)
                 });
                 if response.dragged() {
-                    self.preview_move(&origins, world_delta);
+                    self.preview_move(&origins, &carries, carry, world_delta);
                     self.drag = Drag::Move {
                         origins,
+                        carries,
+                        carry,
                         press,
                         delta: world_delta,
                     };
                 } else if release {
                     // Released: commit the SAME absolute geometry the
                     // preview wrote (idempotent re-apply through the
-                    // history, so one Ctrl+Z reverts the whole drag).
-                    if let Some(command) = commands::drag_move(&origins, world_delta, self.snap) {
+                    // history, so one Ctrl+Z reverts the whole drag —
+                    // carried routes included, M11-8).
+                    if let Some(command) =
+                        commands::drag_group(&origins, &carries, world_delta, self.snap, carry)
+                    {
                         self.edit_current_view(command);
                     } else {
                         // Nothing moved (a snap pulled the target back
                         // onto its origin): restore the press geometry
-                        // the live preview had written into the overlay.
+                        // and press routes the live preview had written.
                         {
                             let overlay = self.overlay_for();
                             for (id, origin) in &origins {
                                 overlay.elements.insert(id.clone(), *origin);
+                            }
+                            if carry {
+                                for (id, wps) in &carries {
+                                    overlay.relationships.insert(id.clone(), wps.clone());
+                                }
                             }
                         }
                         self.rebuild_scene();
@@ -1118,9 +1148,11 @@ impl Viewer {
 
         let painter = ui.painter_at(rect);
         if let Some(scene) = &self.scene {
+            let hover_edge = self.hovered_edge();
             let options = paint::PaintOptions {
                 screen: rect,
                 selection: self.selection.as_ref(),
+                hover_edge: hover_edge.as_ref(),
             };
             let shapes =
                 ctx.fonts_mut(|fonts| paint::paint_scene(scene, &self.viewport, fonts, &options));
@@ -1226,8 +1258,9 @@ impl Viewer {
     /// the cursor begins a group MOVE (the box joins the selection
     /// first; Shift keeps the group, a plain press elsewhere selects
     /// just it), anything else PANS (§P3-M11: the LASSO moved to the
-    /// right button and never hit-tests).
-    fn press_mode(&mut self, origin: Pos2, shift: bool, alt: bool) -> Drag {
+    /// right button and never hit-tests). `ctrl` detaches the carried
+    /// arrow handles from the move (§P3-M11 M11-8).
+    fn press_mode(&mut self, origin: Pos2, shift: bool, alt: bool, ctrl: bool) -> Drag {
         let screen = (f64::from(origin.x), f64::from(origin.y));
         if let Some((id, mut from, index)) = self.waypoint_hit(screen) {
             if alt {
@@ -1283,25 +1316,48 @@ impl Viewer {
         if origins.is_empty() {
             Drag::Idle
         } else {
+            // §P3-M11 M11-8: capture the press-time routes that follow
+            // the group (Ctrl+drag carries nothing).
+            let carries = {
+                let overlay = self.overlay_for().clone();
+                self.scene.as_ref().map_or_else(Vec::new, |scene| {
+                    commands::carried_interiors(scene, &overlay, &ids)
+                })
+            };
             Drag::Move {
                 origins,
+                carries,
+                carry: !ctrl,
                 press: self.viewport.screen_to_world(screen),
                 delta: (0.0, 0.0),
             }
         }
     }
 
-    /// Press on a waypoint handle of the SELECTED edge (§P3-M4): the
+    /// The edge currently under the pointer, if any (§P3-M11 M11-2):
+    /// its waypoint handles paint on hover and a handle press hits, so
+    /// handles are seen — and deleted — before the edge is selected.
+    fn hovered_edge(&self) -> Option<ModelId> {
+        let (scene, hit) = (self.scene.as_ref()?, self.hover?);
+        match hit {
+            hit::Hit::Edge(index) => scene.edges.get(index).map(|edge| edge.id.clone()),
+            hit::Hit::Item(_) => None,
+        }
+    }
+
+    /// Press on a waypoint handle of the SELECTED edge (§P3-M4) — or,
+    /// since §P3-M11, of the HOVERED one: the
     /// tolerance is [`hit::HIT_TOLERANCE_PX`] screen px converted to
     /// world px, and the scene polyline IS the effective route (the
     /// scene is rebuilt with the overlay). Returns the press-time
     /// route plus the route-relative vertex index.
     fn waypoint_hit(&self, screen: (f64, f64)) -> Option<WaypointHit> {
-        let Some(paint::Selection::Edge(id)) = &self.selection else {
-            return None;
+        let id = match &self.selection {
+            Some(paint::Selection::Edge(id)) => id.clone(),
+            _ => self.hovered_edge()?,
         };
         let scene = self.scene.as_ref()?;
-        let edge = scene.edges.iter().find(|edge| edge.id == *id)?;
+        let edge = scene.edges.iter().find(|edge| edge.id == id)?;
         if edge.points.len() < 3 {
             return None;
         }
@@ -1309,7 +1365,7 @@ impl Viewer {
         let tol = hit::HIT_TOLERANCE_PX / self.viewport.scale();
         let index = hit::nearest_waypoint(world, &edge.points, tol)?;
         Some((
-            id.clone(),
+            id,
             edge.points[1..edge.points.len() - 1].to_vec(),
             index - 1,
         ))
@@ -1335,6 +1391,25 @@ impl Viewer {
             overlay.relationships.insert(id.clone(), route);
         }
         self.rebuild_scene();
+    }
+
+    /// Delete/Backspace on the selected edge (§P3-M11 M11-2): drop ALL
+    /// its interior waypoints — the inverse of double-click insert, one
+    /// history step so Ctrl+Z restores the route. `set_waypoints(..,
+    /// vec![])` straightens (the "remove vertices" edit); a plain
+    /// click-select or hover keeps every other state intact.
+    fn clear_selected_waypoints(&mut self) {
+        let Some(paint::Selection::Edge(id)) = self.selection.clone() else {
+            return;
+        };
+        let overlay = self.overlay_for().clone();
+        let command = self
+            .scene
+            .as_ref()
+            .and_then(|scene| commands::set_waypoints(scene, &overlay, &id, Vec::new()));
+        if let Some(command) = command {
+            self.edit_current_view(command);
+        }
     }
 
     /// Double-click on an edge splices a new waypoint into the segment
@@ -1402,13 +1477,38 @@ impl Viewer {
     /// [`commands::drag_move`] for this reason) into the session
     /// overlay and repaint — preview frames EQUAL the committed
     /// geometry, so releasing is an idempotent re-apply.
-    fn preview_move(&mut self, origins: &[(ModelId, (f64, f64))], delta: (f64, f64)) {
+    fn preview_move(
+        &mut self,
+        origins: &[(ModelId, (f64, f64))],
+        carries: &[(ModelId, Vec<(f64, f64)>)],
+        carry: bool,
+        delta: (f64, f64),
+    ) {
         {
             let snap = self.snap;
             let overlay = self.overlay_for();
+            let mut applied = None;
             for (id, origin) in origins {
                 let to = commands::drag_target(*origin, delta, snap);
+                if applied.is_none() {
+                    applied = Some((to.0 - origin.0, to.1 - origin.1));
+                }
                 overlay.elements.insert(id.clone(), to);
+            }
+            // §P3-M11 M11-8: the same shift rides the press-time routes
+            // of fully-contained edges — `drag_group` commits exactly
+            // this translation (both measure off the FIRST origin).
+            if carry {
+                if let Some(shift) = applied {
+                    for (id, wps) in carries {
+                        overlay.relationships.insert(
+                            id.clone(),
+                            wps.iter()
+                                .map(|(x, y)| (x + shift.0, y + shift.1))
+                                .collect(),
+                        );
+                    }
+                }
             }
         }
         self.rebuild_scene();

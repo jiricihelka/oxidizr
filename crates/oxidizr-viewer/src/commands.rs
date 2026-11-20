@@ -605,6 +605,83 @@ pub fn drag_move(from: &[(Id, (f64, f64))], delta: (f64, f64), snap: bool) -> Op
     non_empty_moves(moves)
 }
 
+/// The interior routes a group drag CARRIES (§P3-M11 M11-8): every
+/// edge whose BOTH ends are inside `ids` and that has non-empty
+/// effective interior waypoints. Endpoints re-anchor off the boxes on
+/// every rebuild, so only free-floating handles need translating; an
+/// edge leaving the group keeps its stored route (rerouting it would
+/// fight the user's stored geometry).
+#[must_use]
+pub fn carried_interiors(
+    scene: &Scene,
+    overlay: &LayoutOverlay,
+    ids: &[Id],
+) -> Vec<(Id, Vec<(f64, f64)>)> {
+    scene
+        .edges
+        .iter()
+        .filter(|edge| ids.contains(&edge.source) && ids.contains(&edge.destination))
+        .map(|edge| (edge.id.clone(), overlay.interior(scene, &edge.id)))
+        .filter(|(_, interior)| !interior.is_empty())
+        .collect()
+}
+
+/// Commit a live group drag that also moves the arrow handles
+/// (P3-M11): `MoveElements` plus, unless `with_waypoints` is false
+/// (Ctrl+drag), a `SetWaypoints` translating every `carries` route by
+/// the delta ACTUALLY applied to the first origin after snapping — the
+/// routes land exactly where the boxes did. `carries` are press-time
+/// [`carried_interiors`] results: the overlay already carries the live
+/// preview, so reading routes back from it would capture the wrong
+/// `from`. One [`Command::Group`] → one Ctrl+Z; re-applying the result
+/// is idempotent exactly like [`drag_move`].
+#[must_use]
+pub fn drag_group(
+    from: &[(Id, (f64, f64))],
+    carries: &[(Id, Vec<(f64, f64)>)],
+    delta: (f64, f64),
+    snap: bool,
+    with_waypoints: bool,
+) -> Option<Command> {
+    let moves: Vec<ElementMove> = from
+        .iter()
+        .filter_map(|(id, (x, y))| {
+            let to = drag_target((*x, *y), delta, snap);
+            (to != (*x, *y)).then(|| (id.clone(), (*x, *y), to))
+        })
+        .collect();
+    if moves.is_empty() {
+        return None;
+    }
+    let mut steps = vec![Command::MoveElements { moves }];
+    if with_waypoints {
+        // The applied delta of the FIRST origin — the same element the
+        // shell's preview measures the carry shift from, so preview
+        // frames equal the committed route.
+        let (_, (fx, fy)) = from.first()?;
+        let (tx, ty) = drag_target((*fx, *fy), delta, snap);
+        let applied = (tx - fx, ty - fy);
+        if applied.0.abs() + applied.1.abs() > f64::EPSILON && !carries.is_empty() {
+            let changes: Vec<WaypointChange> = carries
+                .iter()
+                .map(|(id, wps)| {
+                    let to: Vec<(f64, f64)> = wps
+                        .iter()
+                        .map(|(x, y)| (x + applied.0, y + applied.1))
+                        .collect();
+                    (id.clone(), wps.clone(), to)
+                })
+                .collect();
+            steps.push(Command::SetWaypoints { changes });
+        }
+    }
+    if steps.len() == 1 {
+        steps.pop()
+    } else {
+        Some(Command::Group { steps })
+    }
+}
+
 /// Drag INTERIOR waypoint `index` of one edge: `from` is the INTERIOR
 /// captured at press (the same preview/commit contract as [`drag_move`]
 /// — the live preview writes the target first, the commit reads `from`,
@@ -1243,6 +1320,61 @@ mod tests {
         assert_eq!(o.position(&scene, &id(1)), Some((0.0, 0.0)));
         // A drag that snaps back onto the origin commits nothing.
         assert!(drag_move(&from, (4.0, 0.0), true).is_none());
+    }
+
+    #[test]
+    fn carried_interiors_follow_fully_contained_edges_only() {
+        let scene = scene();
+        let o = overlay();
+        // Edge 10 (1→2, two vertices) sits fully inside group [1,2];
+        // edge 11 is contained too but straight (no interior to carry).
+        let carried = carried_interiors(&scene, &o, &[id(1), id(2)]);
+        assert_eq!(carried.len(), 1, "only the bent edge carries");
+        assert_eq!(carried[0].0, id(10));
+        assert_eq!(carried[0].1.len(), 2);
+        // A group holding only ONE endpoint leaves the route alone.
+        assert_eq!(
+            carried_interiors(&scene, &o, &[id(1)]),
+            Vec::new(),
+            "one shared endpoint is not containment"
+        );
+        assert_eq!(carried_interiors(&scene, &o, &[id(3)]), Vec::new());
+    }
+
+    #[test]
+    fn drag_group_carries_routes_and_detaches_on_demand() {
+        let scene = scene();
+        let mut o = overlay();
+        let from = vec![(id(1), (0.0, 0.0)), (id(2), (220.0, 60.0))];
+        let carries = vec![(id(10), vec![(100.0, 20.0), (180.0, 70.0)])];
+        let cmd = drag_group(&from, &carries, (10.0, 10.0), false, true).unwrap();
+        assert!(
+            matches!(&cmd, Command::Group { steps } if steps.len() == 2),
+            "boxes + routes land as ONE undo step: {cmd:?}"
+        );
+        cmd.apply(&mut o, true);
+        assert_eq!(o.position(&scene, &id(1)), Some((10.0, 10.0)));
+        assert_eq!(o.position(&scene, &id(2)), Some((230.0, 70.0)));
+        assert_eq!(
+            o.relationships.get(&id(10)).unwrap(),
+            &vec![(110.0, 30.0), (190.0, 80.0)],
+            "the route translated by exactly the applied delta"
+        );
+        // One undo walks BOTH steps back to the press values.
+        cmd.undo(&mut o);
+        assert_eq!(o.position(&scene, &id(1)), Some((0.0, 0.0)));
+        assert_eq!(
+            o.relationships.get(&id(10)),
+            Some(&vec![(100.0, 20.0), (180.0, 70.0)])
+        );
+        // Ctrl+drag (`with_waypoints` false): plain move, routes stay.
+        let cmd = drag_group(&from, &carries, (10.0, 10.0), false, false).unwrap();
+        assert!(
+            matches!(&cmd, Command::MoveElements { .. }),
+            "no carry → no Group: {cmd:?}"
+        );
+        // Nothing moves → nothing to commit (not even routes).
+        assert!(drag_group(&[], &carries, (10.0, 10.0), false, true).is_none());
     }
 
     #[test]

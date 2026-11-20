@@ -148,6 +148,7 @@ pub fn compose(scene: &Scene, fonts: &mut FontsView<'_>) -> Composed {
         &PaintOptions {
             screen,
             selection: None,
+            hover_edge: None,
         },
     );
 
