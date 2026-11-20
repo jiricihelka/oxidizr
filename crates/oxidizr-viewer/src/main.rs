@@ -15,7 +15,7 @@
 //! uploads ONE texture and overlays its cells on the paint placeholders.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{Parser, ValueEnum};
@@ -65,14 +65,16 @@ fn main() -> eframe::Result {
     let args = Args::parse();
     // Open before the window comes up: failures become in-app state
     // (the status bar), never a crash — errors are values (P3 charter).
-    let opened = args
+    // A `.dsl` with an existing sidecar opens through the SIDECAR
+    // (M4-3): the saved model + layout is the preferred source.
+    let target = args
         .file
-        .as_ref()
-        .map(|path| oxidizr_api::open(&Input::File(path.clone()), &ApiOptions::default()));
-    let path_shown = args
-        .file
-        .as_ref()
-        .map_or_else(String::new, |path| path.display().to_string());
+        .as_deref()
+        .map(|path| open_target(&path.to_string_lossy()));
+    let opened = target
+        .clone()
+        .map(|path| oxidizr_api::open(&Input::File(path), &ApiOptions::default()));
+    let path_shown = target.map_or_else(String::new, |path| path.display().to_string());
     let theme_arg = args.theme;
     let mut viewer = Viewer::new();
     eframe::run_native(
@@ -421,13 +423,15 @@ impl Viewer {
 
     /// Open `path_edit` through the api entry (M1-1); failures keep the
     /// previous workspace on screen and surface in the status bar.
+    /// Opening a `.dsl` whose sidecar already exists opens the SIDECAR
+    /// instead (M4-3): it carries the last saved model AND layout.
     fn open_path(&mut self) {
         let raw = self.path_edit.trim().to_owned();
         if raw.is_empty() {
             self.open_error = Some("enter a workspace path first".to_owned());
             return;
         }
-        match oxidizr_api::open(&Input::File(PathBuf::from(&raw)), &ApiOptions::default()) {
+        match oxidizr_api::open(&Input::File(open_target(&raw)), &ApiOptions::default()) {
             Ok(opened) => self.adopt(opened),
             Err(outcome) => {
                 self.open_error = Some(summarize_log(&outcome.log, "open failed"));
@@ -622,7 +626,9 @@ impl Viewer {
                      undo/redo · Ctrl+S: save layout JSON · Layout dialog: \
                      align/distribute/bring-back · \
                      Ctrl/⌘-click: open element URL · Esc: deselect · edits to the \
-                     file on disk (incl. !includes) auto-reload, layout kept",
+                     file on disk (incl. !includes) auto-reload, layout kept · \
+                     a saved .json sidecar becomes the open & reload source until \
+                     the .dsl is edited again (newest wins)",
                 );
             });
         });
@@ -1595,8 +1601,29 @@ impl Viewer {
                 set.push(sidecar);
             }
         }
+        // The source DSL of an opened sidecar stays watched (§P3-M4-3):
+        // text edits must reach the window even while the sidecar is
+        // the display.
+        set.extend(companion_dsl(&self.display));
         set.extend(self.includes.iter().map(PathBuf::from));
         set
+    }
+
+    /// Which file a reload re-opens (§P3-M4-3): the NEWEST of display,
+    /// sidecar and companion DSL — "sidecar preferred": once a save
+    /// wrote the sidecar it holds the freshest model AND layout, so it
+    /// wins until the source DSL is edited again. Ties keep the
+    /// display (a reload re-reads what it already shows).
+    fn reload_source(&self) -> PathBuf {
+        let display = PathBuf::from(&self.display);
+        let mut candidates = vec![display.clone()];
+        if let Some(sidecar) = commands::save_target(&self.display) {
+            if sidecar != display {
+                candidates.push(sidecar);
+            }
+        }
+        candidates.extend(companion_dsl(&self.display));
+        newest_by_mtime(&candidates).unwrap_or(display)
     }
 
     /// (Re-)arm the reload watch on the current source set: RESET the
@@ -1640,10 +1667,8 @@ impl Viewer {
     /// driver's hashes already advanced with the change, so the note
     /// tells the story and the window stays open (no retry storm).
     fn reload_from_disk(&mut self) {
-        let opened = match oxidizr_api::open(
-            &Input::File(PathBuf::from(&self.display)),
-            &ApiOptions::default(),
-        ) {
+        let source = self.reload_source();
+        let opened = match oxidizr_api::open(&Input::File(source), &ApiOptions::default()) {
             Ok(opened) => opened,
             Err(outcome) => {
                 self.reload_note = Some(format!(
@@ -2024,6 +2049,63 @@ impl Viewer {
 }
 
 // ---- free helpers ------------------------------------------------------------
+
+/// Sidecar-preferred open target (§P3-M4-3): a `.dsl` whose
+/// `<stem>.json` sidecar exists (the M3-5 save writes one) opens
+/// through the SIDECAR — it carries the last saved model AND layout.
+/// An mtime tie opens the sidecar (listed FIRST in the candidate
+/// list); a strictly newer source file wins, so hand edits made
+/// after a save still open. stdin (`-`) and plain `.json` paths
+/// open exactly as given.
+fn open_target(raw: &str) -> PathBuf {
+    let given = PathBuf::from(raw);
+    match commands::save_target(raw) {
+        Some(sidecar) if sidecar != given && sidecar.exists() => {
+            newest_by_mtime(&[sidecar.clone(), given]).unwrap_or(sidecar)
+        }
+        _ => given,
+    }
+}
+
+/// The `.dsl` sibling of an opened sidecar JSON (§P3-M4-3): when the
+/// viewer's own sidecar is the display, its source DSL stays watched
+/// so later text edits still reach the window. Exact stem, the
+/// lowercase extension `save_target` writes; no sibling ⇒ `None`.
+fn companion_dsl(display: &str) -> Option<PathBuf> {
+    let path = Path::new(display);
+    if !path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+    {
+        return None;
+    }
+    let dsl = path.with_extension("dsl");
+    dsl.exists().then_some(dsl)
+}
+
+/// File mtime, `None` when un-stat-able.
+fn mtime(path: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+}
+
+/// First entry with the NEWEST modification time; un-stat-able
+/// entries lose to stat-able ones (all unusable ⇒ `None`). Ties keep
+/// the earlier-listed candidate — how the sidecar "wins by
+/// preference" while the companion only wins when genuinely edited.
+fn newest_by_mtime(paths: &[PathBuf]) -> Option<PathBuf> {
+    let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
+    for path in paths {
+        let Some(at) = mtime(path) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|(_, best_at)| at > *best_at) {
+            best = Some((path.clone(), at));
+        }
+    }
+    best.map(|(path, _)| path)
+}
 
 /// List label for a view: title, else the key (the reference switcher).
 fn view_label(view: View<'_>) -> String {
