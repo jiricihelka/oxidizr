@@ -21,6 +21,14 @@ lsp-types = { workspace = true }
 lsp-server = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+# L-3 diagnostics (P4-D5): the EXACT CLI pipeline over buffers —
+# `oxidizr_api::open(Input::Bytes)` never touches the filesystem, so the
+# lib core stays headless; `oxidizr_json` only for `.json` buffers
+# (Input::Bytes has no extension ⇒ the URI route in diagnostics.rs);
+# `oxidizr_diag` for the Severity enum the Issues speak.
+oxidizr-api = { workspace = true }
+oxidizr-json = { workspace = true }
+oxidizr-diag = { workspace = true }
 
 [dev-dependencies]
 expect-test = { workspace = true }

@@ -6,22 +6,25 @@
 //! around it (over an `lsp-server` channel pair, stdio in the binary,
 //! `Connection::memory()` in the harness test).
 //!
-//! L-2 scope: the `initialize`/`shutdown`/`exit` handshake and
-//! **full-document sync** (`didOpen`/`didChange`/`didClose`). Every
-//! other request answers `MethodNotFound` until its item lands (L1
-//! diagnostics, L2 completion, L3 hover, L4 formatting) — replying is
-//! mandatory, an unanswered request hangs the client.
+//! L-2 shipped the `initialize`/`shutdown`/`exit` handshake and
+//! **full-document sync** (`didOpen`/`didChange`/`didClose`); L-3 added
+//! the diagnostics republish on all three (a close ends with an EMPTY
+//! publish, clearing the editor's squiggles). Requests with no
+//! implemented feature answer `MethodNotFound` (L2 completion, L3 hover,
+//! L4 formatting are open) — replying is mandatory, an unanswered
+//! request hangs the client.
 
 use std::collections::HashMap;
 
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, Response};
 use lsp_types::notification::{
     DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Exit, Notification as _,
+    PublishDiagnostics,
 };
 use lsp_types::request::{Initialize, Request as _, Shutdown};
 use lsp_types::{
-    InitializeResult, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Uri,
+    InitializeResult, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
 };
 
 /// One open buffer (full sync: the text is always the WHOLE document).
@@ -51,10 +54,11 @@ impl Server {
         Self::default()
     }
 
-    /// The advertised server capabilities. L-2 ships full-document
-    /// sync ONLY; each later item adds its provider here (L1 adds
-    /// nothing client-visible, L2 `completion_provider`, L3
-    /// `hover_provider`, L4 `document_formatting_provider`).
+    /// The advertised server capabilities: full-document sync ONLY —
+    /// diagnostics need no capability (publishDiagnostics is
+    /// server-pushed). Later items add their providers here (L2
+    /// `completion_provider`, L3 `hover_provider`, L4
+    /// `document_formatting_provider`).
     #[must_use]
     pub fn capabilities() -> ServerCapabilities {
         ServerCapabilities {
@@ -128,58 +132,81 @@ impl Server {
         match notification.method.as_str() {
             DidOpenTextDocument::METHOD => {
                 let Ok(params) = serde_json::from_value(notification.params.clone()) else {
-                    return (Vec::new(), false); // malformed: ignore, diagnostics (L1) own the complaint
+                    return (Vec::new(), false); // malformed: no URI, nothing to publish about
                 };
-                self.did_open(params);
-                (Vec::new(), false)
+                (self.did_open(params), false)
             }
             DidChangeTextDocument::METHOD => {
                 let Ok(params) = serde_json::from_value(notification.params.clone()) else {
                     return (Vec::new(), false);
                 };
-                self.did_change(params);
-                (Vec::new(), false)
+                (self.did_change(params), false)
             }
             DidCloseTextDocument::METHOD => {
                 let Ok(params) = serde_json::from_value(notification.params.clone()) else {
                     return (Vec::new(), false);
                 };
-                self.did_close(&params);
-                (Vec::new(), false)
+                (self.did_close(&params), false)
             }
             Exit::METHOD => (Vec::new(), true),
             _ => (Vec::new(), false), // unknown notifications are ignored (spec)
         }
     }
 
-    fn did_open(&mut self, params: lsp_types::DidOpenTextDocumentParams) {
+    fn did_open(&mut self, params: lsp_types::DidOpenTextDocumentParams) -> Vec<Message> {
+        let uri = params.text_document.uri;
         self.docs.insert(
-            params.text_document.uri,
+            uri.clone(),
             Document {
                 text: params.text_document.text,
                 version: params.text_document.version,
             },
         );
+        self.publish(&uri)
     }
 
-    fn did_change(&mut self, params: lsp_types::DidChangeTextDocumentParams) {
+    fn did_change(&mut self, params: lsp_types::DidChangeTextDocumentParams) -> Vec<Message> {
         // FULL sync (capabilities): the content changes list carries
         // exactly one whole-document change; `last()` is the defensive
         // reading (an appended list still ends in the freshest text).
         let Some(change) = params.content_changes.into_iter().last() else {
-            return;
+            return Vec::new();
         };
+        let uri = params.text_document.uri;
         self.docs.insert(
-            params.text_document.uri,
+            uri.clone(),
             Document {
                 text: change.text,
                 version: params.text_document.version,
             },
         );
+        self.publish(&uri)
     }
 
-    fn did_close(&mut self, params: &lsp_types::DidCloseTextDocumentParams) {
-        self.docs.remove(&params.text_document.uri);
+    /// Closing drops the buffer AND clears the editor's squiggles with a
+    /// final EMPTY publish (the spec's ask; version `None` — there is no
+    /// buffer left to stamp).
+    fn did_close(&mut self, params: &lsp_types::DidCloseTextDocumentParams) -> Vec<Message> {
+        let uri = params.text_document.uri.clone();
+        self.docs.remove(&uri);
+        let cleared = PublishDiagnosticsParams::new(uri, Vec::new(), None);
+        vec![Notification::new(PublishDiagnostics::METHOD.to_owned(), cleared).into()]
+    }
+
+    /// Diagnostics for the stored buffer of `uri` (§P4-LSP L-3) as one
+    /// `textDocument/publishDiagnostics` notification. Parsing is the
+    /// exact CLI pipeline over the buffer — [`crate::diagnostics::collect`]
+    /// never touches the filesystem, so every keystroke republish is safe.
+    fn publish(&self, uri: &Uri) -> Vec<Message> {
+        let Some(doc) = self.docs.get(uri) else {
+            return Vec::new();
+        };
+        let params = PublishDiagnosticsParams::new(
+            uri.clone(),
+            crate::diagnostics::collect(uri, &doc.text),
+            Some(doc.version),
+        );
+        vec![Notification::new(PublishDiagnostics::METHOD.to_owned(), params).into()]
     }
 }
 
@@ -188,17 +215,25 @@ impl Server {
 /// client vanishes). The stdio binary and the `Connection::memory()`
 /// harness both run THIS — one loop implementation, no drift.
 ///
+/// The connection is OWNED and dropped on return — that drop closes
+/// `sender`, which is what ends `lsp-server`'s writer thread; a caller
+/// holding the connection while joining the io threads would hang
+/// (pinned by the stdio smoke, L1).
+///
 /// # Errors
 ///
 /// Only a channel send to a vanished client can fail; it ends the
 /// session, reported as an error to the binary.
-pub fn run(connection: &Connection) -> anyhow::Result<()> {
+pub fn run(connection: Connection) -> anyhow::Result<()> {
+    // Destructure to make the consumption explicit (clippy's by-value
+    // lint): taking ownership IS the contract — `sender` dropping when
+    // this function returns is what ends lsp-server's writer thread.
+    let Connection { sender, receiver } = connection;
     let mut server = Server::new();
-    while let Ok(message) = connection.receiver.recv() {
+    while let Ok(message) = receiver.recv() {
         let (outbound, stop) = server.handle(&message);
         for message in outbound {
-            connection
-                .sender
+            sender
                 .send(message)
                 .map_err(|_| anyhow::anyhow!("client disconnected"))?;
         }
@@ -244,6 +279,21 @@ mod tests {
             .iter()
             .filter_map(|message| match message {
                 Message::Response(response) => Some(response),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The `publishDiagnostics` payloads among the outbound messages.
+    fn publishes(messages: &[Message]) -> Vec<PublishDiagnosticsParams> {
+        messages
+            .iter()
+            .filter_map(|message| match message {
+                Message::Notification(notification)
+                    if notification.method == PublishDiagnostics::METHOD =>
+                {
+                    Some(serde_json::from_value(notification.params.clone()).unwrap())
+                }
                 _ => None,
             })
             .collect()
@@ -295,7 +345,9 @@ mod tests {
             })
             .unwrap(),
         );
-        assert_silent(&server.handle(&open));
+        let (out, stop) = server.handle(&open);
+        assert!(!stop);
+        assert_eq!(publishes(&out).len(), 1, "didOpen publishes once");
         assert_eq!(server.document(&url()).unwrap().text, "workspace {}");
         let change = notify(
             DidChangeTextDocument::METHOD,
@@ -312,7 +364,8 @@ mod tests {
             })
             .unwrap(),
         );
-        server.handle(&change);
+        let (out, _) = server.handle(&change);
+        assert_eq!(publishes(&out).len(), 1, "didChange republishes");
         let doc = server.document(&url()).unwrap();
         assert_eq!(
             (doc.text.as_str(), doc.version),
@@ -325,8 +378,52 @@ mod tests {
             })
             .unwrap(),
         );
-        server.handle(&close);
+        let (out, _) = server.handle(&close);
         assert!(server.document(&url()).is_none());
+        let cleared = publishes(&out);
+        assert_eq!(cleared.len(), 1, "didClose clears once");
+        assert!(cleared[0].diagnostics.is_empty(), "clearing is EMPTY");
+        assert_eq!(cleared[0].version, None, "no buffer left to stamp");
+    }
+
+    #[test]
+    fn broken_buffer_publishes_real_pipeline_diagnostics() {
+        // End-to-end through the state machine: the publish carries the
+        // SAME errors `oxidizr validate` prints (Input::Bytes pipeline).
+        let mut server = Server::new();
+        let broken = "workspace {\n  model {\n    this is not dsl ~~~~\n  }\n}\n";
+        let (out, _) = server.handle(&notify(
+            DidOpenTextDocument::METHOD,
+            serde_json::to_value(DidOpenTextDocumentParams {
+                text_document: lsp_types::TextDocumentItem {
+                    uri: url(),
+                    language_id: "dsl".to_owned(),
+                    version: 3,
+                    text: broken.to_owned(),
+                },
+            })
+            .unwrap(),
+        ));
+        let published = publishes(&out);
+        assert_eq!(published.len(), 1);
+        assert_eq!(published[0].uri, url());
+        assert_eq!(
+            published[0].version,
+            Some(3),
+            "the publish stamps the buffer version"
+        );
+        assert_ne!(
+            published[0].diagnostics,
+            Vec::<lsp_types::Diagnostic>::new()
+        );
+        assert!(
+            published[0].diagnostics[0]
+                .message
+                .contains("this is not dsl")
+                || published[0].diagnostics[0].message.contains("Unexpected"),
+            "{:?}",
+            published[0].diagnostics[0].message
+        );
     }
 
     #[test]

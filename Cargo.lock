@@ -3090,6 +3090,9 @@ dependencies = [
  "expect-test",
  "lsp-server",
  "lsp-types",
+ "oxidizr-api",
+ "oxidizr-diag",
+ "oxidizr-json",
  "serde_json",
 ]
 

@@ -14,13 +14,12 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     let (connection, io_threads) = lsp_server::Connection::stdio();
-    // `run` returns on `exit` (clean) or when the client vanishes;
-    // the io threads must be joined before process exit so the last
-    // responses actually reach the pipe. (io_threads.join() speaks
-    // std::io::Error — lifted into the anyhow value.)
-    let joined = oxidizr_lsp::server::run(&connection)
-        .and_then(|()| io_threads.join().map_err(anyhow::Error::new));
-    match joined {
+    // `run` returns on `exit` (clean) or when the client vanishes. It
+    // OWNS the connection: returning drops our sender half, which is
+    // what makes lsp-server's writer thread finish — joining the io
+    // threads BEFORE that drop would hang forever.
+    let result = oxidizr_lsp::server::run(connection);
+    match result.and_then(|()| io_threads.join().map_err(anyhow::Error::new)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("oxidizr-lsp: {error}");
