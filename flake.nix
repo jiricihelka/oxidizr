@@ -139,10 +139,10 @@
             pkgs.wayland # libwayland-client + libwayland-cursor (winit backend)
             pkgs.libxkbcommon # keyboard (xkbcommon-dl)
             pkgs.vulkan-loader # libvulkan.so.1 for wgpu/ash
-            pkgs.xorg.libX11 # x11-dl fallback (WINIT_UNIX_BACKEND=x11, xwayland)
-            pkgs.xorg.libXcursor
-            pkgs.xorg.libXi
-            pkgs.xorg.libXrandr
+            pkgs.libx11 # x11-dl fallback (WINIT_UNIX_BACKEND=x11, xwayland)
+            pkgs.libxcursor
+            pkgs.libxi
+            pkgs.libxrandr
           ];
         in
         {
