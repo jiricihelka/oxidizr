@@ -3,13 +3,17 @@
 //! Architecture promise (P3-D1, `agents/plan/build/PHASE_3.md`): all
 //! non-trivial logic lives in the library modules below — [`scene`],
 //! [`hit`], [`paint`], [`key`], [`icons`], [`commands`], [`reload`],
-//! [`layout`] — which import NOTHING from the eframe shell. The `oxidizr-viewer` binary (feature `gui`) is
-//! a thin presentation layer, so Category A tests build and exercise the
-//! whole core headlessly: zero GPU, zero windowing (`cargo test
-//! --workspace` never enables `gui`). [`paint`] emits `epaint::Shape`
-//! data (software raster + text layout, no windowing) — the boundary
-//! guard forbids the eframe/egui tokens only, so epaint stays allowed
-//! exactly because the guard's own test below runs with no GPU.
+//! [`layout`] — which import NOTHING from the eframe shell. The shell
+//! itself is [`shell`], compiled only with `feature = "gui"` (§P3-M8):
+//! the `oxidizr-viewer` binary is its argv shim and `oxidizr view`
+//! (the `gui` feature of `oxidizr-cli`) drives the same
+//! [`shell::run`] in-process, so both entries share one window.
+//! Category A tests build and exercise the whole core headlessly: zero
+//! GPU, zero windowing (`cargo test --workspace` never enables `gui`).
+//! [`paint`] emits `epaint::Shape` data (software raster + text layout,
+//! no windowing) — the boundary guard forbids the eframe/egui tokens
+//! only, so epaint stays allowed exactly because the guard's own test
+//! below runs with no GPU.
 //!
 //! The editor rule (P3-D0): editing features change only layout JSON values
 //! — the workspace model and any DSL text are immutable here.
@@ -33,14 +37,19 @@ pub mod overview;
 pub mod paint;
 pub mod reload;
 pub mod scene;
+#[cfg(feature = "gui")]
+pub mod shell;
 
 #[cfg(test)]
 mod tests {
     /// R-2 boundary guard (P3-D1): the lib core must never reference the
     /// eframe shell — no import, no qualified path, in any lib source.
-    /// `src/main.rs` (the `gui`-gated shell) is the only allowed place.
+    /// The two `gui`-gated shell files (§P3-M8) are the only allowed
+    /// places: `src/shell.rs` (the shell itself) and `src/main.rs`
+    /// (the binary's argv shim).
     #[test]
     fn lib_core_never_references_the_gui_shell() {
+        const SHELL_FILES: [&str; 2] = ["main.rs", "shell.rs"];
         // Built at runtime: the literals themselves must not appear in this
         // file, or the guard would flag its own source.
         let (e, g) = ("eframe", "egui");
@@ -56,7 +65,9 @@ mod tests {
         for entry in entries {
             let path = entry.expect("dir entry").path();
             if path.extension().is_none_or(|e| e != "rs")
-                || path.file_name().is_some_and(|n| n == "main.rs")
+                || path
+                    .file_name()
+                    .is_some_and(|n| SHELL_FILES.iter().any(|shell| n == *shell))
             {
                 continue;
             }
