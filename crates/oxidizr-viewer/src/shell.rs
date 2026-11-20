@@ -556,7 +556,13 @@ impl eframe::App for Viewer {
             if self.display.is_empty() {
                 "no workspace"
             } else {
-                &self.display
+                // §P3-M11 M11-9 (user: the full path is in 3 places,
+                // the edit bar is enough): the title keeps just the
+                // FILE NAME; the toolbar edit bar carries the path.
+                Path::new(&self.display)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(&self.display)
             }
         );
         if self.shown_title != title {
@@ -764,29 +770,22 @@ impl Viewer {
         // egui's, not the history's) — toolbar ran first, OR here.
         self.text_focus = self.text_focus || nav_edit.has_focus();
         let mut nav_view: Option<String> = None;
-        let mut nav_item: Option<(ModelId, (f64, f64))> = None;
+        let mut nav_item: Option<NavJump> = None;
         let query = self.nav_query.clone();
         let cap = 8_usize;
         if !query.trim().is_empty() {
             let mut hits = 0_usize;
             if let Some(scene) = &self.scene {
-                for item in scene
-                    .items
-                    .iter()
-                    .filter(|item| overview::nav_matches(&query, &item.name, item.id.as_str()))
-                {
-                    if hits == cap {
-                        break;
-                    }
-                    hits += 1;
-                    let label = format!("▪ {} ({})", item.name, item.id);
-                    if ui
-                        .selectable_label(false, egui::RichText::new(label).small())
-                        .clicked()
-                    {
-                        nav_item = Some((item.id.clone(), item.rect.center()));
-                    }
-                }
+                let (rows, jump) = nav_element_rows(
+                    ui,
+                    scene,
+                    &query,
+                    cap,
+                    &self.icon_uv,
+                    self.icon_texture.as_ref(),
+                );
+                hits += rows;
+                nav_item = jump;
             }
             if let Some(workspace) = &self.workspace {
                 for view in workspace.views.all_views() {
@@ -1604,13 +1603,14 @@ impl Viewer {
 
     fn status(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            // §P3-M11 M11-9: the opened path shows exactly ONCE — the
+            // toolbar edit bar — so this bar opens with the view title
+            // instead of repeating it (only the no-workspace hint and
+            // the selection stay).
             if self.display.is_empty() {
                 ui.weak("No workspace — enter a path and press Open");
-            } else {
-                ui.strong(&self.display);
             }
             if let Some(scene) = &self.scene {
-                ui.separator();
                 ui.label(format!(
                     "{} · zoom {:.0}%",
                     scene.title,
@@ -2563,6 +2563,52 @@ fn view_row(ui: &mut egui::Ui, view: View<'_>, selected: bool, dirty: bool) -> b
             .unwrap_or("(no description)")
     ));
     clicked
+}
+
+/// Quick-nav jump target: element id + world centre (§P3-M4-4).
+type NavJump = (ModelId, (f64, f64));
+
+/// Quick-nav element rows (§P3-M11 M11-7, user: "Icons for results in
+/// search do not work"): each hit shows its REAL icon through the same
+/// 16 px atlas chip the key panel uses (iconless items keep the `▪`
+/// glyph; a broken icon gets the chip's hollow placeholder). Returns
+/// the row count (against the caller's shared cap) and the clicked
+/// jump target (id + centre). Split out of `view_list` for the line
+/// budget.
+fn nav_element_rows(
+    ui: &mut egui::Ui,
+    scene: &scene::Scene,
+    query: &str,
+    cap: usize,
+    icon_uv: &BTreeMap<String, egui::Rect>,
+    icon_texture: Option<&egui::TextureHandle>,
+) -> (usize, Option<NavJump>) {
+    let mut hits = 0_usize;
+    let mut jump = None;
+    for item in scene
+        .items
+        .iter()
+        .filter(|item| overview::nav_matches(query, &item.name, item.id.as_str()))
+    {
+        if hits == cap {
+            break;
+        }
+        hits += 1;
+        let label = format!("{} ({})", item.name, item.id);
+        let clicked = ui.horizontal(|ui| {
+            if item.icon.is_some() {
+                icon_cell(ui, item.icon.as_deref(), icon_uv, icon_texture);
+            } else {
+                ui.label("▪");
+            }
+            ui.selectable_label(false, egui::RichText::new(label).small())
+                .clicked()
+        });
+        if clicked.inner {
+            jump = Some((item.id.clone(), item.rect.center()));
+        }
+    }
+    (hits, jump)
 }
 
 /// Dialog label for a rank direction (`None` reads as the reference

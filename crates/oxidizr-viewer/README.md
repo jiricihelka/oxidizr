@@ -35,8 +35,10 @@ toolbar path field + Enter / **Open**.
   tooltips, a tag filter, and the left panel: a **view selector grouped by
   view type** (System landscape → context → Container → Component →
   Deployment → Dynamic → Filtered → Image → Custom, each under its own
-  heading) plus a search that jumps to elements (select + center) or
-  switches to matching views.
+  heading) plus a search that jumps to elements (select + center, rows
+  carry the element's real icon) or switches to matching views. The
+  opened path shows once — the toolbar edit bar (title bar carries the
+  file name only).
 - Navigation: wheel zoom (pinch too — two-finger trackpad scroll
   pans), `−`/`+`/`Fit`, drag on empty canvas pans (middle-button or
   Space-drag too), **right-drag** lassos, minimap (click/drag
