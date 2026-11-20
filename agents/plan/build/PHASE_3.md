@@ -94,7 +94,10 @@ crates/
   QA. `cargo test --workspace` must build the viewer with zero GPU/windowing need at
   test time (eframe behind the bin target only).
 - `oxidizr-cli` gains no GUI dependency; a future `oxidizr view` launcher is out of
-  scope (💡 idea if demanded).
+  scope (💡 idea if demanded). **AMENDED 2026-11-20 (§P3-M8, user-signed): the idea was
+  demanded — `oxidizr view` lands as an OPTIONAL `gui` feature of `oxidizr-cli`
+  (default cli build stays zero-GUI; the eframe shell moves to a `gui`-gated lib
+  module so the in-process entry and the standalone binary share one `run`).**
 - **Reconcile engine — NO relocation (ratified 2026-11-19, M0 planning).** Premise
   correction: the P1-D8 id-remap engine has lived in `oxidizr-api/src/reconcile.rs`
   since P1-M7 — never in `cli` — and is already `pub`, shared by the CLI via
@@ -475,6 +478,34 @@ now is too.
 | **M7-1** | headless seam `overview::section` (kind → `(rank, header)`, C4 granularity first: landscape → context → container → component → deployment → dynamic → filtered → image → custom) + `overview::grouped` (stable `(rank, order, key)` sort partitioned into `(header, members)` runs); shell renders `── HEADING ──` separator blocks, row rendering split into `view_row` for the line budget; `view_list`'s own sort gone (subsumed) | `overview.rs` unit over all nine kinds (fixture `NineKinds`, scrambled input, section + intra-section ranking asserted); quartet + `ci gui` + full tier + bless; clippy × 4 combos — **DONE 2026-11-20** |
 
 UI presentation only — no bytes contract, no V-item.
+
+## §P3-M8 — post-v0.3.0 follow-up: `oxidizr view` subcommand (2026-11-20)
+
+User asked why the viewer is a separate binary, not an `oxidizr`
+subcommand. §P3-D1 had parked a launcher as "💡 idea if demanded";
+demanded, and signed off via the questions tool as the **feature-gated
+in-binary** form (over a thin launcher / two binaries). Recorded as F10 in
+`ADDITIONAL_FEATURES.md`; P3-D1 amended above. Goal: `oxidizr view [FILE]
+[--theme …]` opens the SAME viewer window in-process when the binary is
+built `--features gui`, while a default `cargo build`/`cargo test
+--workspace` keeps ZERO eframe/GPU surface (R-2 holds).
+
+The blocker: the whole eframe shell lives in `oxidizr-viewer`'s **binary**
+(`src/main.rs`), which the R-2 guard treats as the one allowed GUI site
+and which `oxidizr-cli` cannot call into. The shared seam must move into
+the lib, `gui`-gated, so BOTH entries ride one `run`.
+
+| Item | Deliverable | Exit gate |
+|---|---|---|
+| **M8-0** | decision + this decomposition (ADDITIONAL_FEATURES F10, P3-D1 amendment) | docs commit |
+| **M8-1** | viewer shell `main.rs` → `#[cfg(feature="gui")] mod shell` (lib `shell.rs`) exposing `pub fn run(file, theme) -> eframe::Result` + `pub enum ThemeArg`; `main.rs` becomes `Args::parse()` → `shell::run`; R-2 guard skips `shell.rs` alongside `main.rs`, count `11` (lib.rs + 10 core modules) UNCHANGED — the shell module is not a core module | default `cargo test -p oxidizr-viewer` still builds NO eframe; `--features gui` compiles; quartet + `ci gui` |
+| **M8-2** | `oxidizr-cli`: optional `oxidizr-viewer` dep + `gui = ["dep:oxidizr-viewer","oxidizr-viewer/gui"]`; `Command::View{file,theme}` (`ViewTheme` ValueEnum) dispatched to `shell::run` under `#[cfg(feature="gui")]`, else a clear "built without the `gui` feature" exit; `oxidizr-viewer` promoted to a workspace dep (already is) | default cli clippy clean (no eframe); `--features gui` clippy clean; existing CLI exit-code suite green |
+| **M8-3** | `cargo xtask ci gui` leg ALSO clippies `-p oxidizr-cli --features gui` (so the in-binary GUI is gate-covered); root README + viewer README + WORKFLOW command table note the new entry | `ci gui` green with both clippy invocations |
+
+Purely additive — `view` never enters the `oxidizr-api` pipeline, so the
+bless 307×unchanged tripwire and all byte-parity paths are untouched.
+Standalone `oxidizr-viewer` binary is RETAINED (the GUI's default entry;
+the flake runs it). No V-item: no bytes contract touched.
 
 ## P3-D10 Verification list (empirical, before dependent code)
 

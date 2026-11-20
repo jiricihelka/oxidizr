@@ -97,6 +97,23 @@ output (Phase 1 flag); F9 is the Phase 1T interlude (test infra, `build/PHASE_1T
 - Compatibility: dev-facing; the CLI lib stays `publish = false`; parity paths
   unchanged (T0 is proven byte-neutral by the existing golden/e2e suite).
 
+### F10 — `oxidizr view`: in-binary GUI entry ✅ (signed off 2026-11-20)
+
+- Problem: the P3 viewer shipped as a second binary (`oxidizr-viewer`); the
+  user asked why the GUI is not a subcommand of the `oxidizr` entry point.
+  §P3-D1 had parked exactly this as a "💡 idea if demanded" — demanded, and
+  signed off (questions tool) as the feature-gated IN-BINARY form.
+- Feature: `oxidizr view [FILE] [--theme light|dark|system]` opens the native
+  viewer window in-process, behind a new `gui` feature of `oxidizr-cli`
+  (which enables `oxidizr-viewer/gui`). Default cli builds keep a ZERO-GUI
+  dependency tree; the subcommand appears in `--help` in every build and,
+  without the feature, exits with a rebuild hint. The standalone
+  `oxidizr-viewer` binary stays (both entries ride the same
+  `oxidizr_viewer::app::run`). Decomposition: `build/PHASE_3.md` §P3-M8.
+- Compatibility: purely additive — `view` never becomes an
+  `oxidizr-api::Request`, so pipeline behavior and every byte-parity path are
+  untouched (bless 307×unchanged remains the tripwire).
+
 ## Ideas (💡 not agreed — sign-off required before implementing)
 
 | # | Idea | Compat analysis |
