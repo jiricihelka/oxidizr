@@ -381,6 +381,49 @@ at the drag-vs-box-select seam (select+undo first, drag second), each
 half gating green. Undo history is per-view (switching views switches
 history — the reference's per-diagram undoStack behaviour).
 
+## §P3-M4 — live reload, navigation, export (decomposition, 2026-11-20)
+
+M4 = the P3-D9 M4 bullet: live reload + remap UX (P3-D6), DSL→sidecar
+workflow, minimap + quick-nav, SVG/PNG export with key (Q2),
+`dot-backend` feature. V6 CLOSED for the Linux leg (probe, below) —
+the design (parent-dir watch + path filter + debounce + content-hash)
+absorbs whatever the other OSes emit; the Windows/macOS legs stay an
+open CI observation, not a blocker. V8 stays informational (P3-D0: no
+pixel parity): we compose the key BELOW the diagram with margins,
+which is what `export.jspf` does — no further look needed.
+
+| Item | Deliverable | Premise / verified | Exit gate |
+|---|---|---|---|
+| **M4-0** | docs: this table + the P3-V6 Linux verdict below | probe: `notify` 8 `recommended_watcher` on Linux = inotify on a DIRECTORY (file watches die on rename-swap); facts + posture recorded below | docs commit |
+| **M4-1** | file-set plumbing + headless `reload` core: `ParseResult.includes: Vec<String>` (every file-system `!include` resolved file, in parse order; URL includes are policy-dead so the set is FS-only), `Opened.includes` (empty for JSON/stdin), and `ReloadDriver` in `reload.rs`: watch PARENT dirs (NonRecursive) of the display file + sidecar + includes, path filter (exact watched paths, `.{pid}.tmp` never matches), raw events → channel, 250 ms settle-debounce per path-set, content-hash compare per path (P3-D6 self-save rule: our rename IS an external-looking `Modify(Name(To))` — indistinguishable without the hash) → `Change` signal | probe facts (M4-0); `read_files` resolves file/dir/glob includes at parse time (`stmt_line.rs:194`); driver headless — notify is already an un-gated viewer dep (`reload` M0 stub says so); R-2 guard untouched | quartet + full tier + bless |
+| **M4-2** | shell reload wiring + remap UX: `egui::RepaintSignal` wakes the app; reload = `open(new bytes)` → `oxidizr_api::reconcile(layout, updated)` where `layout` = current workspace + dirty overlays folded; overlays re-keyed by the remap (ambiguous = conservative drop + report, R-3), histories reset, last-good workspace stays visible when the reparse fails (parse regressions → diagnostics panel, window stays open); status badge added/removed/ambiguous counts | `reconcile(layout, updated) -> (Workspace, Report)` is the SHARED CLI engine (`oxidizr-api::reconcile`); adopt already canonicalizes display; after a reload `dirty` is empty (geometry baked) | quartet + `ci gui` + full tier + bless |
+| **M4-3** | DSL→sidecar workflow: once a sidecar exists it becomes the preferred reload source AND the open-priority target (save already writes it — M3-5); watch set refreshes on save; docs note in the help overlay | M3-5 `save_target` + byte-stability test; P3-D9 M4 bullet | quartet + `ci gui` + full tier + bless |
+| **M4-4** | minimap (navigator.jspf analogue) + quick-nav: headless `overview.rs` — `overview(&Scene, box px) -> Vec<Shape>` (boxes as dots/rects, viewport rect overlay) painted by the shell bottom-right; click/drag the map centers the viewport; quick-nav = search field (elements by name/id + view titles) → center + select | `paint::paint_scene` subset reuse (Category A, same shape-list contract); `hit::Viewport` already does world↔screen | quartet + `ci gui` + full tier + bless |
+| **M4-5** | export SVG+PNG with key: headless `export.rs` — `shapes_to_svg(shapes, size)` translator over OUR shape subset (Line/Path(Open|Closed)/Rect/Circle/Ellipse/Text; no bezier/gradient/image shapes are emitted by `paint`); text = glyph OUTLINES as paths: decode the SAME base64 font data epaint embeds (`FontDefinitions.font_data` + `base64` dep, already declared) → `ab_glyph` (epaint's own rasterizer ⇒ version-unified) `Outline` points → quadratic path, per-galley position/color/size; PNG = our own SVG → `resvg` → tiny-skia pixmap → `png` encode (the pinned trio rides along; no font feature ⇒ hence the outline decision); key section composed BELOW the diagram (V8 anatomy) reusing the `key::legend` rows | seam-verified 2026-11-20: epaint 0.37 has NO svg serializer (we write our own), `Tessellator::tessellate_shape` exists (PNG fallback if resvg path stalls), ab_glyph IS epaint's glyph crate; files `<stem>.svg/.png` next to the save target; dialog-free: toolbar Export | quartet + `ci gui` + full tier + bless (export bytes are NOT goldens — visual parity out of contract, P3-D0; snapshot = shape-count + XML well-formedness + PNG magic) |
+| **M4-6** | `dot-backend` feature (optional): `oxidizr-layout::Dot` engine (P3-D5 neutral trait) shelling to `$OXIDZR_DOT_BIN` (`-Tplain` parse → placements), off by default, Category B test gated on the env var (oracle posture); viewer dialog engine combo lists it only when available | R-1 mitigation names this row; `LayoutEngine` trait exists since M0-2; `Layered` stays the default | quartet + gated test |
+| **M4 close** | PROGRESS board + log M4 row; PHASE_3 M4 DONE; RESUME → M5 entry point | — | full ritual |
+
+Order: M4-0 → M4-1 → M4-2 → M4-3 → M4-4 → M4-5 → M4-6 → close. Split
+rules: M4-5 may ship SVG first (PNG rides the same translator); if
+ab_glyph outline extraction stalls, the recorded fallback is SVG
+`<text>` + an embedded base64 `@font-face` (same font bytes, less
+portable viewers) — decision stays INSIDE M4-5, no scope moves.
+
+P3-V6 verdict (Linux leg, CLOSED 2026-11-20, probe = scratch crate,
+notify 8.x, inotify backend, 400 ms drain windows): a plain
+`fs::write` fires `Access(Open)` + `Modify(Data)` +
+`Access(Close(Write))` (same-content rewrites are indistinguishable ⇒
+content-hash compare is the ONLY dedup); our save posture (temp write
++ rename) fires 4 temp-path events + `Modify(Name(From/To/Both))`
+where the `To` path IS the target — i.e. an atomic external save and
+ours are EVENT-IDENTICAL, only the hash filter separates them;
+delete→recreate arrives as `Remove` then `Create` (watching the FILE
+would die on this — watching the PARENT DIR survives, hence
+NonRecursive dir watches + exact-path filter); 5 rapid writes = 13
+raw events ⇒ the 250 ms per-path-set settle-debounce is mandatory.
+Windows/macOS coalescing + rename semantics: CI-observed, not
+blocking (the filter+debounce+hash posture is OS-agnostic).
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
@@ -473,7 +516,9 @@ history — the reference's per-diagram undoStack behaviour).
   `filter.jspf` tag toolbar is the session-side UI feeding the SAME evaluator —
   its persistence question is P3-V7.) Cloned in `oxidizr-core::filter`.
 - P3-V6 `notify` event coalescing behavior on each OS (debounce tuning), Windows
-  rename semantics on save.
+  rename semantics on save. **Linux leg CLOSED 2026-11-20** — probe facts + the
+  filter/debounce/hash posture in §P3-M4 above; Windows/macOS legs stay a passive
+  CI observation (the posture is OS-agnostic, nothing depends on their exact shape).
 - P3-V7 reference tag-filter persistence: does the web UI filter write the view's
   stored `filter` object (workspace JSON) or stay session-only? → decides our default
   (P3-D3a); check `filter.jspf` + `structurizr-diagram.js` filter wiring + whether a
