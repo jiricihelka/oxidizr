@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | **M1 COMPLETE 2026-11-20** — read-only viewer: api `open` entry, headless `scene`/`hit`/`paint`/`key`/`icons` core (guarded egui-free), eframe shell with full styling, key panel, tag chips, diagnostics, icon atlas. M0 scaffold 2026-11-19. Next: M2 `Layered` layout engine. Log below (`build/PHASE_3.md`) |
+| P3 | viewer+layout | **M2 COMPLETE 2026-11-20** — `Layered` engine (deterministic dagre-family pipeline, 1k-node benches, `P3` baseline) + viewer auto-layout integration (headless `layout` seam, `scene::build` `Overrides` overlay, `auto-layout.jspf` dialog, ONE pass at adopt). M1 read-only viewer COMPLETE 2026-11-20; M0 scaffold 2026-11-19. Next: M3 editing + reload. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,51 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M2 — `Layered` layout engine + viewer auto-layout ✅ (2026-11-20, COMPLETE)
+
+Layout milestone (§P3-M2 decomposition): the §P3-D5 MVP engine in the
+zero-dependency `oxidizr-layout` crate + its integration into the viewer
+as SESSION geometry (the byte contract untouched all milestone — bless
+307×unchanged every commit; layout is never persisted until M3).
+V1 CLOSED up front (dagre 1.1.8 client layout; dialog defaults
+LR/100/50/50 + vertices = the `oxidizr-core` `AutomaticLayout` defaults):
+
+- **M2-1** `c626048` — docs: the §P3-M2 table + the V1 verdict.
+- **M2-2** `94a8d82` — `Layered` **landed complete end-to-end**
+  (deviation recorded: the planned M2-3 seam already existed — naive
+  stages were replaced in M2-3 instead): prep → DFS cycle reversal →
+  longest-path ranks → dummy chains → initial order → stacked coords →
+  anchor-aware orthogonal routes; canonical frame + LR/RL/TD/BU
+  mirroring; 21 tests incl. exact-float coords + 60-node determinism.
+- **M2-3** `344683b` — polish passes in: stage 4 = 4 rounds ×
+  (down+up) cascading **barycenter sweeps**, best-of-rounds by
+  exhaustive crossing count (ties keep the earlier order); stage 5 = 4
+  alternating-side **priority** passes (dummies first so chains
+  straighten, moves clamped to the slot the within-rank neighbours
+  leave open); stage 6 diagonal legs channelled through rank gaps.
+  1k-node determinism test; §P3-D5 hard contract holds — no randomness,
+  stable sorts, fixed iteration counts throughout.
+- **M2-4** `98a4d60` — criterion benches `p3_layered_thousand_{mixed,
+  chain,star}` (criterion is a DEV-dep only — the zero-dep promise
+  governs `[dependencies]`); measured 3.7 / 0.71 / 0.97 ms per 1k-node
+  layout; committed as the `P3` baseline with this close.
+- **M2-5** `e647dcd` — viewer integration: new headless `layout` module
+  (`stored_for` filtered→base, `config_for`, position-blind idempotent
+  `graph_for`, `apply` → `Overrides`, params `encode`/`decode`) +
+  `scene::build` 5th parameter `Option<&Overrides>` (element top-lefts;
+  relationship interiors REPLACE stored vertices, empty straightens);
+  shell `Layout` button + dialog mirroring `auto-layout.jspf`, ONE
+  engine pass at adopt/view-change for views carrying a stored
+  `automaticLayout`, params persisted, overrides session-only.
+  **Deviation recorded: boundary pad stays `BOUNDARY_PADDING = 20`, not
+  V1's dagre-internal 50 px — rects re-derive from the M1 union rule.**
+
+Verification: quartet every commit; `ci gui` green (M2-5); full tier 8/8
++ bless 307×unchanged every commit; boundary guard 9 lib files; engine
+public surface = `Layered` + the M0-2 neutral types only; `cargo xtask
+bench save P3` baseline committed at close. No tag (M5 is the v0.3.0
+point). Next: M3 editing + reload (V4/V6) — layout becomes storable.
 
 ### P3-M1 — read-only viewer ✅ (2026-11-20, COMPLETE)
 
