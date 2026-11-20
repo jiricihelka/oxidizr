@@ -176,6 +176,26 @@ pub fn pick(scene: &Scene, viewport: Viewport, point: (f64, f64)) -> Option<Hit>
         .map(Hit::Edge)
 }
 
+/// Lasso helper (M3-3 box-select): the indices of every item whose box
+/// INTERSECTS the world-space `rect`, in content order. Intersection,
+/// not containment — a lasso clipping a box edge selects it, like the
+/// reference's rubber-band drag.
+#[must_use]
+pub fn items_in_rect(scene: &Scene, rect: Rect) -> Vec<usize> {
+    scene
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| {
+            item.rect.x < rect.x + rect.width
+                && rect.x < item.rect.x + item.rect.width
+                && item.rect.y < rect.y + rect.height
+                && rect.y < item.rect.y + item.rect.height
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
 /// Distance from `point` to a polyline: `INFINITY` for the empty line,
 /// point distance for a single vertex, else the minimum over the
 /// segments ([`distance_to_segment`]).
@@ -444,6 +464,42 @@ mod tests {
         let v = Viewport::new(1.0, (0.0, 0.0));
         // The line crosses the box: the box click is the item.
         assert_eq!(pick(&s, v, (50.0, 25.0)), Some(Hit::Item(0)));
+    }
+
+    #[test]
+    fn items_in_rect_lassoes_by_intersection() {
+        fn lasso(x: f64, y: f64, width: f64, height: f64) -> Rect {
+            Rect {
+                x,
+                y,
+                width,
+                height,
+            }
+        }
+        let mut a = item(0.0, 0.0); // 0..100 × 0..50
+        a.id = Id::new("a");
+        let mut b = item(220.0, 60.0); // 220..320 × 60..110
+        b.id = Id::new("b");
+        let mut c = item(450.0, 0.0); // 450..550 × 0..50
+        c.id = Id::new("c");
+        let s = scene(vec![a, b, c], Vec::new(), Vec::new());
+        // Full cover: content order; b clipped at its corner still counts.
+        assert_eq!(
+            items_in_rect(&s, lasso(-10.0, -10.0, 570.0, 130.0)),
+            vec![0, 1, 2]
+        );
+        // A lasso ending exactly at b's left edge grazes it — strict
+        // inequality means touching does NOT select.
+        assert_eq!(items_in_rect(&s, lasso(-5.0, -5.0, 225.0, 65.0)), vec![0]);
+        assert_eq!(
+            items_in_rect(&s, lasso(-5.0, -5.0, 226.0, 66.0)),
+            vec![0, 1]
+        );
+        // A lasso over empty canvas grabs nothing.
+        assert_eq!(
+            items_in_rect(&s, lasso(120.0, 120.0, 60.0, 20.0)),
+            Vec::new()
+        );
     }
 
     #[test]

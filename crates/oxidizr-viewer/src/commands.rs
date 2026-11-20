@@ -181,6 +181,13 @@ pub enum Command {
         /// The overlay as it was before the clear.
         snapshot: Box<LayoutOverlay>,
     },
+    /// Compound edit: the steps land and undo as ONE unit (P3-M3: one
+    /// auto-layout run produces positions AND routes — a single Ctrl+Z
+    /// reverts both).
+    Group {
+        /// Steps in apply order.
+        steps: Vec<Command>,
+    },
 }
 
 impl Command {
@@ -212,6 +219,17 @@ impl Command {
                     overlay.dimensions = None;
                 } else {
                     *overlay = (**snapshot).clone();
+                }
+            }
+            Self::Group { steps } => {
+                if forward {
+                    for step in steps {
+                        step.apply(overlay, true);
+                    }
+                } else {
+                    for step in steps.iter().rev() {
+                        step.apply(overlay, false);
+                    }
                 }
             }
         }
@@ -550,6 +568,84 @@ pub fn set_canvas_size(overlay: &LayoutOverlay, to: Option<Dimensions>) -> Optio
 pub fn clear_view(overlay: &LayoutOverlay) -> Command {
     Command::ClearView {
         snapshot: Box::new(overlay.clone()),
+    }
+}
+
+/// The dragged target of a top-left: `origin` moved by `delta`, grid-
+/// snapped when `snap`. Shared by [`drag_move`] and the shell's live
+/// preview so preview frames EQUAL the committed geometry.
+#[must_use]
+pub fn drag_target(origin: (f64, f64), delta: (f64, f64), snap: bool) -> (f64, f64) {
+    let to = (origin.0 + delta.0, origin.1 + delta.1);
+    if snap {
+        (snapped(to.0), snapped(to.1))
+    } else {
+        to
+    }
+}
+
+/// Commit a live group drag (P3-M3): `from` are the effective top-lefts
+/// captured when the drag BEGAN (the overlay may already carry the live
+/// preview positions, so the delta is not re-read from it). `snap` grid-
+/// snaps every TARGET top-left exactly like [`move_by`]; the whole group
+/// shares `delta`, so relative layout survives. `None` when nothing
+/// moves. Re-applying the result is idempotent — the preview and the
+/// committed command write the same absolute positions.
+#[must_use]
+pub fn drag_move(from: &[(Id, (f64, f64))], delta: (f64, f64), snap: bool) -> Option<Command> {
+    let moves: Vec<ElementMove> = from
+        .iter()
+        .filter_map(|(id, (x, y))| {
+            let to = drag_target((*x, *y), delta, snap);
+            (to != (*x, *y)).then(|| (id.clone(), (*x, *y), to))
+        })
+        .collect();
+    non_empty_moves(moves)
+}
+
+/// Land one auto-layout run as a single undoable [`Command`] (P3-M3:
+/// the dialog Apply and the adopt-time pass are COMMANDS, not silent
+/// state — one Ctrl+Z reverts positions and routes together). `overrides`
+/// are the engine's absolute placements/routes ([`layout::apply`]'s
+/// output, but headless here); ids already rendering at their placement
+/// are skipped, scene iteration order keeps the command deterministic
+/// (the [`Overrides`] maps are hash maps). `None` when the run changes
+/// nothing.
+#[must_use]
+pub fn apply_layout(
+    scene: &Scene,
+    overlay: &LayoutOverlay,
+    overrides: &Overrides,
+) -> Option<Command> {
+    let moves: Vec<ElementMove> = scene
+        .items
+        .iter()
+        .filter_map(|item| {
+            let to = overrides.elements.get(&item.id)?;
+            let from = overlay.position(scene, &item.id)?;
+            (from != *to).then(|| (item.id.clone(), from, *to))
+        })
+        .collect();
+    let changes: Vec<WaypointChange> = scene
+        .edges
+        .iter()
+        .filter_map(|edge| {
+            let to = overrides.relationships.get(&edge.id)?;
+            let from = overlay.interior(scene, &edge.id);
+            (from != *to).then(|| (edge.id.clone(), from, to.clone()))
+        })
+        .collect();
+    let mut steps = Vec::new();
+    if !moves.is_empty() {
+        steps.push(Command::MoveElements { moves });
+    }
+    if !changes.is_empty() {
+        steps.push(Command::SetWaypoints { changes });
+    }
+    match steps.len() {
+        0 => None,
+        1 => steps.pop(),
+        _ => Some(Command::Group { steps }),
     }
 }
 
@@ -951,6 +1047,97 @@ mod tests {
         let ov = o2.as_overrides();
         assert_eq!(ov.relationships[&id(10)], [] as [(f64, f64); 0]);
         assert!(ov.elements.is_empty());
+    }
+
+    #[test]
+    fn drag_move_snaps_and_survives_the_live_preview() {
+        let scene = scene();
+        let mut o = overlay();
+        // The shell captures the origins at press; the live preview has
+        // already written the target position into the overlay — the
+        // commit reads `from`, never the mutated state.
+        o.elements.insert(id(1), (15.0, 5.0));
+        let from = vec![(id(1), (0.0, 0.0))];
+        let cmd = drag_move(&from, (15.0, 5.0), true).unwrap();
+        assert_eq!(
+            cmd,
+            Command::MoveElements {
+                moves: vec![(id(1), (0.0, 0.0), (20.0, 10.0))]
+            }
+        );
+        cmd.apply(&mut o, true);
+        assert_eq!(o.position(&scene, &id(1)), Some((20.0, 10.0)));
+        // Re-applying the absolute targets is idempotent: the preview
+        // and the committed command write the SAME geometry.
+        cmd.apply(&mut o, true);
+        assert_eq!(o.position(&scene, &id(1)), Some((20.0, 10.0)));
+        cmd.undo(&mut o);
+        assert_eq!(o.position(&scene, &id(1)), Some((0.0, 0.0)));
+        // A drag that snaps back onto the origin commits nothing.
+        assert!(drag_move(&from, (4.0, 0.0), true).is_none());
+    }
+
+    #[test]
+    fn apply_layout_lands_engine_output_as_one_command() {
+        let scene = scene();
+        let mut o = overlay();
+        let overrides = Overrides {
+            elements: HashMap::from([(id(1), (0.0, 0.0)), (id(2), (300.0, 60.0))]),
+            relationships: HashMap::from([(id(10), Vec::new()), (id(11), vec![(300.0, 50.0)])]),
+        };
+        // Box 1 already renders at (0,0): skipped. Edge 10 straightens
+        // and edge 11 gains a waypoint → moves + changes GROUP into one
+        // undoable step.
+        let cmd = apply_layout(&scene, &o, &overrides).unwrap();
+        let Command::Group { steps } = &cmd else {
+            panic!("expected a Group, got {cmd:?}");
+        };
+        assert_eq!(steps.len(), 2);
+        cmd.apply(&mut o, true);
+        assert_eq!(o.position(&scene, &id(2)), Some((300.0, 60.0)));
+        assert_eq!(o.interior(&scene, &id(10)), Vec::new());
+        assert_eq!(o.interior(&scene, &id(11)), vec![(300.0, 50.0)]);
+        // Undo writes the `from` geometry back: the overlay RENDERS as
+        // before (M3-2 semantics — the entries keep the stored values,
+        // they are not erased), and a save would write the identical
+        // file.
+        cmd.undo(&mut o);
+        assert_eq!(o.position(&scene, &id(2)), Some((220.0, 60.0)));
+        assert_eq!(
+            o.interior(&scene, &id(10)),
+            vec![(120.0, 40.0), (200.0, 80.0)]
+        );
+        assert_eq!(o.interior(&scene, &id(11)), Vec::new());
+        // Position-only output is a plain MoveElements (no Group).
+        let only_moves = Overrides {
+            relationships: HashMap::new(),
+            ..overrides
+        };
+        let cmd = apply_layout(&scene, &o, &only_moves).unwrap();
+        assert!(matches!(cmd, Command::MoveElements { .. }));
+        // Everything already laid out: nothing to run.
+        let laid = LayoutOverlay {
+            view_key: "L1".to_string(),
+            elements: HashMap::from([
+                (id(1), (0.0, 0.0)),
+                (id(2), (220.0, 60.0)),
+                (id(3), (450.0, 0.0)),
+            ]),
+            relationships: HashMap::from([
+                (id(10), vec![(120.0, 40.0), (200.0, 80.0)]),
+                (id(11), Vec::new()),
+            ]),
+            dimensions: None,
+        };
+        assert!(apply_layout(&scene, &laid, &overrides_only_matching(&laid)).is_none());
+    }
+
+    /// The engine output that reproduces `laid` exactly (identity run).
+    fn overrides_only_matching(laid: &LayoutOverlay) -> Overrides {
+        Overrides {
+            elements: laid.elements.clone(),
+            relationships: laid.relationships.clone(),
+        }
     }
 
     fn cmd_moves(cmd: &Command) -> Vec<(String, (f64, f64))> {

@@ -14,18 +14,18 @@
 //! icon atlas: `icons` rasterizes style icons headlessly, the shell
 //! uploads ONE texture and overlays its cells on the paint placeholders.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use eframe::egui::{self, Id, Pos2, Vec2};
 use oxidizr_api::{ApiOptions, Input, LogItem, Opened, Outcome};
-use oxidizr_core::Workspace;
 use oxidizr_core::views::{
     AutomaticLayout, ColorScheme, FilterMode, LineStyle, RankDirection, View,
 };
+use oxidizr_core::{Id as ModelId, Workspace};
 use oxidizr_diag::Severity;
-use oxidizr_viewer::{hit, icons, key, layout, paint, scene};
+use oxidizr_viewer::{commands, hit, icons, key, layout, paint, scene};
 
 /// Storage keys (§P3-D2: eframe storage only, no config files).
 const KEY_THEME: &str = "oxidizr.viewer/theme";
@@ -104,6 +104,8 @@ struct Viewer {
     open_error: Option<String>,
     /// Toolbar path editor.
     path_edit: String,
+    /// The path field owns the keyboard (undo/redo keys skip then).
+    path_focus: bool,
     /// Selected view key.
     view_key: Option<String>,
     /// Scene rendered from workspace + view + scheme.
@@ -153,9 +155,18 @@ struct Viewer {
     icon_errors: Vec<(String, String)>,
     /// Icons are stale wrt the scene (set on open/rebuild).
     icons_dirty: bool,
-    /// Session auto-layout geometry for the current view (P3-M2-5);
-    /// NEVER persisted — M3 owns saving (editor rule, P3-D0).
-    layout_overrides: Option<scene::Overrides>,
+    /// Session editing overlays, one per view key (P3-M3); NEVER
+    /// persisted — M3-5 owns saving (editor rule, P3-D0). Kept across
+    /// view switches, cleared when a workspace is adopted.
+    overlays: HashMap<String, commands::LayoutOverlay>,
+    /// Undo/redo history per view key, parallel to [`Self::overlays`].
+    histories: HashMap<String, commands::History>,
+    /// Grid-snap drags to multiples of [`commands::snapped`]'s step.
+    snap: bool,
+    /// The in-flight canvas interaction (pan / drag / lasso).
+    drag: Drag,
+    /// Views edited since the last adopt (dirty marker; M3-5 save).
+    dirty: BTreeSet<String>,
     /// Last auto-layout failure (dialog + status bar).
     layout_error: Option<String>,
     /// Auto-layout dialog visibility.
@@ -163,6 +174,38 @@ struct Viewer {
     /// Dialog parameters — a persisted preference (§P3-D2), mirroring
     /// the reference `auto-layout.jspf` fields.
     layout_params: AutomaticLayout,
+}
+
+/// The in-flight left-button canvas interaction (P3-M3). The mode is
+/// decided at PRESS time and can no longer change: dragging a box
+/// moves the selection, dragging empty canvas lassos, panning moved to
+/// middle-button/Space so the left button is free for editing.
+enum Drag {
+    /// No press, or a press still undecided (a click is still
+    /// possible): nothing mutates the scene.
+    Idle,
+    /// Pan: the plain-drag behavior of M1, unchanged.
+    Pan,
+    /// Move the selected boxes: `origins` are their effective top-lefts
+    /// captured at press; every frame writes `drag_target(origin,
+    /// delta, snap)` into the overlay, so preview frames equal the
+    /// geometry the release commits.
+    Move {
+        /// Press-time selection: id + effective top-left (content order).
+        origins: Vec<(ModelId, (f64, f64))>,
+        /// Press point (screen px) — frame deltas measure from here.
+        press: (f64, f64),
+        /// Latest preview delta (world px); release commits exactly it.
+        delta: (f64, f64),
+    },
+    /// Lasso box-select: `anchor` is the press point (screen px);
+    /// `base` is the selection Shift extends (empty without Shift).
+    Lasso {
+        /// Press point (egui screen points).
+        anchor: Pos2,
+        /// Selection to keep and add to (Shift-drag), empty otherwise.
+        base: Vec<ModelId>,
+    },
 }
 
 impl Viewer {
@@ -173,6 +216,7 @@ impl Viewer {
             open_log: Vec::new(),
             open_error: None,
             path_edit: String::new(),
+            path_focus: false,
             view_key: None,
             scene: None,
             scene_error: None,
@@ -197,7 +241,11 @@ impl Viewer {
             icon_pixels: Vec::new(),
             icon_errors: Vec::new(),
             icons_dirty: false,
-            layout_overrides: None,
+            overlays: HashMap::new(),
+            histories: HashMap::new(),
+            snap: false,
+            drag: Drag::Idle,
+            dirty: BTreeSet::new(),
             layout_error: None,
             show_layout: false,
             layout_params: AutomaticLayout::default(),
@@ -261,7 +309,12 @@ impl Viewer {
         };
         self.tag_inventory = key::tags(&opened.workspace);
         self.tag_sel.clear();
-        self.layout_overrides = None;
+        // Fresh workspace: every session edit dies with the old one
+        // (scope cut §P3-M3 — overlays survive VIEW switches, not OPENs).
+        self.overlays.clear();
+        self.histories.clear();
+        self.dirty.clear();
+        self.drag = Drag::Idle;
         self.layout_error = None;
         self.workspace = Some(opened.workspace);
         self.needs_fit = self.restore_scale.is_none();
@@ -280,12 +333,17 @@ impl Viewer {
                 } else {
                     key::session_mask(workspace, view_key, self.tag_mode, &self.tag_sel)
                 };
+                let overrides = self
+                    .view_key
+                    .as_deref()
+                    .and_then(|key| self.overlays.get(key))
+                    .map(commands::LayoutOverlay::as_overrides);
                 Some(scene::build(
                     workspace,
                     view_key,
                     self.scheme,
                     mask.as_ref(),
-                    self.layout_overrides.as_ref(),
+                    overrides.as_ref(),
                 ))
             }
             _ => None,
@@ -367,6 +425,24 @@ impl eframe::App for Viewer {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.selection = None;
         }
+        // Undo/redo (M3-3): Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk the
+        // CURRENT view's history — skipped while the toolbar path field
+        // owns the keyboard (Ctrl+Z inside the path edit is egui's).
+        if self.scene.is_some() && !self.path_focus {
+            let (undo, redo) = ctx.input(|i| {
+                let command = i.modifiers.command;
+                let z = i.key_pressed(egui::Key::Z);
+                (
+                    command && z && !i.modifiers.shift,
+                    (command && z && i.modifiers.shift) || (command && i.key_pressed(egui::Key::Y)),
+                )
+            });
+            if undo {
+                self.step_history(false);
+            } else if redo {
+                self.step_history(true);
+            }
+        }
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status(ui));
         if self.workspace.is_some() {
@@ -414,6 +490,7 @@ impl Viewer {
                     .hint_text("workspace.dsl / workspace.json")
                     .desired_width(360.0),
             );
+            self.path_focus = edit.has_focus();
             let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let clicked = ui.button("Open").clicked();
             if enter || clicked {
@@ -433,6 +510,8 @@ impl Viewer {
                 if ui.button("Layout").clicked() {
                     self.show_layout = true;
                 }
+                ui.toggle_value(&mut self.snap, "Snap")
+                    .on_hover_text("Grid-snap element drags to 10 px steps");
             });
             ui.separator();
             let dark = self.scheme == ColorScheme::Dark;
@@ -450,8 +529,10 @@ impl Viewer {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label("?").on_hover_text(
-                    "Drag: pan · Wheel: zoom · Click: select · Ctrl/⌘-click: open \
-                     element URL · Esc: deselect · keys work on the canvas",
+                    "Drag box: move · Drag empty: lasso · Middle/Space-drag: pan · \
+                     Wheel: zoom · Click: select · Shift-click: add/toggle · \
+                     Ctrl/⌘-click: open element URL · Ctrl+Z / Ctrl+Y: undo/redo · \
+                     Esc: deselect · keys work on the canvas",
                 );
             });
         });
@@ -469,7 +550,10 @@ impl Viewer {
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 for view in views {
-                    let label = view_label(view);
+                    let mut label = view_label(view);
+                    if self.dirty.contains(view.key()) {
+                        label.push_str(" ●");
+                    }
                     let response = ui.selectable_label(
                         self.view_key.as_deref() == Some(view.key()),
                         egui::RichText::new(label).small(),
@@ -492,7 +576,9 @@ impl Viewer {
             self.selection = None;
             self.needs_fit = true;
             self.restore_scale = None;
-            self.layout_overrides = None;
+            // Session overlays are PER VIEW (§P3-M3) — switching keeps
+            // them; only the transient interaction state resets.
+            self.drag = Drag::Idle;
             self.layout_error = None;
             self.rebuild_scene();
             self.autolayout_once();
@@ -507,25 +593,104 @@ impl Viewer {
         self.last_rect = Some(rect);
         let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
-        if response.dragged() {
-            let delta = response.drag_delta();
-            self.viewport
-                .pan_by((f64::from(delta.x), f64::from(delta.y)));
+        // §P3-M3 input state machine: the drag MODE is decided at press
+        // (pan = middle button or Space, move = left on a box, lasso =
+        // left on background) and every frame of that mode acts on it.
+        let space = ui.input(|i| i.key_down(egui::Key::Space));
+        if response.drag_started_by(egui::PointerButton::Middle)
+            || (space && response.drag_started_by(egui::PointerButton::Primary))
+        {
+            self.drag = Drag::Pan;
+        } else if response.drag_started_by(egui::PointerButton::Primary) {
+            if let Some(origin) = ui.input(|i| i.pointer.press_origin()) {
+                let shift = ui.input(|i| i.modifiers.shift);
+                self.drag = self.press_mode(origin, shift);
+            }
+        }
+        let cursor = response
+            .interact_pointer_pos()
+            .or_else(|| ui.input(|i| i.pointer.hover_pos()));
+        // `release` marks the frame the drag ENDED: the state machine
+        // decides the mode at press, mutates during, commits here.
+        let release = !response.dragged()
+            && !matches!(self.drag, Drag::Idle)
+            && !ui.input(|i| i.pointer.any_down());
+        let mode = std::mem::replace(&mut self.drag, Drag::Idle);
+        match mode {
+            Drag::Idle => {}
+            Drag::Pan => {
+                if response.dragged() {
+                    let delta = response.drag_delta();
+                    self.viewport
+                        .pan_by((f64::from(delta.x), f64::from(delta.y)));
+                }
+                if !release {
+                    self.drag = Drag::Pan;
+                }
+            }
+            Drag::Move {
+                origins,
+                press,
+                delta: last,
+            } => {
+                // World delta of the live pointer from the press point
+                // (`last` carries it through pointer-less frames).
+                let world_delta = cursor.map_or(last, |pos| {
+                    let world = self
+                        .viewport
+                        .screen_to_world((f64::from(pos.x), f64::from(pos.y)));
+                    (world.0 - press.0, world.1 - press.1)
+                });
+                if response.dragged() {
+                    self.preview_move(&origins, world_delta);
+                    self.drag = Drag::Move {
+                        origins,
+                        press,
+                        delta: world_delta,
+                    };
+                } else if release {
+                    // Released: commit the SAME absolute geometry the
+                    // preview wrote (idempotent re-apply through the
+                    // history, so one Ctrl+Z reverts the whole drag).
+                    if let Some(command) = commands::drag_move(&origins, world_delta, self.snap) {
+                        self.edit_current_view(command);
+                    } else {
+                        // Nothing moved (a snap pulled the target back
+                        // onto its origin): restore the press geometry
+                        // the live preview had written into the overlay.
+                        {
+                            let overlay = self.overlay_for();
+                            for (id, origin) in &origins {
+                                overlay.elements.insert(id.clone(), *origin);
+                            }
+                        }
+                        self.rebuild_scene();
+                    }
+                }
+            }
+            Drag::Lasso { anchor, base } => {
+                if response.dragged() {
+                    if let Some(pos) = cursor {
+                        self.lasso_select(anchor, pos, &base);
+                    }
+                    if !release {
+                        self.drag = Drag::Lasso { anchor, base };
+                    }
+                }
+            }
         }
         let scroll = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll.abs() > f32::EPSILON && response.hovered() {
-            if let Some(pointer) = ui.input(|i| i.pointer.hover_pos()) {
+            if let Some(pt) = ui.input(|i| i.pointer.hover_pos()) {
                 let factor = (scroll * 0.005_f32).exp();
-                self.viewport.zoom_at(
-                    f64::from(factor),
-                    (f64::from(pointer.x), f64::from(pointer.y)),
-                );
+                self.viewport
+                    .zoom_at(f64::from(factor), (f64::from(pt.x), f64::from(pt.y)));
             }
         }
         if response.clicked() {
-            if let Some(point) = response.interact_pointer_pos() {
-                let command = ui.input(|i| i.modifiers.command);
-                self.canvas_click(point, command, &ctx);
+            if let Some(pt) = response.interact_pointer_pos() {
+                let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+                self.canvas_click(pt, command, shift, &ctx);
             }
         }
         self.hover = match (response.hovered(), ui.input(|i| i.pointer.hover_pos())) {
@@ -606,6 +771,18 @@ impl Viewer {
                 ui.visuals().weak_text_color(),
             );
         }
+        // §P3-M3: lasso rubber band — accent rect from anchor to pointer.
+        if let Drag::Lasso { anchor, .. } = &self.drag {
+            if let Some(pos) = cursor {
+                let band = egui::Rect::from_two_pos(*anchor, pos);
+                painter.rect_stroke(
+                    band,
+                    0.0,
+                    egui::Stroke::new(1.0, paint::SELECTION_COLOR),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
         // Hover tooltip (fg order, next to the cursor).
         if let (Some(hit), Some(pos), Some(scene)) =
             (self.hover, ui.input(|i| i.pointer.hover_pos()), &self.scene)
@@ -624,9 +801,135 @@ impl Viewer {
         }
     }
 
-    /// Resolve a canvas click: ctrl/⌘ opens the element URL, a plain
-    /// click selects (item over edge already decided by [`hit::pick`]).
-    fn canvas_click(&mut self, point: Pos2, command: bool, ctx: &egui::Context) {
+    /// Decide what a fresh left-button press starts (M3-3): a box
+    /// under the cursor begins a group MOVE (the box joins the
+    /// selection first; Shift keeps the group, a plain press elsewhere
+    /// selects just it), anything else begins a LASSO rubber band.
+    fn press_mode(&mut self, origin: Pos2, shift: bool) -> Drag {
+        let screen = (f64::from(origin.x), f64::from(origin.y));
+        let picked = self
+            .scene
+            .as_ref()
+            .and_then(|scene| hit::pick(scene, self.viewport, screen));
+        let item = match picked {
+            Some(hit::Hit::Item(index)) => self
+                .scene
+                .as_ref()
+                .and_then(|scene| scene.items.get(index))
+                .map(|item| item.id.clone()),
+            _ => None,
+        };
+        let Some(id) = item else {
+            let base = if shift {
+                match &self.selection {
+                    Some(paint::Selection::Items(ids)) => ids.clone(),
+                    _ => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            };
+            return Drag::Lasso {
+                anchor: origin,
+                base,
+            };
+        };
+        let mut ids: Vec<ModelId> = match &self.selection {
+            Some(paint::Selection::Items(ids)) => ids.clone(),
+            _ => Vec::new(),
+        };
+        if !ids.contains(&id) {
+            if shift {
+                ids.push(id);
+            } else {
+                ids = vec![id];
+            }
+            self.selection = Some(paint::Selection::Items(ids.clone()));
+        }
+        let origins = self.press_origins(&ids);
+        if origins.is_empty() {
+            Drag::Idle
+        } else {
+            Drag::Move {
+                origins,
+                press: self.viewport.screen_to_world(screen),
+                delta: (0.0, 0.0),
+            }
+        }
+    }
+
+    /// Press-time effective top-lefts of `ids`, in scene content order
+    /// (the order the preview and the committed command walk alike).
+    fn press_origins(&self, ids: &[ModelId]) -> Vec<(ModelId, (f64, f64))> {
+        let Some(scene) = &self.scene else {
+            return Vec::new();
+        };
+        let overlay = self
+            .view_key
+            .as_deref()
+            .and_then(|key| self.overlays.get(key));
+        scene
+            .items
+            .iter()
+            .filter(|item| ids.contains(&item.id))
+            .map(|item| {
+                let from = overlay
+                    .and_then(|o| o.position(scene, &item.id))
+                    .unwrap_or((item.rect.x, item.rect.y));
+                (item.id.clone(), from)
+            })
+            .collect()
+    }
+
+    /// Live drag preview frame: write exactly the targets the release
+    /// will commit ([`commands::drag_target`] is shared with
+    /// [`commands::drag_move`] for this reason) into the session
+    /// overlay and repaint — preview frames EQUAL the committed
+    /// geometry, so releasing is an idempotent re-apply.
+    fn preview_move(&mut self, origins: &[(ModelId, (f64, f64))], delta: (f64, f64)) {
+        {
+            let snap = self.snap;
+            let overlay = self.overlay_for();
+            for (id, origin) in origins {
+                let to = commands::drag_target(*origin, delta, snap);
+                overlay.elements.insert(id.clone(), to);
+            }
+        }
+        self.rebuild_scene();
+    }
+
+    /// Live lasso frame: `base` plus every box INTERSECTING the
+    /// anchor→current screen rect, mapped to world px and resolved by
+    /// [`hit::items_in_rect`] (touching edges do not select).
+    fn lasso_select(&mut self, anchor: Pos2, current: Pos2, base: &[ModelId]) {
+        let from = self
+            .viewport
+            .screen_to_world((f64::from(anchor.x), f64::from(anchor.y)));
+        let to = self
+            .viewport
+            .screen_to_world((f64::from(current.x), f64::from(current.y)));
+        let rect = scene::Rect {
+            x: from.0.min(to.0),
+            y: from.1.min(to.1),
+            width: (to.0 - from.0).abs(),
+            height: (to.1 - from.1).abs(),
+        };
+        let mut ids: Vec<ModelId> = base.to_vec();
+        if let Some(scene) = &self.scene {
+            for index in hit::items_in_rect(scene, rect) {
+                let id = &scene.items[index].id;
+                if !ids.contains(id) {
+                    ids.push(id.clone());
+                }
+            }
+        }
+        self.selection = (!ids.is_empty()).then_some(paint::Selection::Items(ids));
+    }
+
+    /// Resolve a canvas click: ctrl/⌘ opens the element URL; a plain
+    /// click selects (item over edge already decided by [`hit::pick`]),
+    /// Shift-click TOGGLES membership (M3-3 multi-select) and a click
+    /// on empty canvas clears — Shift keeps the selection.
+    fn canvas_click(&mut self, point: Pos2, command: bool, shift: bool, ctx: &egui::Context) {
         let hit = self.scene.as_ref().and_then(|scene| {
             hit::pick(
                 scene,
@@ -644,18 +947,42 @@ impl Viewer {
                 return;
             }
         }
-        self.selection = hit.and_then(|hit| match hit {
-            hit::Hit::Item(index) => self
-                .scene
-                .as_ref()
-                .and_then(|scene| scene.items.get(index))
-                .map(|item| paint::Selection::Item(item.id.clone())),
-            hit::Hit::Edge(index) => self
-                .scene
-                .as_ref()
-                .and_then(|scene| scene.edges.get(index))
-                .map(|edge| paint::Selection::Edge(edge.id.clone())),
-        });
+        match hit {
+            Some(hit::Hit::Item(index)) => {
+                let Some(id) = self
+                    .scene
+                    .as_ref()
+                    .and_then(|scene| scene.items.get(index))
+                    .map(|item| item.id.clone())
+                else {
+                    return;
+                };
+                let mut ids = if shift {
+                    match &self.selection {
+                        Some(paint::Selection::Items(ids)) => ids.clone(),
+                        _ => Vec::new(),
+                    }
+                } else {
+                    Vec::new()
+                };
+                match ids.iter().position(|existing| *existing == id) {
+                    Some(index) if shift => {
+                        ids.remove(index);
+                    }
+                    _ => ids.push(id),
+                }
+                self.selection = Some(paint::Selection::Items(ids));
+            }
+            Some(hit::Hit::Edge(index)) => {
+                self.selection = self
+                    .scene
+                    .as_ref()
+                    .and_then(|scene| scene.edges.get(index))
+                    .map(|edge| paint::Selection::Edge(edge.id.clone()));
+            }
+            None if !shift => self.selection = None,
+            None => {}
+        }
     }
 
     fn status(&mut self, ui: &mut egui::Ui) {
@@ -676,7 +1003,10 @@ impl Viewer {
             if let Some(selection) = &self.selection {
                 ui.separator();
                 ui.label(match selection {
-                    paint::Selection::Item(id) => format!("selected: {id}"),
+                    paint::Selection::Items(ids) => match ids.len() {
+                        1 => format!("selected: {}", ids[0]),
+                        count => format!("selected: {count} elements"),
+                    },
                     paint::Selection::Edge(id) => format!("selected relationship: {id}"),
                 });
             }
@@ -877,9 +1207,63 @@ impl Viewer {
         }
     }
 
+    /// The editing overlay of the CURRENT view, created on first use
+    /// (P3-M3: one overlay + history per view key, §P3-D0 — the
+    /// workspace model itself is never touched).
+    fn overlay_for(&mut self) -> &mut commands::LayoutOverlay {
+        let view_key = self.view_key.clone().unwrap_or_default();
+        self.overlays
+            .entry(view_key.clone())
+            .or_insert_with(|| commands::LayoutOverlay::for_view(&view_key))
+    }
+
+    /// Run one editing command on the current view: apply through the
+    /// history, mark the view dirty, repaint. EVERY geometry mutation
+    /// in the shell lands here (editor rule, P3-D0).
+    fn edit_current_view(&mut self, command: commands::Command) {
+        let view_key = self.view_key.clone().unwrap_or_default();
+        let overlay = self
+            .overlays
+            .entry(view_key.clone())
+            .or_insert_with(|| commands::LayoutOverlay::for_view(&view_key));
+        let history = self.histories.entry(view_key.clone()).or_default();
+        history.run(overlay, command);
+        self.dirty.insert(view_key);
+        self.rebuild_scene();
+    }
+
+    /// Undo/redo one step of the current view (Ctrl+Z / Ctrl+Y).
+    fn step_history(&mut self, forward: bool) {
+        let moved = match &self.view_key {
+            Some(view_key) => {
+                match (
+                    self.overlays.get_mut(view_key),
+                    self.histories.get_mut(view_key),
+                ) {
+                    (Some(overlay), Some(history)) => {
+                        if forward {
+                            history.redo(overlay)
+                        } else {
+                            history.undo(overlay)
+                        }
+                    }
+                    _ => false,
+                }
+            }
+            None => false,
+        };
+        if moved {
+            if let Some(view_key) = &self.view_key {
+                self.dirty.insert(view_key.clone());
+            }
+            self.rebuild_scene();
+        }
+    }
+
     /// One headless engine run over the current scene: [`layout::apply`]
-    /// plus [`scene::build`] with the result as overrides, then a refit.
-    /// A failing engine keeps the previous geometry and lands in
+    /// plus [`commands::apply_layout`] — the result lands as ONE
+    /// undoable command (positions + routes revert together), then a
+    /// refit. A failing engine keeps the previous geometry and lands in
     /// [`Self::layout_error`] — errors as values (P3 charter).
     fn run_layout(&mut self, params: AutomaticLayout) {
         let applied = self
@@ -888,10 +1272,16 @@ impl Viewer {
             .map(|scene| layout::apply(scene, &params));
         match applied {
             Some(Ok(overrides)) => {
-                self.layout_overrides = Some(overrides);
                 self.layout_error = None;
-                self.rebuild_scene();
-                self.needs_fit = true;
+                let overlay = self.overlay_for().clone();
+                let command = self
+                    .scene
+                    .as_ref()
+                    .and_then(|scene| commands::apply_layout(scene, &overlay, &overrides));
+                if let Some(command) = command {
+                    self.edit_current_view(command);
+                    self.needs_fit = true;
+                }
             }
             Some(Err(error)) => self.layout_error = Some(error.to_string()),
             None => {}
@@ -948,9 +1338,9 @@ impl Viewer {
                         self.run_layout(params);
                     }
                     if ui.button("Reset").clicked() {
-                        self.layout_overrides = None;
+                        let command = commands::clear_view(self.overlay_for());
+                        self.edit_current_view(command);
                         self.layout_error = None;
-                        self.rebuild_scene();
                     }
                 });
                 if let Some(error) = &self.layout_error {

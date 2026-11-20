@@ -62,8 +62,9 @@ pub const FALLBACK_INK: Color32 = Color32::BLACK;
 /// rebuilds across zoom-band/filter changes).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Selection {
-    /// An element box — a [`Scene::items`] entry with this id.
-    Item(Id),
+    /// Element boxes — every id gets an accent outline (single click
+    /// selects one; box-select and Shift-click select many, M3-3).
+    Items(Vec<Id>),
     /// A relationship polyline — a [`Scene::edges`] entry with this id.
     Edge(Id),
 }
@@ -199,8 +200,8 @@ fn paint_item(
     let (outline, body) = element_geometry(item.shape, screen_rect, fill, stroke.color);
     out.extend(body);
     stroke_polygon(out, &outline, stroke, item.border);
-    if let Some(Selection::Item(id)) = options.selection
-        && *id == item.id
+    if let Some(Selection::Items(ids)) = options.selection
+        && ids.contains(&item.id)
     {
         out.push(Shape::rect_stroke(
             screen_rect.expand(4.0),
@@ -963,7 +964,7 @@ mod tests {
 
     #[test]
     fn paints_layers_and_text() {
-        let selection = Selection::Item(Id::new("1"));
+        let selection = Selection::Items(vec![Id::new("1")]);
         let shapes = painted(&scene(), Some(&selection));
         assert!(shapes.len() > 4, "layers: bg + boundary + item + edge");
         let text = texts(&shapes);
