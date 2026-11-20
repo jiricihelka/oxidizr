@@ -120,6 +120,88 @@ pub fn stored_for(workspace: &Workspace, view_key: &str) -> Option<AutomaticLayo
     rendered.content()?.automatic_layout
 }
 
+/// Does the RENDERED view (filtered → base, as [`stored_for`] and
+/// `scene::build` resolve it) carry NO stored coordinates at all? The
+/// loader materializes a missing `location` as the `0`/`0` pair, so
+/// all-zeros means "the file has no layout for this view" — the same
+/// trigger under which the structurizr web application runs automatic
+/// layout ON DISPLAY (§P3-M6, post-v0.3.0: such a view opens laid out by
+/// the bundled engine as a session DISPLAY, never dirty).
+#[must_use]
+pub fn view_needs_layout(workspace: &Workspace, view_key: &str) -> bool {
+    let views = workspace.views.all_views();
+    let Some(view) = views.iter().find(|v| v.key() == view_key).copied() else {
+        return false;
+    };
+    let rendered = match view {
+        View::Filtered(f) => views.iter().find(|b| b.key() == f.base_view_key).copied(),
+        other => Some(other),
+    };
+    let Some(rendered) = rendered else {
+        return false;
+    };
+    let Some(content) = rendered.content() else {
+        return false;
+    };
+    !content.elements.is_empty()
+        && content
+            .elements
+            .iter()
+            .all(|element| element.x == 0 && element.y == 0)
+}
+
+/// Parameters for the display pass: the view's stored `automaticLayout`
+/// (filtered → base), else the reference defaults (LR, 100/50/50,
+/// vertices) — never the dialog's session params: display stays
+/// deterministic and file-driven (§P3-M6).
+#[must_use]
+pub fn display_params(workspace: &Workspace, view_key: &str) -> AutomaticLayout {
+    stored_for(workspace, view_key).unwrap_or_default()
+}
+
+/// The §P3-M6 display auto-layout for an un-laid-out view: `Some(engine
+/// geometry)` when [`view_needs_layout`] holds and the bundled
+/// [`Engine::Layered`] run succeeds, `None` when the view HAS stored
+/// coordinates (it renders verbatim) or the engine run failed. The shell
+/// merges this UNDER the user overlay ([`Overrides::display`]), so one
+/// drag pins that element and leaves the engine's other placements.
+#[must_use]
+pub fn auto_display(workspace: &Workspace, view_key: &str, scene: &Scene) -> Option<Overrides> {
+    if !view_needs_layout(workspace, view_key) {
+        return None;
+    }
+    apply(scene, &display_params(workspace, view_key)).ok()
+}
+
+/// Seed `overlay` with the display geometry it rides on (§P3-M6, the
+/// SAVE-side twin of [`auto_display`]): a view that opened un-laid-out
+/// displays engine geometry, so the user saw it — fill that geometry in
+/// for every id the overlay does not cover so `apply_overlay` writes a
+/// COMPLETE layout: the saved JSON then renders exactly like the screen
+/// did before the save, instead of a single dragged box at real
+/// coordinates and the rest piled at `0,0`. `None` = nothing to seed
+/// (stored layout present, or the engine run failed).
+#[must_use]
+pub fn seed_overlay(
+    workspace: &Workspace,
+    view_key: &str,
+    overlay: &crate::commands::LayoutOverlay,
+) -> Option<crate::commands::LayoutOverlay> {
+    use oxidizr_core::views::ColorScheme;
+
+    let scene = crate::scene::build(workspace, view_key, ColorScheme::Light, None, None).ok()?;
+    let auto = auto_display(workspace, view_key, &scene)?;
+    let mut seeded = crate::commands::LayoutOverlay {
+        view_key: view_key.to_owned(),
+        elements: auto.elements,
+        relationships: auto.relationships,
+        dimensions: overlay.dimensions,
+    };
+    seeded.elements.extend(overlay.elements.clone());
+    seeded.relationships.extend(overlay.relationships.clone());
+    Some(seeded)
+}
+
 /// The layout graph of `scene`: one node per ITEM (id + the
 /// style-resolved box size), one edge per relationship edge between
 /// items (the scene already dropped boundary/unresolvable endpoints).
@@ -407,6 +489,80 @@ mod tests {
         assert_eq!(stored_for(&filtered, "F1"), Some(automatic));
         assert_eq!(stored_for(&ws, "nope"), None);
         assert_eq!(stored_for(&chain(None), "L1"), None);
+    }
+
+    /// The `chain` fixture with every stored coordinate zeroed — the
+    /// shape a DSL WITHOUT `location` statements loads as (§P3-M6).
+    fn stacked() -> Workspace {
+        let mut ws = chain(None);
+        for entry in &mut ws.views.system_landscape_views[0].content.elements {
+            entry.x = 0;
+            entry.y = 0;
+        }
+        ws
+    }
+
+    #[test]
+    fn view_needs_layout_reads_rendered_coordinates() {
+        assert!(!view_needs_layout(&chain(None), "L1"));
+        assert!(view_needs_layout(&stacked(), "L1"));
+        // A filtered view reads the RENDERED base's coordinates.
+        let mut filtered = stacked();
+        filtered
+            .views
+            .filtered_views
+            .push(oxidizr_core::views::FilteredView {
+                base: ViewBase::new("F1", 2),
+                base_view_key: "L1".to_string(),
+                mode: None,
+                tags: Vec::new(),
+            });
+        assert!(view_needs_layout(&filtered, "F1"));
+        assert!(!view_needs_layout(&chain(None), "nope"));
+    }
+
+    #[test]
+    fn auto_display_layers_only_unlaid_out_views() {
+        // Stored placements → render verbatim.
+        let ws = chain(None);
+        assert!(auto_display(&ws, "L1", &scene_of(&ws, None)).is_none());
+        // All-zero stored geometry → the engine's exact placements.
+        let ws = stacked();
+        let auto = auto_display(&ws, "L1", &scene_of(&ws, None)).unwrap();
+        assert_eq!(auto.elements.get(&id(1)), Some(&(0.0, 0.0)));
+        assert_eq!(auto.elements.get(&id(2)), Some(&(450.0, 0.0)));
+        assert_eq!(auto.elements.get(&id(3)), Some(&(900.0, 0.0)));
+    }
+
+    #[test]
+    fn display_overrides_pin_user_edits_on_top_of_the_engine() {
+        let auto = Overrides {
+            elements: [(id(1), (0.0, 0.0)), (id(2), (450.0, 0.0))]
+                .into_iter()
+                .collect(),
+            relationships: HashMap::new(),
+        };
+        let user = Overrides {
+            elements: [(id(2), (7.0, 7.0))].into_iter().collect(),
+            relationships: HashMap::new(),
+        };
+        let merged = Overrides::display(&auto, Some(&user));
+        assert_eq!(merged.elements.get(&id(1)), Some(&(0.0, 0.0)));
+        assert_eq!(merged.elements.get(&id(2)), Some(&(7.0, 7.0)));
+        assert_eq!(Overrides::display(&auto, None), auto);
+    }
+
+    #[test]
+    fn seed_overlay_persists_the_displayed_geometry() {
+        let mut overlay = crate::commands::LayoutOverlay::for_view("L1");
+        overlay.elements.insert(id(1), (7.0, 7.0));
+        let seeded = seed_overlay(&stacked(), "L1", &overlay).unwrap();
+        assert_eq!(seeded.elements.get(&id(1)), Some(&(7.0, 7.0))); // the pin wins
+        assert_eq!(seeded.elements.get(&id(2)), Some(&(450.0, 0.0))); // the rest rides the engine
+        assert_eq!(seeded.elements.get(&id(3)), Some(&(900.0, 0.0)));
+        // A laid-out view has nothing to seed.
+        let ws = chain(None);
+        assert!(seed_overlay(&ws, "L1", &overlay).is_none());
     }
 
     #[test]

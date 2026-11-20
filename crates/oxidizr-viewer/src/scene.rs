@@ -312,6 +312,22 @@ pub struct Overrides {
     pub relationships: HashMap<Id, Vec<(f64, f64)>>,
 }
 
+impl Overrides {
+    /// The shell's display composition (§P3-M6): the engine geometry of
+    /// an un-laid-out view with the user overlay merged on top PER ID —
+    /// a dragged element pins its own box, everything else keeps the
+    /// engine's placement. `user` wins, `auto` fills the gaps.
+    #[must_use]
+    pub fn display(auto: &Overrides, user: Option<&Overrides>) -> Overrides {
+        let mut merged = auto.clone();
+        if let Some(user) = user {
+            merged.elements.extend(user.elements.clone());
+            merged.relationships.extend(user.relationships.clone());
+        }
+        merged
+    }
+}
+
 /// Why a scene could not be built. Bad model ids are never an error here
 /// (they are skipped) — only un-renderable views are.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

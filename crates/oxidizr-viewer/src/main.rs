@@ -385,7 +385,6 @@ impl Viewer {
         self.workspace = Some(opened.workspace);
         self.needs_fit = self.restore_scale.is_none();
         self.rebuild_scene();
-        self.autolayout_once();
     }
 
     /// Re-run `scene::build` for the current workspace/view/scheme,
@@ -404,13 +403,32 @@ impl Viewer {
                     .as_deref()
                     .and_then(|key| self.overlays.get(key))
                     .map(commands::LayoutOverlay::as_overrides);
-                Some(scene::build(
+                let built = scene::build(
                     workspace,
                     view_key,
                     self.scheme,
                     mask.as_ref(),
                     overrides.as_ref(),
-                ))
+                );
+                // §P3-M6 display auto-layout: a view with NO stored
+                // coordinates renders with the bundled engine's geometry
+                // UNDER the user overlay (structurizr-web's on-display
+                // pass) — session display only, never dirty; the dialog
+                // and the seeded save persist it explicitly.
+                let displayed = built
+                    .as_ref()
+                    .ok()
+                    .and_then(|built| layout::auto_display(workspace, view_key, built))
+                    .map(|auto| {
+                        scene::build(
+                            workspace,
+                            view_key,
+                            self.scheme,
+                            mask.as_ref(),
+                            Some(&scene::Overrides::display(&auto, overrides.as_ref())),
+                        )
+                    });
+                displayed.or(Some(built))
             }
             _ => None,
         };
@@ -835,7 +853,6 @@ impl Viewer {
         self.drag = Drag::Idle;
         self.layout_error = None;
         self.rebuild_scene();
-        self.autolayout_once();
     }
 
     #[allow(clippy::too_many_lines)] // the canvas pass: input → fit → paint → tip
@@ -1694,20 +1711,6 @@ impl Viewer {
         self.show_diagnostics = open;
     }
 
-    /// §P3-M2 M2-5: a view that CARRIES an `automaticLayout` request
-    /// gets EXACTLY ONE engine pass at adopt/view-change; further runs
-    /// are the dialog's job. The workspace file is never touched
-    /// (session geometry only — M3 owns saving, P3-D0).
-    fn autolayout_once(&mut self) {
-        let stored = match (&self.workspace, &self.view_key) {
-            (Some(workspace), Some(view_key)) => layout::stored_for(workspace, view_key),
-            _ => None,
-        };
-        if let Some(params) = stored {
-            self.run_layout(params);
-        }
-    }
-
     /// The editing overlay of the CURRENT view, created on first use
     /// (P3-M3: one overlay + history per view key, §P3-D0 — the
     /// workspace model itself is never touched).
@@ -1773,7 +1776,12 @@ impl Viewer {
             let Some(overlay) = self.overlays.get(key) else {
                 continue;
             };
-            applied = commands::apply_overlay(&applied, key, overlay);
+            // §P3-M6: a view that opened un-laid-out DISPLAYS engine
+            // geometry — save persists what the user saw: seed the ids
+            // the overlay does not cover with that geometry, so the
+            // written JSON renders exactly like the screen did.
+            let seeded = layout::seed_overlay(workspace, key, overlay);
+            applied = commands::apply_overlay(&applied, key, seeded.as_ref().unwrap_or(overlay));
         }
         match commands::write_workspace(&target, &applied) {
             Ok(()) => {
