@@ -1,28 +1,50 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 M4 COMPLETE → M5 hardening next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 COMPLETE, tagged v0.3.0 → P4 next**)
 
 ## State
 
-- **P2R COMPLETE** `410fee6`; **P3-M0** `346ca6e`; **P3-M1 COMPLETE**
-  (`969a31b`→`496912c`); **P3-M2 COMPLETE** (`c626048`→`468ec03`,
-  `P3` bench baseline); **P3-M3 COMPLETE** (`4fcb235`→`d39ebdc`);
-  **P3-M4 COMPLETE** (`81b0a3d`→`dc5d840`): M4-0 `81b0a3d`, M4-1
-  `60fbdc4`, M4-2 `4439931`, M4-3 `cba1f4b`, M4-4 `e33c675`, M4-5
-  `ca4221f`, M4-6 `dc5d840`. **Nothing pushed; tags v0.1.0/v0.2.0**
-  (v0.3.0 is the M5 close).
+- **P1 COMPLETE** (tag v0.1.0), **P2 COMPLETE** (tag v0.2.0), **P2R
+  COMPLETE** `410fee6`; **P3 COMPLETE 2026-11-20 — tagged `v0.3.0`
+  (local)**:
+  M0 `346ca6e`; M1 (`969a31b`→`496912c`); M2 (`c626048`→`468ec03`, `P3`
+  bench baseline); M3 (`4fcb235`→`d39ebdc`); M4 (`81b0a3d`→`dc5d840`);
+  M5: M5-0 `5f1dd32`, M5-1 `0842dbd`, M5-2 `2325947`, M5-3 `ff2b8b5`,
+  close + tag. **Nothing pushed; tags v0.1.0/v0.2.0/v0.3.0.**
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
   -p oxidizr-e2e` → 8 ok) + `cargo xtask e2e bless` → 307×unchanged +
   clean `testdata/`; commit every green sub-piece; **never push**.
 
-## M5 (§P3-M5 in PHASE_3.md — authoritative, read it first)
+## Next: Phase 4 (`build/PHASE_4.md` — authoritative, read it first)
 
-- `cargo xtask oracle verify` green — incl. the deferred leg: a
-  viewer-saved sidecar JSON must load through the reference (M3-5
-  posture — save wrote bytes no reference ever parsed).
-- Perf pass: 60 fps @ 200 elements — informational (P3-D0), record
-  what you see.
-- Docs refresh (viewer usage + README/diagnostics if it names the
-  viewer), then **tag v0.3.0** (local, no push).
+- Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
+  command, inspect-parity**, diagram importers moved from P2
+  (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams
+  exporter, release engineering (cargo-dist 3-OS). New crates per
+  P4-D1: `oxidizr-import`/`-lsp`/`-inspect`; the rest are `oxidizr-cli`
+  subcommands. diff exit-code adds `1 = differences found`.
+- **Nothing may alter `oxidizr-json` bytes** (P4 opening clause) —
+  bless 307×unchanged stays the tripwire.
+- P4-M0 = decomposition table into PHASE_4.md (same ritual as P3-M0:
+  docs commit, then per-item rows with DONE stamps at close).
+
+## M5 hardening surface (xtask + probe — read before touching oracle verify)
+
+- `cmd_oracle_verify` legs: json → **sidecar** → diagram → theme;
+  summary `4 json + 4 sidecar + 90 diagram + 6 theme`. Sidecar leg
+  (`verify_sidecar_legs` + `sidecar_edited_leg` + `collect_xy_maps`):
+  open via `oxidizr_api`, save via `commands::write_workspace`;
+  IDENTITY = reference re-export of our sidecar == re-export of the
+  committed golden (both through `normalize_reference_output` —
+  comparing RE-EXPORTS isolates our writer from reference quirks);
+  EDITED = `layout::apply` → `apply_overlay` → save → reference load:
+  `model` Value unchanged, id→x/y map survives verbatim AND differs
+  from stored. xtask deps: oxidizr-api/core/viewer + serde_json
+  (dep-table changes ⇒ stage `Cargo.lock` with the commit).
+- Perf probe `crates/oxidizr-viewer/tests/perf_scene.rs` (ignored):
+  `cargo test --release -p oxidizr-viewer --test perf_scene -- --ignored
+  --nocapture`. Figures in `notes/perf/scene-paint-budgets.md` — 209
+  items + 247 edges ≈ 1.0 ms/frame (~16× headroom); INFORMATIONAL
+  (P3-D0), never a golden.
 
 ## M4-6 dot-backend surface (dot.rs + layout.rs — read before touching)
 
@@ -115,13 +137,16 @@
   `Context::request_repaint()` IS the cross-thread wake; NO
   `strong_noninteractive_color`; `Shape::translate(&mut self, Vec2)`;
   `CornerRadius` = `nw/ne/sw/se: u8`; `Shape::line` = OPEN Path.
-- `similar_names` DENY; `type_complexity` ⇒ alias or fn-`#[allow]` +
-  comment; `redundant_clone` early-return; `redundant_closure`
-  (is_some_and(T::method)); `items_after_statements` — fn-body `use`
-  goes FIRST; `assigning_clones`/`clone_on_copy` — `Dimensions` IS
-  Copy; `doc_lazy_continuation` for doc lines starting `+`; E0282 on
-  bare `Vec::new()` in assert_eq ⇒ bind typed local; `cargo fmt`
-  reflows — match post-fmt text.
+- `similar_names` DENY (`tiles`/`tiled` tripped it); `type_complexity`
+  ⇒ alias or fn-`#[allow]` + comment; `redundant_clone` early-return;
+  `redundant_closure` (is_some_and(T::method));
+  `items_after_statements` — fn-body `use` goes FIRST;
+  `assigning_clones`/`clone_on_copy` — `Dimensions` IS Copy;
+  `doc_lazy_continuation` for doc lines starting `+`; E0282 on bare
+  `Vec::new()` in assert_eq ⇒ bind typed local; `cargo fmt` reflows —
+  match post-fmt text; `manual_div_ceil` ⇒ `.div_ceil()`; usize→f64/
+  u32 casts ⇒ `f64::from(u32::try_from(x).unwrap())`;
+  `too_many_lines` — split a helper (M5-1) before allowing.
 - `format_push_string` ⇒ `let _ = write!`/`writeln!` (a format ending
   in `\n` MUST be `writeln!`); `trivially_copy_pass_by_ref` — `Stroke`
   (8 B) by VALUE; `f32: TryFrom<f64>` is NOT std — own saturating
@@ -146,5 +171,6 @@
   `ComboBox::from_id_salt`; click after a MOVED drag never fires;
   bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"` ==
   307 + clean `git status testdata/`.
-- `cargo test -p oxidizr-viewer` = 89 lib + 3 golden tests;
+- `cargo test -p oxidizr-viewer` = 89 lib + 3 golden (+2 ignored perf);
   `cargo test -p oxidizr-layout --features dot-backend` = 31.
+  Viewer usage lives in `crates/oxidizr-viewer/README.md` (M5-3).

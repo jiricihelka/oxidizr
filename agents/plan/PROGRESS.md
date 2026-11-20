@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | **M4 COMPLETE 2026-11-20** — live reload (parent-dir watch + debounce + hash authority; `reconcile` remap keeps the session layout), sidecar-preferred workflow, minimap + quick-nav, SVG+PNG export with the key, optional `dot-backend`. M3 COMPLETE editing + SAVE; M2 COMPLETE (`Layered` engine + auto-layout dialog, `P3` baseline); M1 COMPLETE read-only viewer; M0 scaffold 2026-11-19. Next: M5 hardening + v0.3.0. Log below (`build/PHASE_3.md`) |
+| P3 | viewer+layout | **COMPLETE 2026-11-20** — M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,41 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M5 — hardening + v0.3.0 ✅ (2026-11-20, COMPLETE)
+
+Hardening milestone (§P3-M5 decomposition): the deferred saved-sidecar
+oracle leg, the informational perf pass, the viewer README — then the
+P3 tag. No V-items; P3-D0 kept the perf numbers out of the golden
+contract.
+
+- **M5-0** `5f1dd32` — docs: §P3-M5 table (oracle legs already green;
+  perf corpora located).
+- **M5-1** `0842dbd` — saved-sidecar A/B legs in `xtask oracle verify`
+  (deferred from M3-5): per top-level JSON golden, IDENTITY — open via
+  `oxidizr_api`, save via `commands::write_workspace` (the Ctrl+S
+  path), the reference's json→json re-export of OUR sidecar == its
+  re-export of the committed golden (byte-equal after normalization —
+  comparing the RE-EXPORTS isolates our writer from reference quirks);
+  EDITED — layered geometry through `apply_overlay` + save, the
+  reference loads it: `model` unchanged, written id→x/y placements
+  survive verbatim (`collect_xy_maps`) and DIFFER from the stored ones.
+  xtask gained oxidizr-api/core/viewer + serde_json deps.
+- **M5-2** `2325947` — perf pass (informational per P3-D0): ignored
+  probe `tests/perf_scene.rs` (release, 5 rounds) — big-bank-plc
+  rebuild 0.03 ms/view, paint 0.9–1.9 ms/frame; petclinic/aws ≤ 0.2 ms;
+  the budget itself grid-tiles the largest view to **209 items +
+  247 edges ≈ 1.0 ms/frame ⇒ ~16× headroom** under 16.7 ms. Figures in
+  `notes/perf/scene-paint-budgets.md` (new perf/ section).
+- **M5-3** `ff2b8b5` — `crates/oxidizr-viewer/README.md`: run/CLI, full
+  UI surface + shortcuts, save/sidecar rule, engines (Layered +
+  `dot-backend`/`$OXIDZR_DOT_BIN`), dev commands; `docs/diagnostics.md`
+  checked — makes no viewer claims.
+
+Verification: quartet every commit; close ritual green — `ci gui`,
+full e2e tier 8/8, bless 307×unchanged + clean `testdata/`,
+`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme sets.
+**Phase 3 complete — tagged `v0.3.0` (local, never pushed).**
 
 ### P3-M4 — live reload + navigation + export ✅ (2026-11-20, COMPLETE)
 
