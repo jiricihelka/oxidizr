@@ -28,6 +28,7 @@ oxidizr-core = { workspace = true }
 oxidizr-api = { workspace = true }
 oxidizr-json = { workspace = true }
 oxidizr-layout = { workspace = true }
+thiserror = { workspace = true }
 # Headless members of the P3 stack (P3-D7): notify powers `reload`,
 # usvg/tiny-skia rasterize SVG icons without any GUI. Pre-declared per the
 # P1-D9 pattern (unused-dep cargo lints are allowed at the workspace).
