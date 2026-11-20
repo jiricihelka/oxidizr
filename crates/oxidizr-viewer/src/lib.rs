@@ -2,8 +2,8 @@
 //!
 //! Architecture promise (P3-D1, `agents/plan/build/PHASE_3.md`): all
 //! non-trivial logic lives in the library modules below — [`scene`],
-//! [`hit`], [`paint`], [`key`], [`commands`], [`reload`] — which import
-//! NOTHING from the eframe shell. The `oxidizr-viewer` binary (feature `gui`) is
+//! [`hit`], [`paint`], [`key`], [`icons`], [`commands`], [`reload`] —
+//! which import NOTHING from the eframe shell. The `oxidizr-viewer` binary (feature `gui`) is
 //! a thin presentation layer, so Category A tests build and exercise the
 //! whole core headlessly: zero GPU, zero windowing (`cargo test
 //! --workspace` never enables `gui`). [`paint`] emits `epaint::Shape`
@@ -25,6 +25,7 @@
 
 pub mod commands;
 pub mod hit;
+pub mod icons;
 pub mod key;
 pub mod paint;
 pub mod reload;
@@ -66,6 +67,6 @@ mod tests {
             }
             checked += 1;
         }
-        assert_eq!(checked, 7, "lib core = lib.rs + six modules");
+        assert_eq!(checked, 8, "lib core = lib.rs + seven modules");
     }
 }

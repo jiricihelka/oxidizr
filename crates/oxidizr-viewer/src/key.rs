@@ -27,7 +27,7 @@ use oxidizr_core::views::{FilterMode, LineStyle, Shape, View};
 
 use crate::scene::{BoundaryKind, Scene};
 
-/// One element legend row: deduplicated by this exact quadruple.
+/// One element legend row: deduplicated by this exact quintuple.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementKey {
     /// Model kind the swatch stands for.
@@ -38,6 +38,9 @@ pub struct ElementKey {
     pub background: String,
     /// Swatch outline `#rrggbb`.
     pub stroke: String,
+    /// Style `icon` the row's elements carry (part of the dedup key
+    /// since M1-5 — distinct icons mean distinct legend rows).
+    pub icon: Option<String>,
 }
 
 /// One edge legend row: deduplicated by color + line style.
@@ -82,6 +85,7 @@ pub fn legend(scene: &Scene) -> Key {
                 shape: item.shape,
                 background: item.background.clone(),
                 stroke: item.stroke.clone(),
+                icon: item.icon.clone(),
             },
         );
     }

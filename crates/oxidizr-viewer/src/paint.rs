@@ -534,11 +534,11 @@ fn element_geometry(
     }
 }
 
-/// The dashed placeholder box standing in for a style `icon` until the
-/// M1-5 atlas lands; returns the text area (the box shrunk by the slot).
-fn icon_placeholder(out: &mut Vec<Shape>, r: ERect, position: IconPosition, ink: Color32) -> ERect {
+/// Icon slot geometry: `(box, text-area shrink vector)` — the shell's
+/// M1-5 icon-texture overlay reuses the exact box the placeholder draws.
+fn icon_box(r: ERect, position: IconPosition) -> (ERect, Vec2) {
     let slot = (r.size().min_elem() * 0.28).clamp(8.0, 64.0);
-    let (box_rect, shrink) = match position {
+    match position {
         IconPosition::Top => (
             erct(r.center().x - slot / 2.0, r.min.y + 4.0, slot, slot),
             Vec2::new(0.0, slot + 4.0),
@@ -551,7 +551,28 @@ fn icon_placeholder(out: &mut Vec<Shape>, r: ERect, position: IconPosition, ink:
             erct(r.min.x + 4.0, r.center().y - slot / 2.0, slot, slot),
             Vec2::new(slot + 4.0, 0.0),
         ),
-    };
+    }
+}
+
+/// The icon slot rect inside a screen rect — where the shell overlays a
+/// rasterized icon texture (M1-5) and where the placeholder below draws.
+#[must_use]
+pub fn icon_slot(r: ERect, position: IconPosition) -> ERect {
+    icon_box(r, position).0
+}
+
+/// World-space item/boundary rect → screen rect through `viewport` —
+/// paint's own mapping, shared with the shell's icon overlay (M1-5).
+#[must_use]
+pub fn to_screen_rect(rect: Rect, viewport: &Viewport) -> ERect {
+    to_rect(rect, viewport)
+}
+
+/// The dashed placeholder box standing in for a style `icon` whose
+/// raster is absent from the atlas (missing, broken or unsupported);
+/// returns the text area (the box shrunk by the slot).
+fn icon_placeholder(out: &mut Vec<Shape>, r: ERect, position: IconPosition, ink: Color32) -> ERect {
+    let (box_rect, shrink) = icon_box(r, position);
     out.push(Shape::rect_stroke(
         box_rect,
         2.0,

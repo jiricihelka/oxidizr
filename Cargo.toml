@@ -60,8 +60,19 @@ proptest = "1"
 eframe = "0.37"
 epaint = "0.37"
 notify = "8"
-usvg = "0.50"
+# Icon rasterization (P3-D7, M1-5). Seam decision recorded 2026-11-20:
+# tiny-skia 0.12 REMOVED the 0.11 usvg `Renderer`, so the sanctioned
+# usvg-tree → tiny-skia path is `resvg` 0.50 (released 2026-11-11, pins
+# exactly usvg 0.50 + tiny-skia 0.12, re-exports both). Zero default
+# features anywhere in the raster stack: no fontdb/harfrust/system-fonts
+# — SVG-with-text renders text-less, the recorded §P3-D7 limitation
+# (V3: bundled themes carry zero such icons). `png` decodes raster icons,
+# `base64` the data URIs D10 stores.
+usvg = { version = "0.50", default-features = false, features = ["svgz"] }
+resvg = { version = "0.50", default-features = false }
 tiny-skia = "0.12"
+png = "0.18"
+base64 = "0.23"
 dark-light = "3"
 
 [workspace.lints.rust]

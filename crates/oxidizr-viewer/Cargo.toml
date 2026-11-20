@@ -36,12 +36,17 @@ thiserror = { workspace = true }
 # the eframe shell. Shapes/text come out as `epaint::Shape` data the
 # shell draws verbatim.
 epaint = { workspace = true }
-# Headless members of the P3 stack (P3-D7): notify powers `reload`,
-# usvg/tiny-skia rasterize SVG icons without any GUI. Pre-declared per the
-# P1-D9 pattern (unused-dep cargo lints are allowed at the workspace).
+# Headless members of the P3 stack (P3-D7): notify powers `reload`, the
+# raster trio (`usvg` parse → `resvg` render → `tiny-skia` pixmap) plus
+# `png`/`base64` rasterize style icons without any GUI (M1-5 `icons`).
+# Pre-declared per the P1-D9 pattern (unused-dep cargo lints are allowed
+# at the workspace).
 notify = { workspace = true }
 usvg = { workspace = true }
+resvg = { workspace = true }
 tiny-skia = { workspace = true }
+png = { workspace = true }
+base64 = { workspace = true }
 dark-light = { workspace = true }
 clap = { workspace = true, optional = true }
 eframe = { workspace = true, optional = true }

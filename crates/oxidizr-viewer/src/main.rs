@@ -1,7 +1,7 @@
 //! The thin presentation shell (P3-D1): the ONLY code in this crate
 //! allowed to reference the GUI stack, compiled only with `--features gui`.
 //! All behavior lives in the library core (`scene`/`hit`/`paint`/`key`/
-//! `commands`/`reload`), which is tested headlessly — this file opens a
+//! `icons`/`commands`/`reload`), which is tested headlessly — this file opens a
 //! workspace through `oxidizr_api::open`, wires `scene::build` +
 //! `hit::pick` + `paint::paint_scene` to pan/zoom/click events, and owns
 //! no logic of its own beyond presentation.
@@ -10,8 +10,11 @@
 //! toolbar), view list, pan/zoom/select, tooltips, element URLs
 //! (ctrl/⌘-click), light/dark (+ OS preference at startup, §P3-D7),
 //! Fit — plus the overlays: key/legend panel (right), session
-//! tag-filter chips (left, V7) and the diagnostics window.
+//! tag-filter chips (left, V7) and the diagnostics window. M1-5 adds the
+//! icon atlas: `icons` rasterizes style icons headlessly, the shell
+//! uploads ONE texture and overlays its cells on the paint placeholders.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
@@ -20,7 +23,7 @@ use oxidizr_api::{ApiOptions, Input, LogItem, Opened, Outcome};
 use oxidizr_core::Workspace;
 use oxidizr_core::views::{ColorScheme, FilterMode, LineStyle, View};
 use oxidizr_diag::Severity;
-use oxidizr_viewer::{hit, key, paint, scene};
+use oxidizr_viewer::{hit, icons, key, paint, scene};
 
 /// Storage keys (§P3-D2: eframe storage only, no config files).
 const KEY_THEME: &str = "oxidizr.viewer/theme";
@@ -84,6 +87,9 @@ fn main() -> eframe::Result {
 /// The viewer app state: a workspace, one selected view, its rendered
 /// scene, the canvas viewport and the theme toggle. No GUI types outside
 /// presentation fields (the lib core owns the rest).
+// Session flags (fit/theme/diagnostics/icons), not state to model as enums
+// — same reading as the P1-D8 CLI flags precedent (oxidizr-cli lib.rs).
+#[allow(clippy::struct_excessive_bools)]
 struct Viewer {
     /// Loaded workspace (after a successful open).
     workspace: Option<Workspace>,
@@ -132,6 +138,18 @@ struct Viewer {
     legend: key::Key,
     /// Diagnostics window visibility (session).
     show_diagnostics: bool,
+    /// Workspace file's directory — resolves file-path icon strings.
+    base_dir: Option<PathBuf>,
+    /// The single icon-atlas texture (uploaded when pixels change, M1-5).
+    icon_texture: Option<egui::TextureHandle>,
+    /// Atlas uv rect per icon string (rebuilt with every atlas).
+    icon_uv: BTreeMap<String, egui::Rect>,
+    /// Atlas pixels last uploaded (skips redundant GPU uploads).
+    icon_pixels: Vec<u8>,
+    /// `snip(icon)` → reason, one row per failing icon (M1-5, warnings).
+    icon_errors: Vec<(String, String)>,
+    /// Icons are stale wrt the scene (set on open/rebuild).
+    icons_dirty: bool,
 }
 
 impl Viewer {
@@ -160,6 +178,12 @@ impl Viewer {
             tag_sel: Vec::new(),
             legend: key::Key::default(),
             show_diagnostics: false,
+            base_dir: None,
+            icon_texture: None,
+            icon_uv: BTreeMap::new(),
+            icon_pixels: Vec::new(),
+            icon_errors: Vec::new(),
+            icons_dirty: false,
         }
     }
 
@@ -208,6 +232,11 @@ impl Viewer {
             .take()
             .filter(|key| views.iter().any(|view| view.key() == key))
             .or_else(|| views.first().map(|view| view.key().to_owned()));
+        self.base_dir = if self.display == "-" {
+            None
+        } else {
+            PathBuf::from(&self.display).parent().map(PathBuf::from)
+        };
         self.tag_inventory = key::tags(&opened.workspace);
         self.tag_sel.clear();
         self.workspace = Some(opened.workspace);
@@ -238,6 +267,7 @@ impl Viewer {
         match built {
             Some(Ok(scene)) => {
                 self.legend = key::legend(&scene);
+                self.icons_dirty = true;
                 self.scene = Some(scene);
                 self.scene_error = None;
             }
@@ -323,6 +353,7 @@ impl eframe::App for Viewer {
                 .default_size(220.0)
                 .show(ui, |ui| self.key_panel(ui));
         }
+        self.sync_icons(&ctx);
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.diagnostics_window(&ctx);
     }
@@ -509,6 +540,20 @@ impl Viewer {
             for shape in shapes {
                 painter.add(shape);
             }
+            // M1-5: rasterized style icons over the placeholders the
+            // paint step drew (an opaque cell covers its box; failed
+            // icons keep the dashed stand-in and surface in diagnostics).
+            if let Some(texture) = &self.icon_texture {
+                for item in &scene.items {
+                    if let Some(uv) = item.icon.as_ref().and_then(|icon| self.icon_uv.get(icon)) {
+                        let rect = paint::icon_slot(
+                            paint::to_screen_rect(item.rect, &self.viewport),
+                            item.icon_position,
+                        );
+                        painter.image(texture.id(), rect, *uv, egui::Color32::WHITE);
+                    }
+                }
+            }
         } else if let Some(error) = &self.scene_error {
             painter.text(
                 rect.center(),
@@ -602,9 +647,9 @@ impl Viewer {
                 });
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if !self.open_log.is_empty() {
-                    let count = self.open_log.len();
-                    let label = egui::RichText::new(format!("⚠ {count} diagnostics"))
+                let issues = self.open_log.len() + self.icon_errors.len();
+                if issues > 0 {
+                    let label = egui::RichText::new(format!("⚠ {issues} diagnostics"))
                         .color(egui::Color32::from_rgb(160, 130, 0));
                     if ui.button(label).clicked() {
                         self.show_diagnostics = !self.show_diagnostics;
@@ -713,6 +758,12 @@ impl Viewer {
                 for entry in &legend.elements {
                     ui.horizontal(|ui| {
                         element_swatch(ui, entry);
+                        icon_cell(
+                            ui,
+                            entry.icon.as_deref(),
+                            &self.icon_uv,
+                            self.icon_texture.as_ref(),
+                        );
                         ui.label(format!("{:?} · {:?}", entry.kind, entry.shape))
                             .on_hover_text(entry.background.clone());
                     });
@@ -755,16 +806,84 @@ impl Viewer {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false; 2])
                     .show(ui, |ui| {
-                        if self.open_log.is_empty() {
+                        if self.open_log.is_empty() && self.icon_errors.is_empty() {
                             ui.weak("No diagnostics — the workspace opened cleanly.");
                         }
                         for item in &self.open_log {
                             let (color, text) = log_row(item);
                             ui.colored_label(color, text);
                         }
+                        for (icon, message) in &self.icon_errors {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(160, 130, 0),
+                                format!("icon {}: {message}", snip(icon)),
+                            );
+                        }
                     });
             });
         self.show_diagnostics = open;
+    }
+
+    /// Rebuild the icon atlas when the scene changed (M1-5): rasterize
+    /// headlessly with [`icons::build_atlas`], re-upload the single
+    /// texture only when its pixels actually changed, and remap the
+    /// per-icon uv rects (inset half a pixel against LINEAR bleed).
+    /// Failures land in [`Self::icon_errors`] — the canvas keeps the
+    /// dashed placeholder for exactly those icons.
+    #[allow(clippy::cast_precision_loss)]
+    // Atlas caps are 1024×2048 px — every u32 here is exactly f32.
+    fn sync_icons(&mut self, ctx: &egui::Context) {
+        if !self.icons_dirty {
+            return;
+        }
+        self.icons_dirty = false;
+        self.icon_uv.clear();
+        self.icon_errors.clear();
+        let scheme = icons::scheme_code(self.scheme);
+        let keys: BTreeSet<icons::IconKey> = self
+            .scene
+            .iter()
+            .flat_map(|scene| scene.items.iter())
+            .filter_map(|item| item.icon.clone())
+            .map(|icon| icons::IconKey {
+                icon,
+                size: icons::ICON_RASTER_PX,
+                scheme,
+            })
+            .collect();
+        if keys.is_empty() {
+            return;
+        }
+        let atlas = icons::build_atlas(keys, self.base_dir.as_deref());
+        atlas.errors.clone_into(&mut self.icon_errors);
+        if atlas.width > 0 && (self.icon_texture.is_none() || self.icon_pixels != atlas.pixels) {
+            let image = egui::ColorImage::from_rgba_unmultiplied(
+                [
+                    usize::try_from(atlas.width).unwrap_or(0),
+                    usize::try_from(atlas.height).unwrap_or(0),
+                ],
+                &atlas.pixels,
+            );
+            self.icon_texture =
+                Some(ctx.load_texture("oxidizr-icons", image, egui::TextureOptions::LINEAR));
+            self.icon_pixels.clone_from(&atlas.pixels);
+        }
+        let (w, h) = (atlas.width as f32, atlas.height as f32);
+        for (key, entry) in &atlas.entries {
+            if entry.width == 0 || entry.height == 0 || w == 0.0 || h == 0.0 {
+                continue;
+            }
+            self.icon_uv.insert(
+                key.icon.clone(),
+                egui::Rect::from_min_max(
+                    egui::pos2((entry.x as f32 + 0.5) / w, (entry.y as f32 + 0.5) / h),
+                    egui::pos2(
+                        ((entry.x + entry.width) as f32 - 0.5) / w,
+                        ((entry.y + entry.height) as f32 - 0.5) / h,
+                    ),
+                ),
+            );
+        }
     }
 }
 
@@ -823,6 +942,45 @@ fn tooltip_text(scene: &scene::Scene, hit: hit::Hit) -> String {
         }
     }
     lines.join("\n")
+}
+
+/// Key-row icon chip (M1-5): the atlas cell when rasterized, a hollow
+/// hint box for missing/broken icons (the canvas placeholder is the
+/// canvas-side half of the same rule).
+fn icon_cell(
+    ui: &mut egui::Ui,
+    icon: Option<&str>,
+    uv_map: &BTreeMap<String, egui::Rect>,
+    texture: Option<&egui::TextureHandle>,
+) {
+    let Some(icon) = icon else {
+        return;
+    };
+    let (rect, _response) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+    match (uv_map.get(icon), texture) {
+        (Some(uv), Some(texture)) => {
+            ui.painter()
+                .image(texture.id(), rect, *uv, egui::Color32::WHITE);
+        }
+        _ => {
+            ui.painter().rect_stroke(
+                rect,
+                2.0,
+                egui::Stroke::new(1.0, egui::Color32::GRAY),
+                egui::StrokeKind::Inside,
+            );
+        }
+    }
+}
+
+/// Shorten a data-URI-ish string for the diagnostics list.
+fn snip(text: &str) -> String {
+    const LIMIT: usize = 48;
+    if text.chars().count() <= LIMIT {
+        return text.to_owned();
+    }
+    let head: String = text.chars().take(LIMIT).collect();
+    format!("{head}…")
 }
 
 /// Small fixed-size swatch cell painted by `draw` (key panel rows).
