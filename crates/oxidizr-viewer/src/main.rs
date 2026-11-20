@@ -1,16 +1,16 @@
 //! The thin presentation shell (P3-D1): the ONLY code in this crate
 //! allowed to reference the GUI stack, compiled only with `--features gui`.
-//! All behavior lives in the library core (`scene`/`hit`/`paint`/
+//! All behavior lives in the library core (`scene`/`hit`/`paint`/`key`/
 //! `commands`/`reload`), which is tested headlessly — this file opens a
 //! workspace through `oxidizr_api::open`, wires `scene::build` +
 //! `hit::pick` + `paint::paint_scene` to pan/zoom/click events, and owns
 //! no logic of its own beyond presentation.
 //!
-//! M1-4a scope (the a/b split of the §P3-M1 M1-4 row): open (argv +
+//! M1-4 scope (a/b split of the §P3-M1 row): canvas — open (argv +
 //! toolbar), view list, pan/zoom/select, tooltips, element URLs
-//! (ctrl/⌘-click), light/dark (+ OS preference at startup, §P3-D7) and
-//! Fit. The key/legend panel, tag-filter chips and the diagnostics
-//! panel land with M1-4b.
+//! (ctrl/⌘-click), light/dark (+ OS preference at startup, §P3-D7),
+//! Fit — plus the overlays: key/legend panel (right), session
+//! tag-filter chips (left, V7) and the diagnostics window.
 
 use std::path::PathBuf;
 
@@ -18,8 +18,9 @@ use clap::{Parser, ValueEnum};
 use eframe::egui::{self, Id, Pos2, Vec2};
 use oxidizr_api::{ApiOptions, Input, LogItem, Opened, Outcome};
 use oxidizr_core::Workspace;
-use oxidizr_core::views::{ColorScheme, View};
-use oxidizr_viewer::{hit, paint, scene};
+use oxidizr_core::views::{ColorScheme, FilterMode, LineStyle, View};
+use oxidizr_diag::Severity;
+use oxidizr_viewer::{hit, key, paint, scene};
 
 /// Storage keys (§P3-D2: eframe storage only, no config files).
 const KEY_THEME: &str = "oxidizr.viewer/theme";
@@ -121,6 +122,16 @@ struct Viewer {
     shown_title: String,
     /// Visuals pushed to egui once (the creator closure has no Context).
     visuals_ready: bool,
+    /// Stored-tag inventory for the filter chips (recomputed on open).
+    tag_inventory: Vec<key::TagCount>,
+    /// Chip semantics: hide (Exclude) or show only (Include) tagged.
+    tag_mode: FilterMode,
+    /// Selected filter tags — SESSION state (P3-V7), never persisted.
+    tag_sel: Vec<String>,
+    /// Legend of the current scene (folded by [`key::legend`]).
+    legend: key::Key,
+    /// Diagnostics window visibility (session).
+    show_diagnostics: bool,
 }
 
 impl Viewer {
@@ -144,6 +155,11 @@ impl Viewer {
             last_rect: None,
             shown_title: String::new(),
             visuals_ready: false,
+            tag_inventory: Vec::new(),
+            tag_mode: FilterMode::Exclude,
+            tag_sel: Vec::new(),
+            legend: key::Key::default(),
+            show_diagnostics: false,
         }
     }
 
@@ -192,27 +208,46 @@ impl Viewer {
             .take()
             .filter(|key| views.iter().any(|view| view.key() == key))
             .or_else(|| views.first().map(|view| view.key().to_owned()));
+        self.tag_inventory = key::tags(&opened.workspace);
+        self.tag_sel.clear();
         self.workspace = Some(opened.workspace);
         self.needs_fit = self.restore_scale.is_none();
         self.rebuild_scene();
     }
 
-    /// Re-run `scene::build` for the current workspace/view/scheme.
+    /// Re-run `scene::build` for the current workspace/view/scheme,
+    /// intersected with the session tag mask (empty selection = no
+    /// mask), and refresh the legend.
     fn rebuild_scene(&mut self) {
         let built = match (&self.workspace, &self.view_key) {
-            (Some(workspace), Some(key)) => Some(scene::build(workspace, key, self.scheme, None)),
+            (Some(workspace), Some(view_key)) => {
+                let mask = if self.tag_sel.is_empty() {
+                    None
+                } else {
+                    key::session_mask(workspace, view_key, self.tag_mode, &self.tag_sel)
+                };
+                Some(scene::build(
+                    workspace,
+                    view_key,
+                    self.scheme,
+                    mask.as_ref(),
+                ))
+            }
             _ => None,
         };
         match built {
             Some(Ok(scene)) => {
+                self.legend = key::legend(&scene);
                 self.scene = Some(scene);
                 self.scene_error = None;
             }
             Some(Err(error)) => {
+                self.legend = key::Key::default();
                 self.scene = None;
                 self.scene_error = Some(error.to_string());
             }
             None => {
+                self.legend = key::Key::default();
                 self.scene = None;
                 self.scene_error = None;
             }
@@ -283,7 +318,13 @@ impl eframe::App for Viewer {
                 .default_size(240.0)
                 .show(ui, |ui| self.view_list(ui));
         }
+        if self.scene.is_some() {
+            egui::Panel::right("key")
+                .default_size(220.0)
+                .show(ui, |ui| self.key_panel(ui));
+        }
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
+        self.diagnostics_window(&ctx);
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -391,6 +432,7 @@ impl Viewer {
             self.restore_scale = None;
             self.rebuild_scene();
         }
+        self.tag_filter(ui);
     }
 
     #[allow(clippy::too_many_lines)] // the canvas pass: input → fit → paint → tip
@@ -537,7 +579,7 @@ impl Viewer {
         });
     }
 
-    fn status(&self, ui: &mut egui::Ui) {
+    fn status(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if self.display.is_empty() {
                 ui.weak("No workspace — enter a path and press Open");
@@ -562,20 +604,11 @@ impl Viewer {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if !self.open_log.is_empty() {
                     let count = self.open_log.len();
-                    ui.colored_label(
-                        egui::Color32::from_rgb(160, 130, 0),
-                        format!("⚠ {count} diagnostics"),
-                    )
-                    .on_hover_ui(|ui| {
-                        ui.set_max_width(520.0);
-                        egui::ScrollArea::vertical()
-                            .max_height(300.0)
-                            .show(ui, |ui| {
-                                for item in &self.open_log {
-                                    ui.label(log_line(item));
-                                }
-                            });
-                    });
+                    let label = egui::RichText::new(format!("⚠ {count} diagnostics"))
+                        .color(egui::Color32::from_rgb(160, 130, 0));
+                    if ui.button(label).clicked() {
+                        self.show_diagnostics = !self.show_diagnostics;
+                    }
                 }
                 if let Some(error) = self.open_error.as_ref().or(self.scene_error.as_ref()) {
                     ui.colored_label(egui::Color32::DARK_RED, truncate(error, 90))
@@ -583,6 +616,155 @@ impl Viewer {
                 }
             });
         });
+    }
+
+    /// Session tag-filter chips (M1-4b, P3-V7): the chip set + mode are
+    /// SESSION state — the mask flows into `scene::build` via
+    /// [`key::session_mask`] and nothing is ever written back.
+    fn tag_filter(&mut self, ui: &mut egui::Ui) {
+        if self.tag_inventory.is_empty() {
+            return;
+        }
+        let mut toggle: Option<String> = None;
+        let mut mode: Option<FilterMode> = None;
+        let mut clear = false;
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.strong("Tag filter");
+            if ui
+                .selectable_label(
+                    self.tag_mode == FilterMode::Exclude,
+                    egui::RichText::new("exclude").small(),
+                )
+                .on_hover_text("Hide tagged items (absent mode in the reference)")
+                .clicked()
+            {
+                mode = Some(FilterMode::Exclude);
+            }
+            if ui
+                .selectable_label(
+                    self.tag_mode == FilterMode::Include,
+                    egui::RichText::new("include").small(),
+                )
+                .on_hover_text("Show only items/relationships carrying a selected tag")
+                .clicked()
+            {
+                mode = Some(FilterMode::Include);
+            }
+            clear = !self.tag_sel.is_empty() && ui.small_button("clear").clicked();
+        });
+        egui::ScrollArea::horizontal()
+            .max_height(72.0)
+            .show(ui, |ui| {
+                for row in &self.tag_inventory {
+                    let on = self.tag_sel.contains(&row.tag);
+                    let text = format!("{} · {}", row.tag, row.elements + row.relationships);
+                    if ui
+                        .selectable_label(on, egui::RichText::new(text).small())
+                        .on_hover_text(format!(
+                            "{} elements · {} relationships store this tag",
+                            row.elements, row.relationships
+                        ))
+                        .clicked()
+                    {
+                        toggle = Some(row.tag.clone());
+                    }
+                }
+            });
+        let mut dirty = false;
+        if let Some(new_mode) = mode {
+            if self.tag_mode != new_mode {
+                self.tag_mode = new_mode;
+                dirty = true;
+            }
+        }
+        if let Some(tag) = toggle {
+            match self.tag_sel.iter().position(|t| *t == tag) {
+                Some(at) => {
+                    self.tag_sel.remove(at);
+                }
+                None => self.tag_sel.push(tag),
+            }
+            dirty = true;
+        }
+        if clear {
+            self.tag_sel.clear();
+            dirty = true;
+        }
+        if dirty {
+            self.rebuild_scene();
+        }
+    }
+
+    /// Key/legend panel (M1-4b): the scene's distinct appearances,
+    /// folded headlessly by [`key::legend`] (swatches + labels).
+    fn key_panel(&self, ui: &mut egui::Ui) {
+        ui.heading(egui::RichText::new("Key").size(14.0).weak());
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                let legend = &self.legend;
+                if legend.elements.is_empty()
+                    && legend.edges.is_empty()
+                    && legend.boundaries.is_empty()
+                {
+                    ui.weak("Nothing rendered.");
+                }
+                for entry in &legend.elements {
+                    ui.horizontal(|ui| {
+                        element_swatch(ui, entry);
+                        ui.label(format!("{:?} · {:?}", entry.kind, entry.shape))
+                            .on_hover_text(entry.background.clone());
+                    });
+                }
+                if !legend.edges.is_empty() {
+                    ui.separator();
+                    for entry in &legend.edges {
+                        ui.horizontal(|ui| {
+                            edge_swatch(ui, entry);
+                            ui.label(format!("{:?}", entry.line_style))
+                                .on_hover_text(entry.color.clone());
+                        });
+                    }
+                }
+                if !legend.boundaries.is_empty() {
+                    ui.separator();
+                    for entry in &legend.boundaries {
+                        ui.label(format!(
+                            "boundary: {} ({:?})",
+                            key::boundary_label(entry.kind),
+                            entry.border
+                        ));
+                    }
+                }
+            });
+    }
+
+    /// Full diagnostics list in a dismissible window (M1-4b); the
+    /// status-bar count toggles it (hover preview was M1-4a).
+    fn diagnostics_window(&mut self, ctx: &egui::Context) {
+        if !self.show_diagnostics {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Diagnostics")
+            .open(&mut open)
+            .default_pos([120.0, 96.0])
+            .default_size([580.0, 260.0])
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| {
+                        if self.open_log.is_empty() {
+                            ui.weak("No diagnostics — the workspace opened cleanly.");
+                        }
+                        for item in &self.open_log {
+                            let (color, text) = log_row(item);
+                            ui.colored_label(color, text);
+                        }
+                    });
+            });
+        self.show_diagnostics = open;
     }
 }
 
@@ -643,12 +825,74 @@ fn tooltip_text(scene: &scene::Scene, hit: hit::Hit) -> String {
     lines.join("\n")
 }
 
-/// One human line for a diagnostic entry (full panel comes with M1-4b).
-fn log_line(item: &LogItem) -> String {
+/// Small fixed-size swatch cell painted by `draw` (key panel rows).
+fn swatch_cell(ui: &mut egui::Ui, draw: impl FnOnce(egui::Rect, &egui::Painter)) {
+    let (rect, _response) = ui.allocate_exact_size(egui::vec2(26.0, 16.0), egui::Sense::hover());
+    draw(rect, ui.painter());
+}
+
+/// Element legend swatch: filled box in the entry's resolved colors.
+fn element_swatch(ui: &mut egui::Ui, entry: &key::ElementKey) {
+    let fill = paint::parse_color(&entry.background).unwrap_or(paint::FALLBACK_FILL);
+    let ink = paint::parse_color(&entry.stroke).unwrap_or(paint::FALLBACK_INK);
+    swatch_cell(ui, |rect, painter| {
+        let r = rect.shrink(1.5);
+        painter.rect_filled(r, 3.0, fill);
+        painter.rect_stroke(
+            r,
+            3.0,
+            egui::Stroke::new(1.0, ink),
+            egui::StrokeKind::Inside,
+        );
+    });
+}
+
+/// Edge legend swatch: a short line in the entry's color + line style.
+fn edge_swatch(ui: &mut egui::Ui, entry: &key::EdgeKey) {
+    let color = paint::parse_color(&entry.color).unwrap_or(paint::FALLBACK_INK);
+    let stroke = egui::Stroke::new(2.0, color);
+    swatch_cell(ui, |rect, painter| {
+        let y = rect.center().y;
+        let (l, r) = (rect.min.x + 1.0, rect.max.x - 1.0);
+        let third = (r - l) / 3.0;
+        match entry.line_style {
+            LineStyle::Solid => {
+                painter.line_segment([egui::pos2(l, y), egui::pos2(r, y)], stroke);
+            }
+            LineStyle::Dashed => {
+                let mid = l + third * 1.5;
+                painter.line_segment([egui::pos2(l, y), egui::pos2(mid, y)], stroke);
+                painter.line_segment([egui::pos2(mid + 2.0, y), egui::pos2(r, y)], stroke);
+            }
+            LineStyle::Dotted => {
+                let mut x = l;
+                for _ in 0..5 {
+                    painter.line_segment([egui::pos2(x, y), egui::pos2(x + 1.0, y)], stroke);
+                    x += third * 0.6;
+                }
+            }
+        }
+    });
+}
+
+/// Panel row for a diagnostic entry: severity color + one-line text.
+fn log_row(item: &LogItem) -> (egui::Color32, String) {
     match item {
-        LogItem::Issue(issue) => format!("{:?}: {}", issue.severity, issue.message),
-        LogItem::OkLine(line) | LogItem::NoteLine(line) => line.clone(),
+        LogItem::Issue(issue) => {
+            let color = match issue.severity {
+                Severity::Error => egui::Color32::from_rgb(185, 60, 60),
+                Severity::Warning => egui::Color32::from_rgb(160, 130, 0),
+                Severity::Info => egui::Color32::GRAY,
+            };
+            (color, format!("{:?}: {}", issue.severity, issue.message))
+        }
+        LogItem::OkLine(line) | LogItem::NoteLine(line) => (egui::Color32::GRAY, line.clone()),
     }
+}
+
+/// One human line for a diagnostic entry (status-bar summaries).
+fn log_line(item: &LogItem) -> String {
+    log_row(item).1
 }
 
 /// First three log lines inline, the rest counted (status bar text).

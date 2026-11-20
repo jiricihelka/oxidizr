@@ -27,6 +27,7 @@ required-features = ["gui"]
 [dependencies]
 oxidizr-core = { workspace = true }
 oxidizr-api = { workspace = true }
+oxidizr-diag = { workspace = true }
 oxidizr-json = { workspace = true }
 oxidizr-layout = { workspace = true }
 thiserror = { workspace = true }

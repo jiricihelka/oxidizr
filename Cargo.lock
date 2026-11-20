@@ -3080,6 +3080,7 @@ dependencies = [
  "notify",
  "oxidizr-api",
  "oxidizr-core",
+ "oxidizr-diag",
  "oxidizr-json",
  "oxidizr-layout",
  "thiserror 2.0.21",
