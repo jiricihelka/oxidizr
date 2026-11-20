@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6 complete, tagged v0.3.0 → P4 next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6/M7/M8 complete, tagged v0.3.0 → P4 next**)
 
 ## State
 
@@ -9,9 +9,11 @@
   bench baseline); M3 (`4fcb235`→`d39ebdc`); M4 (`81b0a3d`→`dc5d840`);
   M5: M5-0 `5f1dd32`, M5-1 `0842dbd`, M5-2 `2325947`, M5-3 `ff2b8b5`,
   close + tag. **Post-tag M6** (display auto-layout, §P3-M6): code
-  `a1e7dfc`, docs follow. **Post-tag M7** (§P3-M7): sidebar view list
-  grouped per view kind. **Nothing pushed; tags
-  v0.1.0/v0.2.0/v0.3.0.**
+  `a1e7dfc`, docs `0083fe6`. **Post-tag M7** (§P3-M7): sidebar view list
+  grouped per view kind, `e60dcba`. **Post-tag M8** (§P3-M8, F10):
+  `oxidizr view` in-binary GUI subcommand — shell→lib `shell.rs`
+  `55a0219`, cli entry `6bd7073`, gates/docs (this commit). **Nothing
+  pushed; tags v0.1.0/v0.2.0/v0.3.0.**
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
   -p oxidizr-e2e` → 8 ok) + `cargo xtask e2e bless` → 307×unchanged +
@@ -158,7 +160,9 @@
   needs a rationale comment; unused `mut` when a cfg block vanishes —
   restructure instead of `#[allow]`.
 - R-2 guard: lib core NEVER references eframe/egui (literals in DOC
-  COMMENTS fail); count assert = lib.rs + N modules — NOW 11 files.
+  COMMENTS fail); the skip-set is the two `gui`-gated shell files
+  {`main.rs`, `shell.rs`} (§P3-M8); count assert = lib.rs + N modules —
+  NOW 11 files (the shell module is NOT a core module).
 
 ## M6 display auto-layout (layout.rs + shell — read before touching)
 
@@ -181,6 +185,25 @@
   (rank+header per `View` variant, C4 granularity first) +
   `overview::grouped` (stable `(rank, order, key)` sort → header runs);
   the shell renders separator + uppercase headings, rows via `view_row`.
+
+## M8 `oxidizr view` (F10 — shell now a lib module; read before touching)
+
+- The eframe shell MOVED `main.rs` → `src/shell.rs`, `#[cfg(feature =
+  "gui")] pub mod shell` (lib). Public surface: `shell::run(Option<&Path>,
+  ThemeArg) -> eframe::Result` + `pub enum ThemeArg`. `main.rs` is a thin
+  argv shim (clap `Args` → `shell::run`); the CLI's `oxidizr view`
+  (`oxidizr-cli` feature `gui`) calls the SAME `shell::run` in-process —
+  entries cannot drift. R-2 guard skip-set is now the two shell files.
+- CLI: `oxidizr-cli` gained `gui = ["dep:oxidizr-viewer",
+  "oxidizr-viewer/gui"]` + `Command::View { file, --theme }`. `run()`
+  branches on `View` BEFORE the pipeline (`to_request` → `Option`, None
+  ONLY for view) — the GUI is NOT an `oxidizr-api::Request`. Without the
+  cli `gui` feature, `view` is stable `--help` surface but exits 1 with
+  the rebuild hint (`anyhow::bail!`, cfg-gated). `ViewTheme` mirrors
+  `ThemeArg`.
+- Gates: `cargo xtask ci gui` now clippies `-p oxidizr-viewer -p
+  oxidizr-cli --features oxidizr-viewer/gui,oxidizr-cli/gui` (both);
+  `.github/workflows/ci.yml` mirrors the gui clippy + the 3-OS check.
 
 ## Viewer orientation (M1/M2 shipped)
 

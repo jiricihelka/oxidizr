@@ -37,6 +37,8 @@ cargo bench --workspace                    # criterion benches (no arg forwardin
                                            # the e2e corpus benches (feature-gated, local-only)
 cargo xtask ci                             # the commit gates locally: fmt + clippy + test + refs
 cargo xtask ci windows                     # + the Wine windows-gnu leg (nix dev shell)
+cargo xtask ci gui                         # + GUI clippy legs: viewer shell + the in-process
+                                           # `oxidizr view` entry (§P3-M8, both packages)
 cargo xtask refs                           # doc path & §section reference integrity only
 cargo xtask ci lint                        # actionlint on .github/ (CI's lint job is authoritative)
 cargo xtask bench                          # bench job mirror + e2e corpus benches

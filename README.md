@@ -48,6 +48,11 @@ oxidizr reconcile --dsl edited.dsl --layout layout.json -o reconciled.json
 oxidizr export -w workspace.dsl -f theme -o out/
 oxidizr export -w workspace.dsl -f plantuml/c4plantuml -o out/
 oxidizr export -w workspace.dsl -f mermaid -o out/
+
+# Open the native viewer window (F10): compiled into the unified binary by
+# `cargo build --features gui`; the standalone `oxidizr-viewer` binary is
+# the same window without the feature flag (crates/oxidizr-viewer/README.md)
+oxidizr view workspace.dsl
 ```
 
 Global flags: `--strict` (warnings exit 1), `--quiet`, `--no-color` (also via

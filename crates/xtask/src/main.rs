@@ -243,8 +243,10 @@ enum Step {
     Test,
     Refs,
     Lint,
-    /// viewer GUI shell (eframe) clippy — the default quartet omits it (keeps
-    /// `cargo test --workspace` headless, P3-D1); CI runs it as an extra leg.
+    /// GUI clippy (eframe shell + the in-process `oxidizr view` entry,
+    /// §P3-M8): `oxidizr-viewer` AND `oxidizr-cli` with `gui`. The default
+    /// quartet omits it (keeps `cargo test --workspace` headless, P3-D1);
+    /// CI runs it as an extra leg.
     Gui,
     /// windows-latest matrix leg approximated via the windows-gnu + Wine dev leg.
     Windows,
@@ -295,9 +297,11 @@ impl Step {
                 "clippy",
                 "-p",
                 "oxidizr-viewer",
+                "-p",
+                "oxidizr-cli",
                 "--all-targets",
                 "--features",
-                "gui",
+                "oxidizr-viewer/gui,oxidizr-cli/gui",
                 "--",
                 "-D",
                 "warnings",

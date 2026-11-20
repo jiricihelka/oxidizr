@@ -9,11 +9,18 @@ model and the DSL text are never rewritten.
 ```sh
 cargo run -p oxidizr-viewer --features gui -- workspace.dsl
 cargo run -p oxidizr-viewer --features gui -- workspace.json --theme dark
+
+# the unified binary drives the SAME window (F10, §P3-M8):
+cargo run -p oxidizr-cli --features gui -- view workspace.dsl --theme dark
 ```
 
-The `gui` feature compiles the eframe shell (the binary needs it); the
-library core is headless — `cargo test -p oxidizr-viewer` never opens a
-window or touches a GPU.
+The `gui` feature compiles the eframe shell (`shell.rs`); the standalone
+binary is its argv shim and `oxidizr view` is the in-process entry of the
+unified `oxidizr` binary — both call one `oxidizr_viewer::shell::run`, so
+they cannot drift. Without the cli `gui` feature `oxidizr view` still
+appears in `--help` but exits with the rebuild hint. The library core is
+headless — `cargo test -p oxidizr-viewer` never opens a window or touches
+a GPU.
 
 `--theme light|dark|system` (default `system`: persisted toggle first, then
 the OS preference). A file argument opens at startup; otherwise use the
