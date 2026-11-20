@@ -1,41 +1,45 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 M2 COMPLETE → M3 next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 M3-1 docs → M3-2 code next**)
 
 ## State
 
 - **P2R COMPLETE** `410fee6`; **P3-M0** (`e3f81e6`→`346ca6e`);
-  **P3-M1 COMPLETE** (`969a31b`→`496912c`); **P3-M2 COMPLETE** —
-  **M2-1** `c626048`, **M2-2** `94a8d82`, **M2-3** `344683b`,
-  **M2-4** `98a4d60`, **M2-5** `e647dcd`, close = docs + `bench save
-  P3` baseline (this commit). **Nothing pushed; tags v0.1.0/v0.2.0**
-  (v0.3.0 at P3-M5).
-- **Ritual:** quartet every commit; viewer commits also `cargo xtask ci
-  gui`; engine/API commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
+  **P3-M1 COMPLETE** (`969a31b`→`496912c`); **P3-M2 COMPLETE**
+  (`c626048`→`e647dcd`, close `468ec03` + `P3` bench baseline);
+  **P3-M3 STARTED** — M3-1 = §P3-M3 decomposition + V4 CLOSED
+  (this commit). **Nothing pushed; tags v0.1.0/v0.2.0** (v0.3.0 at
+  P3-M5).
+- **Ritual:** quartet every commit; shell commits also `cargo xtask ci
+  gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
   -p oxidizr-e2e` → 8 ok) + `cargo xtask e2e bless` → 307×unchanged +
   clean `testdata/`; **never push**.
-- **NEXT: M3 editing + save (§P3-D4, P3-D9 M3 bullet).** Charter first:
-  M3 touches >4 modules (commands, scene, shell, save, tests) ⇒ write a
-  **§P3-M3 decomposition table** in PHASE_3 as the M3-1 docs commit
-  (M2-1 pattern), checking §P3-D10 **V4** (dialog/auto-layout
-  semantics) + **V6** (save/write-back) rows against the monorepo
-  BEFORE coding. Scope from §P3-D4: `LayoutOverlay` (commands.rs stub —
-  id → geometry deltas over the read-only workspace), invertible
-  commands (`MoveElement`, `SetWaypoints`/`Insert`/`Delete`,
-  `SetAnchor`, `ClearViewLayout`, align l/c/r/t/m/b + distribute h/v,
-  `CenterViewOrSelection`, `SetCanvasSize` → stored dimensions,
-  `BringOffCanvasBack`, `RemoveAllEdgeWaypoints`), Vec undo/redo cap
-  200 (Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), drag + grid snap 10 px, box
-  select, waypoint drag/insert/delete; **SAVE = clone workspace →
-  apply overlay (elementViews x/y, relationshipViews vertices) →
-  `oxidizr-json` writer (WRITE-CATALOG, NO new serializer) → Ctrl+S to
-  `<name>.json` sidecar** — byte-compat gate: oracle round-trip check.
-  The M2 `Overrides` seam is the geometry substrate: overlay ≈ stored
-  + overrides merge; `relationships[id] = []` already IS
-  "remove vertices". reload.rs stays a stub until M4 (with minimap +
-  export + dot-backend; M4 also gets live reload per P3-D6).
-- **M4** (P3-D9): live reload + remap UX, sidecar workflow, minimap +
-  quick-nav, export SVG+PNG, `dot-backend` feature (`$OXIDZR_DOT_BIN`).
-- **M5**: oracle verify (needs `$OXIDZR_STRUCTURIZR_BIN`), perf pass,
-  docs, tag **v0.3.0**.
+- **M3 plan (§P3-M3 table in PHASE_3.md — authoritative, read it):**
+  - **M3-2 NEXT**: headless `commands` — `LayoutOverlay { elements
+    top-lefts, relationship interiors, dimensions }` + invertible
+    `Command` (MoveElements group / SetWaypoints / ClearView snapshot /
+    SetCanvasSize) + factories (align 6, distribute 2, centre,
+    bring-back, remove-all) + `History` (Vec stacks cap 200, apply/undo
+    symmetric via from/to swap) + `snap_grid` (10 px) +
+    `as_overrides()` → `scene::build`; `hit::items_in_rect` helper.
+  - **M3-3** shell: drag-move + box-select + pan→middle/space +
+    Ctrl+Z/Y keys + per-view overlay map (replaces
+    `Viewer.layout_overrides`) + dirty badge + Apply/Reset as commands.
+  - **M3-4** waypoint handles (drag/insert/Alt-delete) + dialog footer
+    buttons (magnet bring-back, remove-vertices) + align/distribute row.
+  - **M3-5** SAVE: `apply_overlay` (clone workspace, write x/y +
+    vertices + dimensions) → `oxidizr_json::to_vec` → temp+rename;
+    Ctrl+S; `.json` in place, DSL → `<stem>.json` sidecar; filtered
+    views save-blocked; Category A round-trip test.
+  - V4 verdict (in §P3-D10): block permanent, honored, we stay EDITABLE
+    (overlay wins session, save writes GEOMETRY ONLY, never the block);
+    reference re-lays-out every render + locks (`:355/:400/:989`);
+    `removeAllVertices` before EVERY apply (overwrite always).
+  - Scope cuts: SetAnchor + width/height deltas → P4; undo per-view.
+- **M4** (P3-D9): live reload + remap UX (notify, 250 ms debounce,
+  api::reconcile remap, temp+rename no-storm), DSL→sidecar workflow,
+  minimap + quick-nav, export SVG+PNG, `dot-backend` feature
+  (`$OXIDZR_DOT_BIN`). V6 (notify coalescing per OS) gates the watch.
+- **M5**: `cargo xtask oracle verify` (needs `$OXIDZR_STRUCTURIZR_BIN`),
+  perf pass, docs, tag **v0.3.0**.
 
 ## M2 auto-layout (shipped — read before M3)
 

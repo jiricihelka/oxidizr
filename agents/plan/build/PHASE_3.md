@@ -348,6 +348,39 @@ geometry only (M3 owns save); byte contract untouched all milestone.
 Order: M2-1 → M2-2 → M2-3 → M2-4 → M2-5 → close. Engine internals stay
 module-private: the public surface remains `Layered` + the M0-2 types.
 
+## P3-M3 decomposition (charter: >4-module milestone; written 2026-11-20 before code)
+
+Editing + save (§M3 = P3-D4 + the P3-D9 M3 bullet): per-view
+[`LayoutOverlay`] over the read-only workspace, invertible commands +
+undo/redo, drag/snap, waypoint editing, the parity command set, and
+SAVE through the existing `oxidizr-json` writer (byte contract: the
+save path adds NO serializer; WRITE-CATALOG rules apply unchanged).
+V4 CLOSED (§P3-D10): stored `automaticLayout` blocks are honoured,
+permanent and never block editing here — the overlay wins the session,
+save writes GEOMETRY ONLY. The M2 `scene::Overrides` IS the overlay's
+geometry payload: `commands` graduates the M0 stub, the shell replaces
+`layout_overrides` with the per-view overlay map (session state, kept
+across view switches like the reference's in-memory JSON, cleared at
+open/reload). Scope cuts recorded up front: **`SetAnchor` and
+width/height deltas are P4** (the P3-D9 M3 bullet lists the parity set
+WITHOUT anchors; item sizes are style-resolved, V1-adjacent — the
+overlay carries element TOP-LEFTS, relationship interiors and the view
+`dimensions` only).
+
+| Item | Deliverable | Premise / verified | Exit gate |
+|---|---|---|---|
+| **M3-1** | docs: this table + the P3-V4 CLOSED verdict | V4: the reference NEVER writes the block (zero `setAutomaticLayout` call sites), re-lays-out every render and locks non-editable (`structurizr-diagram.js:355/:400/:989`) — we keep editing ON, block permanent, save = geometry only; dialog houses Bring-back + Remove-vertices (auto-layout.jspf) | docs commit |
+| **M3-2** | headless `commands` module: `LayoutOverlay { elements (top-lefts), relationships (interiors), dimensions }` + the invertible `Command` set (`MoveElements` group, `SetWaypoints`, `ClearView` snapshot, `SetCanvasSize`) + FACTORIES for the parity set (align l/c/r/t/m/b, distribute h/v, centre, bring-back, remove-all-vertices — each computes its `MoveElements`/`SetWaypoints` delta from the overlay + scene rects) + `History` (Vec undo/redo, cap 200, apply/undo symmetric) | commands mutate ONLY the overlay (editor rule, P3-D0); inverse = swap from/to, no stored closures; grid snap 10 px lives here (`snap_grid` pure fn); `as_overrides()` feeds `scene::build`; unit tests: every command round-trips (apply→undo = identity), cap drops oldest, factories against fixture rects | quartet + full tier + bless |
+| **M3-3** | shell interactions: left-drag ELEMENT moves (snap toggle, group-move keeps deltas), left-drag EMPTY canvas box-select (+shift add), pan moves to middle-button/space per P3-D4, click select (paint-order pick), Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y wired to `History`, per-view overlay map (`HashMap<view_key, LayoutOverlay>`), dirty badge, auto-layout Apply/Reset land as COMMANDS (undoable) | shell keeps ZERO geometry math (factories + `hit::items_in_rect` headless helper — new); one-pass `autolayout_once` unchanged, writes the overlay; rebuild on every command (cheap, M1-D3 scene-cache contract intact) | quartet + `ci gui` + full tier + bless |
+| **M3-4** | waypoint editing + parity UI: selected edge draws its waypoint handles; drag handle / double-click insert / Alt+click delete → `SetWaypoints`; dialog gains the two reference-footer buttons (magnet Bring-back, Remove-vertices) + align/distribute row for multi-select; empty-waypoint contract = straight (M2-5 `Overrides` semantics reused verbatim) | `hit` gains `nearest_waypoint`/`insert_waypoint` pure helpers (segment distance reuses the edge-hit math); handle painting rides `paint::paint_scene` (Category A) | quartet + `ci gui` + full tier + bless |
+| **M3-5** | SAVE: headless `apply_overlay(&Workspace, view_key, &LayoutOverlay) -> Workspace` (elementViews x/y, relationshipViews vertices, view `dimensions` — clone-and-write, model untouched) + `oxidizr_json::to_vec` + temp+rename write (P3-D6 posture); Ctrl+S + toolbar Save; target = opened `.json`, sidecar `<stem>.json` for DSL sources; Save blocked (status note) on filtered views | Category A: apply→write→`from_slice` round-trip equals the in-memory scene; bless 307×unchanged proves the writer path byte-neutral; oracle `json` load of a saved sidecar is the M5 A/B leg (needs `$OXIDZR_STRUCTURIZR_BIN`) | quartet + `ci gui` + full tier + bless |
+| **M3 close** | PROGRESS board + log M3 row; PHASE_3 M3 DONE; RESUME → M4 entry point; bench sanity (engine untouched → `cmp P3` spot-check only) | — | full ritual |
+
+Order: M3-1 → M3-2 → M3-3 → M3-4 → M3-5 → close. If M3-3 drags, split
+at the drag-vs-box-select seam (select+undo first, drag second), each
+half gating green. Undo history is per-view (switching views switches
+history — the reference's per-diagram undoStack behaviour).
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
@@ -396,6 +429,31 @@ module-private: the public surface remains `Layered` + the M0-2 types.
   icons; no text-in-SVG special case.
 - P3-V4 `automaticLayout` fields honored by reference consumers when geometry exists
   (do we clear or keep the block on manual edit? match Lite behavior).
+  **CLOSED 2026-11-20** (monorepo `ad34036`): the block is **permanent** —
+  consumers READ it, nobody writes it: `setAutomaticLayout` has ZERO call
+  sites in main sources (only the `ModelView.java:128` setter definition).
+  When a view carries the block the web tool (1) re-runs the client layout
+  on EVERY render with the stored params, overriding stored geometry
+  (`structurizr-diagram.js:989-996`), and (2) locks the diagram
+  NON-EDITABLE (`:355` canvas-drag-only, `:400` `editable = false`) — so
+  "manual edit clears the block" never happens: manual editing is simply
+  impossible while the block exists. `applyAutomaticLayout` (`:6844`)
+  calls `removeAllVertices()` before EVERY layout run — the
+  `vertices`/`setLinkVertices` flag controls whether the engine
+  REGENERATES waypoints, not whether existing ones survive (the P3-D4
+  "overwrite vs keep" reading is settled: always overwrite).
+  Server side: `GraphvizAutomaticLayout.apply(Workspace)`
+  (`structurizr-autolayout …:200-230`) honours the block per view on every
+  apply — Lite behavior = honour-always, clear-never. **Decision (P3-D4
+  editor, ratified 2026-11-20):** oxidizr keeps the diagram EDITABLE with
+  a stored block (the V1 row's open decision — the reference lock is web
+  UX; feature parity per P3-D0 makes editing our headline); the block is
+  permanent too — manual edits live in the overlay (session, overrides
+  win), save writes GEOMETRY ONLY (`x/y` + vertices), the block
+  round-trips untouched. Dialog parity fact logged: the reference dialog
+  footer (`auto-layout.jspf`) houses **Bring-elements-back** (magnet) and
+  **Remove-all-vertices** buttons next to Auto-layout — our M3 dialog
+  gains both.
 - P3-V5 filtered-view evaluation semantics corner cases (relationship filters,
   `directRelationshipsOnly`) vs `core::filter::eval`. **CLOSED 2026-11-19** against
   monorepo `ad34036`: the reference evaluates client-side ONLY (Java `FilteredView`/
