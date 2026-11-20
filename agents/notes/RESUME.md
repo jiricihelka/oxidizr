@@ -1,53 +1,50 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3-M1-5 done → M1 close next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3-M1 COMPLETE → M2 next**)
 
 ## State
 
 - **P2R COMPLETE** `410fee6`; bench baseline `2R` (`6baa7b4`).
-  **P3-M0 COMPLETE** (`e3f81e6`→`346ca6e`). **Nothing pushed; tags stay
+  **P3-M0 COMPLETE** (`e3f81e6`→`346ca6e`). **P3-M1 COMPLETE**
+  (`969a31b`→`496912c`, log in PROGRESS). **Nothing pushed; tags stay
   v0.1.0/v0.2.0** (v0.3.0 lands at P3-M5).
-- **P3-M1 (read-only viewer)** — decomposition §P3-M1 in
-  `agents/plan/build/PHASE_3.md`. Progress:
-  - **M1-1 DONE** `969a31b`: `oxidizr-api::open()` partial-DSL open.
-  - **M1-2 DONE** `28fd3bf`: `scene.rs` headless scene core (14 tests).
-  - **M1-3 DONE** `c85bf1c`: `hit.rs` viewport + pick (10 tests).
-  - **M1-4a DONE** `36c36c1`: `paint.rs` headless paint + gui shell
-    (open/navigate/select/tooltips/theme/persistence).
-  - **M1-4b DONE** `3662671`: headless `key` module — `legend(&Scene)`
-    (deduped rows), `tags(&Workspace)` inventory, `session_mask` →
-    `filter::eval` on the RENDER BASE (V5/V7, session-only); chips +
-    key panel + diagnostics window. Include trap: a relationship
-    needs ITS OWN tags to hit.
-  - **M1-5 DONE 2026-11-20**: headless `icons` module — `rasterize`
-    (data URIs base64/percent, file paths vs `base_dir`, `http(s)`
-    NEVER fetched, foreign bytes `Unsupported`) + `build_atlas`
-    (deterministic shelf pack, keyed icon×size×scheme,
-    `ICON_RASTER_PX` 64, failures once each in `Atlas::errors`).
-    **Raster seam: `resvg` 0.50** (usvg 0.50/tiny-skia 0.12 trio;
-    tiny-skia 0.12 removed the 0.11 usvg `Renderer`) — usvg/resvg
-    ZERO default features (no fontdb) → SVG-with-text renders
-    text-less (§P3-D7, V3 moots it). Shell: ONE texture upload, cells
-    as ½-px-inset uv rects overlaid after `paint_scene` via pub
-    `paint::icon_slot`/`to_screen_rect`; placeholder stays for failed
-    icons; key-row chips; diagnostics + status count include icon
-    errors; `ElementKey.icon` quintuple; guard 8 lib files; 8 unit
-    tests.
-  - **M1 close NEXT**: PROGRESS board + log M1 row; PHASE_3 §P3-M1
-    header → M1 DONE; this file → M2 entry point. Full ritual (docs
-    only — bench N/A, engine untouched, note it).
-- **M2 entry point (Layered, V1 OPEN)**: §P3-M2 in PHASE_3 —
-  `oxidizr-layout::Layered` against `LayoutGraph` (M0-2 types,
-  zero-dep crate); V1 = parity INTENT only (our {x,y}, contract-safe
-  by definition); viewer applies results as scene overrides.
-- **P3-V items**: V2/V3/V5/V7 CLOSED; open: V1 (M2), V4+V6 (M3),
-  V8 (M4). Reference clone `ad34036` under `/tmp/opencode/structurizr-ref`
-  — re-clone per `agents/notes/env/toolbox.md` if lost.
+- **M2 NEXT — `Layered` engine MVP (§P3-D5).** Entry order:
+  1. **Write the §P3-M2 decomposition into PHASE_3 FIRST** (charter:
+     >4 modules — layout internals, V1 verification, benches/baseline,
+     viewer buttons+dialog).
+  2. **P3-V1 OPEN**: auto-layout parity INTENT vs monorepo `ad34036`
+     (clone under `/tmp/opencode/structurizr-ref`, re-clone per
+     `agents/notes/env/toolbox.md` if lost): rank direction per C4
+     view type (`automaticLayout` LeftRight/…/TopDown), boundary
+     nesting as opaque super-nodes — drives `Layered` tuning; result
+     is OUR {x,y}, contract-safe by definition.
+  3. `Layered` MVP pipeline (existing `oxidizr-layout` types from
+     M0-2 `3775a38`: `LayoutGraph`/`LayoutConfig`/`Anchor`/
+     `RankDirection` + `trait LayoutEngine`, ZERO deps): cycle removal
+     by DFS reversal → longest-path layering (iteration cap, no
+     simplex) → barycenter sweeps w/ deterministic tie-breaks →
+     simple priority coordinate pass honoring separations →
+     orthogonal edge routing along rank gaps → naive boundary
+     contraction (super-nodes, unpack after ordering).
+  4. **Determinism is the hard contract**: no randomness, stable
+     sorts, fixed iteration counts → property test "same input ⇒
+     byte-identical layout" + criterion benches on 1k-node synthetic
+     views; P3 JOINS the milestone baseline list (new committed bench
+     baseline at close).
+  5. Viewer: auto-layout BUTTONS + dialog (direction, generate
+     vertices, rank/node separation — `auto-layout.jspf`, feature
+     matrix row 12); applied as scene geometry (M3 persists via
+     overlay — M2 keeps it session-live unless the plan row says
+     otherwise).
+  - Quality bar: usable, stable, deterministic C4 layouts — NOT
+    Graphviz parity (polish deferred to P4-D13). `Dot` backend is M4
+    (`dot-backend` feature, `$OXIDZR_DOT_BIN`).
 - **Ritual unchanged:** quartet every commit; API/engine commits also
   full tier (`OXIDZR_E2E_FULL=1 cargo test -p oxidizr-e2e`, 8 ok) +
-  `cargo xtask e2e bless` → 307×unchanged; viewer commits also
-  `cargo xtask ci gui`; commit every green piece + rewrite this file;
-  **never push**.
+  `cargo xtask e2e bless` → 307×unchanged + clean `testdata/`; viewer
+  commits also `cargo xtask ci gui`; layout-crate commits run the
+  quartet (workspace-wide) — bench `cmp` at M2 close; commit every
+  green piece + rewrite this file; **never push**.
 
-## M1 orientation (read first)
+## M1 viewer orientation (shipped — read before any viewer work)
 
 - eframe/egui/epaint **0.37 API traps** (all compile-verified):
   `App::ui(&mut self, ui, frame)`; panels unified → `egui::Panel::
@@ -65,26 +62,25 @@
   `Pos2::distance`, dashes only via `Shape::dashed_line_many`.
   `f32: From<i32>` AND `f32: From<u32>` do NOT exist (accumulate or
   cast-allow).
-- Icon-raster API facts (compile-verified 2026-11-20): usvg 0.50
+- Icon-raster API facts (compile-verified): usvg 0.50
   `Size::width()/height()` return **f32 directly** (no `.get()`);
   `resvg::render(&tree, Transform, &mut pixmap.as_mut())` — NO fontdb
-  arg; usvg `Options { resources_dir, ..Default }` with
-  `default-features = false, features = ["svgz"]`; png 0.18 default
-  output is IDENTITY — `set_transformations(ALPHA|EXPAND|STRIP_16)`,
-  `ColorType::{Grayscale,Rgb,Rgba}` (no `Gray`); strict base64
-  (`"R0lGODlh"` = GIF89a magic, padding-free). `[a,b,c,d; N]` repeat
-  is NOT array syntax — use `[u8;4].repeat(n)`. Raw string `r#"…"#`
-  breaks on `fill="#…"` payloads — use `r##"…"##`.
-- Shell shape (`main.rs`): `Viewer` fields += `tag_inventory`/
-  `tag_mode(FilterMode)`/`tag_sel`(SESSION)/`legend(key::Key)`/
-  `show_diagnostics`/`base_dir`/`icon_texture`/`icon_uv`/
-  `icon_pixels`/`icon_errors`/`icons_dirty`; mask built in
-  `rebuild_scene` only when `tag_sel` non-empty; `adopt` recomputes
-  inventory + clears chips + derives `base_dir` from `self.display`
-  (`-` → None; AFTER the display clone — E0382 trap); `sync_icons`
-  runs BEFORE the CentralPanel. Storage keys `oxidizr.viewer/
-  {theme,zoom,view}` (chips NEVER persist, V7).
-- `key::session_mask` follows the `scene::build` view/base resolution
+  arg; usvg `Options { resources_dir, ..Default }`, features OFF
+  except `svgz`; png 0.18 default output is IDENTITY —
+  `set_transformations(ALPHA|EXPAND|STRIP_16)`, `ColorType::
+  {Grayscale,Rgb,Rgba}` (no `Gray`). `[a,b,c,d; N]` is NOT array
+  syntax — `[u8;4].repeat(n)`; raw string `r#"…"#` breaks on
+  `fill="#…"` — `r##"…"##`.
+- Shell shape (`main.rs`): `Viewer` = workspace/view/scene/viewport/
+  selection + `tag_inventory`/`tag_mode`/`tag_sel`(SESSION)/
+  `legend`/`show_diagnostics`/`base_dir`/`icon_texture`/`icon_uv`/
+  `icon_pixels`/`icon_errors`/`icons_dirty`; `adopt` derives
+  `base_dir` from `self.display` (`-` → None; AFTER the display
+  clone — E0382 trap); `sync_icons` runs BEFORE the CentralPanel;
+  mask built in `rebuild_scene` only when `tag_sel` non-empty.
+  Storage keys `oxidizr.viewer/{theme,zoom,view}` (chips NEVER
+  persist, V7).
+- `key::session_mask` follows `scene::build` view/base resolution
   exactly (Filtered → base content); hold a function-lifetime `View`
   binding for the content borrow (E0597 trap).
 - Guard: 8 lib files (`lib`+`scene`+`hit`+`key`+`icons`+`paint`+

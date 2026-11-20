@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | **M0 COMPLETE 2026-11-19** — scaffold wave: layout crate (zero-dep graph + trait), viewer crate (headless lib core + `gui`-gated eframe shell, CI legs on 3 OSes), reconcile-stays-in-api decision, `core::filter::eval` per P3-V5 verdict. Next: M1 read-only viewer. Log below (`build/PHASE_3.md`) |
+| P3 | viewer+layout | **M1 COMPLETE 2026-11-20** — read-only viewer: api `open` entry, headless `scene`/`hit`/`paint`/`key`/`icons` core (guarded egui-free), eframe shell with full styling, key panel, tag chips, diagnostics, icon atlas. M0 scaffold 2026-11-19. Next: M2 `Layered` layout engine. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,51 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M1 — read-only viewer ✅ (2026-11-20, COMPLETE)
+
+Read-only viewer milestone (§P3-M1 decomposition): open DSL/JSON,
+headless scene/hit/paint/key/icons core, `gui`-gated eframe shell with
+full styling, key panel, tag chips, diagnostics and the icon atlas.
+Six green commits riding the ritual — quartet every time; full tier 8/8
++ bless 307×unchanged every time (no byte path touched all milestone);
+`cargo xtask ci gui` from M1-4a on:
+
+- **M1-1** `969a31b` — `oxidizr-api::open()`: public entry mirroring
+  the `dsl2json`/`json2json` build; DSL opens PARTIALLY on statement
+  errors (viewer twist, documented), validate tail informational;
+  7 integration tests.
+- **M1-2** `28fd3bf` — `scene.rs`: `Scene` + `build(ws, view, scheme,
+  mask)` — stored-x/y geometry, boundary unions (group/deployment/
+  parent-SS/parent-container), style resolution (P2-D2) light/dark,
+  filtered-view resolution with the session mask INTERSECTING the
+  view's own filter (V5/V7); 14 tests incl. determinism.
+- **M1-3** `c85bf1c` — `hit.rs`: `Viewport` world↔screen + zoom clamp
+  (NaN-safe), AABB item pick (paint order) + polyline edge pick
+  (tolerance ÷ scale); 10 tests.
+- **M1-4a** `36c36c1` — headless `paint.rs`: `paint_scene →
+  Vec<epaint::Shape>` (whole paint path Category A; `epaint` recorded
+  as unconditional lib dep) + gui shell: open (argv/menu), view list,
+  pan/zoom/select, ctrl-click element URLs, tooltips, light/dark +
+  `dark-light` startup, Fit, storage persistence; 3 golden-paint tests.
+- **M1-4b** `3662671` — headless `key.rs`: deduped legend rows,
+  stored-tag inventory, `session_mask` → `filter::eval` on the view's
+  RENDER BASE (V5/V7; chips session-only, never persisted); shell key
+  panel + tag chips + diagnostics window. Trap pinned: Include keeps a
+  relationship ONLY when the RELATIONSHIP's own tags hit.
+- **M1-5** `496912c` — headless `icons.rs`: D10 icon sources (data
+  URIs base64/percent, file paths vs `base_dir`, remote URLs NEVER
+  fetched), PNG via `png` 0.18, SVG via the recorded **resvg 0.50**
+  seam (usvg 0.50/tiny-skia 0.12, zero default features → SVG-with-text
+  renders text-less — the §P3-D7 limitation V3 made moot), one
+  deterministic atlas keyed (icon,size,scheme); shell overlays it as
+  ONE texture, dashed placeholders + warning diagnostics for failures.
+
+Verification: guard holds at 8 lib files (no `eframe`/`egui` tokens in
+lib sources, epaint OK); `ci gui` leg + windows-gnu cross-check green;
+bench N/A — engine untouched since P2R (`410fee6`), bless corpus-diff=0
+every commit proves the byte contract. No tag (M5 is the v0.3.0 point).
+Next: M2 `Layered` (P3-D5 MVP; V1 OPEN — decompose before code).
 
 ### P3-M0 — viewer + layout scaffold ✅ (2026-11-19, COMPLETE)
 
