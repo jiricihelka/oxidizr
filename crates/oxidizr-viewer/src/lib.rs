@@ -2,10 +2,14 @@
 //!
 //! Architecture promise (P3-D1, `agents/plan/build/PHASE_3.md`): all
 //! non-trivial logic lives in the library modules below — [`scene`],
-//! [`hit`], [`commands`], [`reload`] — which import NOTHING from the eframe
-//! shell. The `oxidizr-viewer` binary (feature `gui`) is a thin presentation
-//! layer, so Category A tests build and exercise the whole core headlessly:
-//! zero GPU, zero windowing (`cargo test --workspace` never enables `gui`).
+//! [`hit`], [`paint`], [`commands`], [`reload`] — which import NOTHING
+//! from the eframe shell. The `oxidizr-viewer` binary (feature `gui`) is
+//! a thin presentation layer, so Category A tests build and exercise the
+//! whole core headlessly: zero GPU, zero windowing (`cargo test
+//! --workspace` never enables `gui`). [`paint`] emits `epaint::Shape`
+//! data (software raster + text layout, no windowing) — the boundary
+//! guard forbids the eframe/egui tokens only, so epaint stays allowed
+//! exactly because the guard's own test below runs with no GPU.
 //!
 //! The editor rule (P3-D0): editing features change only layout JSON values
 //! — the workspace model and any DSL text are immutable here.
@@ -13,12 +17,15 @@
 //! # Dependency pins (P3-D2)
 //!
 //! `eframe` = 0.37 (wgpu renderer — better HiDPI/text path; glow is not
-//! used), `notify` = 8 (9 is rc as of 2026-11-19), `usvg` = 0.50 +
-//! `tiny-skia` = 0.12 (SVG icon rasterization, P3-D7), `dark-light` = 3
-//! (OS light/dark preference, P3-D7). Event-driven repaint only (D2).
+//! used), `epaint` = 0.37 (the headless [`paint`] module's shape + text
+//! toolkit; unifies with eframe's), `notify` = 8 (9 is rc as of
+//! 2026-11-19), `usvg` = 0.50 + `tiny-skia` = 0.12 (SVG icon
+//! rasterization, P3-D7), `dark-light` = 3 (OS light/dark preference,
+//! P3-D7). Event-driven repaint only (D2).
 
 pub mod commands;
 pub mod hit;
+pub mod paint;
 pub mod reload;
 pub mod scene;
 
@@ -58,6 +65,6 @@ mod tests {
             }
             checked += 1;
         }
-        assert_eq!(checked, 5, "lib core = lib.rs + four modules");
+        assert_eq!(checked, 6, "lib core = lib.rs + five modules");
     }
 }

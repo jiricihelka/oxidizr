@@ -52,9 +52,13 @@ criterion = "0.5"
 proptest = "1"
 
 # P3 viewer GUI stack (P3-D2 pins; recorded in the viewer's DEPENDENCIES
-# rustdoc). `eframe` carries egui + the wgpu renderer. `notify` stays on the
-# stable series — 9.x is rc at pin time (2026-11-19).
+# rustdoc). `eframe` carries egui + the wgpu renderer. `epaint` is the
+# software raster + text-layout toolkit the headless `paint` module uses
+# (no GPU/windowing — unconditional lib dep, M1-4); it unifies with
+# eframe's. `notify` stays on the stable series — 9.x is rc at pin time
+# (2026-11-19).
 eframe = "0.37"
+epaint = "0.37"
 notify = "8"
 usvg = "0.50"
 tiny-skia = "0.12"

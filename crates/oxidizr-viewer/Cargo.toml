@@ -15,9 +15,10 @@ workspace = true
 # The eframe shell is the ONLY windowing/GPU surface (P3-D1, risk R-2).
 # Gated so `cargo test --workspace` and the quartet build and run the lib
 # core with ZERO GPU/windowing need; `cargo build --features gui` (CI
-# M0-4 leg, and end-user builds) compiles the binary.
+# M0-4 leg, and end-user builds) compiles the binary. `clap` rides the
+# shell (argv parsing) so the headless dep graph stays lean.
 default = []
-gui = ["dep:eframe"]
+gui = ["dep:eframe", "dep:clap"]
 
 [[bin]]
 name = "oxidizr-viewer"
@@ -29,6 +30,11 @@ oxidizr-api = { workspace = true }
 oxidizr-json = { workspace = true }
 oxidizr-layout = { workspace = true }
 thiserror = { workspace = true }
+# Software raster + text layout for the headless `paint` module (M1-4):
+# pure CPU code, no windowing/GPU — the `gui` gate keeps guarding ONLY
+# the eframe shell. Shapes/text come out as `epaint::Shape` data the
+# shell draws verbatim.
+epaint = { workspace = true }
 # Headless members of the P3 stack (P3-D7): notify powers `reload`,
 # usvg/tiny-skia rasterize SVG icons without any GUI. Pre-declared per the
 # P1-D9 pattern (unused-dep cargo lints are allowed at the workspace).
@@ -36,4 +42,5 @@ notify = { workspace = true }
 usvg = { workspace = true }
 tiny-skia = { workspace = true }
 dark-light = { workspace = true }
+clap = { workspace = true, optional = true }
 eframe = { workspace = true, optional = true }
