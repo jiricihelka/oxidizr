@@ -27,6 +27,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [reconcile-ambiguity-fixtures.md](pitfalls/reconcile-ambiguity-fixtures.md) | duplicate names die at parse/hydrate; contest needs identifier-vs-canonical |
 | [dsl-corpus-grammar-gotchas.md](pitfalls/dsl-corpus-grammar-gotchas.md) | e2e-corpus grammar traps: own-line comments, identifier charsets, context-statement tables, dotted scopes, extends-env via `!element` |
 | [shell-timing-and-cargo-clean.md](pitfalls/shell-timing-and-cargo-clean.md) | `/usr/bin/time` absent silently; `cargo clean --workspace` keeps deps warm; n≥3 timings |
+| [epaint-037-font-stack.md](pitfalls/epaint-037-font-stack.md) | epaint 0.37: `default_fonts` OFF by default; skrifa-not-ab_glyph ⇒ companion-dep glyph outlines |
 
 ## testing/ — test architecture ([index](testing/README.md))
 

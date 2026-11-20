@@ -16,3 +16,4 @@ tools, not guessed.
 | [t3-invalid-corpus-probes.md](t3-invalid-corpus-probes.md) | T3 debt-code verdicts (3001/3002 reachable, 4002/9001 unreachable, 5001/5005 shapes), mutation-op rules, mutate-then-rebless |
 | [shell-timing-and-cargo-clean.md](shell-timing-and-cargo-clean.md) | `/usr/bin/time` absent + SILENT in `2>` harnesses; `cargo clean --workspace` keeps deps warm; n≥3 for ms deltas |
 | [dsl-style-color-normalization.md](dsl-style-color-normalization.md) | T4 oracle verdicts: `Color` setter normalization applies on the DSL path too (lowercase hex, name→hex, bogus = statement error); `group { url }` rejection is reference-correct |
+| [epaint-037-font-stack.md](epaint-037-font-stack.md) | epaint 0.37: `default_fonts` OFF by default (silent empty font_data headless); skrifa not ab_glyph — outlines via companion ab_glyph; glyph/shape gotchas |
