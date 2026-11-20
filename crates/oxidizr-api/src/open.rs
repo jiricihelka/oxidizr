@@ -35,6 +35,11 @@ pub struct Opened {
     /// first, then core-validation violations. Never blocking (the open
     /// succeeded); the viewer presents them in its diagnostics panel.
     pub log: Vec<LogItem>,
+    /// File-system `!include`d files behind a DSL open, in parse order
+    /// (canonical PATH form, `oxidizr_dsl::engine::ParseResult::includes`)
+    /// — the live-reload watch closure (§P3-M4); empty for JSON/stdin/
+    /// bytes inputs, which have no include tree.
+    pub includes: Vec<String>,
 }
 
 /// Open a workspace for the viewer.
@@ -52,6 +57,7 @@ pub struct Opened {
 pub fn open(input: &Input, opts: &ApiOptions) -> Result<Opened, Outcome> {
     let source = read_input(input, opts).map_err(|e| failing(e, ExitClass::Io))?;
     let mut log: Vec<LogItem> = Vec::new();
+    let mut includes: Vec<String> = Vec::new();
     let mut workspace = match extension_of(input).as_deref() {
         Some("json") => oxidizr_json::from_slice(source.text.as_bytes()).map_err(|e| {
             failing(
@@ -65,6 +71,7 @@ pub fn open(input: &Input, opts: &ApiOptions) -> Result<Opened, Outcome> {
             // D1 recovery, viewer twist: the repaired workspace opens even
             // with statement errors (see module docs).
             log.extend(statement_errors(&result).into_iter().map(LogItem::Issue));
+            includes = result.includes;
             result.workspace
         }
         Some(_) => {
@@ -90,6 +97,7 @@ pub fn open(input: &Input, opts: &ApiOptions) -> Result<Opened, Outcome> {
         workspace,
         display: source.display,
         log,
+        includes,
     })
 }
 

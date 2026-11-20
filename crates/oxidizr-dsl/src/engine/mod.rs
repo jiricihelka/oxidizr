@@ -348,6 +348,16 @@ pub struct ParseResult {
     /// Diagnostics recorded via D1 recovery (empty for reference-accepted
     /// inputs whose only errors would be reference aborts).
     pub errors: Vec<DslError>,
+    /// Every file-system `!include`d file, in parse order (directory
+    /// includes contribute their sorted entry list; nested includes
+    /// contribute theirs at the point they are read). Canonical PATH
+    /// form: cwd-joined and lexical like `java_canonical`, but WITHOUT
+    /// its symlink resolution — these files exist, so the viewer can
+    /// `std::fs::canonicalize` further if it cares).
+    /// Empty for fragments and URL-free parses: URL includes are
+    /// policy-rejected, so this set is file-system-only BY CONSTRUCTION
+    /// (the M4 live-reload watch closure, §P3-M4).
+    pub includes: Vec<String>,
 }
 
 /// The parser (reference `StructurizrDslParser` instance state).
@@ -403,6 +413,9 @@ pub(crate) struct Parser<'a> {
     /// Transient set by the `!include` arm: the `IncludedFile.getFile()`
     /// the recursion reports as its `dslFile`.
     pub(crate) last_include_path: Option<String>,
+    /// File-system `!include`d files in read order (§P3-M4 watch
+    /// closure) — canonical PATH form, see [`ParseResult::includes`].
+    pub includes: Vec<String>,
     /// The `ElementGroup` member sets, indexed by group `uid`: the live
     /// membership the ONE registered group object accumulates via
     /// `addElement` (which propagates to the parent group object).
@@ -457,6 +470,7 @@ impl<'a> Parser<'a> {
             errors: Vec::new(),
             seq: HashMap::new(),
             last_include_path: None,
+            includes: Vec::new(),
             groups: Vec::new(),
         }
     }
@@ -1576,6 +1590,7 @@ impl<'a> Parser<'a> {
         ParseResult {
             workspace: self.builder.build(),
             errors: self.errors,
+            includes: self.includes,
         }
     }
 }

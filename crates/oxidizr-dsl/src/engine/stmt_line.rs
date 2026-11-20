@@ -149,6 +149,8 @@ impl Parser<'_> {
                 })
                 .collect();
             self.last_include_path = Some(file.display().to_string());
+            self.includes
+                .push(crate::engine::stmt_line::java_canonical(&file));
             self.parse_included(&padded.join("\n"));
         }
         Ok(())

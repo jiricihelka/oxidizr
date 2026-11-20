@@ -128,3 +128,32 @@ fn extensionless_input_is_dsl() {
     assert_eq!(opened.display, "-");
     assert_eq!(opened.workspace.model.software_systems.len(), 1);
 }
+
+#[test]
+fn dsl_open_exposes_the_include_closure() {
+    // §P3-M4: the viewer's live-reload watcher watches display + this
+    // set; URL includes are policy-dead, so it is file-system-only.
+    let dir = std::env::temp_dir().join(format!("oxidizr-m4-open-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("main.dsl"),
+        "workspace \"I\" {\n    model {\n        !include people.dsl\n    }\n}\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("people.dsl"), "alice = person \"Alice\"\n").unwrap();
+    let opened = open(&Input::File(dir.join("main.dsl")), &opts()).unwrap();
+    assert_eq!(opened.includes.len(), 1);
+    assert!(opened.includes[0].ends_with("people.dsl"));
+
+    // JSON and stdin have no include tree.
+    let json = temp_file(
+        "inc-json",
+        "ws.json",
+        &String::from_utf8(oxidizr_json::to_vec(&opened.workspace).unwrap()).unwrap(),
+    );
+    let none: Vec<String> = Vec::new();
+    assert_eq!(open(&Input::File(json), &opts()).unwrap().includes, none);
+    let stdin = open(&Input::Bytes(DSL.as_bytes().to_vec()), &opts()).unwrap();
+    assert_eq!(stdin.includes, none);
+}
