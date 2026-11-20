@@ -734,7 +734,7 @@ impl Viewer {
                      Drag empty: pan · Right-drag: lasso · \
                      Middle/Space-drag: pan too · Wheel: zoom · \
                      Trackpad: pinch zooms, two-finger scroll pans · \
-                     Click: select · Shift-click: add/toggle · \
+                     Click: select (info in the right panel) · Shift-click: add/toggle · \
                      Click edge: select · Drag handle: reroute · Double-click edge: \
                      insert handle · Alt+click handle: delete · Delete: drop all \
                      handles of the selected edge · Ctrl+Z / Ctrl+Y: \
@@ -1760,13 +1760,16 @@ impl Viewer {
         }
     }
 
-    /// Key/legend panel (M1-4b): the scene's distinct appearances,
-    /// folded headlessly by [`key::legend`] (swatches + labels).
+    /// Right panel (§P3-M11 M11-11): the SELECTED object's facts on top,
+    /// then the key/legend (M1-4b) — the scene's distinct appearances,
+    /// folded headlessly by [`key::legend`] (swatches + labels). One
+    /// scroll area so a long Info block never squeezes the legend.
     fn key_panel(&self, ui: &mut egui::Ui) {
-        ui.heading(egui::RichText::new("Key").size(14.0).weak());
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
+                self.info_block(ui);
+                ui.heading(egui::RichText::new("Key").size(14.0).weak());
                 let legend = &self.legend;
                 if legend.elements.is_empty()
                     && legend.edges.is_empty()
@@ -1808,6 +1811,33 @@ impl Viewer {
                     }
                 }
             });
+    }
+
+    /// The Info block (user: "When I click an object, info about that
+    /// object should appear in the right sidebar"): rows built
+    /// headlessly by [`overview::selection_info`], laid out as a
+    /// label/value grid. Absent for an empty/off-scene selection.
+    fn info_block(&self, ui: &mut egui::Ui) {
+        let (Some(scene), Some(selection)) = (&self.scene, &self.selection) else {
+            return;
+        };
+        let rows = overview::selection_info(scene, selection);
+        if rows.is_empty() {
+            return;
+        }
+        ui.heading(egui::RichText::new("Selection").size(14.0).weak());
+        egui::Grid::new("selection-info")
+            .num_columns(2)
+            .spacing([8.0, 2.0])
+            .max_col_width(170.0)
+            .show(ui, |ui| {
+                for (label, value) in rows {
+                    ui.weak(label);
+                    ui.label(value);
+                    ui.end_row();
+                }
+            });
+        ui.separator();
     }
 
     /// Full diagnostics list in a dismissible window (M1-4b); the

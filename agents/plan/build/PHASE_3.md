@@ -582,7 +582,7 @@ the `C` column — each C lands on green gates.
 | **M11-5** | Text never covered: `paint_scene` splits its output into two lanes — geometry keeps the reference layer order (boundaries→items→edges), ALL text galleys are emitted LAST (nested boxes no longer paint over a parent's label) — **DONE 2026-11-20** | C4 |
 | **M11-7** | Search result rows show the element's icon (`icon_cell`, `▪` fallback) — **DONE 2026-11-20** | C5 |
 | **M11-9** | Opened-file path appears ONLY in the toolbar edit: window Title keeps the file NAME, status bar drops the path entirely (opens with the view title now) — **DONE 2026-11-20** | C5 |
-| **M11-11** | Click object → right panel shows an **Info** block (kind/id/name/metadata/description/group/tags/URL; edges: source → destination + labels) above the Key | C6 |
+| **M11-11** | Click object → right panel shows an **Info** block (kind/id/name/metadata/description/group/tags/URL; edges: source → destination + labels) above the Key — **DONE 2026-11-20** | C6 |
 | **M11-6** | Engine routes stop stacking: port spread in `layered.rs` — edges sharing a (node, side) distribute their anchor along the side by far-end cross order (N edges → N+1 slots), replacing the shared side-midpoint anchor | C7 |
 | **M11-12** | Oxidizr-only sidecar: non-contract per-file data persists in `<stem>.oxidizr.json` (versioned envelope, atomic write, our own JSON — NEVER fed to or from the contract writer, NEVER adopted as an open/reload source); first user = per-view viewport memory (zoom + centre restored on reopen). User directive 2026-11-20, registered in ADDITIONAL_FEATURES.md | C8 |
 

@@ -31,8 +31,10 @@ toolbar path field + Enter / **Open**.
 - Every view kind renders with full styling (custom/image views are
   placeholder boxes), arrows landing on box sides (never the middle) and
   labels painted above every box (nested boxes never cover text),
-  light/dark themes, the bundled font, key/legend and
-  tooltips, a tag filter, and the left panel: a **view selector grouped by
+  light/dark themes, the bundled font, tooltips, a tag filter, and the
+  right panel: a **Selection info block** (click any element or edge —
+  name, kind, description, position / endpoints, technology…) above the
+  key/legend; the left panel: a **view selector grouped by
   view type** (System landscape → context → Container → Component →
   Deployment → Dynamic → Filtered → Image → Custom, each under its own
   heading) plus a search that jumps to elements (select + center, rows

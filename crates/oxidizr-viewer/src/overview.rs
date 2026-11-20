@@ -17,6 +17,7 @@
 //! partition the view list into per-type sections (§P3-M7).
 
 use epaint::{Color32, Rect as ERect, Shape, Stroke, pos2};
+use oxidizr_core::Id;
 
 use crate::paint::Selection;
 use crate::scene::{Rect, Scene};
@@ -227,10 +228,90 @@ pub fn grouped<'a>(views: &[View<'a>]) -> Vec<(&'static str, Vec<View<'a>>)> {
     runs
 }
 
+/// Factual rows about the current selection (§P3-M11 M11-11, the right
+/// panel's Info block): labelled key/value lines for one element, the
+/// element group, or one edge. Edge endpoints resolve to ELEMENT NAMES
+/// (ids only when an end is off-scene); rows that would be empty are
+/// skipped, so the block stays compact for sparse models.
+#[must_use]
+pub fn selection_info(scene: &Scene, selection: &Selection) -> Vec<(&'static str, String)> {
+    let name_of = |id: &Id| {
+        scene
+            .items
+            .iter()
+            .find(|item| item.id == *id)
+            .map_or_else(|| id.to_string(), |item| item.name.clone())
+    };
+    let mut rows: Vec<(&'static str, String)> = Vec::new();
+    match selection {
+        Selection::Items(ids) => {
+            if let [only] = ids.as_slice() {
+                let Some(item) = scene.items.iter().find(|item| item.id == *only) else {
+                    return rows;
+                };
+                rows.push(("Name", item.name.clone()));
+                rows.push(("Id", item.id.to_string()));
+                rows.push(("Kind", format!("{:?}", item.kind)));
+                if let Some(group) = &item.group {
+                    rows.push(("Group", group.clone()));
+                }
+                if let Some(description) = &item.description {
+                    rows.push(("Description", description.clone()));
+                }
+                if let Some(metadata) = &item.metadata {
+                    rows.push(("Metadata", metadata.clone()));
+                }
+                rows.push((
+                    "Location",
+                    format!(
+                        "({}, {}) · {} × {}",
+                        item.rect.x.round(),
+                        item.rect.y.round(),
+                        item.rect.width.round(),
+                        item.rect.height.round()
+                    ),
+                ));
+                if let Some(url) = &item.url {
+                    rows.push(("Url", url.clone()));
+                }
+            } else if !ids.is_empty() {
+                rows.push(("Elements", ids.len().to_string()));
+                let mut names: Vec<String> = ids.iter().take(8).map(&name_of).collect();
+                if ids.len() > 8 {
+                    names.push("…".to_string());
+                }
+                rows.push(("Contains", names.join(", ")));
+            }
+        }
+        Selection::Edge(id) => {
+            let Some(edge) = scene.edges.iter().find(|edge| edge.id == *id) else {
+                return rows;
+            };
+            rows.push((
+                "Label",
+                edge.label.clone().unwrap_or_else(|| "(none)".to_string()),
+            ));
+            rows.push(("From", name_of(&edge.source)));
+            rows.push(("To", name_of(&edge.destination)));
+            if let Some(metadata) = &edge.metadata {
+                rows.push(("Technology", metadata.clone()));
+            }
+            if let Some(order) = &edge.order {
+                rows.push(("Order", order.clone()));
+            }
+            rows.push(("Waypoints", edge.points.len().saturating_sub(2).to_string()));
+            if let Some(url) = &edge.url {
+                rows.push(("Url", url.clone()));
+            }
+        }
+    }
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::{Boundary, BoundaryKind, Item};
+    use crate::scene::{Boundary, BoundaryKind, Edge, Item};
     use oxidizr_core::Id;
     use oxidizr_core::validate::ElementKind;
     use oxidizr_core::views::{
@@ -295,6 +376,63 @@ mod tests {
             edges: Vec::new(),
             bounds: wr(0.0, 0.0, 1000.0, 600.0),
         }
+    }
+
+    fn edge(points: Vec<(f64, f64)>) -> Edge {
+        Edge {
+            id: Id::new("e"),
+            source: Id::new("1"),
+            destination: Id::new("2"),
+            points,
+            label: None,
+            metadata: Some("[HTTPS]".to_string()),
+            order: None,
+            color: "#000000".to_string(),
+            thickness: 2,
+            line_style: LineStyle::Solid,
+            font_size: 24,
+            label_width: 200,
+            label_position: 50,
+            opacity: 100,
+            url: None,
+        }
+    }
+
+    #[test]
+    fn selection_info_reports_item_group_and_edge() {
+        let mut s = scene();
+        s.items[0].description = Some("Pays money".to_string());
+        s.edges.push(edge(vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]));
+        let get = |rows: &[(&'static str, String)], key| {
+            rows.iter().find(|(k, _)| *k == key).map(|(_, v)| v.clone())
+        };
+        // A single element: the full identity + geometry block.
+        let rows = selection_info(&s, &Selection::Items(vec![Id::new("1")]));
+        assert_eq!(get(&rows, "Name").as_deref(), Some("Box 1"));
+        assert_eq!(get(&rows, "Kind").as_deref(), Some("Person"));
+        assert_eq!(get(&rows, "Description").as_deref(), Some("Pays money"));
+        assert_eq!(
+            get(&rows, "Location").as_deref(),
+            Some("(50, 50) · 350 × 150")
+        );
+        assert_eq!(get(&rows, "Url"), None, "absent rows are skipped");
+        // A group: count + names.
+        let rows = selection_info(&s, &Selection::Items(vec![Id::new("1"), Id::new("2")]));
+        assert_eq!(get(&rows, "Elements").as_deref(), Some("2"));
+        assert_eq!(get(&rows, "Contains").as_deref(), Some("Box 1, Box 2"));
+        // An edge: endpoint NAMES, technology, waypoint count.
+        let rows = selection_info(&s, &Selection::Edge(Id::new("e")));
+        assert_eq!(get(&rows, "Label").as_deref(), Some("(none)"));
+        assert_eq!(get(&rows, "From").as_deref(), Some("Box 1"));
+        assert_eq!(get(&rows, "To").as_deref(), Some("Box 2"));
+        assert_eq!(get(&rows, "Technology").as_deref(), Some("[HTTPS]"));
+        assert_eq!(get(&rows, "Waypoints").as_deref(), Some("1"));
+        // Selections pointing off-scene render nothing.
+        assert_eq!(selection_info(&s, &Selection::Items(vec![])), Vec::new());
+        assert_eq!(
+            selection_info(&s, &Selection::Edge(Id::new("gone"))),
+            Vec::new()
+        );
     }
 
     fn box_rect() -> ERect {
