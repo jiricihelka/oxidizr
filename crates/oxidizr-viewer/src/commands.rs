@@ -603,6 +603,31 @@ pub fn drag_move(from: &[(Id, (f64, f64))], delta: (f64, f64), snap: bool) -> Op
     non_empty_moves(moves)
 }
 
+/// Drag INTERIOR waypoint `index` of one edge: `from` is the INTERIOR
+/// captured at press (the same preview/commit contract as [`drag_move`]
+/// — the live preview writes the target first, the commit reads `from`,
+/// so re-applying is idempotent). `None` when nothing moves or the
+/// index leaves the route (P3-M4).
+#[must_use]
+pub fn drag_waypoint(
+    id: &Id,
+    from: &[(f64, f64)],
+    index: usize,
+    delta: (f64, f64),
+    snap: bool,
+) -> Option<Command> {
+    let (x, y) = *from.get(index)?;
+    let to = drag_target((x, y), delta, snap);
+    if to == (x, y) {
+        return None;
+    }
+    let mut points = from.to_vec();
+    points[index] = to;
+    Some(Command::SetWaypoints {
+        changes: vec![(id.clone(), from.to_vec(), points)],
+    })
+}
+
 /// Land one auto-layout run as a single undoable [`Command`] (P3-M3:
 /// the dialog Apply and the adopt-time pass are COMMANDS, not silent
 /// state — one Ctrl+Z reverts positions and routes together). `overrides`
@@ -1075,6 +1100,49 @@ mod tests {
         assert_eq!(o.position(&scene, &id(1)), Some((0.0, 0.0)));
         // A drag that snaps back onto the origin commits nothing.
         assert!(drag_move(&from, (4.0, 0.0), true).is_none());
+    }
+
+    #[test]
+    fn drag_waypoint_moves_one_vertex_and_survives_preview() {
+        let scene = scene();
+        let mut o = overlay();
+        // The live preview already wrote the target into the overlay;
+        // the commit reads the press-captured interior, not the
+        // mutated state (P3-M4 handle drag).
+        o.relationships
+            .insert(id(10), vec![(120.0, 40.0), (215.0, 85.0)]);
+        let from = [(120.0, 40.0), (200.0, 80.0)];
+        let cmd = drag_waypoint(&id(10), &from, 1, (15.0, 5.0), true).unwrap();
+        assert_eq!(
+            cmd,
+            Command::SetWaypoints {
+                changes: vec![(
+                    id(10),
+                    vec![(120.0, 40.0), (200.0, 80.0)],
+                    vec![(120.0, 40.0), (220.0, 90.0)]
+                )]
+            }
+        );
+        cmd.apply(&mut o, true);
+        assert_eq!(
+            o.interior(&scene, &id(10)),
+            vec![(120.0, 40.0), (220.0, 90.0)]
+        );
+        // Idempotent re-apply: preview and commit write the SAME route.
+        cmd.apply(&mut o, true);
+        assert_eq!(
+            o.interior(&scene, &id(10)),
+            vec![(120.0, 40.0), (220.0, 90.0)]
+        );
+        cmd.undo(&mut o);
+        assert_eq!(
+            o.interior(&scene, &id(10)),
+            vec![(120.0, 40.0), (200.0, 80.0)]
+        );
+        // Snapped back onto the vertex: nothing to commit; an index
+        // outside the route never mutates anything either.
+        assert!(drag_waypoint(&id(10), &from, 1, (4.0, 0.0), true).is_none());
+        assert!(drag_waypoint(&id(10), &from, 2, (10.0, 0.0), false).is_none());
     }
 
     #[test]

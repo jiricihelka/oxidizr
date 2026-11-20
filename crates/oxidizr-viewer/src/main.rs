@@ -206,7 +206,26 @@ enum Drag {
         /// Selection to keep and add to (Shift-drag), empty otherwise.
         base: Vec<ModelId>,
     },
+    /// Drag one INTERIOR waypoint of the selected edge (P3-M4): the
+    /// press captured the edge's route `from` and the grabbed vertex
+    /// `index` — the same preview/commit contract as [`Self::Move`].
+    Waypoint {
+        /// The edge whose route is dragged.
+        id: ModelId,
+        /// Press-time INTERIOR waypoints (world px).
+        from: Vec<(f64, f64)>,
+        /// Grabbed vertex within `from`.
+        index: usize,
+        /// Press point (world px) — deltas measure from here.
+        press: (f64, f64),
+        /// Latest preview delta (world px); release commits exactly it.
+        delta: (f64, f64),
+    },
 }
+
+/// What a press on a waypoint handle finds (§P3-M4): the edge id, its
+/// press-time INTERIOR route, and the route-relative vertex index.
+type WaypointHit = (ModelId, Vec<(f64, f64)>, usize);
 
 impl Viewer {
     fn new() -> Self {
@@ -531,8 +550,10 @@ impl Viewer {
                 ui.label("?").on_hover_text(
                     "Drag box: move · Drag empty: lasso · Middle/Space-drag: pan · \
                      Wheel: zoom · Click: select · Shift-click: add/toggle · \
-                     Ctrl/⌘-click: open element URL · Ctrl+Z / Ctrl+Y: undo/redo · \
-                     Esc: deselect · keys work on the canvas",
+                     Click edge: select · Drag handle: reroute · Double-click edge: \
+                     insert handle · Alt+click handle: delete · Ctrl+Z / Ctrl+Y: \
+                     undo/redo · Layout dialog: align/distribute/bring-back · \
+                     Ctrl/⌘-click: open element URL · Esc: deselect",
                 );
             });
         });
@@ -603,8 +624,8 @@ impl Viewer {
             self.drag = Drag::Pan;
         } else if response.drag_started_by(egui::PointerButton::Primary) {
             if let Some(origin) = ui.input(|i| i.pointer.press_origin()) {
-                let shift = ui.input(|i| i.modifiers.shift);
-                self.drag = self.press_mode(origin, shift);
+                let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
+                self.drag = self.press_mode(origin, shift, alt);
             }
         }
         let cursor = response
@@ -678,6 +699,48 @@ impl Viewer {
                     }
                 }
             }
+            Drag::Waypoint {
+                id,
+                from,
+                index,
+                press,
+                delta: last,
+            } => {
+                // Same measuring as Move: world delta from the press
+                // point, `last` carrying it through pointer-less frames.
+                let world_delta = cursor.map_or(last, |pos| {
+                    let world = self
+                        .viewport
+                        .screen_to_world((f64::from(pos.x), f64::from(pos.y)));
+                    (world.0 - press.0, world.1 - press.1)
+                });
+                if response.dragged() {
+                    self.preview_waypoint(&id, &from, index, world_delta);
+                    self.drag = Drag::Waypoint {
+                        id,
+                        from,
+                        index,
+                        press,
+                        delta: world_delta,
+                    };
+                } else if release {
+                    // Released: the preview's route IS the commit
+                    // (idempotent re-apply through the history).
+                    if let Some(command) =
+                        commands::drag_waypoint(&id, &from, index, world_delta, self.snap)
+                    {
+                        self.edit_current_view(command);
+                    } else {
+                        // Nothing moved: restore the press route the
+                        // preview had written into the overlay.
+                        {
+                            let overlay = self.overlay_for();
+                            overlay.relationships.insert(id, from);
+                        }
+                        self.rebuild_scene();
+                    }
+                }
+            }
         }
         let scroll = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll.abs() > f32::EPSILON && response.hovered() {
@@ -691,6 +754,13 @@ impl Viewer {
             if let Some(pt) = response.interact_pointer_pos() {
                 let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
                 self.canvas_click(pt, command, shift, &ctx);
+            }
+        }
+        // P3-M4: a double-click on an edge splices a waypoint into the
+        // nearest segment (the second click also selected it).
+        if response.double_clicked() {
+            if let Some(pt) = response.interact_pointer_pos() {
+                self.insert_waypoint_at((f64::from(pt.x), f64::from(pt.y)));
             }
         }
         self.hover = match (response.hovered(), ui.input(|i| i.pointer.hover_pos())) {
@@ -801,12 +871,35 @@ impl Viewer {
         }
     }
 
-    /// Decide what a fresh left-button press starts (M3-3): a box
-    /// under the cursor begins a group MOVE (the box joins the
-    /// selection first; Shift keeps the group, a plain press elsewhere
-    /// selects just it), anything else begins a LASSO rubber band.
-    fn press_mode(&mut self, origin: Pos2, shift: bool) -> Drag {
+    /// Decide what a fresh left-button press starts (M3-3/M3-4): a
+    /// waypoint handle of the SELECTED edge grabs FIRST (Alt+press
+    /// deletes that vertex, a plain press drags it), then a box under
+    /// the cursor begins a group MOVE (the box joins the selection
+    /// first; Shift keeps the group, a plain press elsewhere selects
+    /// just it), anything else begins a LASSO rubber band.
+    fn press_mode(&mut self, origin: Pos2, shift: bool, alt: bool) -> Drag {
         let screen = (f64::from(origin.x), f64::from(origin.y));
+        if let Some((id, mut from, index)) = self.waypoint_hit(screen) {
+            if alt {
+                from.remove(index);
+                let overlay = self.overlay_for().clone();
+                let command = self
+                    .scene
+                    .as_ref()
+                    .and_then(|scene| commands::set_waypoints(scene, &overlay, &id, from));
+                if let Some(command) = command {
+                    self.edit_current_view(command);
+                }
+                return Drag::Idle;
+            }
+            return Drag::Waypoint {
+                id,
+                from,
+                index,
+                press: self.viewport.screen_to_world(screen),
+                delta: (0.0, 0.0),
+            };
+        }
         let picked = self
             .scene
             .as_ref()
@@ -854,6 +947,89 @@ impl Viewer {
                 press: self.viewport.screen_to_world(screen),
                 delta: (0.0, 0.0),
             }
+        }
+    }
+
+    /// Press on a waypoint handle of the SELECTED edge (§P3-M4): the
+    /// tolerance is [`hit::HIT_TOLERANCE_PX`] screen px converted to
+    /// world px, and the scene polyline IS the effective route (the
+    /// scene is rebuilt with the overlay). Returns the press-time
+    /// route plus the route-relative vertex index.
+    fn waypoint_hit(&self, screen: (f64, f64)) -> Option<WaypointHit> {
+        let Some(paint::Selection::Edge(id)) = &self.selection else {
+            return None;
+        };
+        let scene = self.scene.as_ref()?;
+        let edge = scene.edges.iter().find(|edge| edge.id == *id)?;
+        if edge.points.len() < 3 {
+            return None;
+        }
+        let world = self.viewport.screen_to_world(screen);
+        let tol = hit::HIT_TOLERANCE_PX / self.viewport.scale();
+        let index = hit::nearest_waypoint(world, &edge.points, tol)?;
+        Some((
+            id.clone(),
+            edge.points[1..edge.points.len() - 1].to_vec(),
+            index - 1,
+        ))
+    }
+
+    /// Live waypoint preview frame: write exactly the route the
+    /// release will commit ([`commands::drag_waypoint`] shares
+    /// [`commands::drag_target`] with the box-move preview), then
+    /// repaint — preview frames EQUAL the committed geometry.
+    fn preview_waypoint(
+        &mut self,
+        id: &ModelId,
+        from: &[(f64, f64)],
+        index: usize,
+        delta: (f64, f64),
+    ) {
+        let mut route = from.to_vec();
+        if let Some(at) = route.get_mut(index) {
+            *at = commands::drag_target(*at, delta, self.snap);
+        }
+        {
+            let overlay = self.overlay_for();
+            overlay.relationships.insert(id.clone(), route);
+        }
+        self.rebuild_scene();
+    }
+
+    /// Double-click on an edge splices a new waypoint into the segment
+    /// nearest the click (§P3-M4). The scene polyline is the effective
+    /// route, so its splice index maps directly onto the INTERIOR list
+    /// `set_waypoints` commits.
+    fn insert_waypoint_at(&mut self, screen: (f64, f64)) {
+        let picked = self
+            .scene
+            .as_ref()
+            .and_then(|scene| hit::pick(scene, self.viewport, screen));
+        let Some(hit::Hit::Edge(index)) = picked else {
+            return;
+        };
+        let Some((id, points)) = self.scene.as_ref().and_then(|scene| {
+            scene
+                .edges
+                .get(index)
+                .map(|edge| (edge.id.clone(), edge.points.clone()))
+        }) else {
+            return;
+        };
+        if points.len() < 2 {
+            return;
+        }
+        let world = self.viewport.screen_to_world(screen);
+        let splice = hit::insert_waypoint(world, &points).saturating_sub(1);
+        let mut interior = points[1..points.len() - 1].to_vec();
+        interior.insert(splice.min(interior.len()), world);
+        let overlay = self.overlay_for().clone();
+        let command = self
+            .scene
+            .as_ref()
+            .and_then(|scene| commands::set_waypoints(scene, &overlay, &id, interior));
+        if let Some(command) = command {
+            self.edit_current_view(command);
         }
     }
 
@@ -1288,6 +1464,132 @@ impl Viewer {
         }
     }
 
+    /// Run one headless editing factory against the current scene and
+    /// overlay and land its result as ONE undoable edit (§P3-M4); a
+    /// `None` command (nothing moves) is silently ignored.
+    // The factory signature IS the seam between the dialog buttons and
+    // the `commands` factories — factoring it out would only name it.
+    #[allow(clippy::type_complexity)]
+    fn run_edit(
+        &mut self,
+        make: impl FnOnce(&scene::Scene, &commands::LayoutOverlay) -> Option<commands::Command>,
+    ) {
+        let overlay = self.overlay_for().clone();
+        let command = self.scene.as_ref().and_then(|scene| make(scene, &overlay));
+        if let Some(command) = command {
+            self.edit_current_view(command);
+        }
+    }
+
+    /// The reference editor's parity row for the layout dialog
+    /// (§P3-M4): align/distribute cues for a multi-select, plus the
+    /// footer's two magnet buttons — bring-back and remove-all-vertices.
+    /// Every button runs its `commands` factory through [`Self::run_edit`]
+    /// (session overlay only, one undoable step each).
+    fn editing_buttons(&mut self, ui: &mut egui::Ui) {
+        let ids: Vec<ModelId> = match &self.selection {
+            Some(paint::Selection::Items(ids)) => ids.clone(),
+            _ => Vec::new(),
+        };
+        ui.horizontal(|ui| {
+            ui.label("Align:");
+            for (label, tip, edge) in [
+                ("L", "common left edges", commands::AlignEdge::Left),
+                (
+                    "Cx",
+                    "common vertical centres",
+                    commands::AlignEdge::CenterX,
+                ),
+                ("R", "common right edges", commands::AlignEdge::Right),
+                ("T", "common top edges", commands::AlignEdge::Top),
+                (
+                    "Cy",
+                    "common horizontal centres",
+                    commands::AlignEdge::CenterY,
+                ),
+                ("B", "common bottom edges", commands::AlignEdge::Bottom),
+            ] {
+                let enabled = ids.len() >= 2;
+                if ui
+                    .add_enabled(enabled, egui::Button::new(label))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    let ids = ids.clone();
+                    self.run_edit(move |scene, overlay| {
+                        commands::align(scene, overlay, &ids, edge)
+                    });
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("Space:");
+            for (label, tip, axis) in [
+                ("↔", "even horizontal gaps", commands::Axis::Horizontal),
+                ("↕", "even vertical gaps", commands::Axis::Vertical),
+            ] {
+                let enabled = ids.len() >= 3;
+                if ui
+                    .add_enabled(enabled, egui::Button::new(label))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    let ids = ids.clone();
+                    self.run_edit(move |scene, overlay| {
+                        commands::distribute(scene, overlay, &ids, axis)
+                    });
+                }
+            }
+            if ui
+                .button("Centre")
+                .on_hover_text("centre the selection in the view")
+                .clicked()
+            {
+                let ids = ids.clone();
+                self.run_edit(move |scene, overlay| commands::centre_view(scene, overlay, &ids));
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui
+                .button("Bring back")
+                .on_hover_text("pull off-canvas elements onto the visible page (reference: magnet)")
+                .clicked()
+            {
+                let page = self.canvas_page();
+                self.run_edit(move |scene, overlay| {
+                    page.and_then(|page| commands::bring_back(scene, overlay, page))
+                });
+            }
+            if ui
+                .button("Remove vertices")
+                .on_hover_text(
+                    "straighten every routed relationship (reference: remove all vertices)",
+                )
+                .clicked()
+            {
+                self.run_edit(commands::remove_all_vertices);
+            }
+        });
+    }
+
+    /// The visible canvas as a WORLD rect — the "page" the reference's
+    /// bring-back button pulls off-canvas boxes onto (§P3-M4).
+    fn canvas_page(&self) -> Option<scene::Rect> {
+        let rect = self.last_rect?;
+        let min = self
+            .viewport
+            .screen_to_world((f64::from(rect.min.x), f64::from(rect.min.y)));
+        let max = self
+            .viewport
+            .screen_to_world((f64::from(rect.max.x), f64::from(rect.max.y)));
+        Some(scene::Rect {
+            x: min.0,
+            y: min.1,
+            width: max.0 - min.0,
+            height: max.1 - min.1,
+        })
+    }
+
     /// The auto-layout dialog — mirrors the reference `auto-layout.jspf`
     /// (direction, rank/node/edge separation, route vertices). `Apply`
     /// runs the engine on the CURRENT scene; `Reset` drops the session
@@ -1343,6 +1645,8 @@ impl Viewer {
                         self.layout_error = None;
                     }
                 });
+                ui.separator();
+                self.editing_buttons(ui);
                 if let Some(error) = &self.layout_error {
                     ui.colored_label(egui::Color32::DARK_RED, error);
                 }

@@ -57,6 +57,9 @@ pub const ARC_SEGMENTS: usize = 32;
 pub const FALLBACK_FILL: Color32 = Color32::from_rgb(135, 180, 220);
 /// Fallback ink (stroke/text) when a scene color fails [`parse_color`].
 pub const FALLBACK_INK: Color32 = Color32::BLACK;
+/// Screen-space radius of the waypoint handles painted on the SELECTED
+/// edge (P3-M4) — fixed pixels, so they stay grabbable at any zoom.
+pub const WAYPOINT_HANDLE_PX: f32 = 4.0;
 
 /// What the shell selects (id-based so the selection survives scene
 /// rebuilds across zoom-band/filter changes).
@@ -272,6 +275,22 @@ fn paint_edge(
             points.clone(),
             Stroke::new(width + 2.0, SELECTION_COLOR),
         ));
+        // P3-M4: one handle circle per INTERIOR vertex — the endpoints
+        // belong to the boxes and never get one.
+        if points.len() >= 3 {
+            for at in &points[1..points.len() - 1] {
+                out.push(Shape::circle_filled(
+                    *at,
+                    WAYPOINT_HANDLE_PX,
+                    SELECTION_COLOR,
+                ));
+                out.push(Shape::circle_stroke(
+                    *at,
+                    WAYPOINT_HANDLE_PX,
+                    Stroke::new(1.0, Color32::WHITE),
+                ));
+            }
+        }
     }
     let px = scaled_px(edge.font_size, viewport);
     let label_at = point_at(
@@ -987,6 +1006,28 @@ mod tests {
         let b = painted(&scene(), None);
         assert_eq!(a.len(), b.len());
         assert_eq!(texts(&a), texts(&b));
+    }
+
+    #[test]
+    fn selected_edge_paints_waypoint_handles() {
+        let mut s = scene();
+        // Fixture edge "e" gets two INTERIOR vertices; the fixture item
+        // is a Box, so no other shape in the scene is a Circle.
+        s.edges[0].points = vec![(175.0, 75.0), (400.0, 120.0), (700.0, 40.0), (900.0, 75.0)];
+        // The order badge paints its own circle pair — out of scope here.
+        s.edges[0].order = None;
+        let id = s.edges[0].id.clone();
+        let circles = |shapes: &[Shape]| {
+            shapes
+                .iter()
+                .filter(|shape| matches!(shape, Shape::Circle(_)))
+                .count()
+        };
+        // Unselected: no handles at all…
+        assert_eq!(circles(&painted(&s, None)), 0);
+        // …selected: filled + ring per interior vertex (endpoints skip).
+        let picked = painted(&s, Some(&Selection::Edge(id)));
+        assert_eq!(circles(&picked), 4);
     }
 
     #[test]

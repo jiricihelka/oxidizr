@@ -196,6 +196,36 @@ pub fn items_in_rect(scene: &Scene, rect: Rect) -> Vec<usize> {
         .collect()
 }
 
+/// Index of the INTERIOR vertex of `points` nearest to `point`, when it
+/// sits within `tol` world units — the waypoint-handle hit (P3-M4).
+/// The polyline is the scene contract `[source, interiors…, destination]`,
+/// so the endpoints are skipped: they belong to the boxes, never the
+/// route. `None` for polylines without interior vertices.
+#[must_use]
+pub fn nearest_waypoint(point: (f64, f64), points: &[(f64, f64)], tol: f64) -> Option<usize> {
+    points
+        .iter()
+        .enumerate()
+        .skip(1)
+        .take(points.len().saturating_sub(2))
+        .filter(|(_, at)| distance(point, **at) <= tol)
+        .min_by(|(_, a), (_, b)| distance(point, **a).total_cmp(&distance(point, **b)))
+        .map(|(index, _)| index)
+}
+
+/// Where a new vertex splices into `points`: the start of the segment
+/// nearest to `point` (a straight two-point edge inserts at 1; fewer
+/// than two points have nothing to split — the append index comes back).
+#[must_use]
+pub fn insert_waypoint(point: (f64, f64), points: &[(f64, f64)]) -> usize {
+    points
+        .windows(2)
+        .enumerate()
+        .map(|(index, segment)| (index, distance_to_segment(point, segment[0], segment[1])))
+        .min_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map_or(points.len(), |(index, _)| index + 1)
+}
+
 /// Distance from `point` to a polyline: `INFINITY` for the empty line,
 /// point distance for a single vertex, else the minimum over the
 /// segments ([`distance_to_segment`]).
@@ -500,6 +530,36 @@ mod tests {
             items_in_rect(&s, lasso(120.0, 120.0, 60.0, 20.0)),
             Vec::new()
         );
+    }
+
+    #[test]
+    fn nearest_waypoint_hits_interior_vertices_only() {
+        let line = [(0.0, 0.0), (100.0, 20.0), (200.0, 0.0)];
+        // Interior vertex within tolerance → its polyline index.
+        assert_eq!(nearest_waypoint((102.0, 21.0), &line, 6.0), Some(1));
+        // Endpoints belong to the boxes: never a waypoint hit.
+        assert_eq!(nearest_waypoint((1.0, 1.0), &line, 6.0), None);
+        // Out of tolerance → None; a straight (no interior) line never hits.
+        assert_eq!(nearest_waypoint((100.0, 30.0), &line, 6.0), None);
+        assert_eq!(
+            nearest_waypoint((100.0, 0.0), &[(0.0, 0.0), (200.0, 0.0)], 6.0),
+            None
+        );
+        // The NEARER of two interior vertices wins.
+        let bent = [(0.0, 0.0), (100.0, 0.0), (200.0, 0.0), (300.0, 100.0)];
+        assert_eq!(nearest_waypoint((101.0, 1.0), &bent, 6.0), Some(1));
+    }
+
+    #[test]
+    fn insert_waypoint_splices_the_nearest_segment() {
+        // A straight line: the new vertex lands between the endpoints.
+        assert_eq!(insert_waypoint((40.0, 3.0), &[(0.0, 0.0), (100.0, 0.0)]), 1);
+        // The segment closest to the click gets split.
+        let l = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)];
+        assert_eq!(insert_waypoint((95.0, 60.0), &l), 2);
+        // Degenerate inputs: nothing to split, the append index comes back.
+        assert_eq!(insert_waypoint((0.0, 0.0), &[]), 0);
+        assert_eq!(insert_waypoint((5.0, 5.0), &[(1.0, 1.0)]), 1);
     }
 
     #[test]
