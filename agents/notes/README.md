@@ -40,6 +40,12 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [oracle-app-harness.md](testing/oracle-app-harness.md) | export injects inspection props + default views; goldening limits |
 | [cli-e2e-pitfalls.md](testing/cli-e2e-pitfalls.md) | subprocess tests: pipe stdio, random UUIDs, known-vs-legacy JSON fields |
 
+## perf/ — measured timings ([index](perf/README.md))
+
+| note | one-liner |
+|---|---|
+| [scene-paint-budgets.md](perf/scene-paint-budgets.md) | P3-M5: scene rebuild + paint vs the 60 fps / 200-element budget (≈1 ms/frame ⇒ ~16× headroom) |
+
 ## process/ — how work is done ([index](process/README.md))
 
 | note | one-liner |
