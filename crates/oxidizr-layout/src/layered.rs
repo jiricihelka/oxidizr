@@ -1199,13 +1199,25 @@ mod tests {
         g.add_edge(edge("bh", "b", "h"));
         let r = layout(&g);
         let h = pos(&r, "h");
-        let mut ends = vec![
+        let mut ends = [
             *pts(&r, "ah").last().unwrap(),
             *pts(&r, "bh").last().unwrap(),
         ];
         ends.sort_by(|p, q| p.y.total_cmp(&q.y));
-        assert_eq!(ends[0], Point { x: h.x, y: h.y + 20.0 });
-        assert_eq!(ends[1], Point { x: h.x, y: h.y + 40.0 });
+        assert_eq!(
+            ends[0],
+            Point {
+                x: h.x,
+                y: h.y + 20.0
+            }
+        );
+        assert_eq!(
+            ends[1],
+            Point {
+                x: h.x,
+                y: h.y + 40.0
+            }
+        );
     }
 
     #[test]
