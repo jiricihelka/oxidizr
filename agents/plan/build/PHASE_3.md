@@ -443,6 +443,25 @@ Order: M5-0 → M5-1 → M5-2 → M5-3 → close. The oracle binary is slow
 (~1 s JVM start) — M5-1's legs ride the existing Category B job
 posture, never the per-PR quartet.
 
+## §P3-M6 — post-v0.3.0 follow-up: display auto-layout (2026-11-20)
+
+User report after the tag: views of a file without `location` statements
+opened piled at `(0, 0)` — "automatic layout does not work". Root cause:
+the loader materializes a missing location as the stored `0`/`0` pair
+(V-2), and the M2-5 open pass fired ONLY for views carrying an
+`automaticLayout` statement (and dirtied the view on open). The
+structurizr web application runs automatic layout **on display** exactly
+when a view has no stored layout — the `autolayout` statement exists to
+parameterize that pass — and renders stored layout verbatim otherwise.
+
+| Item | Deliverable | Exit gate |
+|---|---|---|
+| **M6-1** | headless seam — `layout::view_needs_layout` (no non-zero coord on the RENDERED view, filtered→base like `scene::build`), `display_params` (view `automaticLayout` else the reference LR defaults — dialog params never used for display), `auto_display` (bundled Layered only, never `dot`), `seed_overlay` (save-side twin), `scene::Overrides::display` (user overlay merges OVER the engine per id); shell: the display pass runs in `rebuild_scene` UNDER the overlay (session display, NEVER dirty) and `save_workspace` seeds untouched ids so the JSON persists what was displayed; `autolayout_once` (dirty-on-open) removed | 4 `layout.rs` units + `crates/oxidizr-viewer/tests/auto_display.rs` on big-bank-plc; quartet + `ci gui` + full tier 8/8 + bless 307×unchanged; clippy × 4 feature combos — **DONE 2026-11-20** — `a1e7dfc` |
+
+No V-item needed: no bytes contract touched (the display pass is
+session state, like the M2-5 `Overrides` stance; `oxidizr-json` output
+stays file-driven — bless 307×unchanged held).
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for

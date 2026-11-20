@@ -30,13 +30,19 @@ toolbar path field + Enter / **Open**.
 - Editing: drag a box to move (optional **Snap**, 10 px grid), drag empty
   canvas to lasso, click/Shift-click to select, click an edge to select,
   drag its handles to reroute, double-click inserts a handle,
-  Alt+click deletes one. The **Layout** dialog runs the bundled layered
-  engine (direction + spacings, optional route vertices) and offers
-  align/distribute/centre/bring-back/remove-vertices. All edits live in a
-  per-view overlay — the opened workspace stays immutable in-app.
+  Alt+click deletes one. Views whose file carries NO element coordinates
+  open laid out by the bundled engine automatically (the view's
+  `autolayout` settings when present) — a display default, never marked
+  dirty; it is written out when you save. The **Layout** dialog runs the
+  bundled layered engine on demand (direction + spacings, optional route
+  vertices) and offers align/distribute/centre/bring-back/remove-vertices.
+  All edits live in a per-view overlay — the opened workspace stays
+  immutable in-app.
 - **Save** (Ctrl+S, enabled when dirty): writes the layout back as JSON —
   the opened `.json` in place, or a `<stem>.json` sidecar for DSL sources —
   through the same byte-contract writer as the CLI (atomic temp+rename).
+  A view that opened with automatic layout saves the COMPLETE geometry
+  the screen showed — engine placements plus your edits.
 - **Export**: writes `<stem>.svg` + `<stem>.png` with the diagram key
   beside the save file — the current view exactly as painted, no selection.
 - Live reload: edits to the file on disk (including `!include` files)

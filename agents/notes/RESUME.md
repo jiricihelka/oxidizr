@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 COMPLETE, tagged v0.3.0 → P4 next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6 complete, tagged v0.3.0 → P4 next**)
 
 ## State
 
@@ -8,7 +8,9 @@
   M0 `346ca6e`; M1 (`969a31b`→`496912c`); M2 (`c626048`→`468ec03`, `P3`
   bench baseline); M3 (`4fcb235`→`d39ebdc`); M4 (`81b0a3d`→`dc5d840`);
   M5: M5-0 `5f1dd32`, M5-1 `0842dbd`, M5-2 `2325947`, M5-3 `ff2b8b5`,
-  close + tag. **Nothing pushed; tags v0.1.0/v0.2.0/v0.3.0.**
+  close + tag. **Post-tag M6** (display auto-layout, §P3-M6): code
+  `a1e7dfc`, docs follow. **Nothing pushed; tags
+  v0.1.0/v0.2.0/v0.3.0.**
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
   -p oxidizr-e2e` → 8 ok) + `cargo xtask e2e bless` → 307×unchanged +
@@ -157,20 +159,39 @@
 - R-2 guard: lib core NEVER references eframe/egui (literals in DOC
   COMMENTS fail); count assert = lib.rs + N modules — NOW 11 files.
 
+## M6 display auto-layout (layout.rs + shell — read before touching)
+
+- Rule (mirrors structurizr web): a view whose RENDERED content (filtered
+  → base) has NO non-zero stored coord opens laid out by the bundled
+  Layered engine — the loader materializes a missing `location` as the
+  `0`/`0` pair, so all-zeros = "file has no layout". Display is
+  session-only, NEVER dirty; views WITH stored coords render verbatim
+  (`autolayout_once` is GONE — it dirtied on open and only fired with a
+  stored `automaticLayout`). Params = view `automaticLayout` else the
+  reference LR defaults — NEVER the dialog's session params; engine =
+  Layered only, never `dot`.
+- Seam: `view_needs_layout` / `display_params` / `auto_display` /
+  `seed_overlay` (save-side); `Overrides::display(auto, user)` merges the
+  overlay OVER the engine PER ID. Shell: `rebuild_scene` runs the pass
+  UNDER the overlay; `save_workspace` seeds untouched ids so the JSON
+  persists what was displayed. Guard test: `tests/auto_display.rs`
+  (big-bank-plc Components: pile → spread → pin → seed).
+
 ## Viewer orientation (M1/M2 shipped)
 
 - Scene: item rect top-left x/y (or override), size = style else
   350×150; edge polyline = [source centre, interiors…, destination
   centre]; `hit::pick` items last-wins, edges tolerance-first;
   boundaries not pickable. `layout.rs` `stored_for`/`config_for`/
-  `apply`/`encode`/`decode`; boundary pad `BOUNDARY_PADDING = 20`
-  (deviation). Core↔engine direction names differ — `layout::
-  direction()` maps.
+  `apply`/`encode`/`decode` + the M6 display seam above; boundary pad
+  `BOUNDARY_PADDING = 20` (deviation). Core↔engine direction names
+  differ — `layout::direction()` maps.
 - eframe-0.37: unified `egui::Panel`; `Storage::set_string(k, String)`;
   `Window::open(&mut bool)`; `ctx.load_texture`;
   `ComboBox::from_id_salt`; click after a MOVED drag never fires;
   bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"` ==
   307 + clean `git status testdata/`.
-- `cargo test -p oxidizr-viewer` = 89 lib + 3 golden (+2 ignored perf);
+- `cargo test -p oxidizr-viewer` = 92 lib + 1 auto_display + 3 golden
+  (+2 ignored perf);
   `cargo test -p oxidizr-layout --features dot-backend` = 31.
   Viewer usage lives in `crates/oxidizr-viewer/README.md` (M5-3).
