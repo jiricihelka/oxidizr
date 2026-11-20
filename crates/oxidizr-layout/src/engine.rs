@@ -74,6 +74,10 @@ pub enum LayoutError {
         /// Reported value.
         value: i32,
     },
+    /// Layering did not converge after cycle removal. Defensive only:
+    /// the DFS reversal guarantees a DAG, so reaching this means an
+    /// engine bug, never bad input.
+    CycleRemovalFailed,
 }
 
 impl fmt::Display for LayoutError {
@@ -89,6 +93,7 @@ impl fmt::Display for LayoutError {
             Self::BadSeparation { name, value } => {
                 write!(f, "config separation {name} must be >= 0, got {value}")
             }
+            Self::CycleRemovalFailed => write!(f, "layering did not converge"),
         }
     }
 }
