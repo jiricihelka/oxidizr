@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 + M6–M10 complete, tagged v0.3.0 → P4 next**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0 → P4 next, F5 LSP prioritized**)
 
 ## State
 
@@ -16,7 +16,15 @@
   M9** (§P3-M9): Windows CI reload fix — notify `Modify(Any)` class
   accepted on windows-cfg only + platform-mapping test. **Post-tag
   M10** (§P3-M10): display-layout separation floor (`DISPLAY_FALLBACK`
-  200/120, graphviz lower-bound) + right-button pan (this commit).
+  200/120, graphviz lower-bound) + right-button pan. **Post-tag
+  M11** (§P3-M11, twelve-item UX batch, 2026-11-20/21): C1 `c67d16b`
+  (gesture swap + trackpad split + tooltip), C2 `33d4b0a` (waypoint
+  delete + hover handles + drags carry routes), C3 `131588b` (side
+  anchors), C4 `357d90c` (text-last paint), C5 `5ce2146` (search icons +
+  path once), C6 `27957b5` (selection info panel), C7 `6d11861`+`6728166`
+  (engine port spread + scene slide rule), C8 `f499fb7` (F11
+  `<stem>.oxidizr.json` sidecar + viewport memory). Milestone closed:
+  full e2e tier + bless 307×unchanged.
   **Nothing pushed; tags v0.1.0/v0.2.0/v0.3.0.**
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
@@ -25,6 +33,9 @@
 
 ## Next: Phase 4 (`build/PHASE_4.md` — authoritative, read it first)
 
+- **User priority (2026-11-21): F5 `lsp` FIRST** — save-time
+  diagnostics, completion, hover, built on the CST; the other P4 items
+  follow after.
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams
@@ -35,6 +46,41 @@
   bless 307×unchanged stays the tripwire.
 - P4-M0 = decomposition table into PHASE_4.md (same ritual as P3-M0:
   docs commit, then per-item rows with DONE stamps at close).
+
+## §P3-M11 UX batch surface (shell/paint/scene/layered/statefile — read before touching)
+
+- **Paint (C4)**: `paint_scene` = background + GEOMETRY lane (reference
+  order: boundaries→items→edges→selection) + ALL `Shape::Text` LAST
+  (`split_text` partitions each layer). Invariant test
+  `text_shapes_are_always_the_final_run`.
+- **Arrow ports (C3+C7)**: engine `layered.rs` `pick_side` (shared by
+  `endpoint` + the `port_spread` prepass; exact `endpoint(None)` rule:
+  pinned anchor else dominant delta, ties→horizontal) fans a (node,
+  side) group into N+1 slots, `along=(rank+1)/(N+1)`, ordered by far
+  box-centre coordinate PARALLEL to the side (ties→input order). N=1
+  keeps 0.5 — lone edges byte-identical. Scene `border_anchor`:
+  centre→next RAY picks the side, anchor then SLIDES to the next
+  point's facing cross coordinate CLAMPED to the side — engine legs
+  share their port's cross coordinate, so stored routes re-anchor
+  EXACTLY and every leg is axis-parallel (both exact-placement scene
+  tests rely on it; the old 1e-9 tolerance died with the ray-parameter).
+- **Sidecar (C8, F11)**: `statefile.rs` = `<stem>.oxidizr.json`
+  (STEM naming ⇒ big.dsl/big.json pair shares ONE file; can never equal
+  the contract sidecar `big.json`). Envelope `{"format":
+  "oxidizr-viewer-state","version":1,"views":{k:{zoom,x,y}}}` via
+  serde_json VALUES (untyped, BTreeMap order); atomic `{file}.{pid}.tmp`
+  + rename; refuses to clobber a NEWER-version envelope; anything
+  unreadable/wrong-shape loads EMPTY. NEVER in `save_target`, the
+  reload candidate lists, or the watch set (exact-path filter drops its
+  events — sibling test pins that). Shell: `adopt()` = flush old file
+  (`record_view`+`flush_sidecar`) → seed `self.sidecar` from the new
+  file → `pending_viewport` restores the camera on the FIRST painted
+  frame (wins over `restore_scale` — cleared on apply — and over
+  `needs_fit`, which adopt skips while pending). `record_view` stores
+  zoom + WORLD centre from `last_rect` (resolution-independent).
+  `reload_from_disk` pre-seeds `pending_view` = current view (adopt
+  else falls back to the FIRST view). `eframe::App::save()` records +
+  flushes (close hook); KEY_ZOOM stays as cross-file fallback.
 
 ## M5 hardening surface (xtask + probe — read before touching oracle verify)
 
@@ -156,7 +202,7 @@
   `items_after_statements` — fn-body `use` goes FIRST;
   `assigning_clones`/`clone_on_copy` — `Dimensions` IS Copy;
   `doc_lazy_continuation` for doc lines starting `+`; E0282 on bare
-  `Vec::new()` in assert_eq ⇒ bind typed local; `cargo fmt` reflows —
+  `Vec::new()` in assert_eq ⇒ bind typed local or `Vec::<T>::new()`; `cargo fmt` reflows —
   match post-fmt text; `manual_div_ceil` ⇒ `.div_ceil()`; usize→f64/
   u32 casts ⇒ `f64::from(u32::try_from(x).unwrap())`;
   `too_many_lines` — split a helper (M5-1) before allowing.
@@ -166,11 +212,15 @@
   helper; `doc_markdown` backticks (`ab_glyph`); Result fns need
   `# Errors`; `collapsible_if` via let-chains; `too_many_lines` allow
   needs a rationale comment; unused `mut` when a cfg block vanishes —
-  restructure instead of `#[allow]`.
+  restructure instead of `#[allow]`; `useless_vec` on a fixed-size test
+  fixture ⇒ array (the M11 spread test tripped it AFTER the sweep —
+  re-run `clippy --workspace --all-targets` after adding tests);
+  `filter_map(|e| e.ok())` ⇒ `filter_map(Result::ok)`.
 - R-2 guard: lib core NEVER references eframe/egui (literals in DOC
   COMMENTS fail); the skip-set is the two `gui`-gated shell files
   {`main.rs`, `shell.rs`} (§P3-M8); count assert = lib.rs + N modules —
-  NOW 11 files (the shell module is NOT a core module).
+  NOW 12 files (`statefile.rs` added at M11-12; the shell module is
+  NOT a core module).
 
 ## M6 display auto-layout (layout.rs + shell — read before touching)
 
@@ -230,7 +280,7 @@
   `ComboBox::from_id_salt`; click after a MOVED drag never fires;
   bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"` ==
   307 + clean `git status testdata/`.
-- `cargo test -p oxidizr-viewer` = 95 lib + 1 auto_display + 3 golden
-  (+2 ignored perf);
-  `cargo test -p oxidizr-layout --features dot-backend` = 31.
+- `cargo test -p oxidizr-viewer` = 106 lib + 1 auto_display + 3 golden
+  (+2 ignored perf); `cargo test -p oxidizr-layout` = 25 (32 with
+  `dot-backend`).
   Viewer usage lives in `crates/oxidizr-viewer/README.md` (M5-3).

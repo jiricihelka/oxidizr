@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
+| P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,52 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M11 — post-v0.3.0: twelve-item UX batch + F11 viewport sidecar ✅ (2026-11-20/21, COMPLETE)
+
+Twelve live-use reports on the shipped viewer (§P3-M11 decomposition,
+commits C1–C8). Presentation/session-state only — no bytes contract, no
+V-item; the one new file format (M11-12) is F11, user-directed and
+registered in `ADDITIONAL_FEATURES.md`.
+
+- **C1** `c67d16b` — button roles SWAPPED (left-drag pans, right-drag
+  lassos), trackpad gestures split by scroll UNIT (`Line`/`Page`=wheel→
+  zoom, `Point`=two-finger→pan; pinch folds into `zoom_delta()`), hover
+  tooltip on egui's `on_hover_ui_at_pointer` (the hand-rolled
+  unique-`Area` id flickered).
+- **C2** `33d4b0a` — Delete/Backspace clears ALL waypoints of the
+  selected edge; handles paint on edge HOVER (Alt+click without
+  selecting first); dragging boxes carries the routes of their
+  fully-contained edges (Ctrl detaches; one `Command::Group`).
+- **C3** `131588b` — arrows land on box SIDES: `border_anchor` clips the
+  centre→neighbour ray to the border (M11-3).
+- **C4** `357d90c` — text never covered: `paint_scene` emits TWO lanes
+  (geometry in reference order, then ALL galleys last); invariant test
+  `text_shapes_are_always_the_final_run`.
+- **C5** `5ce2146` — search rows carry the element's REAL icon
+  (`nav_element_rows` + `icon_cell`, `▪` fallback); opened path shows
+  once (Title = file NAME, status bar drops the path).
+- **C6** `27957b5` — right-panel Selection info block above the Key
+  (pure `overview::selection_info`: element identity/geometry, group
+  names, edge endpoints as NAMES + technology/waypoints).
+- **C7** `6d11861` (+lint `6728166`) — engine port spread: shared
+  `pick_side`/`Side4`, `endpoint(along)`; edges sharing a (node, side)
+  fan into N+1 slots by far-end cross order (N=1 keeps the midpoint —
+  lone edges byte-identical). Scene `border_anchor` evolved: ray CHOOSES
+  the side, anchor SLIDES to the next point's facing cross coordinate —
+  re-adds spread ports EXACTLY, all legs axis-parallel.
+- **C8** `f499fb7` — F11: `statefile.rs` (`<stem>.oxidizr.json`,
+  versioned envelope, atomic temp+rename, refuses newer envelopes, any
+  garbage decodes empty) + per-view viewport memory: `adopt()` is the
+  single flush/seed choke-point (open AND reload), `pending_viewport`
+  restores the camera on the first painted frame (beats `restore_scale`
+  and the re-fit); reload pre-seeds `pending_view` so it keeps the
+  SELECTED view too. serde_json is the module's ONLY new dep;
+  `oxidizr_json` untouched, sidecar never an open/reload/watch source.
+
+106 viewer lib + 25 engine tests (32 with `dot-backend`); quartet +
+`ci gui` + clippy ×4 + live window smoke per commit; milestone close:
+full e2e tier green + `cargo xtask e2e bless` → 307×unchanged.
 
 ### P3-M10 — post-v0.3.0: roomier display layout + right-drag pan ✅ (2026-11-20, COMPLETE)
 

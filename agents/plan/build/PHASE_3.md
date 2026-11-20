@@ -600,6 +600,12 @@ SCENE, not per engine, so hand-placed views without vertices benefit
 too; M11-6 anchor spread is engine-side because only the engine knows
 the rank geometry.
 
+**CLOSED 2026-11-21** — C1–C8 landed (`c67d16b`, `33d4b0a`, `131588b`,
+`357d90c`, `5ce2146`, `27957b5`, `6d11861`+`6728166`, `f499fb7`), every
+row DONE; full e2e tier green + bless 307×unchanged. Milestone log:
+`PROGRESS.md` §P3-M11; shipped-surface notes:
+`agents/notes/RESUME.md` §P3-M11.
+
 ## P3-D10 Verification list (empirical, before dependent code)
 
 - P3-V1 auto-layout parity intent: what the reference web tool/dot produces for
