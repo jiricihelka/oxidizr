@@ -24,6 +24,7 @@
 //! P3-D7). Event-driven repaint only (D2).
 
 pub mod commands;
+pub mod export;
 pub mod hit;
 pub mod icons;
 pub mod key;
@@ -69,6 +70,6 @@ mod tests {
             }
             checked += 1;
         }
-        assert_eq!(checked, 10, "lib core = lib.rs + nine modules");
+        assert_eq!(checked, 11, "lib core = lib.rs + ten modules");
     }
 }

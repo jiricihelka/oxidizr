@@ -846,6 +846,19 @@ pub fn save_target(display: &str) -> Option<PathBuf> {
 /// [`SaveError::Io`] when the temp write or rename fails.
 pub fn write_workspace(path: &Path, workspace: &Workspace) -> Result<(), SaveError> {
     let bytes = oxidizr_json::to_vec(workspace)?;
+    write_atomic(path, &bytes)
+}
+
+/// Atomic byte write (the M3-5 pattern, shared by save and M4-5
+/// export): `.{pid}.tmp` beside the target, then rename. The temp
+/// suffix never matches the reload watch's exact-path filter, so
+/// exports landing in a watched directory cannot trigger a reload.
+///
+/// # Errors
+///
+/// [`SaveError::Io`] when the temp write or the rename fails (the
+/// error carries `path`).
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), SaveError> {
     let name = path.file_name().map_or_else(
         || "workspace.json".to_owned(),
         |name| name.to_string_lossy().into_owned(),
@@ -855,7 +868,7 @@ pub fn write_workspace(path: &Path, workspace: &Workspace) -> Result<(), SaveErr
         path: path.to_path_buf(),
         source,
     };
-    std::fs::write(&temp, &bytes).map_err(io)?;
+    std::fs::write(&temp, bytes).map_err(io)?;
     std::fs::rename(&temp, path).map_err(io)
 }
 

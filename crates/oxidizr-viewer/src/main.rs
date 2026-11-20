@@ -26,7 +26,7 @@ use oxidizr_core::views::{
 };
 use oxidizr_core::{Id as ModelId, Workspace};
 use oxidizr_diag::Severity;
-use oxidizr_viewer::{commands, hit, icons, key, layout, overview, paint, reload, scene};
+use oxidizr_viewer::{commands, export, hit, icons, key, layout, overview, paint, reload, scene};
 
 /// Storage keys (§P3-D2: eframe storage only, no config files).
 const KEY_THEME: &str = "oxidizr.viewer/theme";
@@ -667,6 +667,17 @@ impl Viewer {
                 {
                     self.save_workspace();
                 }
+                if ui
+                    .button("Export")
+                    .on_hover_text(
+                        "Write <stem>.svg + <stem>.png with the key beside the save \
+                         file — the CURRENT view exactly as painted (no selection), \
+                         no dialog",
+                    )
+                    .clicked()
+                {
+                    self.export_files();
+                }
             });
             ui.separator();
             let dark = self.scheme == ColorScheme::Dark;
@@ -694,7 +705,9 @@ impl Viewer {
                      file on disk (incl. !includes) auto-reload, layout kept · \
                      a saved .json sidecar becomes the open & reload source until \
                      the .dsl is edited again (newest wins) · left-panel search \
-                     jumps to elements/views · minimap click/drag recenters",
+                     jumps to elements/views · minimap click/drag recenters · \
+                     Export writes <stem>.svg + <stem>.png (with key) beside \
+                     the save file",
                 );
             });
         });
@@ -1472,9 +1485,12 @@ impl Viewer {
                 }
                 if let Some(note) = &self.save_note {
                     // Real failures are the SaveError texts ("serialize:
-                    // …", "write <path>: …"); "save blocked"/"nothing to
-                    // save" are guarded no-ops, "saved …" success.
-                    let bad = note.starts_with("serialize:") || note.starts_with("write ");
+                    // …", "write <path>: …") and export notes
+                    // ("export blocked/failed: …"); "save blocked"/"nothing to
+                    // save" are guarded no-ops, "saved …"/"exported …" success.
+                    let bad = note.starts_with("serialize:")
+                        || note.starts_with("write ")
+                        || note.starts_with("export ");
                     ui.colored_label(
                         if bad {
                             egui::Color32::DARK_RED
@@ -1767,6 +1783,56 @@ impl Viewer {
                 self.restart_watch();
             }
             Err(error) => self.save_note = Some(error.to_string()),
+        }
+    }
+
+    /// §P3-M4-5: export the CURRENT view as `<stem>.svg` + `<stem>.png`
+    /// beside the save target (the `export.jspf` analogue) — the scene
+    /// exactly as painted plus the key band; the selection is never
+    /// exported. Writes are atomic (the M3-5 temp+rename: neither file
+    /// name is in the watch set, so exporting cannot self-trigger a
+    /// reload). Dialog-free (V8 posture): success/blocked/failed rides
+    /// the status note.
+    fn export_files(&mut self) {
+        self.save_note = None;
+        let Some(base) = commands::save_target(&self.display) else {
+            self.save_note = Some("export blocked: stdin has no file to write".to_owned());
+            return;
+        };
+        let Some(ctx) = self.repaint_ctx.clone() else {
+            return;
+        };
+        let rendered = self.scene.as_ref().map(|scene| {
+            ctx.fonts_mut(|fonts| {
+                let composed = export::compose(scene, fonts);
+                let svg = export::shapes_to_svg(&composed.shapes, composed.size);
+                export::svg_to_png(&svg).map(|png| (svg, png))
+            })
+        });
+        let rendered = match rendered {
+            Some(Ok(rendered)) => rendered,
+            Some(Err(error)) => {
+                self.save_note = Some(format!("export failed: {error}"));
+                return;
+            }
+            None => {
+                self.save_note = Some("export blocked: no view is shown".to_owned());
+                return;
+            }
+        };
+        let svg_path = base.with_extension("svg");
+        let png_path = base.with_extension("png");
+        let written = commands::write_atomic(&svg_path, rendered.0.as_bytes())
+            .and_then(|()| commands::write_atomic(&png_path, &rendered.1));
+        match written {
+            Ok(()) => {
+                self.save_note = Some(format!(
+                    "exported {} + {}",
+                    svg_path.display(),
+                    png_path.display()
+                ));
+            }
+            Err(error) => self.save_note = Some(format!("export failed: {error}")),
         }
     }
 

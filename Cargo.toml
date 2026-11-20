@@ -58,7 +58,12 @@ proptest = "1"
 # eframe's. `notify` stays on the stable series — 9.x is rc at pin time
 # (2026-11-19).
 eframe = "0.37"
-epaint = "0.37"
+# M4-5 reality (2026-11-20): this epaint series has `default = []` —
+# `default_fonts` (the bundled Ubuntu-Light/Hack TTFs, P3-D2) rides
+# egui's features in a `gui` build but is OFF for the headless lib
+# alone; the export glyph-outline pass (export.rs) needs the embedded
+# bytes in BOTH builds, so the feature is pinned explicitly here.
+epaint = { version = "0.37", features = ["default_fonts"] }
 notify = "8"
 # Icon rasterization (P3-D7, M1-5). Seam decision recorded 2026-11-20:
 # tiny-skia 0.12 REMOVED the 0.11 usvg `Renderer`, so the sanctioned
@@ -73,6 +78,13 @@ resvg = { version = "0.50", default-features = false }
 tiny-skia = "0.12"
 png = "0.18"
 base64 = "0.23"
+# Export text = glyph OUTLINES (M4-5): the pinned raster stack is built
+# WITHOUT text features (see the note above), so SVG `<text>` cannot
+# rasterize; ab_glyph turns the SAME bundled TTF epaint embeds into
+# quadratic path segments. (Reality note: epaint 0.37 swapped ab_glyph
+# for skrifa/swash internally, so this is our own companion dep, not a
+# version-unification — same bytes, independent parser, no conflict.)
+ab_glyph = "0.2"
 dark-light = "3"
 
 [workspace.lints.rust]

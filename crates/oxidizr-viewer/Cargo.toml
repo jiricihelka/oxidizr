@@ -47,6 +47,7 @@ resvg = { workspace = true }
 tiny-skia = { workspace = true }
 png = { workspace = true }
 base64 = { workspace = true }
+ab_glyph = { workspace = true }
 dark-light = { workspace = true }
 clap = { workspace = true, optional = true }
 eframe = { workspace = true, optional = true }
