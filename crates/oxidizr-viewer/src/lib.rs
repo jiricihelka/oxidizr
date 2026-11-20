@@ -28,6 +28,7 @@ pub mod hit;
 pub mod icons;
 pub mod key;
 pub mod layout;
+pub mod overview;
 pub mod paint;
 pub mod reload;
 pub mod scene;
@@ -68,6 +69,6 @@ mod tests {
             }
             checked += 1;
         }
-        assert_eq!(checked, 9, "lib core = lib.rs + eight modules");
+        assert_eq!(checked, 10, "lib core = lib.rs + nine modules");
     }
 }

@@ -26,7 +26,7 @@ use oxidizr_core::views::{
 };
 use oxidizr_core::{Id as ModelId, Workspace};
 use oxidizr_diag::Severity;
-use oxidizr_viewer::{commands, hit, icons, key, layout, paint, reload, scene};
+use oxidizr_viewer::{commands, hit, icons, key, layout, overview, paint, reload, scene};
 
 /// Storage keys (§P3-D2: eframe storage only, no config files).
 const KEY_THEME: &str = "oxidizr.viewer/theme";
@@ -107,10 +107,14 @@ struct Viewer {
     open_error: Option<String>,
     /// Toolbar path editor.
     path_edit: String,
-    /// The path field owns the keyboard (undo/redo keys skip then).
-    path_focus: bool,
+    /// A text field (path bar or quick-nav) owns the keyboard
+    /// (undo/redo/save keys skip then).
+    text_focus: bool,
     /// Selected view key.
     view_key: Option<String>,
+    /// Quick-nav search text (§P3-M4-4, the left panel): matches
+    /// element names/ids and view titles; session-only, not persisted.
+    nav_query: String,
     /// Scene rendered from workspace + view + scheme.
     scene: Option<scene::Scene>,
     /// Scene-build failure (centered, red).
@@ -242,6 +246,10 @@ enum Drag {
         /// Latest preview delta (world px); release commits exactly it.
         delta: (f64, f64),
     },
+    /// Press began INSIDE the minimap box (§P3-M4-4): every frame the
+    /// pointer position re-centers the viewport (click = one recenter,
+    /// drag = continuous). No scene edit, no history entry.
+    Minimap,
 }
 
 /// What a press on a waypoint handle finds (§P3-M4): the edge id, its
@@ -256,8 +264,9 @@ impl Viewer {
             open_log: Vec::new(),
             open_error: None,
             path_edit: String::new(),
-            path_focus: false,
+            text_focus: false,
             view_key: None,
+            nav_query: String::new(),
             scene: None,
             scene_error: None,
             scheme: ColorScheme::Light,
@@ -448,6 +457,62 @@ impl Viewer {
         self.viewport.zoom_at(factor, pivot);
     }
 
+    /// The minimap box for a canvas rect: bottom-right, fixed size
+    /// (§P3-M4-4), `None` when the canvas is too small to earn one.
+    fn minimap_rect(rect: egui::Rect) -> Option<egui::Rect> {
+        let (w, h, m) = (
+            overview::MAP_WIDTH_PX,
+            overview::MAP_HEIGHT_PX,
+            overview::MAP_MARGIN_PX,
+        );
+        (rect.width() > 2.0 * (w + m) && rect.height() > 2.0 * (h + m)).then(|| {
+            egui::Rect::from_min_max(
+                egui::pos2(rect.max.x - m - w, rect.max.y - m - h),
+                egui::pos2(rect.max.x - m, rect.max.y - m),
+            )
+        })
+    }
+
+    /// Whether a screen point sits inside this frame's minimap (input
+    /// triage: presses there steer the map, never the canvas).
+    fn minimap_contains(&self, point: egui::Pos2) -> bool {
+        self.scene.is_some()
+            && self
+                .last_rect
+                .and_then(Self::minimap_rect)
+                .is_some_and(|mini| mini.contains(point))
+    }
+
+    /// The world point a minimap click/drag selects — `Some` only for
+    /// points INSIDE the map box (the projection otherwise extrapolates
+    /// any canvas point), `None` when the scene has no bounds.
+    fn minimap_world(&self, point: egui::Pos2) -> Option<(f64, f64)> {
+        let rect = self.last_rect?;
+        let mini = Self::minimap_rect(rect)?;
+        if !mini.contains(point) {
+            return None;
+        }
+        let scene = self.scene.as_ref()?;
+        let map = overview::Overview::new(scene.bounds, mini)?;
+        Some(map.map_to_world((f64::from(point.x), f64::from(point.y))))
+    }
+
+    /// Put `world` at the middle of the last canvas, scale unchanged —
+    /// the minimap recenter and the quick-nav jump share this.
+    fn center_world(&mut self, world: (f64, f64)) {
+        let Some(rect) = self.last_rect else {
+            return;
+        };
+        let scale = self.viewport.scale();
+        self.viewport = hit::Viewport::new(
+            scale,
+            (
+                f64::from(rect.center().x) - world.0 * scale,
+                f64::from(rect.center().y) - world.1 * scale,
+            ),
+        );
+    }
+
     /// Push scheme visuals; egui keeps its own defaults until then.
     fn apply_visuals(&self, ctx: &egui::Context) {
         ctx.set_visuals(if self.scheme == ColorScheme::Dark {
@@ -502,7 +567,7 @@ impl eframe::App for Viewer {
         // CURRENT view's history — skipped while the toolbar path field
         // owns the keyboard (Ctrl+Z inside the path edit is egui's).
         // Ctrl+S saves (M3-5) under the same focus guard.
-        if self.scene.is_some() && !self.path_focus {
+        if self.scene.is_some() && !self.text_focus {
             let (undo, redo, save) = ctx.input(|i| {
                 let command = i.modifiers.command;
                 let z = i.key_pressed(egui::Key::Z);
@@ -568,7 +633,7 @@ impl Viewer {
                     .hint_text("workspace.dsl / workspace.json")
                     .desired_width(360.0),
             );
-            self.path_focus = edit.has_focus();
+            self.text_focus = edit.has_focus();
             let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let clicked = ui.button("Open").clicked();
             if enter || clicked {
@@ -628,17 +693,80 @@ impl Viewer {
                      Ctrl/⌘-click: open element URL · Esc: deselect · edits to the \
                      file on disk (incl. !includes) auto-reload, layout kept · \
                      a saved .json sidecar becomes the open & reload source until \
-                     the .dsl is edited again (newest wins)",
+                     the .dsl is edited again (newest wins) · left-panel search \
+                     jumps to elements/views · minimap click/drag recenters",
                 );
             });
         });
     }
 
     fn view_list(&mut self, ui: &mut egui::Ui) {
+        if self.workspace.is_none() {
+            return;
+        }
+        ui.heading(egui::RichText::new("Views").size(14.0).weak());
+        // §P3-M4-4 quick-nav: one search field over element names/ids
+        // (the CURRENT view's scene — selection is view-local) and all
+        // view titles/keys. A click jumps: element = center + select,
+        // view = switch. Match cap keeps the list scannable.
+        let nav_edit = ui.add(
+            egui::TextEdit::singleline(&mut self.nav_query)
+                .hint_text("find element / view")
+                .desired_width(f32::INFINITY),
+        );
+        // The nav field owns the keyboard too (Ctrl+Z inside it is
+        // egui's, not the history's) — toolbar ran first, OR here.
+        self.text_focus = self.text_focus || nav_edit.has_focus();
+        let mut nav_view: Option<String> = None;
+        let mut nav_item: Option<(ModelId, (f64, f64))> = None;
+        let query = self.nav_query.clone();
+        let cap = 8_usize;
+        if !query.trim().is_empty() {
+            let mut hits = 0_usize;
+            if let Some(scene) = &self.scene {
+                for item in scene
+                    .items
+                    .iter()
+                    .filter(|item| overview::nav_matches(&query, &item.name, item.id.as_str()))
+                {
+                    if hits == cap {
+                        break;
+                    }
+                    hits += 1;
+                    let label = format!("▪ {} ({})", item.name, item.id);
+                    if ui
+                        .selectable_label(false, egui::RichText::new(label).small())
+                        .clicked()
+                    {
+                        nav_item = Some((item.id.clone(), item.rect.center()));
+                    }
+                }
+            }
+            if let Some(workspace) = &self.workspace {
+                for view in workspace.views.all_views() {
+                    if hits == 2 * cap {
+                        break;
+                    }
+                    if !overview::nav_matches(&query, &view_label(view), view.key()) {
+                        continue;
+                    }
+                    hits += 1;
+                    let label = format!("⧉ {}", view_label(view));
+                    if ui
+                        .selectable_label(
+                            self.view_key.as_deref() == Some(view.key()),
+                            egui::RichText::new(label).small(),
+                        )
+                        .clicked()
+                    {
+                        nav_view = Some(view.key().to_owned());
+                    }
+                }
+            }
+        }
         let Some(workspace) = &self.workspace else {
             return;
         };
-        ui.heading(egui::RichText::new("Views").size(14.0).weak());
         let mut views = workspace.views.all_views();
         views.sort_by_key(|view| (view.base().order, view.key().to_owned()));
         let mut chosen: Option<String> = None;
@@ -667,19 +795,30 @@ impl Viewer {
                     ));
                 }
             });
-        if let Some(key) = chosen {
-            self.view_key = Some(key);
-            self.selection = None;
-            self.needs_fit = true;
-            self.restore_scale = None;
-            // Session overlays are PER VIEW (§P3-M3) — switching keeps
-            // them; only the transient interaction state resets.
-            self.drag = Drag::Idle;
-            self.layout_error = None;
-            self.rebuild_scene();
-            self.autolayout_once();
+        if let Some(key) = chosen.or(nav_view) {
+            self.show_view(key);
+        }
+        if let Some((id, center)) = nav_item {
+            // Quick-nav jump: the element's view is already on screen
+            // (search ran over its scene), so center + select.
+            self.selection = Some(paint::Selection::Items(vec![id]));
+            self.center_world(center);
         }
         self.tag_filter(ui);
+    }
+
+    /// Show view `key` (the list and the quick-nav share this): session
+    /// overlays are PER VIEW (§P3-M3) — switching keeps them; only the
+    /// transient interaction state resets.
+    fn show_view(&mut self, key: String) {
+        self.view_key = Some(key);
+        self.selection = None;
+        self.needs_fit = true;
+        self.restore_scale = None;
+        self.drag = Drag::Idle;
+        self.layout_error = None;
+        self.rebuild_scene();
+        self.autolayout_once();
     }
 
     #[allow(clippy::too_many_lines)] // the canvas pass: input → fit → paint → tip
@@ -693,7 +832,13 @@ impl Viewer {
         // (pan = middle button or Space, move = left on a box, lasso =
         // left on background) and every frame of that mode acts on it.
         let space = ui.input(|i| i.key_down(egui::Key::Space));
-        if response.drag_started_by(egui::PointerButton::Middle)
+        let minimap_press = response.drag_started_by(egui::PointerButton::Primary)
+            && ui
+                .input(|i| i.pointer.press_origin())
+                .is_some_and(|origin| self.minimap_contains(origin));
+        if minimap_press {
+            self.drag = Drag::Minimap;
+        } else if response.drag_started_by(egui::PointerButton::Middle)
             || (space && response.drag_started_by(egui::PointerButton::Primary))
         {
             self.drag = Drag::Pan;
@@ -714,6 +859,19 @@ impl Viewer {
         let mode = std::mem::replace(&mut self.drag, Drag::Idle);
         match mode {
             Drag::Idle => {}
+            Drag::Minimap => {
+                // Click or drag on the minimap: the pointer's world
+                // point IS the new viewport center (§P3-M4-4) — no
+                // scene edit, no history entry.
+                if let Some(pos) = cursor {
+                    if let Some(world) = self.minimap_world(pos) {
+                        self.center_world(world);
+                    }
+                }
+                if !release {
+                    self.drag = Drag::Minimap;
+                }
+            }
             Drag::Pan => {
                 if response.dragged() {
                     let delta = response.drag_delta();
@@ -827,25 +985,34 @@ impl Viewer {
         }
         if response.clicked() {
             if let Some(pt) = response.interact_pointer_pos() {
-                let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
-                self.canvas_click(pt, command, shift, &ctx);
+                // A click inside the minimap recenters; it never picks
+                // a box (§P3-M4-4).
+                if let Some(world) = self.minimap_world(pt) {
+                    self.center_world(world);
+                } else {
+                    let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+                    self.canvas_click(pt, command, shift, &ctx);
+                }
             }
         }
         // P3-M4: a double-click on an edge splices a waypoint into the
         // nearest segment (the second click also selected it).
-        if response.double_clicked() {
-            if let Some(pt) = response.interact_pointer_pos() {
-                self.insert_waypoint_at((f64::from(pt.x), f64::from(pt.y)));
-            }
+        if response.double_clicked()
+            && let Some(pt) = response.interact_pointer_pos()
+            && !self.minimap_contains(pt)
+        {
+            self.insert_waypoint_at((f64::from(pt.x), f64::from(pt.y)));
         }
         self.hover = match (response.hovered(), ui.input(|i| i.pointer.hover_pos())) {
-            (true, Some(pointer)) => self.scene.as_ref().and_then(|scene| {
-                hit::pick(
-                    scene,
-                    self.viewport,
-                    (f64::from(pointer.x), f64::from(pointer.y)),
-                )
-            }),
+            (true, Some(pointer)) if !self.minimap_contains(pointer) => {
+                self.scene.as_ref().and_then(|scene| {
+                    hit::pick(
+                        scene,
+                        self.viewport,
+                        (f64::from(pointer.x), f64::from(pointer.y)),
+                    )
+                })
+            }
             _ => None,
         };
         ctx.set_cursor_icon(if self.hover.is_some() {
@@ -924,6 +1091,39 @@ impl Viewer {
                     band,
                     0.0,
                     egui::Stroke::new(1.0, paint::SELECTION_COLOR),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+        // §P3-M4-4: minimap (the navigator.jspf analogue) — the whole
+        // scene overview + the live viewport rect, bottom-right. The
+        // painter is clipped to the box, so a viewport rect bigger than
+        // the scene cannot spill onto the canvas.
+        if let (Some(scene), Some(mini)) = (&self.scene, Self::minimap_rect(rect)) {
+            if let Some(map) = overview::Overview::new(scene.bounds, mini) {
+                let tl = self
+                    .viewport
+                    .screen_to_world((f64::from(rect.min.x), f64::from(rect.min.y)));
+                let br = self
+                    .viewport
+                    .screen_to_world((f64::from(rect.max.x), f64::from(rect.max.y)));
+                let view_world = scene::Rect {
+                    x: tl.0.min(br.0),
+                    y: tl.1.min(br.1),
+                    width: (br.0 - tl.0).abs(),
+                    height: (br.1 - tl.1).abs(),
+                };
+                let bg = ui.visuals().window_fill;
+                let edge = ui.visuals().noninteractive().fg_stroke.color;
+                let map_painter = ui.painter_at(mini);
+                map_painter.rect_filled(mini, 6.0, bg);
+                for shape in map.shapes(scene, Some(view_world), self.selection.as_ref()) {
+                    map_painter.add(shape);
+                }
+                map_painter.rect_stroke(
+                    mini,
+                    6.0,
+                    egui::Stroke::new(1.0, edge),
                     egui::StrokeKind::Inside,
                 );
             }
