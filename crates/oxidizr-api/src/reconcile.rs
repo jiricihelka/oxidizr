@@ -238,6 +238,17 @@ pub struct Report {
     pub elements: usize,
     /// Relationship-view grafts.
     pub relationships: usize,
+    /// EVERY uncontested old→new ELEMENT id pair the remap established
+    /// (sorted by old id for a deterministic order). The CLI report
+    /// never prints these; the viewer's reload path uses them to re-key
+    /// its session overlays (§P3-M4). Ambiguous ids appear in NEITHER
+    /// this list NOR `ambiguous`-carried guesses — never guessed means
+    /// never here. Elements and relationships keep SEPARATE lists:
+    /// both id spaces mint `"1"`, `"2"`, … independently, so a merged
+    /// pair list would be ambiguous by construction.
+    pub remapped_elements: Vec<(Id, Id)>,
+    /// The relationship counterpart of [`Report::remapped_elements`].
+    pub remapped_relationships: Vec<(Id, Id)>,
     /// Layout entries that could not be placed (the DSL edit removed or
     /// excluded them — expected outcomes, reported for review).
     pub dropped: Vec<String>,
@@ -280,6 +291,20 @@ pub fn reconcile(layout: &Workspace, updated: &Workspace) -> (Workspace, Report)
     );
     report.ambiguous.append(&mut elems.ambiguous);
     report.ambiguous.append(&mut rels.ambiguous);
+    // The full uncontested mappings, deterministic order (the viewer's
+    // overlay re-key; §P3-M4). Collected BEFORE grafting, sorted per
+    // kind so runs agree and the overlapping id spaces never mix.
+    let sorted = |maps: &Maps| {
+        let mut pairs: Vec<(Id, Id)> = maps
+            .to_new
+            .iter()
+            .map(|(old, new)| (old.clone(), new.clone()))
+            .collect();
+        pairs.sort();
+        pairs
+    };
+    report.remapped_elements = sorted(&elems);
+    report.remapped_relationships = sorted(&rels);
 
     let old_views = layout.views.all_views();
     let old_by_key: HashMap<&str, OldView<'_>> =
@@ -520,6 +545,47 @@ mod tests {
             .system_landscape_views
             .first()
             .expect("landscape view")
+    }
+
+    #[test]
+    fn remapped_reports_the_full_uncontested_pairs() {
+        // Same id-shift fixture: identifiers carry the match, so BOTH
+        // elements remap (api 1→2, web 2→3) and the relationship
+        // follows (3→4) — the viewer's overlay re-key consumes exactly
+        // these lists (§P3-M4).
+        let layout = parse(
+            "workspace \"W\" {\n    model {\n        api = softwareSystem \"API\"\n        web = softwareSystem \"Web\"\n        api -> web \"Uses\"\n    }\n}\n",
+        );
+        let updated = parse(
+            "workspace \"W\" {\n    model {\n        db = softwareSystem \"DB\"\n        api = softwareSystem \"API\"\n        web = softwareSystem \"Web\"\n        api -> web \"Uses\"\n    }\n}\n",
+        );
+        let (_, report) = reconcile(&layout, &updated);
+        let elements: Vec<(String, String)> = report
+            .remapped_elements
+            .iter()
+            .map(|(old, new)| (old.to_string(), new.to_string()))
+            .collect();
+        assert!(
+            elements.contains(&("1".to_string(), "2".to_string())),
+            "api 1→2: {elements:?}"
+        );
+        assert!(
+            elements.contains(&("2".to_string(), "3".to_string())),
+            "web 2→3: {elements:?}"
+        );
+        assert!(
+            !elements.iter().any(|(_, new)| new == "1"),
+            "the inserted db has no layout predecessor: {elements:?}"
+        );
+        // Relationship ids OVERLAP element ids (both spaces mint "1",
+        // "2", …) — which is exactly why the lists are per kind: the
+        // rel pair (3→4) could not live in the element list.
+        let relationships: Vec<(String, String)> = report
+            .remapped_relationships
+            .iter()
+            .map(|(old, new)| (old.to_string(), new.to_string()))
+            .collect();
+        assert_eq!(relationships, vec![("3".to_string(), "4".to_string())]);
     }
 
     #[test]

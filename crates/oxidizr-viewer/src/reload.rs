@@ -23,12 +23,19 @@ use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use notify::{EventKind, RecursiveMode, Watcher};
+
+/// Wake handle the notify thread calls on every raw event that hits
+/// the watched set: a cheap "something moved, repaint and poll". The
+/// shell supplies `move || ctx.request_repaint()` over its cloned
+/// paint context (the 0.37 shell has no `RepaintSignal` type — the
+/// context method IS the cross-thread wake); keeping it a plain
+/// closure is what lets this module stay GUI-free (R-2 guard).
+pub type Wake = Arc<dyn Fn() + Send + Sync>;
 
 /// Settle window after the LAST raw event before the hash check runs
 /// (P3-D6: 250 ms; V6: bursts arrive @30 ms apart, so this coalesces
@@ -90,15 +97,14 @@ impl ReloadDriver {
     /// from their CURRENT content. Parent directories get `NonRecursive`
     /// watches (V6: survive delete/rename); unreadable paths are
     /// watched anyway — their appearance IS a change. `wake` wakes the
-    /// UI so a change is polled promptly (eframe's repaint signal is
-    /// exactly this).
+    /// UI so a change is polled promptly (see [`Wake`]).
     ///
     /// # Errors
     ///
     /// `notify::Error` when the OS watcher cannot be created or a
     /// directory cannot be watched. A MISSING parent directory is not
     /// an error — nothing can change there yet.
-    pub fn watch(paths: &[PathBuf], wake: Arc<AtomicBool>) -> Result<Self, notify::Error> {
+    pub fn watch(paths: &[PathBuf], wake: Wake) -> Result<Self, notify::Error> {
         let set: BTreeSet<PathBuf> = paths.iter().map(|path| canonical_or_self(path)).collect();
         let baseline: Vec<(PathBuf, Hashed)> = set
             .iter()
@@ -146,6 +152,24 @@ impl ReloadDriver {
         inner.pending = false;
     }
 
+    /// We just wrote `path` OURSELF with `bytes` (the M3-5 save): pin
+    /// its baseline hash to exactly that content, so the rename events
+    /// our save fired hash-match and no reload edge can fire for it —
+    /// without waiting for the re-baseline `adopt` performs (P3-D6:
+    /// saving must not self-trigger).
+    pub fn note_written(&self, path: &Path, bytes: &[u8]) {
+        let mut inner = lock(&self.inner);
+        if let Some(slot) = inner
+            .baseline
+            .iter_mut()
+            .find(|(known, _)| known == &canonical_or_self(path))
+        {
+            let mut hasher = DefaultHasher::new();
+            bytes.hash(&mut hasher);
+            slot.1 = Some(hasher.finish());
+        }
+    }
+
     /// Poll from the frame loop: `true` EXACTLY ONCE per real content
     /// change, and only after the sources settled for [`DEBOUNCE`].
     /// The hashes are committed here, so a later revert-to-baseline
@@ -184,11 +208,7 @@ fn canonical_or_self(path: &Path) -> PathBuf {
 // Thread entry point: move-in is the idiomatic hand-off even though
 // the loop only borrows the three.
 #[allow(clippy::needless_pass_by_value)]
-fn pump(
-    rx: mpsc::Receiver<notify::Result<notify::Event>>,
-    inner: Arc<Mutex<Inner>>,
-    wake: Arc<AtomicBool>,
-) {
+fn pump(rx: mpsc::Receiver<notify::Result<notify::Event>>, inner: Arc<Mutex<Inner>>, wake: Wake) {
     loop {
         match rx.recv() {
             Ok(Ok(event)) => {
@@ -206,7 +226,7 @@ fn pump(
                     state.last_event = Some(Instant::now());
                     state.pending = true;
                 }
-                wake.store(true, Ordering::Relaxed);
+                wake();
             }
             Ok(Err(_)) => {}
             // Stream closed (harness dropped the sender): stop.
@@ -238,8 +258,8 @@ mod tests {
         dir
     }
 
-    fn wake_flag() -> Arc<AtomicBool> {
-        Arc::new(AtomicBool::new(false))
+    fn wake() -> Wake {
+        Arc::new(|| {})
     }
 
     /// Poll until an edge or the budget runs out (events are async;
@@ -257,13 +277,20 @@ mod tests {
 
     #[test]
     fn change_emits_exactly_one_edge_and_identical_rewrites_are_silent() {
+        use std::sync::atomic::{AtomicBool, Ordering};
         let dir = temp_dir("edge");
         let file = dir.join("demo.dsl");
         std::fs::write(&file, "v1").unwrap();
-        let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake_flag()).unwrap();
+        let woken = Arc::new(AtomicBool::new(false));
+        let wake: Wake = {
+            let woken = Arc::clone(&woken);
+            Arc::new(move || woken.store(true, Ordering::Relaxed))
+        };
+        let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake).unwrap();
 
         std::fs::write(&file, "v2").unwrap();
         assert!(wait_for_edge(&driver), "external change must fire");
+        assert!(woken.load(Ordering::Relaxed), "the thread must wake the UI");
         // Edge consumed: poll stays false until the NEXT change.
         std::thread::sleep(DEBOUNCE + Duration::from_millis(100));
         assert!(!driver.poll(), "exactly once per change");
@@ -294,7 +321,7 @@ mod tests {
         let dir = temp_dir("burst");
         let file = dir.join("burst.dsl");
         std::fs::write(&file, "0").unwrap();
-        let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake_flag()).unwrap();
+        let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake()).unwrap();
         // V6 shape: 5 writes @30 ms — 13 raw events, one reload.
         for i in 1..=5 {
             std::fs::write(&file, format!("{i}")).unwrap();
@@ -310,7 +337,7 @@ mod tests {
         let dir = temp_dir("sibling");
         let file = dir.join("watched.dsl");
         std::fs::write(&file, "keep").unwrap();
-        let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake_flag()).unwrap();
+        let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake()).unwrap();
         for i in 0..3 {
             std::fs::write(dir.join(format!("watched.dsl.{i}.tmp")), "junk").unwrap();
             std::fs::write(dir.join("other.txt"), "junk").unwrap();
@@ -326,7 +353,7 @@ mod tests {
         let included = dir.join("child.dsl");
         std::fs::write(&main, "!include child.dsl").unwrap();
         std::fs::write(&included, "a").unwrap();
-        let driver = ReloadDriver::watch(&[main.clone(), included.clone()], wake_flag()).unwrap();
+        let driver = ReloadDriver::watch(&[main.clone(), included.clone()], wake()).unwrap();
         // A reload swaps the closure: child out, new sidecar in.
         let sidecar = dir.join("main.json");
         std::fs::write(&sidecar, "{}").unwrap();
@@ -338,6 +365,24 @@ mod tests {
         assert!(!driver.poll());
         // The new set IS watched: sidecar edits fire.
         std::fs::write(&sidecar, "{\"id\": 1}").unwrap();
+        assert!(wait_for_edge(&driver));
+    }
+
+    #[test]
+    fn note_written_pins_the_save_so_our_rename_never_reloads() {
+        let dir = temp_dir("note");
+        let file = dir.join("saved.dsl");
+        std::fs::write(&file, "base").unwrap();
+        let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake()).unwrap();
+        // Our save: write temp, pin, rename (the M3-5 order).
+        let bytes = b"saved geometry".to_vec();
+        std::fs::write(dir.join("saved.dsl.7.tmp"), &bytes).unwrap();
+        driver.note_written(&file, &bytes);
+        std::fs::rename(dir.join("saved.dsl.7.tmp"), &file).unwrap();
+        std::thread::sleep(DEBOUNCE + Duration::from_millis(300));
+        assert!(!driver.poll(), "our save (pinned) must not self-trigger");
+        // An external change still fires.
+        std::fs::write(&file, "external edit").unwrap();
         assert!(wait_for_edge(&driver));
     }
 }

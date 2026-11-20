@@ -16,6 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::{Parser, ValueEnum};
 use eframe::egui::{self, Id, Pos2, Vec2};
@@ -25,7 +26,7 @@ use oxidizr_core::views::{
 };
 use oxidizr_core::{Id as ModelId, Workspace};
 use oxidizr_diag::Severity;
-use oxidizr_viewer::{commands, hit, icons, key, layout, paint, scene};
+use oxidizr_viewer::{commands, hit, icons, key, layout, paint, reload, scene};
 
 /// Storage keys (§P3-D2: eframe storage only, no config files).
 const KEY_THEME: &str = "oxidizr.viewer/theme";
@@ -170,6 +171,21 @@ struct Viewer {
     /// Last Save outcome line (M3-5): green in the status bar, cleared
     /// by the next save attempt and by any adopt.
     save_note: Option<String>,
+    /// File set behind the current open (`Opened.includes`) — the
+    /// reload watch closure next to the display file (§P3-M4).
+    includes: Vec<String>,
+    /// Live-reload driver for the current sources (§P3-M4-2); `None`
+    /// = not watching: stdin, or awaiting re-arm after an adopt.
+    reload: Option<reload::ReloadDriver>,
+    /// Watch setup failed once for this open — stop retrying per frame.
+    reload_disabled: bool,
+    /// Last reload outcome line (status bar): the reconcile report
+    /// summary, or the last-good notice after a failed reparse.
+    reload_note: Option<String>,
+    /// Paint-context clone handed to the notify thread as its wake
+    /// handle (egui 0.37: `request_repaint` IS the cross-thread
+    /// signal — there is no `RepaintSignal`).
+    repaint_ctx: Option<egui::Context>,
     /// Last auto-layout failure (dialog + status bar).
     layout_error: Option<String>,
     /// Auto-layout dialog visibility.
@@ -269,6 +285,11 @@ impl Viewer {
             drag: Drag::Idle,
             dirty: BTreeSet::new(),
             save_note: None,
+            includes: Vec::new(),
+            reload: None,
+            reload_disabled: false,
+            reload_note: None,
+            repaint_ctx: None,
             layout_error: None,
             show_layout: false,
             layout_params: AutomaticLayout::default(),
@@ -338,6 +359,12 @@ impl Viewer {
         self.histories.clear();
         self.dirty.clear();
         self.save_note = None;
+        // New workspace, new source set: the driver dies with the old
+        // one and the frame guard re-arms the watch from `display` +
+        // `includes` on the next frame (§P3-M4-2).
+        self.reload = None;
+        self.reload_disabled = false;
+        self.includes = opened.includes.clone();
         self.drag = Drag::Idle;
         self.layout_error = None;
         self.workspace = Some(opened.workspace);
@@ -445,6 +472,24 @@ impl eframe::App for Viewer {
         if self.shown_title != title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.shown_title = title;
+        }
+        if self.repaint_ctx.is_none() {
+            self.repaint_ctx = Some(ctx.clone());
+        }
+        // Live reload (§P3-M4-2): the notify thread only SCHEDULES a
+        // check — the debounced edge is consumed HERE, on the UI
+        // thread, so a reload can never interleave with a drag. The
+        // reload's adopt empties `reload`, and the guard below re-arms
+        // the watch on the fresh source set next frame.
+        if self.reload.as_ref().is_some_and(reload::ReloadDriver::poll) {
+            self.reload_from_disk();
+        }
+        if self.reload.is_none()
+            && !self.reload_disabled
+            && self.workspace.is_some()
+            && self.display != "-"
+        {
+            self.restart_watch();
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.selection = None;
@@ -576,7 +621,8 @@ impl Viewer {
                      insert handle · Alt+click handle: delete · Ctrl+Z / Ctrl+Y: \
                      undo/redo · Ctrl+S: save layout JSON · Layout dialog: \
                      align/distribute/bring-back · \
-                     Ctrl/⌘-click: open element URL · Esc: deselect",
+                     Ctrl/⌘-click: open element URL · Esc: deselect · edits to the \
+                     file on disk (incl. !includes) auto-reload, layout kept",
                 );
             });
         });
@@ -1233,6 +1279,21 @@ impl Viewer {
                     )
                     .on_hover_text(note.clone());
                 }
+                if let Some(note) = &self.reload_note {
+                    // "reload failed"/"reload watch" are the bad lines;
+                    // a reconcile summary ("reloaded — …") is the
+                    // happy-path report and stays green.
+                    let bad = note.starts_with("reload failed") || note.starts_with("reload watch");
+                    ui.colored_label(
+                        if bad {
+                            egui::Color32::DARK_RED
+                        } else {
+                            egui::Color32::DARK_GREEN
+                        },
+                        truncate(note, 90),
+                    )
+                    .on_hover_text(note.clone());
+                }
                 if let Some(error) = self
                     .open_error
                     .as_ref()
@@ -1492,6 +1553,12 @@ impl Viewer {
             Ok(()) => {
                 self.dirty.clear();
                 self.save_note = Some(format!("saved {}", target.display()));
+                // Re-baseline the reload watch on the bytes we just
+                // wrote (and adopt the sidecar the save may have
+                // created): the rename events our save fired hash-match
+                // against the fresh baseline, so saving never
+                // self-triggers a reload (P3-D6, V6).
+                self.restart_watch();
             }
             Err(error) => self.save_note = Some(error.to_string()),
         }
@@ -1509,6 +1576,141 @@ impl Viewer {
                     .any(|view| view.key() == key && matches!(view, View::Filtered(_)))
             })
         })
+    }
+
+    /// The reload watch closure (§P3-D6): the display file, the
+    /// sidecar once one EXISTS (the M3-5 save may have created it),
+    /// and the DSL `!include` set. stdin has no files. The driver
+    /// canonicalizes and filters parent-dir events to exactly these
+    /// paths, so the `.{pid}.tmp` siblings our saves churn can never
+    /// match.
+    fn watch_set(&self) -> Vec<PathBuf> {
+        if self.display == "-" {
+            return Vec::new();
+        }
+        let display = PathBuf::from(&self.display);
+        let mut set = vec![display.clone()];
+        if let Some(sidecar) = commands::save_target(&self.display) {
+            if sidecar != display && sidecar.exists() {
+                set.push(sidecar);
+            }
+        }
+        set.extend(self.includes.iter().map(PathBuf::from));
+        set
+    }
+
+    /// (Re-)arm the reload watch on the current source set: RESET the
+    /// live driver (re-baseline — the bytes a save just wrote are
+    /// truth and the rename events they fired hash-match, so no
+    /// self-triggered reload, P3-D6), or build a fresh one (an adopt
+    /// dropped the old, taking its dir watches with it). Failure
+    /// degrades to "no reload for this open", never worse.
+    fn restart_watch(&mut self) {
+        let Some(ctx) = self.repaint_ctx.clone() else {
+            return; // before the first frame: the frame guard retries
+        };
+        let set = self.watch_set();
+        if set.is_empty() {
+            self.reload = None;
+            return;
+        }
+        if let Some(driver) = &self.reload {
+            driver.reset(&set);
+            return;
+        }
+        let wake: reload::Wake = Arc::new(move || ctx.request_repaint());
+        match reload::ReloadDriver::watch(&set, wake) {
+            Ok(driver) => self.reload = Some(driver),
+            Err(error) => {
+                self.reload_disabled = true;
+                self.reload_note = Some(format!("reload watch failed: {error}"));
+            }
+        }
+    }
+
+    /// Live reload (P3-D6): re-open the display file, fold the session
+    /// overlays into the layout side and remap through the SHARED
+    /// `oxidizr-api::reconcile` engine. Surviving views keep their
+    /// on-screen geometry — overlays re-key onto the new ids from the
+    /// report's remap lists (uncontested pairs only: ambiguous ids are
+    /// NEVER guessed, so their entries drop, R-3). Histories reset (a
+    /// command's `from` values name pre-reload ids), `dirty` clears
+    /// (the geometry lands baked into the reconciled workspace). A
+    /// failed reparse keeps the last-good workspace on screen: the
+    /// driver's hashes already advanced with the change, so the note
+    /// tells the story and the window stays open (no retry storm).
+    fn reload_from_disk(&mut self) {
+        let opened = match oxidizr_api::open(
+            &Input::File(PathBuf::from(&self.display)),
+            &ApiOptions::default(),
+        ) {
+            Ok(opened) => opened,
+            Err(outcome) => {
+                self.reload_note = Some(format!(
+                    "reload failed — last-good kept: {}",
+                    summarize_log(&outcome.log, "open failed")
+                ));
+                return;
+            }
+        };
+        // The CURRENT on-screen layout is reconcile's layout side:
+        // stored geometry plus every session overlay.
+        let Some(current) = self.workspace.clone() else {
+            return;
+        };
+        let mut layout = current;
+        for (key, overlay) in &self.overlays {
+            layout = commands::apply_overlay(&layout, key, overlay);
+        }
+        let (reconciled, report) = oxidizr_api::reconcile::reconcile(&layout, &opened.workspace);
+        // Re-key the overlays onto the new ids. Element and
+        // relationship id spaces OVERLAP (both mint "1", "2", …), so
+        // each kind looks up in its OWN list; views that died take
+        // their overlays with them.
+        let view_keys: BTreeSet<&str> = opened
+            .workspace
+            .views
+            .all_views()
+            .iter()
+            .map(|view| view.key())
+            .collect();
+        let remap = |pairs: &[(ModelId, ModelId)], old: &ModelId| {
+            pairs
+                .binary_search_by(|(from, _)| from.cmp(old))
+                .ok()
+                .map(|index| pairs[index].1.clone())
+        };
+        let mut restored: HashMap<String, commands::LayoutOverlay> = HashMap::new();
+        for (key, overlay) in &self.overlays {
+            if !view_keys.contains(key.as_str()) {
+                continue;
+            }
+            let mut next = commands::LayoutOverlay::for_view(&overlay.view_key);
+            for (old, at) in &overlay.elements {
+                if let Some(new) = remap(&report.remapped_elements, old) {
+                    next.elements.insert(new, *at);
+                }
+            }
+            for (old, points) in &overlay.relationships {
+                if let Some(new) = remap(&report.remapped_relationships, old) {
+                    next.relationships.insert(new, points.clone());
+                }
+            }
+            next.dimensions = overlay.dimensions;
+            restored.insert(key.clone(), next);
+        }
+        let note = format!(
+            "reloaded — {} · {} ambiguous",
+            report.summary(),
+            report.ambiguous.len()
+        );
+        self.adopt(Opened {
+            workspace: reconciled,
+            ..opened
+        });
+        self.overlays = restored;
+        self.rebuild_scene();
+        self.reload_note = Some(note);
     }
 
     /// Undo/redo one step of the current view (Ctrl+Z / Ctrl+Y).
