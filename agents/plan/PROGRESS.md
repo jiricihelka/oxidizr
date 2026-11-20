@@ -29,7 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
-| P3 | viewer+layout | **M2 COMPLETE 2026-11-20** — `Layered` engine (deterministic dagre-family pipeline, 1k-node benches, `P3` baseline) + viewer auto-layout integration (headless `layout` seam, `scene::build` `Overrides` overlay, `auto-layout.jspf` dialog, ONE pass at adopt). M1 read-only viewer COMPLETE 2026-11-20; M0 scaffold 2026-11-19. Next: M3 editing + reload. Log below (`build/PHASE_3.md`) |
+| P3 | viewer+layout | **M3 COMPLETE 2026-11-20** — editing + SAVE: headless `commands` (`LayoutOverlay`/`Command`/`History`), shell drag/lasso/waypoint interactions, parity UI (align/distribute/centre/bring-back), `apply_overlay` → sidecar JSON via the shared writer (Ctrl+S). M2 COMPLETE 2026-11-20 (`Layered` engine + auto-layout dialog, `P3` baseline); M1 read-only viewer COMPLETE 2026-11-20; M0 scaffold 2026-11-19. Next: M4 live reload + export (V6). Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
 sub-piece**, wrapped up by a milestone commit (PROGRESS log + status board); keep
@@ -150,6 +150,58 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P3-M3 — editing commands + shell interactions + SAVE ✅ (2026-11-20, COMPLETE)
+
+Editing milestone (§P3-M3 decomposition, V4 CLOSED up front at M3-1):
+the session overlay becomes the single mutation surface (editor rule
+P3-D0 — commands touch ONLY the overlay, the workspace model and DSL
+text are immutable in-app) and lands on disk as byte-contract JSON.
+The byte contract held all milestone: bless 307×unchanged every
+commit; the save path adds NO serializer (shared `oxidizr_json`).
+
+- **M3-1** `4fcb235` — docs: §P3-M3 table + the V4 verdict: the
+  reference NEVER writes a stored `automaticLayout` block, we keep
+  editing ON, the block is permanent, save writes GEOMETRY ONLY.
+- **M3-2** `6b401c0` — headless `commands`: `LayoutOverlay` (view_key,
+  element top-lefts, relationship interiors, dimensions), invertible
+  `Command` set (moves/waypoints/canvas-size/clear/group — inverse =
+  swapped `from`/`to`, no closures on the stack), the parity factories
+  (move/align/distribute/centre/bring-back/remove-all-vertices/
+  set-waypoints, all `Option<Command>` so no-op never enters history),
+  `History` cap 200. Undo semantics pinned: undo rewrites `from`
+  geometry, map ENTRIES persist — round-trip identity is at RENDER
+  level (the overlay readers), not map equality.
+- **M3-3** `c0ad59e` — shell state machine: drag MODE decided at press
+  (`Drag::Idle/Pan/Move/Lasso`), preview frames equal the committed
+  geometry (press-captured origins + `drag_target`, release is an
+  idempotent re-apply), intersection lasso (+Shift), middle/Space pan,
+  Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y per view, per-view overlay+history maps,
+  dirty badge; Apply/Reset land as undoable commands.
+- **M3-4** `6c5d541` — waypoint editing: `hit::nearest_waypoint`/
+  `insert_waypoint` pure helpers, `commands::drag_waypoint`, handle
+  circles on the selected edge (`WAYPOINT_HANDLE_PX`, screen px),
+  `Drag::Waypoint` + handle-first `press_mode` (Alt+press deletes,
+  double-click splices), dialog parity footer (align L/Cx/R/T/Cy/B,
+  distribute ↔/↕, Centre, Bring back, Remove vertices) via `run_edit`.
+- **M3-5** `1d58964` — SAVE: `apply_overlay` (elementViews x/y,
+  relationshipViews vertices wholesale, view dimensions — i32 grid,
+  7 MODEL-view collections by key; filtered/image have no content slot
+  → save BLOCKED with a status note), `save_target` (`.json` in place,
+  `.dsl` → `<stem>.json` sidecar, stdin → None), `write_workspace`
+  (shared writer → `.{pid}.tmp` → rename, P3-D6), Ctrl+S + toolbar
+  Save + status note. Category A test pins the contract as BYTE
+  STABILITY (`to_vec(from_slice(bytes)) == bytes`) — the JSON read
+  normalizes bean defaults and the writer sorts entry arrays, so
+  idempotent saves, not struct equality, is what the format promises.
+
+Verification: quartet every commit; `ci gui` on every shell commit;
+full e2e tier 8/8 + bless 307×unchanged every commit; viewer lib 71
+tests + 3 golden; guard still 9 lib files (save rides `oxidizr_json`,
+no egui in the core). `bench cmp P3` spot-check at close: the layout
+ENGINE untouched all milestone (viewer-only work) — all groups 1.00.
+No tag (M5 is the v0.3.0 point). Next: M4 live reload + remap (V6),
+minimap/quick-nav, export SVG+PNG, `dot-backend`.
 
 ### P3-M2 — `Layered` layout engine + viewer auto-layout ✅ (2026-11-20, COMPLETE)
 

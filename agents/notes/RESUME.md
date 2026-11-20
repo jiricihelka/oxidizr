@@ -1,151 +1,115 @@
-# RESUME — session checkpoint (updated 2026-11-20, **P3 M3-5 done → M3 close next**)
+# RESUME — session checkpoint (updated 2026-11-20, **P3 M3 COMPLETE → M4 live reload + export next**)
 
 ## State
 
-- **P2R COMPLETE** `410fee6`; **P3-M0** (`e3f81e6`→`346ca6e`);
-  **P3-M1 COMPLETE** (`969a31b`→`496912c`); **P3-M2 COMPLETE**
-  (`c626048`→`e647dcd`, close `468ec03` + `P3` bench baseline);
-  **P3-M3**: M3-1 `4fcb235`, M3-2 `6b401c0`, M3-3 `c0ad59e`,
-  M3-4 = this commit. **Nothing pushed; tags v0.1.0/v0.2.0**
-  (v0.3.0 at P3-M5).
+- **P2R COMPLETE** `410fee6`; **P3-M0** `346ca6e`; **P3-M1 COMPLETE**
+  (`969a31b`→`496912c`); **P3-M2 COMPLETE** (`c626048`→`468ec03`,
+  `P3` bench baseline); **P3-M3 COMPLETE** (`4fcb235`→this close):
+  M3-2 `6b401c0`, M3-3 `c0ad59e`, M3-4 `6c5d541`, M3-5 `1d58964`.
+  **Nothing pushed; tags v0.1.0/v0.2.0** (v0.3.0 at P3-M5).
 - **Ritual:** quartet every commit; shell commits also `cargo xtask ci
   gui`; lib commits also full tier (`OXIDZR_E2E_FULL=1 cargo test
   -p oxidizr-e2e` → 8 ok) + `cargo xtask e2e bless` → 307×unchanged +
-  clean `testdata/`; **never push**.
-- **M3 plan (§P3-M3 table in PHASE_3.md — authoritative, read it):**
-  - **M3-4 DONE (this commit)** waypoint editing + parity UI:
-    - `hit::nearest_waypoint(point, polyline, tol)` → polyline index of
-      the nearest INTERIOR vertex (endpoints skipped, tol world px)
-      and `hit::insert_waypoint(point, polyline)` → splice index
-      (split nearest segment via `distance_to_segment`).
-    - `commands::drag_waypoint(id, from, index, delta, snap)` — press-
-      captured INTERIOR contract, idempotent like `drag_move`.
-    - `paint::WAYPOINT_HANDLE_PX = 4.0`; selected `Selection::Edge`
-      paints filled+ring circles per interior vertex (screen px).
-    - Shell: `Drag::Waypoint { id, from, index, press, delta }`;
-      `press_mode(origin, shift, alt)` — handle of the SELECTED edge
-      grabs FIRST (Alt+press deletes vertex via `set_waypoints`,
-      plain press drags; preview = `preview_waypoint`, release commits
-      `drag_waypoint`, None → restore press route); double-click on an
-      edge → `insert_waypoint_at` (pick Edge, splice, `set_waypoints`);
-      dialog footer `editing_buttons` row (Align L/Cx/R/T/Cy/B ≥2,
-      Space ↔/↕ ≥3, Centre, Bring back via `canvas_page()` = visible
-      canvas WORLD rect, Remove vertices) — all through `run_edit`
-      (overlay clone → factory → `edit_current_view`); `WaypointHit`
-      type alias for the hit tuple; help text updated.
-  - **M3-5 DONE (this commit)** SAVE:
-    - `commands::apply_overlay(&Workspace, view_key, &LayoutOverlay) ->
-      Workspace` — clone-and-write into `elementViews x/y`,
-      `relationshipViews vertices` (wholesale), view `dimensions`;
-      `to_px` rounds+clamps to the stored i32 grid; walks `ViewSet`
-      via local `content_of_key` (the 7 MODEL-view vecs by
-      `base.key` — filtered/image have NO content → key lands
-      nowhere); model/styles/automaticLayout untouched (V4).
-    - `commands::save_target(display)`: `.json` in place, `.dsl` →
-      `<stem>.json` sidecar (case-insensitive), `"-"` stdin → None.
-    - `commands::write_workspace(path, ws)`: `oxidizr_json::to_vec`
-      (NO second serializer) → `{name}.{pid}.tmp` → rename (P3-D6);
-      `SaveError { Json(#[from] JsonError), Io { path, source } }`.
-    - Shell: `save_note: Option<String>` (status bar: dark_red only on
-      `serialize:`/`write ` prefixes, else dark_green; cleared per
-      attempt + at adopt); `save_workspace()` blocks on
-      `current_view_filtered()` (`View::Filtered` via `all_views()`)
-      and stdin, folds ALL dirty overlays, success → `dirty.clear()`;
-      Ctrl+S in the undo/redo block (path-focus guarded); toolbar
-      "Save" enabled iff dirty non-empty; help text lists Ctrl+S.
-    - Category A test: open temp DSL → ids from FIRST view content →
-      overlay (222.4,333.6)→(222,334) rounds → ghost key == workspace
-      → sidecar write → `from_slice` → **byte-stability** re-write
-      `to_vec(parsed) == bytes` (NOT struct equality: JSON read
-      normalizes absent description → `Some("")` + rebuilds tags, the
-      writer sorts entry arrays by id — idempotent saves is the
-      contract). `save_target` unit test.
-    - Also: hit.rs lasso-empty test needed `let empty: Vec<usize>`
-      (E0282 with the new generic inference context).
-  - **M3 CLOSE NEXT**: PROGRESS board + log M3 row; PHASE_3 M3 DONE
-    stamps; RESUME → M4 entry; bench sanity = `cmp P3` spot-check
-    only (engine untouched).
-  - V4 verdict (§P3-D10): stored `automaticLayout` block PERMANENT,
-    honored at render, we stay EDITABLE; save writes GEOMETRY ONLY,
-    never the block.
-  - Scope cuts: SetAnchor + width/height deltas → P4; undo per-view.
-- **M4** (P3-D9): live reload + remap UX (notify, 250 ms debounce,
-  api::reconcile remap, temp+rename no-storm), DSL→sidecar workflow,
-  minimap + quick-nav, export SVG+PNG, `dot-backend` feature
-  (`$OXIDZR_DOT_BIN`). V6 (notify coalescing per OS) gates the watch.
-- **M5**: `cargo xtask oracle verify` (needs `$OXIDZR_STRUCTURIZR_BIN`),
-  perf pass, docs, tag **v0.3.0**.
+  clean `testdata/`; commit every green sub-piece; **never push**.
+- `bench cmp P3` at M3 close: ALL groups 1.00 (engine untouched).
 
-## M3 editing core (commands.rs — read before M3-5)
+## M4 NEXT (§P3-M4 in PHASE_3.md — authoritative, read it)
 
-- `LayoutOverlay { view_key, elements, relationships, dimensions }`
-  (`for_view`, `is_empty`, `as_overrides`, `position`/`rect`/
-  `interior` read overlay-first-then-scene); `Command`
-  (MoveElements{moves}/SetWaypoints{changes}/SetCanvasSize{from,to}/
-  ClearView{snapshot}/Group{steps}) with symmetric `apply(forward)`.
-  Factories `move_by`(snap, GRID_PX 10), `align`(AlignEdge l/cx/r/t/
-  cy/b, bbox target, ≥2), `distribute`(Axis, ≥3, extremes fixed),
-  `centre_view`, `bring_back`(page Rect, minimal delta),
-  `remove_all_vertices`, `set_waypoints`(from = overlay.interior),
-  `drag_waypoint`, `set_canvas_size`, `clear_view`, `drag_target`/
-  `drag_move`, `apply_layout(scene, overlay, overrides)` →
-  Moves/Changes/Group — ALL `Option<Command>` (None = no-op, never
-  pushed). `History` run/undo/redo/reset/can_*, HISTORY_CAP 200.
-- Undo semantics (pinned): undo REWRITES `from` geometry, map ENTRIES
-  persist — round-trip identity is at RENDER level (`position()`/
-  `interior()` readers), not map equality.
-- Fixture math (commands tests): 3 boxes 100×50 at (0,0)/(220,60)/
-  (450,0), edge10 interiors [(120,40),(200,80)], bounds (-20,-20,
-  590,150); `drag_waypoint(10, +[15,5], snap)` → vertex (220,90);
-  distribute gap 125 → box2 225; drag_move((0,0)+(15,5),snap)→(20,10).
-- Shell contract: scene is rebuilt WITH the overlay, so
-  `scene.edges[i].points` IS the effective polyline — hit tests and
-  handle painting read the scene, commits capture at press.
+- **Live reload + remap (P3-D6, V6 gate):** `reload.rs` is still the
+  M0 stub (`ReloadDriver` placeholder). Wire a notify watcher on the
+  opened file + `!include` closure, 250 ms debounce, reparse through
+  `oxidizr_api::open`, remap old→new ids via the SHARED
+  `oxidizr-api::reconcile` engine (stays in api, viewer consumes),
+  keep surviving overlay geometry. V6 = per-OS notify coalescing +
+  our own temp+rename writer must not storm (M3-5 writes
+  `{name}.{pid}.tmp` then renames — the watcher must ignore temps and
+  survive rename-as-modify). Display string after adopt already
+  canonicalized (`Opened.display`, `-` = stdin).
+- **DSL→sidecar workflow:** M3-5 save already produces `<stem>.json`;
+  the reload watch should ALSO watch the sidecar once it exists
+  (decide: prefer sidecar over DSL for reload once saved).
+- **Minimap (navigator.jspf) + quick-nav (quick-navigation.jspf).**
+- **Export SVG+PNG with key (P3-V8 reference look, Q2):** headless
+  ride on `paint::paint_scene` shapes → SVG (usvg-free? decide) / PNG
+  (software raster — epaint has no rasterizer: decide tessellator +
+  miniquad-free path, this is the meaty design point).
+- **`dot-backend` feature:** optional `graphviz dot` engine behind
+  `$OXIDZR_DOT_BIN` (Category B posture like the oracle).
+- M4 gates the same quartet/`ci gui`/full tier/bless ritual; watch
+  tests = temp dir + fs events, NO sleeps longer than needed (CI).
 
-## M2 auto-layout (shipped)
+## M3 editing core (commands.rs + shell — read before touching edits)
 
-- `layout.rs` (headless, 7 tests): `stored_for` (Filtered → BASE view;
-  `content.automatic_layout` — a **ViewContent** field), `config_for`
-  (null direction ⇒ LR), `apply` (placements→top-lefts, route
-  interiors, empty straightens), `encode`/`decode`
-  (`"LR|100|50|50|1"`, garbage→None).
-- `scene::build(ws, key, scheme, mask, Option<&Overrides>)`; overrides
-  REPLACE (elements = TOP-LEFT; relationships = interiors wholesale).
-  DEVIATION (M2-5 row): boundary pad stays `BOUNDARY_PADDING = 20`.
+- `LayoutOverlay { view_key, elements (top-lefts), relationships
+  (interiors), dimensions: Option<Dimensions> (Copy!) }`; readers
+  `position`/`rect`/`interior` = overlay-first-then-scene;
+  `as_overrides()` → `scene::build` 5th param. `Command`
+  Move/SetWaypoints/SetCanvasSize/ClearView/Group, symmetric
+  `apply(forward)`; factories ALL `Option<Command>` (None = no-op);
+  `History` cap 200. Undo rewrites `from` geometry, map ENTRIES
+  persist — identity is at RENDER level, not map equality.
+- SAVE (M3-5): `apply_overlay(&Workspace, key, &overlay)` writes
+  elementViews x/y + relationshipViews vertices (wholesale) +
+  dimensions via `to_px` (round+clamp i32); walks the 7 MODEL-view
+  vecs by `base.key` (macro `content_of_key`) — filtered/image = no
+  content → key lands nowhere; shell blocks their save
+  (`current_view_filtered` via `View::Filtered` + `all_views()`).
+  `save_target`: `.json` in place, `.dsl` → sidecar (case-insens),
+  `-` → None. `write_workspace`: `oxidizr_json::to_vec` (NO second
+  serializer) → `.{pid}.tmp` → rename; `SaveError{Json,Io{path,
+  source}}`. Shell: `save_note` status line (dark_red iff
+  `serialize:`/`write ` prefixes), Ctrl+S focus-guarded, toolbar Save
+  iff dirty; success clears `dirty`. Category A test pins BYTE
+  STABILITY `to_vec(from_slice(bytes)) == bytes` — JSON read
+  normalizes (`Some("")` descriptions, tag rebuild) + writer SORTS
+  entry arrays by id ⇒ struct equality is NOT the contract.
+- Shell contract: scene rebuilt WITH the overlay ⇒
+  `scene.edges[i].points` IS the effective polyline; commits capture
+  at press; preview frames == committed geometry (idempotent
+  re-apply); `press_mode(origin, shift, alt)` handle-first; double-
+  click `insert_waypoint_at`; `run_edit`/`editing_buttons`/
+  `canvas_page` dialog parity; per-view overlays/histories/dirty,
+  cleared at adopt only.
+- `hit`: `nearest_waypoint`/`insert_waypoint` (interior-only, splice
+  nearest segment), `HIT_TOLERANCE_PX 6` screen px ÷ scale;
+  `paint::WAYPOINT_HANDLE_PX 4.0` filled+ring on selected Edge.
 
-## Clippy/lint catalog (cumulative — the gui leg alone catches shell docs)
+## Clippy/lint catalog (cumulative — `ci gui` alone catches shell docs)
 
-- egui 0.37: `PointerButton::Primary` (NOT `Left`); no
-  `InputState::any_pointer_down` ⇒ `i.pointer.any_down()`;
-  `Ui::toggle_value(&mut bool, atoms)`; `Painter::rect_stroke(rect,
-  rounding, stroke, StrokeKind)`; `Id::new` DEPRECATED ⇒ focus via
-  `response.has_focus()` into a flag; `Response::double_clicked()`.
-- `similar_names` DENY — `pointer` vs existing `painter` (use
-  `cursor`). `type_complexity` ⇒ alias (`WaypointHit`) or fn-level
-  `#[allow]` + comment (run_edit's factory param). `redundant_clone`
-  in an early-return branch (move `from`, don't clone).
-  `redundant_closure` ⇒ pass the fn (`run_edit(remove_all_vertices)`).
-- Doc line starting `+` ⇒ `doc_lazy_continuation`; `[] as Vec` cast
-  ILLEGAL ⇒ `[] as [(f64,f64); 0]`; `float_cmp` allow where exactness
-  by design; `manual_midpoint` ⇒ `f64::midpoint`;
-  `cast_precision_loss` ⇒ fn-level allow + comment; double `&mut self`
-  in one expression ⇒ split with a local; `cargo fmt` reflows
-  signatures — match post-fmt text.
-- Paint fixtures bite: the paint-test edge has an `order` BADGE
-  (circle pair) — clear `order = None` before counting circles.
+- egui 0.37: `PointerButton::Primary`; `i.pointer.any_down()`;
+  `Ui::toggle_value`; `rect_stroke(rect, rounding, stroke,
+  StrokeKind)`; `Id::new` DEPRECATED (`response.has_focus()`);
+  `double_clicked()`; `ui.add_enabled(bool, egui::Button::new(..))`.
+- `similar_names` DENY (`cursor` not `pointer` by `painter`);
+  `type_complexity` ⇒ alias (`WaypointHit`) or fn-`#[allow]`+comment
+  (`run_edit`); `redundant_clone` early-return; `redundant_closure`
+  ⇒ pass fn; `assigning_clones`/`clone_on_copy` — `Dimensions` IS
+  Copy; doc line starting `+` ⇒ `doc_lazy_continuation`; E0282 on
+  bare `Vec::new()` in assert_eq ⇒ bind `let empty: Vec<usize>`;
+  double `&mut self` one expression ⇒ split local; `cargo fmt`
+  reflows — match post-fmt text; paint fixture edge has `order`
+  BADGE (circle pair) — clear before counting circles.
+- R-2 guard: lib core NEVER references eframe/egui (9 files checked;
+  `oxidizr_json`/`oxidizr_api` imports fine).
 
-## M1 viewer orientation (shipped)
+## Viewer orientation (M1/M2 shipped)
 
-- eframe/egui/epaint 0.37: `App::ui(&mut self, ui, frame)`; unified
-  `egui::Panel`; `Storage::set_string(k, String)`; `Window::open(&mut
-  bool)`; `ctx.load_texture`/`Painter::image`; `ComboBox::from_id_salt`,
-  `ui.selectable_value`, `DragValue::range(0..=1000)` (i32).
-- Click after a DECIDED drag (that MOVED) never fires; plain
-  press-release still clicks (press-decided mode is click-safe).
-- Scene: item rect top-left = element x/y (or override), size = style
-  else 350×150; edge polyline = [source centre, vertices…, destination
-  centre]; `hit::pick` items last-wins, edges by tolerance, boundaries
-  NOT pickable; `Hit::Item/Edge(usize)` = scene-layer indices.
-- bless diff-0: `cargo xtask e2e bless 2>&1 | grep -cE ": unchanged$"`
-  = 307 + clean `git status` under `testdata/`.
-- `cargo test -p oxidizr-viewer` = 69 lib + 3 golden tests.
+- Scene: item rect top-left = x/y (or override), size = style else
+  350×150; edge polyline = [source centre, interiors…, destination
+  centre]; `hit::pick` items last-wins, edges tolerance-first;
+  boundaries not pickable. `layout.rs` `stored_for`/`config_for`/
+  `apply`/`encode`/`decode` (`"LR|100|50|50|1"`); boundary pad
+  DEVIATION: `BOUNDARY_PADDING = 20`.
+- eframe-0.37: unified `egui::Panel`; `Storage::set_string(k,
+  String)`; `Window::open(&mut bool)`; `ctx.load_texture`;
+  `ComboBox::from_id_salt`; click after a MOVED drag never fires;
+  bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"`
+  == 307 + clean `git status testdata/`.
+- `cargo test -p oxidizr-viewer` = 71 lib + 3 golden tests.
+
+## M5 (after M4)
+
+- `cargo xtask oracle verify` (needs `$OXIDZR_STRUCTURIZR_BIN`) —
+  the saved-sidecar `json` load A/B leg was deferred here from M3-5;
+  perf pass (60 fps @ 200 elements, informational), docs, tag
+  **v0.3.0**.
