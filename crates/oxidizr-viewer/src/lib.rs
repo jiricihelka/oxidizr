@@ -39,6 +39,7 @@ pub mod reload;
 pub mod scene;
 #[cfg(feature = "gui")]
 pub mod shell;
+pub mod statefile;
 
 #[cfg(test)]
 mod tests {
@@ -81,6 +82,6 @@ mod tests {
             }
             checked += 1;
         }
-        assert_eq!(checked, 11, "lib core = lib.rs + ten modules");
+        assert_eq!(checked, 12, "lib core = lib.rs + eleven modules");
     }
 }

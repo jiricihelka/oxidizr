@@ -114,6 +114,25 @@ output (Phase 1 flag); F9 is the Phase 1T interlude (test infra, `build/PHASE_1T
   `oxidizr-api::Request`, so pipeline behavior and every byte-parity path are
   untouched (bless 307×unchanged remains the tripwire).
 
+### F11 — `<stem>.oxidizr.json` sidecar for oxidizr-only data ✅ (signed off 2026-11-20, user directive)
+
+- Problem: the viewer accumulates per-file state the Structurizr JSON
+  model cannot carry (per-view viewport memory; later bookmarks, custom
+  groupings…). Writing it into the workspace JSON would break the byte
+  contract and put unknown keys in front of the official tooling;
+  eframe's storage keys per window, not per file, and is invisible to
+  the user.
+- Feature: oxidizr-only data persists next to the source file as
+  `<stem>.oxidizr.json` — a versioned envelope written atomically
+  (temp+rename) with our own JSON (serde_json, never `oxidizr_json`)
+  — and NEVER fed to or read
+  from the contract writer/reader, NEVER adopted as an open or reload
+  source (the layout sidecar for `big.dsl` is `big.json` — a different
+  exact filename), and deleting it always loses nothing (pure cache).
+  Decomposition: `build/PHASE_3.md` §P3-M11 (M11-12).
+- Compatibility: none — the contract pipeline never references the
+  file; workspaces that never use it see zero behavior change.
+
 ## Ideas (💡 not agreed — sign-off required before implementing)
 
 | # | Idea | Compat analysis |

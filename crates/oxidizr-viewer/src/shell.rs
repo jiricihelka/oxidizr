@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::{commands, export, hit, icons, key, layout, overview, paint, reload, scene};
+use crate::{commands, export, hit, icons, key, layout, overview, paint, reload, scene, statefile};
 use clap::ValueEnum;
 use eframe::egui::{self, Pos2, Vec2};
 use oxidizr_api::{ApiOptions, Input, LogItem, Opened, Outcome};
@@ -123,6 +123,14 @@ struct Viewer {
     /// Zoom restored from storage, applied on the first painted frame
     /// (the canvas size is unknown before that).
     restore_scale: Option<f64>,
+    /// §P3-M11 M11-12 (F11): per-file sidecar state — view key → last
+    /// camera (zoom + world centre). Seeded from the
+    /// `<stem>.oxidizr.json` cache on adopt, flushed back to it on every
+    /// file swap and on close. Pure cache: NEVER an open/reload source.
+    sidecar: statefile::ViewerState,
+    /// Sidecar camera awaiting the first painted frame after an adopt
+    /// (consumed by `canvas`; takes precedence over `restore_scale`).
+    pending_viewport: Option<statefile::ViewMemory>,
     /// View key restored from storage (honored by the next adopt).
     pending_view: Option<String>,
     /// Canvas rect from the previous frame (zoom-button pivot).
@@ -277,6 +285,8 @@ impl Viewer {
             viewport: hit::Viewport::new(1.0, (0.0, 0.0)),
             needs_fit: false,
             restore_scale: None,
+            sidecar: statefile::ViewerState::default(),
+            pending_viewport: None,
             pending_view: None,
             last_rect: None,
             shown_title: String::new(),
@@ -348,8 +358,19 @@ impl Viewer {
     /// Take over a freshly opened workspace: first (or restored) view,
     /// re-fit unless a zoom is pending.
     fn adopt(&mut self, opened: Opened) {
+        // §P3-M11 M11-12 sidecar swap: BOTH an open and a live reload
+        // funnel through here, so this is the single choke-point — the
+        // OUTGOING file's camera map is recorded and flushed to its
+        // `<stem>.oxidizr.json` before the swap, the INCOMING file's
+        // map is then seeded from its own cache (a missing or unusable
+        // file simply starts empty).
+        self.record_view();
+        self.flush_sidecar();
         self.display = opened.display.clone();
         self.path_edit = opened.display;
+        self.sidecar = statefile::sidecar_path(&self.display)
+            .map(|path| statefile::load(&path))
+            .unwrap_or_default();
         self.open_log = opened.log;
         self.open_error = None;
         self.selection = None;
@@ -382,8 +403,48 @@ impl Viewer {
         self.drag = Drag::Idle;
         self.layout_error = None;
         self.workspace = Some(opened.workspace);
-        self.needs_fit = self.restore_scale.is_none();
+        // §P3-M11 M11-12: a remembered camera beats both the startup
+        // zoom restore and the re-fit; a view nobody panned fits fresh.
+        self.pending_viewport = self
+            .view_key
+            .as_ref()
+            .and_then(|key| self.sidecar.views.get(key))
+            .copied();
+        self.needs_fit = self.pending_viewport.is_none() && self.restore_scale.is_none();
         self.rebuild_scene();
+    }
+
+    /// Record the current viewport into the in-memory sidecar map
+    /// (§P3-M11 M11-12): the zoom plus the WORLD point at the canvas
+    /// centre, derived from the last painted canvas rect. Before the
+    /// first frame there is no rect and nothing worth remembering.
+    fn record_view(&mut self) {
+        let (Some(key), Some(rect)) = (&self.view_key, self.last_rect) else {
+            return;
+        };
+        let centre = self.viewport.screen_to_world((
+            f64::from(rect.width()) / 2.0,
+            f64::from(rect.height()) / 2.0,
+        ));
+        if !(centre.0.is_finite() && centre.1.is_finite()) {
+            return;
+        }
+        self.sidecar.views.insert(
+            key.clone(),
+            statefile::ViewMemory {
+                zoom: self.viewport.scale(),
+                centre,
+            },
+        );
+    }
+
+    /// Write the current file's sidecar map to disk (M11-12). Silent
+    /// best-effort: this is a pure cache, a failed write may never
+    /// disturb the session.
+    fn flush_sidecar(&self) {
+        if let Some(path) = statefile::sidecar_path(&self.display) {
+            let _ = statefile::store(&path, &self.sidecar);
+        }
     }
 
     /// Re-run `scene::build` for the current workspace/view/scheme,
@@ -655,6 +716,10 @@ impl eframe::App for Viewer {
             storage.set_string(KEY_VIEW, key.clone());
         }
         storage.set_string(KEY_LAYOUT, layout::encode(&self.layout_params));
+        // §P3-M11 M11-12: closing the window flushes the per-file
+        // viewport memory to the sidecar beside the workspace.
+        self.record_view();
+        self.flush_sidecar();
     }
 }
 
@@ -746,7 +811,9 @@ impl Viewer {
                      the .dsl is edited again (newest wins) · left-panel search \
                      jumps to elements/views · minimap click/drag recenters · \
                      Export writes <stem>.svg + <stem>.png (with key) beside \
-                     the save file",
+                     the save file · per-view zoom/pan is remembered per \
+                     workspace in <stem>.oxidizr.json (a pure cache — delete \
+                     it and nothing is lost)",
                 );
             });
         });
@@ -853,6 +920,9 @@ impl Viewer {
     /// overlays are PER VIEW (§P3-M3) — switching keeps them; only the
     /// transient interaction state resets.
     fn show_view(&mut self, key: String) {
+        // §P3-M11 M11-12: the view we are LEAVING keeps its camera in
+        // the sidecar map before the switch resets the viewport.
+        self.record_view();
         self.view_key = Some(key);
         self.selection = None;
         self.needs_fit = true;
@@ -1127,7 +1197,21 @@ impl Viewer {
         });
 
         let screen = (f64::from(rect.width()), f64::from(rect.height()));
-        if let Some(scale) = self.restore_scale.take() {
+        // §P3-M11 M11-12: the sidecar memory wins over both the startup
+        // zoom restore and the re-fit; the remembered WORLD point is
+        // re-centred for whatever canvas size this first frame reports
+        // (storing world coords is what makes the memory resolution-
+        // independent). Viewport::new clamps a hand-edited zoom.
+        if let Some(memory) = self.pending_viewport.take() {
+            self.restore_scale = None;
+            self.viewport = hit::Viewport::new(
+                memory.zoom,
+                (
+                    screen.0 / 2.0 - memory.centre.0 * memory.zoom,
+                    screen.1 / 2.0 - memory.centre.1 * memory.zoom,
+                ),
+            );
+        } else if let Some(scale) = self.restore_scale.take() {
             if let Some(scene) = &self.scene {
                 let center = scene.bounds.center();
                 self.viewport = hit::Viewport::new(
@@ -2169,6 +2253,11 @@ impl Viewer {
             report.summary(),
             report.ambiguous.len()
         );
+        // §P3-M11 M11-12: a reload keeps the user's view — adopt()
+        // otherwise falls back to the FIRST view (pending_view is empty
+        // after startup), which would strand the remembered camera of
+        // the view actually on screen.
+        self.pending_view = self.view_key.clone();
         self.adopt(Opened {
             workspace: reconciled,
             ..opened

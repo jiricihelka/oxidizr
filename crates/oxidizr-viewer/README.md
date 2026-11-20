@@ -66,9 +66,15 @@ toolbar path field + Enter / **Open**.
 - **Export**: writes `<stem>.svg` + `<stem>.png` with the diagram key
   beside the save file — the current view exactly as painted, no selection.
 - Live reload: edits to the file on disk (including `!include` files)
-  reload the view and KEEP your layout (reconcile remaps surviving ids).
+  reload the view and KEEP your layout, selected view and camera
+  (reconcile remaps surviving ids).
   A saved `.json` sidecar becomes the open/reload source until the `.dsl`
   is edited again — newest wins. A failed reparse keeps the last-good view.
+- **Viewport memory**: every view you pan/zoom is remembered per
+  workspace and restored on reopen, in a `<stem>.oxidizr.json` file — a
+  versioned, atomic, pure cache that is never read as a workspace (the
+  contract sidecar `<stem>.json` is a different file; deleting the state
+  file loses nothing but the camera positions).
 
 Keyboard: Ctrl+Z / Ctrl+Y undo/redo · Ctrl+S save · Ctrl/⌘-click opens an
 element URL · Esc deselects. Toolbar `?` lists every gesture.

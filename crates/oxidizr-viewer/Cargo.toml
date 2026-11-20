@@ -37,6 +37,11 @@ oxidizr-diag = { workspace = true }
 oxidizr-json = { workspace = true }
 oxidizr-layout = { workspace = true }
 thiserror = { workspace = true }
+# §P3-M11 M11-12 (F11): the `<stem>.oxidizr.json` sidecar is OUR OWN
+# JSON — serde_json over an envelope that NEVER enters the contract
+# reader/writer (oxidizr_json stays untouched). Pure-Rust, no platform
+# API (the std-only rule is about portability, not crates).
+serde_json = { workspace = true }
 # Software raster + text layout for the headless `paint` module (M1-4):
 # pure CPU code, no windowing/GPU — the `gui` gate keeps guarding ONLY
 # the eframe shell. Shapes/text come out as `epaint::Shape` data the
