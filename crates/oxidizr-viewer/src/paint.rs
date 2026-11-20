@@ -96,7 +96,9 @@ pub struct PaintOptions<'a> {
 
 /// Paint one scene into a shape list, background first, then boundaries,
 /// items, edges and the selection accent — the layer order the reference
-/// paints (boundaries under boxes, arrows over boxes).
+/// paints (boundaries under boxes, arrows over boxes). §P3-M11 M11-5:
+/// every galley is EMITTED LAST (two lanes, geometry then text), so a
+/// later box never paints over an earlier box's label.
 #[must_use]
 pub fn paint_scene(
     scene: &Scene,
@@ -105,17 +107,43 @@ pub fn paint_scene(
     options: &PaintOptions<'_>,
 ) -> Vec<Shape> {
     let background = parse_color(&scene.background).unwrap_or(Color32::from_rgb(255, 255, 255));
-    let mut out = vec![Shape::rect_filled(options.screen, 0.0, background)];
+    // §P3-M11 M11-5: geometry first, ALL text last — a nested box
+    // (deployment node, group member painted later) may still overlap
+    // an earlier box's label rectangle, but it can no longer paint
+    // OVER the label glyphs. Reference order keeps its meaning inside
+    // each lane: boundaries under items under edges, labels topmost.
+    let mut geometry = vec![Shape::rect_filled(options.screen, 0.0, background)];
+    let mut text: Vec<Shape> = Vec::new();
+    let mut layer = Vec::new();
     for boundary in &scene.boundaries {
-        paint_boundary(&mut out, boundary, viewport, fonts, options);
+        layer.clear();
+        paint_boundary(&mut layer, boundary, viewport, fonts, options);
+        split_text(&mut layer, &mut geometry, &mut text);
     }
     for item in &scene.items {
-        paint_item(&mut out, item, viewport, fonts, options);
+        layer.clear();
+        paint_item(&mut layer, item, viewport, fonts, options);
+        split_text(&mut layer, &mut geometry, &mut text);
     }
     for edge in &scene.edges {
-        paint_edge(&mut out, edge, viewport, fonts, background, options);
+        layer.clear();
+        paint_edge(&mut layer, edge, viewport, fonts, background, options);
+        split_text(&mut layer, &mut geometry, &mut text);
     }
-    out
+    geometry.extend(text);
+    geometry
+}
+
+/// Move a layer's galley shapes into the text lane, the rest into the
+/// geometry lane (§P3-M11: the two-pass z-order of [`paint_scene`]).
+fn split_text(layer: &mut Vec<Shape>, geometry: &mut Vec<Shape>, text: &mut Vec<Shape>) {
+    for shape in layer.drain(..) {
+        if matches!(shape, Shape::Text(_)) {
+            text.push(shape);
+        } else {
+            geometry.push(shape);
+        }
+    }
 }
 
 /// A `#rrggbb` color from the resolved styles; `None` on anything else
@@ -958,6 +986,24 @@ mod tests {
                 height: 150.0,
             },
         }
+    }
+
+    #[test]
+    fn text_shapes_are_always_the_final_run() {
+        // §P3-M11 M11-5: paint_scene emits geometry first, ALL galleys
+        // last, so no later box can cover earlier text. The fixture
+        // paints boundaries, items and a labelled edge in one scene.
+        let shapes = painted(&scene(), None);
+        let first_text = shapes
+            .iter()
+            .position(|shape| matches!(shape, Shape::Text(_)))
+            .expect("the fixture paints labels");
+        assert!(
+            shapes[first_text..]
+                .iter()
+                .all(|shape| matches!(shape, Shape::Text(_))),
+            "a geometry shape was emitted after the first galley"
+        );
     }
 
     #[test]

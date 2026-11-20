@@ -29,7 +29,8 @@ toolbar path field + Enter / **Open**.
 ## What you get
 
 - Every view kind renders with full styling (custom/image views are
-  placeholder boxes), arrows landing on box sides (never the middle),
+  placeholder boxes), arrows landing on box sides (never the middle) and
+  labels painted above every box (nested boxes never cover text),
   light/dark themes, the bundled font, key/legend and
   tooltips, a tag filter, and the left panel: a **view selector grouped by
   view type** (System landscape → context → Container → Component →

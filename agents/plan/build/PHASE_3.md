@@ -579,7 +579,7 @@ the `C` column — each C lands on green gates.
 | **M11-2** | Remove arrow handles: **Delete/Backspace** clears ALL waypoints of the selected edge; handles now also PAINT on edge hover and `waypoint_hit` accepts the hovered edge, so Alt+click deletes without selecting first — **DONE 2026-11-20** | C2 |
 | **M11-8** | Moving boxes carries their arrowheads: dragging N boxes translates the interior waypoints of edges whose BOTH ends move; **Ctrl+drag detaches** (waypoints stay). Preview==commit via one `Command::Group` — **DONE 2026-11-20** | C2 |
 | **M11-3** | Arrows land on box SIDES, not centres: `scene::build` replaces centre endpoints with the centre→next-point ray clipped to the rect border (same dx/dy rule as the engine's `endpoint(None)`, so engine-routed sides agree) — **DONE 2026-11-20** | C3 |
-| **M11-5** | Text never covered: `paint_scene` z-order split — all fills/strokes, then edges, then ALL galleys (nested boxes no longer paint over a parent's label) | C4 |
+| **M11-5** | Text never covered: `paint_scene` splits its output into two lanes — geometry keeps the reference layer order (boundaries→items→edges), ALL text galleys are emitted LAST (nested boxes no longer paint over a parent's label) — **DONE 2026-11-20** | C4 |
 | **M11-7** | Search result rows show the element's icon (`icon_cell`, `▪` fallback) | C5 |
 | **M11-9** | Opened-file path appears ONLY in the toolbar edit: window Title and status bar drop it (status keeps the view key + dirty state) | C5 |
 | **M11-11** | Click object → right panel shows an **Info** block (kind/id/name/metadata/description/group/tags/URL; edges: source → destination + labels) above the Key | C6 |
