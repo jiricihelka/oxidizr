@@ -214,6 +214,39 @@ crates/
   semantic comparators, `Layered` layout polish; cargo-dist wired + v0.4.0 as the first
   dist release; changelog catch-up through v0.3.0; docs pass; **roadmap complete**.
 
+**RE-ORDERED 2026-11-21 (user directive: "prioritizing LSP functionality"):**
+the M4 `lsp` binary moves to the FRONT as **§P4-LSP** (decomposition below,
+items L-1…L-7, commits L0…L5); M0 `diff` → M1 `inspect` → M2 importers →
+M3 query/init/completions/generate → M5 oracle+carry-ins+dist follow in
+their original relative order.
+
+## §P4-LSP — `oxidizr-lsp` decomposition (started 2026-11-21, runs FIRST)
+
+F5 (agreed 2026-11-14), P4-D5. New crate touching existing `oxidizr-dsl`
+(scope-replay helper) ⇒ charter decomposition up front. Probes done
+2026-11-21 (P4-V5 part 1): `lsp-server 0.10` + `lsp-types 0.97` resolve
+and build on the pinned nightly, sync/no-tokio as planned. Seams the
+design rides (all pre-existing): `oxidizr_api::open(&Input::Bytes)` =
+the exact CLI pipeline over a buffer; `oxidizr_dsl::engine::parse_dsl`;
+`Ctx::permitted_tokens()` (P1-D3 scope machine) = the completion
+source; `oxidizr_dsl::fmt::format` = lossless printer;
+`oxidizr_diag::{Span(byte offsets), Position(1-based, char col),
+Code(OXZ-nnnn)}`.
+
+| Item | Deliverable | C |
+|---|---|---|
+| **L-1** | Crate shape per the viewer precedent (R-2 ritual): `oxidizr-lsp` = **headless lib core** (doc store + feature handlers as pure functions: text+position in, LSP types out — Category A testable) + thin stdio binary; workspace member, lints inherit, `publish = true` (it ships in P4-D10) | L0 |
+| **L-2** | Server loop: stdio `lsp-server` `Connection`, `initialize`/`shutdown`/`exit`, capability set grows with each item; **full-document sync** (`didOpen`/`didChange` full/`didClose`, `syncKind = Full` — files are small, incremental stays 💡); transcript harness = in-memory pipes driving the core loop, `expect-test` on the message stream | L0 |
+| **L-3** | Diagnostics on open/change: buffer → `api::open(Input::Bytes)` → map every diagnostic to `lsp_types::Diagnostic` — ranges from BYTE OFFSETS recomputed against the buffer text (LSP columns are **UTF-16 code units**; diag `Position.col` counts chars — the mapper is a tested pure fn), severity map, `code` = `OXZ-nnnn` + `codeDescription` → `docs/diagnostics.md#OXZ-nnnn`, `maxNumberOfProblems` cap (default 100); JSON buffers validate via `json2json` | L1 |
+| **L-4** | Completion: new `oxidizr-dsl` pub helper replays tokenize+scope to a cursor offset (returns the `Ctx` + preceding identifiers); items = `permitted_tokens()` + `!`-directives + contextual identifiers (element/relationship id targets, view keys, style tags) + statement snippets (`sys`, `rel`, …) | L2 |
+| **L-5** | Hover: embedded keyword-doc table + model hover (kind, canonical name, technology, tags, relationship counts) from the LAST SUCCESSFUL parse of that doc | L3 |
+| **L-6** | Formatting: full-document `textDocument/formatting` = one TextEdit from `fmt::format`; `rangeFormatting` maps to top-level-statement granularity (documented); buffers WITH parse errors still format — the P1-M6b printer is lossless over the CST | L4 |
+| **L-7** | Config & close: `initializationOptions` `{strict, themesDir, allowNet=false, maxNumberOfProblems}` (no network ever without `allowNet`, D5); `oxidizr-lsp --version`; `docs/lsp-editors.md` smoke notes (vscode/helix/neovim); milestone close = full e2e tier + bless 307×unchanged + PROGRESS/RESUME | L5 |
+
+Deferred (already 💡-registered in P4-D5): semantic tokens, rename,
+code actions, incremental sync. Risk R-3 (LSP UX surprises) mitigated by
+full-sync + the offset→UTF-16 mapper being pure + transcript tests.
+
 ## P4-D12 Verification list
 
 - P4-V1 diff identity rules vs real-world edit sequences (identifier/canonical-name
