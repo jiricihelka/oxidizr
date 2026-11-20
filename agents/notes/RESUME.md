@@ -11,18 +11,13 @@
     pipeline — DFS cycle reversal → longest-path ranks → dummy
     chains → **barycenter sweeps** → **priority coordinate passes**
     → **orthogonal Z-channel routes**. 24 unit tests green.
-  - **M2-4 NEXT — benches**: criterion targets in
-    `crates/oxidizr-layout/benches/` (`[[bench]] harness = false` +
-    `criterion = { workspace = true }`-style deps in `[dev-dependencies]`,
-    per the `reconcile` pattern in `crates/oxidizr-cli/Cargo.toml`
-    — copy its exact shape). Shapes: 1k-node synthetic (reuse the
-    `thousand_nodes_are_deterministic` generator pattern: mixed
-    fan/back-edges), a long-chain, a star/fan; bench `Layered.layout`
-    whole-pipeline. The bench dev-dep does NOT break the zero-dep
-    promise (dev-deps are not deps — record in the Cargo.toml comment
-    if in doubt). Gate: quartet + a `cargo bench -p oxidizr-layout`
-    smoke run.
-  - **M2-5**: viewer integration: headless `layout` module
+  - **M2-4 DONE 2026-11-20** (this commit): `benches/layered.rs`
+    — `p3_layered_thousand_{mixed,chain,star}`, criterion
+    dev-dependency (zero-dep promise intact — `[dependencies]` stays
+    empty, noted in the manifest). Measured: 3.7/0.71/0.97 ms per
+    1k-node layout. `cargo bench -p oxidizr-layout` green; `.expect`
+    in benches is precedented (`e2e.rs`).
+  - **M2-5 NEXT — viewer integration: headless `layout` module
     (scene→`LayoutGraph`, engine run, `Overrides { element rects,
     edge waypoints }`), `scene::build` gains `Option<&Overrides>`
     (session-live, NEVER persisted), auto-layout button + dialog

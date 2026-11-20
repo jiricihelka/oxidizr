@@ -15,3 +15,12 @@ workspace = true
 # NO dependencies — not even thiserror (P3-D1 zero-dep promise beats the
 # thiserror convention for THIS crate; the error type hand-rolls Display +
 # Error, std-only). Neutral graph types in/out: no oxidizr-core, no IO, no GUI.
+
+[dev-dependencies]
+# Bench-only: `criterion` is not a dependency of the shipped crate (§P3-D1
+# governs `[dependencies]`; `cargo tree -e normal` stays empty).
+criterion = { workspace = true }
+
+[[bench]]
+name = "layered"
+harness = false
