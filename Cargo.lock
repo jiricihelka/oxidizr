@@ -5307,7 +5307,11 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "oxidizr-api",
+ "oxidizr-core",
  "oxidizr-e2e",
+ "oxidizr-viewer",
+ "serde_json",
 ]
 
 [[package]]

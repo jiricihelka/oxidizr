@@ -35,6 +35,7 @@ oxidizr-export = { path = "crates/oxidizr-export", version = "0.1.0" }
 oxidizr-layout = { path = "crates/oxidizr-layout", version = "0.1.0" }
 oxidizr-api = { path = "crates/oxidizr-api", version = "0.1.0" }
 oxidizr-e2e = { path = "crates/oxidizr-e2e", version = "0.1.0" }
+oxidizr-viewer = { path = "crates/oxidizr-viewer", version = "0.1.0" }
 
 # `preserve_order`: property maps must iterate in DOCUMENT order on read
 # (byte-stable round-trip, WRITE-CATALOG §1) — the default BTreeMap sorts.

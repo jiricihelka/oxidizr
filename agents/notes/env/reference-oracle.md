@@ -20,4 +20,6 @@ summary (except the dedicated CI job, where skip = failure).
 Drivers: `cargo xtask oracle gen|verify` (normalizes the reference's 2-space
 pretty-print + scope-order quirks — see `xtask::normalize_reference_output`).
 
-Last useful: never
+Last useful: 2026-11-20 — `oracle verify` green: 4 json + **4 sidecar** (M5-1
+saved-sidecar A/B legs: identity re-export byte-equal; edited layered
+geometry round-trips the loader) + 90 diagram + 6 theme golden sets.

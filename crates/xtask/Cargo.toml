@@ -14,6 +14,12 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 oxidizr-e2e = { workspace = true }
+# M5-1 saved-sidecar leg: open through the real api pipeline, save through
+# the viewer's headless save path, compare the reference's re-exports.
+oxidizr-api = { workspace = true }
+oxidizr-core = { workspace = true }
+oxidizr-viewer = { workspace = true }
+serde_json = { workspace = true }
 
 [[bin]]
 name = "xtask"

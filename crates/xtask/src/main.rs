@@ -1177,6 +1177,8 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
     // a shared counter; this fold prints them (after the streaming `ok:`
     // lines) and bails with the count, as the old `failures == 0` did.
     let (goldens, mut failed) = verify_json_legs(oracle, &root)?;
+    let (sidecar_sets, sidecar_failed) = verify_sidecar_legs(oracle, &root)?;
+    failed.extend(sidecar_failed);
     let (diagram_sets, diagram_failed) = verify_diagram_legs(oracle, &root)?;
     failed.extend(diagram_failed);
     let (theme_sets, theme_failed) = verify_theme_legs(oracle, &root)?;
@@ -1190,7 +1192,7 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
         failed.len()
     );
     println!(
-        "oracle verify: {} json + {diagram_sets} diagram + {theme_sets} theme golden set(s) match",
+        "oracle verify: {} json + {sidecar_sets} sidecar + {diagram_sets} diagram + {theme_sets} theme golden set(s) match",
         goldens.len()
     );
     Ok(())
@@ -1227,6 +1229,182 @@ fn verify_json_legs(oracle: &Path, root: &Path) -> Result<(Vec<PathBuf>, Vec<Str
         }
     }
     Ok((goldens, failed))
+}
+
+/// Saved-sidecar legs (P3-M5 / M5-1, deferred from M3-5): the reference
+/// must load the JSON the viewer's save path writes. Per top-level JSON
+/// golden fixture: (1) IDENTITY — open the fixture through the real api
+/// pipeline, save it with `commands::write_workspace` (the Ctrl+S path),
+/// and compare the reference's json→json re-export of OUR sidecar with
+/// its re-export of the committed golden, byte-equal after normalization.
+/// Comparing the two RE-EXPORTS isolates our writer from any reference
+/// json→json quirk. (2) EDITED — run the bundled layered engine over the
+/// first non-filtered view with ≥ 2 items, save the overlay through
+/// `apply_overlay` + `write_workspace`, and require the reference to load
+/// it: the `model` section unchanged, every written view placement
+/// (id → x/y) surviving the load VERBATIM, and the placement map
+/// different from the stored one (the geometry actually flowed).
+fn verify_sidecar_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>)> {
+    use oxidizr_api::open;
+    use oxidizr_api::pipeline::{ApiOptions, Input};
+    use oxidizr_viewer::commands;
+
+    let mut failed: Vec<String> = Vec::new();
+    let mut fixtures = 0_usize;
+    let mut goldens: Vec<PathBuf> = fs::read_dir(root.join("testdata").join("golden"))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "json"))
+        .collect();
+    goldens.sort();
+    for golden_path in &goldens {
+        let name = golden_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .context("bad golden name")?;
+        let fixture = find_fixture(root, name)?;
+        let opened =
+            open(&Input::File(fixture.clone()), &ApiOptions::default()).map_err(|outcome| {
+                anyhow::anyhow!(
+                    "open {} failed (exit {:?})",
+                    fixture.display(),
+                    outcome.exit
+                )
+            })?;
+        let workspace = &opened.workspace;
+        let tmp = scratch(name);
+        fs::create_dir_all(&tmp)?;
+
+        // (1) IDENTITY: the save path with zero edits, vs the golden.
+        let sidecar = tmp.join(format!("{name}.json"));
+        commands::write_workspace(&sidecar, workspace)
+            .with_context(|| format!("sidecar save `{name}`"))?;
+        let ours = reference_export_json(oracle, &sidecar, &tmp.join("ours"))
+            .with_context(|| format!("oracle sidecar load `{name}`"))?;
+        let ours_norm = normalize_reference_output(&fs::read(&ours)?);
+        let theirs = reference_export_json(oracle, golden_path, &tmp.join("theirs"))
+            .with_context(|| format!("oracle golden re-export `{name}`"))?;
+        let theirs_norm = normalize_reference_output(&fs::read(&theirs)?);
+        if ours_norm == theirs_norm {
+            println!("ok: {name} (sidecar identity)");
+        } else {
+            failed.push(format!(
+                "MISMATCH: {name} (the reference's re-export of our saved sidecar \
+                 differs from its re-export of the committed golden)"
+            ));
+        }
+
+        // (2) EDITED: real layered geometry through the reference loader.
+        let edited_ok = sidecar_edited_leg(oracle, &tmp, name, workspace, &ours_norm, &mut failed)?;
+        if edited_ok {
+            println!("ok: {name} (sidecar edited)");
+        } else if !failed.iter().any(|l| l.contains(name)) {
+            println!("ok: {name} (sidecar edited skipped — no view with >= 2 items)");
+        }
+        let _ = fs::remove_dir_all(&tmp);
+        fixtures += 1;
+    }
+    Ok((fixtures, failed))
+}
+
+/// The EDITED half of the saved-sidecar leg (§P3-M5 M5-1): layered
+/// geometry for the first non-filtered view with ≥ 2 items, saved through
+/// `apply_overlay` + the viewer save path, loaded back by the reference.
+/// Failures append lines; the answer says whether the leg actually ran.
+fn sidecar_edited_leg(
+    oracle: &Path,
+    tmp: &Path,
+    name: &str,
+    workspace: &oxidizr_core::Workspace,
+    ours_norm: &[u8],
+    failed: &mut Vec<String>,
+) -> Result<bool> {
+    use oxidizr_core::views::{AutomaticLayout, ColorScheme, View};
+    use oxidizr_viewer::{commands, layout, scene};
+
+    for view in workspace.views.all_views() {
+        if matches!(view, View::Filtered(_)) {
+            continue;
+        }
+        let Ok(built) = scene::build(workspace, view.key(), ColorScheme::Light, None, None) else {
+            continue;
+        };
+        if built.items.len() < 2 {
+            continue;
+        }
+        let overrides = layout::apply(&built, &AutomaticLayout::default())
+            .with_context(|| format!("sidecar edited `{name}`: layout run"))?;
+        let overlay = commands::LayoutOverlay {
+            view_key: view.key().to_owned(),
+            elements: overrides.elements,
+            relationships: overrides.relationships,
+            dimensions: None,
+        };
+        let applied = commands::apply_overlay(workspace, view.key(), &overlay);
+        let edited = tmp.join(format!("{name}-edited.json"));
+        commands::write_workspace(&edited, &applied)
+            .with_context(|| format!("sidecar edited save `{name}`"))?;
+        let fresh = reference_export_json(oracle, &edited, &tmp.join("edited"))
+            .with_context(|| format!("oracle EDITED-sidecar load `{name}`"))?;
+        let fresh_val: serde_json::Value =
+            serde_json::from_slice(&normalize_reference_output(&fs::read(&fresh)?))?;
+        let ours_val: serde_json::Value = serde_json::from_slice(ours_norm)?;
+        let written_val: serde_json::Value = serde_json::from_slice(&fs::read(&edited)?)?;
+        if fresh_val.get("model") != ours_val.get("model") {
+            failed.push(format!(
+                "MISMATCH: {name} (the edited sidecar lost model content \
+                 through the reference loader)"
+            ));
+            return Ok(false);
+        }
+        let mut written = BTreeMap::new();
+        collect_xy_maps(&written_val, &mut written);
+        let mut echoed = BTreeMap::new();
+        collect_xy_maps(&fresh_val, &mut echoed);
+        let mut stored = BTreeMap::new();
+        collect_xy_maps(&ours_val, &mut stored);
+        if written != echoed {
+            failed.push(format!(
+                "MISMATCH: {name} (view placements changed through the \
+                 reference load: {} written vs {} echoed)",
+                written.len(),
+                echoed.len()
+            ));
+        } else if written == stored {
+            failed.push(format!(
+                "MISMATCH: {name} (the edited sidecar kept the stored \
+                 placements — the overlay did not flow)"
+            ));
+        } else {
+            return Ok(true);
+        }
+        return Ok(false);
+    }
+    Ok(false)
+}
+
+/// id → (x, y) for every JSON object carrying all three (elementViews,
+/// deployment-node views…). Vertices (x/y without an id) never match;
+/// integer coordinates only (the stored grid, `to_px`).
+fn collect_xy_maps(value: &serde_json::Value, out: &mut BTreeMap<String, (i64, i64)>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            let id = map.get("id").and_then(serde_json::Value::as_str);
+            let x = map.get("x").and_then(serde_json::Value::as_i64);
+            let y = map.get("y").and_then(serde_json::Value::as_i64);
+            if let (Some(id), Some(x), Some(y)) = (id, x, y) {
+                out.insert(id.to_owned(), (x, y));
+            }
+            for child in map.values() {
+                collect_xy_maps(child, out);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for child in items {
+                collect_xy_maps(child, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Diagram goldens (M2-d, C4 leg M3-d, Mermaid leg M4-d):
