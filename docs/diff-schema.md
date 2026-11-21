@@ -83,6 +83,12 @@ Geometry fields — `position[<canon>]`, `vertices[<canon>]`,
 under `--ignore-layout`. `ImageView` content (base64 payload) is never
 compared. Deployment `healthCheck` details are not compared (v1 set).
 
+PROVENANCE STAMPS are never compared: any property key starting with
+`structurizr.dsl` — the loader regenerates `structurizr.dsl.identifier`
+(a fresh UUID per item) and the `structurizr.dsl` source snapshot on
+every parse, so comparing them would make `diff(a, a)` non-empty for
+every DSL input. User property keys are unaffected.
+
 ## Exit code
 
 `oxidizr diff` exits `0` with an empty document, `1` (`differences

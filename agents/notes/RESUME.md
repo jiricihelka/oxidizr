@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); M0 `diff` in flight — M0a engine shipped, M0b schema next**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); M0 `diff` in flight — M0a–M0c shipped, M0d close next**)
 
 ## State
 
@@ -39,14 +39,18 @@
   `cargo xtask ci` green; close-out notes in PHASE_4.md (L-7 DONE row)
   and PROGRESS.md (status board + `P4-LSP` milestone log).
 - **M0 `diff` IN FLIGHT** (F3; decomposition = §P4-M0 D-1…D-4, commits
-  M0a…M0d): **M0a DONE** — `oxidizr-api/src/diff.rs` engine (identity
-  by canonical name via `adopt`, `idChanged` category, `ignore_layout`
-  gate, deterministic sort; 10 unit tests). **Next M0b**: schema-1 JSON
-  (`{schema:1, added, removed, changed, idChanged}`) +
-  `docs/diff-schema.md`; then M0c pipeline/CLI (`Request::Diff`,
-  `ExitClass::Differences` = 1, `oxidizr diff A B`), M0d fixtures +
-  close. Then M1 `inspect`, M2 importers, M3 query/init/completions,
-  M5 oracle + carry-ins + cargo-dist + changelog catch-up.
+  M0a…M0d): **M0a–M0c DONE** — engine (`oxidizr-api/src/diff.rs`,
+  identity by canonical name via `adopt`, `idChanged` category,
+  `ignore_layout` gate, provenance `structurizr.dsl*` stamps never
+  compared); schema-1 JSON + `docs/diff-schema.md`; pipeline
+  (`Request::Diff`, `ExitClass::Differences` = 1, `ApiOptions.color`) +
+  CLI `oxidizr diff A B [--format human|json] [--ignore-layout]
+  [--quiet]` + CLI goldens. **Next M0d (close)**: fixture pairs under
+  `testdata/probes/diff/*` (README contract row), `diff(a, a)` EMPTY
+  property sweep over `testdata/dsl`, full e2e tier + bless 307×
+  unchanged + PROGRESS milestone log. Then M1 `inspect`, M2 importers,
+  M3 query/init/completions, M5 oracle + carry-ins + cargo-dist +
+  changelog catch-up.
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams

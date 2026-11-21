@@ -21,6 +21,7 @@ use oxidizr_diag::codes;
 use oxidizr_dsl::engine::{EnvLookup, ParseOptions, ParseResult, parse_dsl};
 
 use crate::Issue;
+use crate::diff::DiffOptions;
 use crate::reconcile;
 use crate::suggest;
 
@@ -35,6 +36,9 @@ pub enum ExitClass {
     Ok,
     /// Diagnostics with an error (or a warning under `--strict`) — 1.
     Diagnostics,
+    /// Differences found (the `diff` command; the documented P4-D1
+    /// extension of the P1-D8 contract, GNU-diff convention) — 1.
+    Differences,
     /// Usage error (the `fmt --write -` family; clap exits 2 before `execute`).
     Usage,
     /// I/O / input-policy failure — 3.
@@ -47,7 +51,9 @@ impl ExitClass {
     pub fn code(self) -> i32 {
         match self {
             ExitClass::Ok => 0,
-            ExitClass::Diagnostics => 1,
+            // `Differences` shares code 1 with `Diagnostics` (the P4-D1
+            // extension keeps the P1-D8 contract's codes).
+            ExitClass::Diagnostics | ExitClass::Differences => 1,
             ExitClass::Usage => 2,
             ExitClass::Io => 3,
         }
@@ -87,6 +93,9 @@ pub type StdinReader = fn() -> Result<Vec<u8>, Issue>;
 
 /// Flags the command bodies consume (P1-D8 global flags; extension by
 /// addition only).
+// One bool per CLI flag is the surface itself (same justification as the
+// `Cli` struct in `oxidizr-cli`), not state to model as enums.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Default)]
 pub struct ApiOptions {
     /// `--strict`: warnings block (exit 1).
@@ -109,6 +118,10 @@ pub struct ApiOptions {
     /// (`<dir>/<name>/theme.json`, P2-D3); `None` starts the chain at
     /// `OXIDZR_THEMES_DIR`.
     pub themes_dir: Option<std::path::PathBuf>,
+    /// Paint the `diff` human report (± colors, §P4-M0 D-3). The CLI fills
+    /// it from `!no_color && NO_COLOR unset` (the `report::Renderer` rule);
+    /// the default stays PLAIN so API / e2e bytes are stable.
+    pub color: bool,
 }
 
 /// `fmt` modes (P1-D8): default prints to stdout (→ [`Outcome::bytes`]),
@@ -173,6 +186,22 @@ pub enum Request {
         /// Output directory (`None` = the workspace file's directory,
         /// created as needed — reference `ExportCommand`).
         output: Option<PathBuf>,
+    },
+    /// Compare two workspaces (`diff`, F3, §P4-M0): both sides load via
+    /// [`crate::open::open`] (extension dispatch, partial DSL opens ride
+    /// the log), then the pure engine in [`crate::diff`] decides.
+    Diff {
+        /// Left side (`A`).
+        a: PathBuf,
+        /// Right side (`B`).
+        b: PathBuf,
+        /// `--format json` (schema-1 document on [`Outcome::bytes`]);
+        /// `false` = the human ± report on `bytes`.
+        json: bool,
+        /// `--ignore-layout`: skip view geometry fields.
+        ignore_layout: bool,
+        /// `--quiet`: exit code only (no bytes, no log chatter).
+        quiet: bool,
     },
 }
 
@@ -261,6 +290,13 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
             format,
             output,
         } => export_cmd(&workspace, &format, output.as_deref(), opts),
+        Request::Diff {
+            a,
+            b,
+            json,
+            ignore_layout,
+            quiet,
+        } => diff_cmd(&a, &b, json, ignore_layout, quiet, opts),
     }
 }
 
@@ -924,5 +960,60 @@ fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Result<Outco
     } else {
         ExitClass::Ok
     };
+    Ok(out)
+}
+
+/// `diff` (F3, §P4-M0 D-3): load BOTH sides through [`crate::open::open`]
+/// (extension dispatch, `.dsl`/`.json`; a recoverable DSL opens partially —
+/// its diagnostics ride the log INFORMATIONALLY, the reference has no `diff`
+/// so no parity rule binds them), run the pure engine, and carry the result:
+/// `Differences` (exit 1, the documented P4-D1 extension) when any category
+/// is non-empty, `Ok` otherwise. `json` rides [`Outcome::bytes`] as the
+/// schema-1 document (`docs/diff-schema.md`); the human format is the ±
+/// report, painted per [`ApiOptions::color`]. `--quiet` = exit code only:
+/// no bytes, no chatter (load failures still abort with their own class —
+/// an unreadable side is not "no differences").
+fn diff_cmd(
+    a: &Path,
+    b: &Path,
+    json: bool,
+    ignore_layout: bool,
+    quiet: bool,
+    opts: &ApiOptions,
+) -> Result<Outcome, Fail> {
+    let left = crate::open::open(&Input::File(a.to_path_buf()), opts).map_err(Fail)?;
+    let right = crate::open::open(&Input::File(b.to_path_buf()), opts).map_err(Fail)?;
+    let d = crate::diff::diff(
+        &left.workspace,
+        &right.workspace,
+        &DiffOptions { ignore_layout },
+    );
+    let mut out = Outcome {
+        exit: if d.is_empty() {
+            ExitClass::Ok
+        } else {
+            ExitClass::Differences
+        },
+        ..Outcome::default()
+    };
+    if quiet {
+        // The exit code IS the result (the `fmt --check` pattern, minus its
+        // list): nothing rides the streams.
+        return Ok(out);
+    }
+    // Informational open diagnostics (partial DSL opens, validation): they
+    // join AFTER the payload decision so `--quiet` keeps them out too.
+    if json {
+        let doc = serde_json::to_string_pretty(&d.to_json())
+            .map_err(|e| Fail::new(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
+        out.bytes = Some(format!("{doc}\n").into_bytes());
+    } else if !d.is_empty() {
+        // Silent when equal, like GNU diff; one line per entry.
+        let mut text = d.human_lines(opts.color).join("\n");
+        text.push('\n');
+        out.bytes = Some(text.into_bytes());
+    }
+    out.log.extend(left.log);
+    out.log.extend(right.log);
     Ok(out)
 }

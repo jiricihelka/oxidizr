@@ -61,6 +61,9 @@ pub fn hermetic_options() -> ApiOptions {
         // hermetic env map above and explicit fixtures.
         allow_net: false,
         themes_dir: None,
+        // PLAIN: the harness never paints (the diff human report rides
+        // `ApiOptions::color`, §P4-M0 D-3).
+        color: false,
     }
 }
 

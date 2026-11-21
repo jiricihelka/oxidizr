@@ -35,7 +35,10 @@ impl Exit {
         use oxidizr_api::ExitClass;
         match class {
             ExitClass::Ok => Exit::Ok,
-            ExitClass::Diagnostics => Exit::Error,
+            // The P4-D1 extension maps onto the same code 1 as
+            // `Diagnostics`; the corpus never runs `diff`, so no sidecar
+            // ever records it.
+            ExitClass::Diagnostics | ExitClass::Differences => Exit::Error,
             ExitClass::Usage => Exit::Usage,
             ExitClass::Io => Exit::Io,
         }

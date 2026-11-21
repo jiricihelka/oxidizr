@@ -102,6 +102,63 @@ impl Diff {
             && self.id_changed.is_empty()
     }
 
+    /// The human report (§P4-M0 D-3): ± entries grouped by category, in
+    /// schema order (`added`, `removed`, `changed`, `idChanged`). The
+    /// rendering lives here so the CLI stays a replay shim (the bodies-in-API
+    /// invariant); ANSI paint rides the `color` flag (the CLI fills it from
+    /// `!no_color && NO_COLOR unset`, so API/e2e runs stay PLAIN).
+    #[must_use]
+    pub fn human_lines(&self, color: bool) -> Vec<String> {
+        let paint = |code: &str, text: &str| {
+            if color {
+                format!("\x1b[{code}m{text}\x1b[0m")
+            } else {
+                text.to_owned()
+            }
+        };
+        let mut out = Vec::new();
+        for (title, entries, sign, code) in [
+            ("added", &self.added, "+", "32"),
+            ("removed", &self.removed, "-", "31"),
+        ] {
+            if entries.is_empty() {
+                continue;
+            }
+            out.push(format!("{title} ({}):", entries.len()));
+            for e in entries {
+                out.push(format!("{} {} ({})", paint(code, sign), e.path, e.kind));
+            }
+        }
+        if !self.changed.is_empty() {
+            out.push(format!("changed ({}):", self.changed.len()));
+            for c in &self.changed {
+                let before = c.before.to_string();
+                let after = c.after.to_string();
+                out.push(format!(
+                    "{} {} {}: {} -> {}",
+                    paint("33", "~"),
+                    c.path,
+                    c.field,
+                    before,
+                    after
+                ));
+            }
+        }
+        if !self.id_changed.is_empty() {
+            out.push(format!("idChanged ({}):", self.id_changed.len()));
+            for c in &self.id_changed {
+                let before = &c.before;
+                let after = &c.after;
+                out.push(format!(
+                    "{} {} id: {before} -> {after}",
+                    paint("36", "#"),
+                    c.path
+                ));
+            }
+        }
+        out
+    }
+
     /// The frozen SCHEMA 1 document (P4-D2, `docs/diff-schema.md`):
     /// `{schema:1, added:[{path,kind}], removed:[…], changed:[{path,
     /// field, before, after}], idChanged:[{path, before, after}]}`.
@@ -930,6 +987,14 @@ fn groups(g: &[String]) -> Value {
 /// One `properties.<key>` field per entry (per-key granularity, P4-M0).
 fn push_props(fields: &mut Fields, props: &Properties) {
     for (k, v) in props.iter() {
+        // Provenance stamps are NEVER compared: the DSL loader regenerates
+        // them on every parse (`structurizr.dsl.identifier` = a fresh UUID
+        // per item, `structurizr.dsl` = the base64 source snapshot), so
+        // including them would break the `diff(a, a)` EMPTY property on
+        // every parsed input (§P4-M0 D-1; documented in diff-schema.md).
+        if k.starts_with("structurizr.dsl") {
+            continue;
+        }
         push(fields, &format!("properties.{k}"), json!(v));
     }
 }
@@ -1231,6 +1296,32 @@ mod tests {
         let d = diff(&a, &b, &DiffOptions::default());
         assert_eq!(d.changed.len(), 2);
         assert!(d.changed.iter().all(|c| c.path == "workspace"));
+    }
+
+    #[test]
+    fn provenance_stamps_are_never_compared() {
+        // The DSL loader stamps `structurizr.dsl.identifier` (fresh UUID)
+        // and the `structurizr.dsl` source snapshot on every parse — the
+        // `diff(a, a)` EMPTY property only holds when both are excluded.
+        let a = ws();
+        let mut b = ws();
+        b.model.people[0].item.properties.insert(
+            "structurizr.dsl.identifier",
+            "9a9f97b3-10de-4fc5-b737-6dda095a1f3b",
+        );
+        b.properties.insert("structurizr.dsl", "ZHlmZg==");
+        let mut with = ws();
+        with.model.people[0].item.properties.insert(
+            "structurizr.dsl.identifier",
+            "11111111-2222-3333-4444-555555555555",
+        );
+        with.properties.insert("structurizr.dsl", "d29ya3NwYWNl");
+        assert!(
+            diff(&with, &a, &DiffOptions::default()).is_empty(),
+            "stamps on both sides"
+        );
+        let d = diff(&a, &b, &DiffOptions::default());
+        assert!(d.is_empty(), "differing stamps must be invisible: {d:?}");
     }
 
     #[test]

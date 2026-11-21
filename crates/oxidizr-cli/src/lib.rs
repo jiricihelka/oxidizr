@@ -146,6 +146,23 @@ pub enum Command {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
+    /// Compare two workspaces (`diff`, F3, §P4-M0): canonical-identity
+    /// diff, exit 1 when they differ (the P4-D1 exit-code extension).
+    Diff {
+        /// Left workspace file (`.dsl` or `.json`).
+        a: PathBuf,
+        /// Right workspace file.
+        b: PathBuf,
+        /// `json` prints the schema-1 document (`docs/diff-schema.md`);
+        /// the default `human` prints the grouped ± report.
+        #[arg(long, value_enum, default_value_t = DiffFormat::Human)]
+        format: DiffFormat,
+        /// Ignore view geometry (positions, routing, layout, animations).
+        // Explicit spelling: the `Command` rename is `lowercase`, which
+        // would otherwise flatten the field name to `--ignorelayout`.
+        #[arg(long = "ignore-layout")]
+        ignore_layout: bool,
+    },
     /// Open the workspace in the native viewer window (F10, §P3-M8) —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
@@ -158,6 +175,17 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = ViewTheme::System)]
         theme: ViewTheme,
     },
+}
+
+/// `oxidizr diff --format` values (§P4-M0 D-3): the human ± report (the
+/// default) or the schema-1 JSON document (`docs/diff-schema.md`).
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
+pub enum DiffFormat {
+    /// Grouped ± report on stdout.
+    #[default]
+    Human,
+    /// Schema-1 document on stdout.
+    Json,
 }
 
 /// `oxidizr view --theme` values (F10) — mirrors the viewer's own
@@ -206,9 +234,12 @@ pub fn run() -> anyhow::Result<i32> {
         stdin: Some(read_stdin),
         allow_net: cli.allow_net,
         themes_dir: cli.themes_dir,
+        // The `report::Renderer` rule (§P4-M0 D-3): `--no-color` or a set
+        // `NO_COLOR` both disable the `diff` human paint.
+        color: !cli.no_color && std::env::var_os("NO_COLOR").is_none(),
     };
-    let request =
-        to_request(cli.command).context("internal: `view` must dispatch before the pipeline")?;
+    let request = to_request(cli.command, cli.quiet)
+        .context("internal: `view` must dispatch before the pipeline")?;
     let outcome = oxidizr_api::execute(request, &options);
     Ok(replay(&renderer, outcome))
 }
@@ -219,8 +250,10 @@ pub fn run() -> anyhow::Result<i32> {
 /// MOVES into the [`Request`] — the old `&Cli` leg cloned every path the
 /// caller was about to drop anyway. `None` ONLY for the §P3-M8 `view`
 /// shell: [`run`] dispatches it BEFORE the pipeline — the GUI entry (F10)
-/// is not a byte-contract command and never becomes a [`Request`].
-fn to_request(command: Command) -> Option<Request> {
+/// is not a byte-contract command and never becomes a [`Request`]. The
+/// global `--quiet` reaches `diff` (exit code only, §P4-M0 D-3) — the other
+/// commands consume it in the [`Renderer`].
+fn to_request(command: Command, quiet: bool) -> Option<Request> {
     Some(match command {
         Command::Dsl2Json { dsl, output } => Request::Dsl2Json {
             input: input_of(dsl.as_deref()),
@@ -267,6 +300,18 @@ fn to_request(command: Command) -> Option<Request> {
             workspace,
             format,
             output,
+        },
+        Command::Diff {
+            a,
+            b,
+            format,
+            ignore_layout,
+        } => Request::Diff {
+            a,
+            b,
+            json: format == DiffFormat::Json,
+            ignore_layout,
+            quiet,
         },
         // §P3-M8: dispatched in `run` before the pipeline is reached.
         Command::View { .. } => return None,
@@ -372,6 +417,7 @@ mod tests {
             Command::Fmt { .. } => "fmt",
             Command::Reconcile { .. } => "reconcile",
             Command::Export { .. } => "export",
+            Command::Diff { .. } => "diff",
             Command::View { .. } => "view",
         }
     }
@@ -423,6 +469,22 @@ mod tests {
         Cli::try_parse_from(["oxidizr", "view"]).unwrap();
         Cli::try_parse_from(["oxidizr", "view", "ws.dsl", "--theme", "dark"]).unwrap();
         assert!(Cli::try_parse_from(["oxidizr", "view", "--theme", "sepia"]).is_err());
+        // §P4-M0 / F3: `diff` needs both sides; `--format` defaults to human.
+        Cli::try_parse_from(["oxidizr", "diff", "a.dsl", "b.json"]).unwrap();
+        Cli::try_parse_from(["oxidizr", "diff", "a.json", "b.json", "--format", "json"]).unwrap();
+        Cli::try_parse_from([
+            "oxidizr",
+            "--quiet",
+            "diff",
+            "a.dsl",
+            "b.dsl",
+            "--ignore-layout",
+        ])
+        .unwrap();
+        assert!(Cli::try_parse_from(["oxidizr", "diff", "only-a.dsl"]).is_err());
+        assert!(
+            Cli::try_parse_from(["oxidizr", "diff", "a.dsl", "b.dsl", "--format", "yaml"]).is_err()
+        );
         assert!(Cli::try_parse_from(["oxidizr", "merge"]).is_err());
         // `validate` needs at least one file (clap usage error, exit 2).
         assert!(Cli::try_parse_from(["oxidizr", "validate"]).is_err());

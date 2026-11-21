@@ -590,3 +590,125 @@ fn view_without_gui_feature_exits_1_with_rebuild_hint() {
         "hint names the flag: {err}"
     );
 }
+
+// §P4-M0 / F3 — `oxidizr diff` (D-3): exit codes 0/1/3, the human ± report,
+// the schema-1 JSON document, `--quiet` (exit code only) and `--ignore-layout`.
+// Self-contained fixtures in a temp dir (the `cli-stdin` precedent); NO_COLOR
+// is set by `oxidizr()`, so the report bytes are the PLAIN rendering.
+
+fn diff_temp(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("oxidizr-cli-diff-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name)
+}
+
+const DIFF_A: &str = "workspace \"D\" {\n    model {\n        person \"Alice\" \"CEO\"\n    }\n}\n";
+const DIFF_B: &str = "workspace \"D\" {\n    model {\n        person \"Alice\" \"CEO\"\n        person \"Bob\"\n    }\n}\n";
+
+fn diff_pair() -> (PathBuf, PathBuf) {
+    let (a, b) = (diff_temp("a.dsl"), diff_temp("b.dsl"));
+    std::fs::write(&a, DIFF_A).unwrap();
+    std::fs::write(&b, DIFF_B).unwrap();
+    (a, b)
+}
+
+#[test]
+fn diff_identical_exits_zero_silent() {
+    let a = diff_temp("same.dsl");
+    std::fs::write(&a, DIFF_A).unwrap();
+    let out = run(&["diff", a.to_str().unwrap(), a.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(0), "equal sides exit 0");
+    assert!(out.stdout.is_empty(), "human format is silent when equal");
+}
+
+#[test]
+fn diff_human_report_exit_one_golden() {
+    let (a, b) = diff_pair();
+    let out = run(&["diff", a.to_str().unwrap(), b.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1), "differences found — P4-D1");
+    // The default `SystemLandscape-001` view is generated on both sides, so
+    // membership and the new element's position follow the model leg.
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "added (1):\n\
+         + model.people[Bob] (person)\n\
+         changed (2):\n\
+         ~ views[SystemLandscape-001] elements: [\"Person://Alice\"] -> [\"Person://Alice\",\"Person://Bob\"]\n\
+         ~ views[SystemLandscape-001] position[Bob]: null -> {\"x\":0,\"y\":0}\n"
+    );
+}
+
+#[test]
+fn diff_json_schema_document_exit_one() {
+    let (a, b) = diff_pair();
+    let out = run(
+        &[
+            "diff",
+            "--format",
+            "json",
+            a.to_str().unwrap(),
+            b.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let text = String::from_utf8(out.stdout).unwrap();
+    // The frozen schema-1 shape (docs/diff-schema.md): stable key order,
+    // all categories present, the added entry first. Provenance stamps
+    // (`structurizr.dsl*`) never appear.
+    assert!(
+        text.starts_with("{\n  \"schema\": 1,\n  \"added\": [\n"),
+        "{text}"
+    );
+    assert!(text.contains("\"path\": \"model.people[Bob]\""), "{text}");
+    assert!(text.contains("\"idChanged\": []\n}\n"), "{text}");
+    assert!(!text.contains("structurizr.dsl"), "{text}");
+}
+
+#[test]
+fn diff_quiet_is_exit_code_only() {
+    let (a, b) = diff_pair();
+    let out = run(
+        &["--quiet", "diff", a.to_str().unwrap(), b.to_str().unwrap()],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.stdout, b"");
+    assert_eq!(out.stderr, b"");
+}
+
+#[test]
+fn diff_ignore_layout_skips_geometry() {
+    let (a, b) = diff_pair();
+    let out = run(
+        &[
+            "diff",
+            "--ignore-layout",
+            a.to_str().unwrap(),
+            b.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("+ model.people[Bob]"), "{text}");
+    // Membership is not layout (§P4-M0): only the geometry field disappears.
+    assert!(text.contains("elements"), "{text}");
+    assert!(!text.contains("position[Bob]"), "{text}");
+}
+
+#[test]
+fn diff_missing_side_exit_three() {
+    let a = diff_temp("present.dsl");
+    std::fs::write(&a, DIFF_A).unwrap();
+    let missing = diff_temp("absent.dsl");
+    let out = run(
+        &["diff", a.to_str().unwrap(), missing.to_str().unwrap()],
+        None,
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(3),
+        "unreadable side is I/O, not equality"
+    );
+}

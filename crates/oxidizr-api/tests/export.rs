@@ -24,6 +24,7 @@ fn opts() -> ApiOptions {
         stdin: None,
         allow_net: false,
         themes_dir: None,
+        color: false,
     }
 }
 
