@@ -17,6 +17,9 @@ oxidizr-diag = { workspace = true }
 oxidizr-dsl = { workspace = true }
 oxidizr-json = { workspace = true }
 oxidizr-export = { workspace = true }
+# §P4-M1 inspect: the advisory engine; the pipeline loads the workspace
+# via `open` and reports the violations (the JSON contract is untouched).
+oxidizr-inspect = { workspace = true }
 # §P4-M0 diff: the `before`/`after` values of a field-level change are
 # `serde_json::Value` (the schema-1 document D-2 renders them verbatim).
 serde_json = { workspace = true }

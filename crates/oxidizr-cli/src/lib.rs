@@ -37,7 +37,7 @@ use std::path::PathBuf;
 
 use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
 use clap::{Parser, Subcommand, ValueEnum};
-use oxidizr_api::{ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request};
+use oxidizr_api::{ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request, Severity};
 
 use report::{Issue, Renderer};
 
@@ -163,6 +163,32 @@ pub enum Command {
         #[arg(long = "ignore-layout")]
         ignore_layout: bool,
     },
+    /// Report the reference inspections over one workspace (`inspect`,
+    /// F-inspect-parity, §P4-M1): advisory only (the JSON contract is
+    /// untouched); exit 1 when any violation is REPORTED (the P4-D1
+    /// exit-code family — the same code 1 as `diff`).
+    Inspect {
+        /// Workspace file (`.dsl` or `.json`).
+        workspace: PathBuf,
+        /// Only report violations at or above this severity (`ignore`
+        /// is never reported regardless).
+        // Explicit spelling (the `lowercase` rename lesson from `diff`).
+        #[arg(long = "severity-threshold", value_enum, default_value_t = InspectThreshold::Info)]
+        severity_threshold: InspectThreshold,
+        /// Report ONLY these inspection types (exact type match;
+        /// repeatable; applied before `--except`).
+        #[arg(long)]
+        only: Vec<String>,
+        /// Never report these inspection types (exact type match;
+        /// repeatable).
+        #[arg(long)]
+        except: Vec<String>,
+        /// `json` prints the schema-1 violations document
+        /// (`docs/inspect-schema.md`); the default `human` prints the
+        /// `type | SEVERITY | message` lines.
+        #[arg(long, value_enum, default_value_t = InspectFormat::Human)]
+        format: InspectFormat,
+    },
     /// Open the workspace in the native viewer window (F10, §P3-M8) —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
@@ -186,6 +212,32 @@ pub enum DiffFormat {
     Human,
     /// Schema-1 document on stdout.
     Json,
+}
+
+/// `oxidizr inspect --format` values (§P4-M1 I-4): the reference
+/// `type | SEVERITY | message` lines (the default) or the schema-1
+/// violations document (`docs/inspect-schema.md`).
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
+pub enum InspectFormat {
+    /// `type | SEVERITY | message` lines on stdout.
+    #[default]
+    Human,
+    /// Schema-1 document on stdout.
+    Json,
+}
+
+/// `oxidizr inspect --severity-threshold` values (§P4-M1 I-4): the three
+/// REPORTABLE levels — `ignore` is not a threshold (nothing outranks
+/// it; `ignore` violations are never reported regardless).
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
+pub enum InspectThreshold {
+    /// Report every violation (the default).
+    #[default]
+    Info,
+    /// Warnings and errors only.
+    Warning,
+    /// Errors only.
+    Error,
 }
 
 /// `oxidizr view --theme` values (F10) — mirrors the viewer's own
@@ -313,6 +365,24 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             ignore_layout,
             quiet,
         },
+        Command::Inspect {
+            workspace,
+            severity_threshold,
+            only,
+            except,
+            format,
+        } => Request::Inspect {
+            workspace,
+            threshold: match severity_threshold {
+                InspectThreshold::Info => Severity::Info,
+                InspectThreshold::Warning => Severity::Warning,
+                InspectThreshold::Error => Severity::Error,
+            },
+            only,
+            except,
+            json: format == InspectFormat::Json,
+            quiet,
+        },
         // §P3-M8: dispatched in `run` before the pipeline is reached.
         Command::View { .. } => return None,
     })
@@ -418,6 +488,7 @@ mod tests {
             Command::Reconcile { .. } => "reconcile",
             Command::Export { .. } => "export",
             Command::Diff { .. } => "diff",
+            Command::Inspect { .. } => "inspect",
             Command::View { .. } => "view",
         }
     }
@@ -428,6 +499,20 @@ mod tests {
         Cli::try_parse_from(["oxidizr", "json2json", "-"]).unwrap();
         Cli::try_parse_from(["oxidizr", "validate", "a.dsl", "b.json"]).unwrap();
         Cli::try_parse_from(["oxidizr", "fmt", "--check", "x.dsl"]).unwrap();
+        Cli::try_parse_from([
+            "oxidizr",
+            "inspect",
+            "ws.dsl",
+            "--severity-threshold",
+            "warning",
+            "--only",
+            "model.empty",
+            "--except",
+            "views.empty",
+            "--format",
+            "json",
+        ])
+        .unwrap();
         Cli::try_parse_from([
             "oxidizr",
             "--strict",

@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); next: M1 `inspect`**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); next: M2 importers**)
 
 ## State
 
@@ -47,11 +47,22 @@
   (snapshots + corpus sweeps) + `Tags::effective` in core. Full e2e tier
   green + bless 307×unchanged + `cargo xtask ci` green; stamps: PHASE_4
   §P4-M0 CLOSED row, PROGRESS status board + `P4-M0` milestone log.
-- **Next: M1 `inspect`** (`build/PHASE_4.md` — new crate `oxidizr-inspect`
-  per P4-D1, catalog-driven inspections port + `oxidizr inspect`
-  subcommand; R-4 mitigation: catalog + per-inspection oracle snapshots).
-  Then M2 importers, M3 query/init/completions, M5 oracle + carry-ins +
-  cargo-dist + changelog catch-up.
+- **§P4-M1 `inspect` CLOSED 2026-11-21** (F-inspect-parity; I-1…I-4,
+  commits M1a `cad75b9`, M1b `9e7b599`, M1c `9bf088b`, M1d this): new crate
+  `oxidizr-inspect` (pure model logic over core, ADVISORY — P4-D7), the
+  `DefaultInspector` port (workspace+model+view phases, run order +
+  messages VERBATIM, P4-V2 severity strategy), `oxidizr inspect <WS>
+  [--severity-threshold info|warning|error] [--only T]… [--except T]…
+  [--format human|json] [--quiet]` + schema-1 doc (`docs/inspect-schema.md`),
+  exit 1 iff REPORTED. Full e2e tier green + bless 307×unchanged +
+  `cargo xtask ci` green; stamps: PHASE_4 §P4-M1 CLOSED header (I-rows all
+  DONE), PROGRESS status board + `P4-M1` milestone log. Surface notes below.
+- **Next: M2 importers** (`build/PHASE_4.md` — new crate `oxidizr-import`:
+  C4-PlantUML → Mermaid → image (`ImageView` content) importers; the
+  `!docs`/`!adrs` import work retires OXZ-5003). Decompose in PHASE_4.md
+  before implementation if it touches >~4 modules. Then M3
+  (`query`/`init`/completions), M5 (oracle legs + carry-ins + cargo-dist +
+  changelog catch-up).
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams
@@ -212,6 +223,44 @@
   contract row; NOT oracle-witnessed — Structurizr has no `diff`). The
   story covers every category: add/remove, the relationship-description
   rename pair, field/style changes, membership shift, id drift.
+
+## §P4-M1 inspect surface (`oxidizr-inspect` + pipeline + CLI — read before touching)
+
+- **Engine** (`run.rs` = the `DefaultInspector` port): `inspect(&Workspace)`
+  runs workspace → model → view phases and returns violations in EXECUTION
+  order (never sorted); `Violation.toString()` = `type | SEVERITY |
+  message` with Java enum names. Messages VERBATIM from the pinned Java —
+  pinned quirks: `Model.isEmpty()` counts people+systems+deploymentNodes
+  ONLY (custom elements never count); the noview message alone uses
+  `getName()`, every other one the canonical name minus `Type://`
+  (`ModelItem::name_of`); filtered/image views get the generated-key
+  inspection ONLY (no content ⇒ no empty/layout trio); styles fire ONLY on
+  `metadata == Some(false)`.
+- **Severity strategy** (`severity.rs`, P4-V2 CLOSED from pinned Java):
+  property key `structurizr.inspection.<lowercased dotted type>` —
+  SINGULAR `inspection`; longest-first `*` wildcard fallbacks;
+  relationship types rewrite to `.relationship[<srcType>-><dstType>].`
+  (source type first); holder chains inner→outer FIRST-HIT-WINS
+  (element→own props→…→workspace; view→view-config→workspace; style→
+  view-config→workspace); NO match ⇒ ERROR; `structurizr.inspection=
+  false` kills the run. Deviation (registered): unparseable severity
+  VALUES map to ERROR (Java throws).
+- **Filters/reporting** (`inspect_cmd` in pipeline): the engine keeps
+  IGNORE violations (reference counters) — ONLY the CLI drops them;
+  threshold keeps rank `error>warning>info`; `--only` (when set) BEFORE
+  `--except`, exact type match; exit 1 iff REPORTED (`ExitClass::
+  Differences`); human color paints ONLY the severity token
+  (31/33/36 — goldens run `NO_COLOR` ⇒ PLAIN bytes are the contract).
+- **Faithful CLI quirk**: `oxidizr inspect` loads via `api::open`, which
+  installs default views whose keys ARE auto-generated — the goldens
+  REPORT `views.view.key` + `views.view.layout` for
+  `SystemLandscape-001`/`SystemContext-001` (pinned `createDefaultViews`).
+- **Tests**: 15 lib + 19 integration (`inspect_model.rs`/`inspect_views.rs`
+  snapshots re-bless via `UPDATE_EXPECT=1 cargo test -p oxidizr-inspect`;
+  `inspect_complete.rs` proptest; `inspect_corpus.rs` sweep — lossy-read
+  for `testdata/dsl/iso-8859.dsl`, network-include fixtures parse-fail and
+  are skipped ⇒ hermetic). 8 CLI goldens `inspect_*` in
+  `crates/oxidizr-cli/tests/cli.rs`.
 
 ## §P3-M11 UX batch surface (shell/paint/scene/layered/statefile — read before touching)
 

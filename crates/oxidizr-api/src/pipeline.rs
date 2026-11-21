@@ -203,6 +203,28 @@ pub enum Request {
         /// `--quiet`: exit code only (no bytes, no log chatter).
         quiet: bool,
     },
+    /// Report the reference inspections over one workspace (`inspect`,
+    /// F-inspect-parity, §P4-M1): loaded via [`crate::open::open`] (like
+    /// [`Request::Diff`]), then the pure engine in [`oxidizr_inspect`]
+    /// decides. Exit [`ExitClass::Differences`] iff any violation is
+    /// REPORTED after the filters.
+    Inspect {
+        /// Workspace file (`.dsl` or `.json`) — a file path, like `diff`.
+        workspace: PathBuf,
+        /// Report violations at or above this severity (rank
+        /// `error > warning > info`); `ignore` is never reported.
+        threshold: oxidizr_inspect::Severity,
+        /// `--only`: report ONLY these inspection types (exact type
+        /// match, run order preserved). Applied BEFORE `except`.
+        only: Vec<String>,
+        /// `--except`: never report these inspection types.
+        except: Vec<String>,
+        /// `--format json` (schema-1 document on [`Outcome::bytes`]);
+        /// `false` = the human `type | SEVERITY | message` lines.
+        json: bool,
+        /// `--quiet`: exit code only (no bytes, no log chatter).
+        quiet: bool,
+    },
 }
 
 /// The full result of one [`execute`]: exit class, ordered human log, and
@@ -297,6 +319,14 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
             ignore_layout,
             quiet,
         } => diff_cmd(&a, &b, json, ignore_layout, quiet, opts),
+        Request::Inspect {
+            workspace,
+            threshold,
+            only,
+            except,
+            json,
+            quiet,
+        } => inspect_cmd(&workspace, threshold, &only, &except, json, quiet, opts),
     }
 }
 
@@ -1016,4 +1046,104 @@ fn diff_cmd(
     out.log.extend(left.log);
     out.log.extend(right.log);
     Ok(out)
+}
+
+/// `oxidizr inspect` (§P4-M1 I-4): load via [`crate::open::open`] (same
+/// partial-DSL-open semantics as [`Request::Diff`]), run the pure engine
+/// in [`oxidizr_inspect`], then filter and report. The engine output IS
+/// the contract (run order, verbatim messages); this body decides only
+/// what is REPORTED:
+/// - `ignore` severity NEVER (the reference counts it, never prints it),
+/// - the threshold keeps violations at or above its rank,
+/// - `--only` (when non-empty) BEFORE `--except`, exact type match.
+///
+/// Exit is [`ExitClass::Differences`] iff anything survives — the P4-D1
+/// family, same process code 1 as `diff`.
+fn inspect_cmd(
+    workspace: &Path,
+    threshold: oxidizr_inspect::Severity,
+    only: &[String],
+    except: &[String],
+    json: bool,
+    quiet: bool,
+    opts: &ApiOptions,
+) -> Result<Outcome, Fail> {
+    use oxidizr_inspect::Severity;
+
+    let opened = crate::open::open(&Input::File(workspace.to_path_buf()), opts).map_err(Fail)?;
+    let all = oxidizr_inspect::inspect(&opened.workspace);
+    let reported: Vec<&oxidizr_inspect::Violation> = all
+        .iter()
+        .filter(|v| v.severity != Severity::Ignore && v.severity.rank() >= threshold.rank())
+        .filter(|v| only.is_empty() || only.iter().any(|t| t == v.inspection))
+        .filter(|v| !except.iter().any(|t| t == v.inspection))
+        .collect();
+    let mut out = Outcome {
+        exit: if reported.is_empty() {
+            ExitClass::Ok
+        } else {
+            ExitClass::Differences
+        },
+        ..Outcome::default()
+    };
+    if quiet {
+        // The exit code IS the result (the `diff --quiet` pattern).
+        return Ok(out);
+    }
+    if json {
+        // Schema 1 (`docs/inspect-schema.md`): frozen key order, run
+        // order preserved, lowercase severities. Provenance stamps never
+        // appear (the `diff` schema rule).
+        let doc = serde_json::json!({
+            "schema": 1,
+            "violations": reported
+                .iter()
+                .map(|v| {
+                    serde_json::json!({
+                        "type": v.inspection,
+                        "severity": v.severity.as_str(),
+                        "message": v.message,
+                    })
+                })
+                .collect::<Vec<serde_json::Value>>(),
+        });
+        let doc = serde_json::to_string_pretty(&doc)
+            .map_err(|e| Fail::new(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
+        out.bytes = Some(format!("{doc}\n").into_bytes());
+    } else if !reported.is_empty() {
+        // Silent when clean, like `diff` and like the reference CLI; one
+        // `type | SEVERITY | message` line per violation (`toString`).
+        let mut text = reported
+            .iter()
+            .map(|v| inspect_human_line(v, opts.color))
+            .collect::<Vec<String>>()
+            .join("\n");
+        text.push('\n');
+        out.bytes = Some(text.into_bytes());
+    }
+    out.log.extend(opened.log);
+    Ok(out)
+}
+
+/// One human report line: the reference `Violation.toString()` verbatim;
+/// `color` paints ONLY the SEVERITY token (error red, warning yellow,
+/// info cyan). The CLI goldens run `NO_COLOR`, so the PLAIN bytes are
+/// the golden contract.
+fn inspect_human_line(v: &oxidizr_inspect::Violation, color: bool) -> String {
+    if !color {
+        return v.to_string();
+    }
+    let code = match v.severity {
+        oxidizr_inspect::Severity::Error => "31",
+        oxidizr_inspect::Severity::Warning => "33",
+        oxidizr_inspect::Severity::Info => "36",
+        // Never reported, but keep the renderer total.
+        oxidizr_inspect::Severity::Ignore => return v.to_string(),
+    };
+    format!(
+        "{} | \x1b[{code}m{}\x1b[0m | {}",
+        v.inspection,
+        v.severity.java_name(),
+        v.message
+    )
 }

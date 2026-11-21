@@ -31,6 +31,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
 | P4 | §P4-M0 `oxidizr diff` (D-1…D-4) | **COMPLETE 2026-11-21** — canonical-identity model diff (F3, P4-D1/D2): engine + body in `oxidizr-api` (bodies-in-API invariant), schema-1 JSON frozen (`docs/diff-schema.md`), human ± report, `oxidizr diff A B [--format human|json] [--ignore-layout] [--quiet]`, exit 1 on differences (`ExitClass::Differences`). Loader representations never surface: `structurizr.dsl*` provenance stamps never compared, tags compared as the reference EFFECTIVE `getTags()` view, empty text reads absent — a `.dsl` and its JSON twin diff EMPTY; `diff(a, a)` determinism sweep over the corpus. Fixtures `testdata/probes/diff/*` + `tests/diff_probes.rs` (6). bless 307×unchanged. Commits M0a `c121cbe` → M0d (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-LSP `oxidizr-lsp` (L0–L5, prioritized) | **COMPLETE 2026-11-21** — LSP first (user directive): diagnostics/completion/hover/formatting/`initializationOptions`/`--version` all shipped; headless core + stdio binary, transcript + 54 lib tests, no `oxidizr-json` bytes touched (bless 307×unchanged). Commits L0 `a38f905` → L5 (this). Log below (`build/PHASE_4.md`) |
+| P4 | §P4-M1 `inspect` (I-1…I-4) | **COMPLETE 2026-11-21** — `structurizr-inspection` port: new crate `oxidizr-inspect` (pure model logic over core — advisory only, the JSON byte contract untouched), `DefaultInspector` run order verbatim (workspace+model+view phases, messages VERBATIM, quirks included: `Model.isEmpty()` counts only people/systems/nodes, noview alone uses `getName()`, filtered/image are generated-key-only), severity-strategy port (P4-V2: `structurizr.inspection.<dotted type>` keys, `*` fallbacks, inner-first holder chains, relationship `[srcType->dstType]` specificity), `oxidizr inspect <WS> [--severity-threshold info\|warning\|error] [--only T]… [--except T]… [--format human\|json] [--quiet]` — schema-1 document (`docs/inspect-schema.md`), exit 1 iff REPORTED (P4-D1 family). 15 lib + 19 inspect tests + 8 CLI goldens; corpus sweep (`testdata/dsl` never panics); complete-workspace proptest `inspect == []`; bless 307×unchanged. Commits M1a `cad75b9` → M1d (this). Log below (`build/PHASE_4.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -251,6 +252,62 @@ thin stdio binary (the R-2 viewer ritual mirrored).
   cap on the wire); full e2e tier (`OXIDZR_E2E_FULL=1`) green +
   `cargo xtask e2e bless` → 307×unchanged — the JSON byte contract
   untouched end of the milestone.
+
+### P4-M1 — `inspect` engine + command ✅ (2026-11-21, COMPLETE)
+
+Reference inspections ported (F-inspect-parity; the §P4-M1 decomposition
+I-1…I-4, commits M1a…M1d, `build/PHASE_4.md`). New crate
+`oxidizr-inspect` — pure model logic over `oxidizr-core`, ADVISORY only:
+no `oxidizr-json` byte contact (bless 307×unchanged at close, P4-D7).
+Command body + reports live in `oxidizr-api` (the T0-d invariant); the
+CLI stays the argv shim.
+
+- **M1a** `cad75b9` — crate skeleton: `Severity` (case-insensitive
+  parse; UNPARSEABLE values map to ERROR — the reference throws, the
+  port keeps errors-as-values and fails loud, registered deviation),
+  `Violation` with the reference `toString` (`type | SEVERITY |
+  message`), the `PropertyBasedSeverityStrategy` port (P4-V2 CLOSED
+  from the pinned Java: key `structurizr.inspection.<lowercased dotted
+  type>` SINGULAR, longest-first `*` wildcard fallbacks, relationship
+  types rewritten to `.relationship[<srcType>-><dstType>].`, holder
+  chains inner→outer first-hit-wins, NO match ⇒ ERROR,
+  `structurizr.inspection=false` kills the whole run).
+- **M1b** `9e7b599` — engine (`run.rs`), workspace + model phases: run
+  order IS the report contract (`DefaultInspector` — violations keep
+  execution order, never sorted), messages VERBATIM (`terminologyFor`
+  lowercased, `nameOf` = canonical name minus `Type://`, the noview
+  message alone uses `getName()`, Java's `Model.isEmpty()` quirk —
+  custom elements never count), the element ladder + owned-relationship
+  walk in numeric-id order; embedded-key matchers hand-written from the
+  Java regexes under `Matcher.matches()` semantics (std-only).
+- **M1c** `9bf088b` — view phase: per-kind generated-key/empty/
+  manual-layout trio, the two multi-system `workspace.scope` checks at
+  their exact loop positions (distinct `softwareSystemId` counts),
+  filtered/image views generated-key ONLY, styles fire on
+  `metadata == Some(false)`; view/style/views-level holder chains
+  through view-config to workspace. Tests: nine-kind run-order
+  snapshot, holder-chain severity tests, complete-workspace proptest
+  (`inspect == []`), corpus sweep over `testdata/dsl` (lossy-read for
+  the Latin-1 fixture — the engine is TOTAL: 98 files, never panics).
+- **M1d** (this commit) — `Request::Inspect` + `inspect_cmd` via
+  `api::open`; `oxidizr inspect <WS> [--severity-threshold] [--only]…
+  [--except]… [--format human|json] [--quiet]`: the engine output IS
+  the contract — human lines are the reference `toString` (color paints
+  ONLY the severity token; goldens run `NO_COLOR`), json is the frozen
+  schema-1 document (`docs/inspect-schema.md`: run order, lowercase
+  severities, `ignore` NEVER present); filters: `ignore` never
+  reported, threshold keeps rank `error>warning>info`, `--only` (when
+  set) BEFORE `--except`, exact type match; exit 1 iff anything is
+  REPORTED (`ExitClass::Differences`, P4-D1 family — `Severity`
+  re-exported from `oxidizr-api`). The CLI goldens pin the `open`
+  default-views leg too: `SystemLandscape-001`/`SystemContext-001`
+  carry auto-generated keys (pinned `createDefaultViews`) and the
+  reference REPORTS key + layout for them.
+- Close: `cargo xtask ci` green; oxidizr-inspect 15 lib + 19
+  integration tests; 8 new CLI goldens
+  (`crates/oxidizr-cli/tests/cli.rs`, `inspect_*`); full e2e tier
+  (`OXIDZR_E2E_FULL=1`) green + `cargo xtask e2e bless` →
+  307×unchanged.
 
 ### P3-M11 — post-v0.3.0: twelve-item UX batch + F11 viewport sidecar ✅ (2026-11-20/21, COMPLETE)
 

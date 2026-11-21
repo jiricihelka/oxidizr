@@ -712,3 +712,184 @@ fn diff_missing_side_exit_three() {
         "unreadable side is I/O, not equality"
     );
 }
+
+// §P4-M1 / F-inspect-parity — `oxidizr inspect` (I-4): exit 0/1/2, the
+// human `type | SEVERITY | message` report (NO_COLOR ⇒ PLAIN bytes), the
+// schema-1 JSON document (docs/inspect-schema.md), the severity
+// threshold, `--only`/`--except` and `--quiet`, and the `open` default-
+// views leg (generated keys are REPORTED — the reference quirk).
+// Self-contained fixtures in a temp dir (the `diff` precedent).
+
+fn inspect_temp(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("oxidizr-cli-inspect-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name)
+}
+
+fn inspect_fixture(name: &str, source: &str) -> PathBuf {
+    let path = inspect_temp(name);
+    std::fs::write(&path, source).unwrap();
+    path
+}
+
+/// Scope set (silences `workspace.scope`), one explicit-key landscape
+/// view (prevents the default-views leg and silences noview) with a
+/// single disconnected person.
+const INSPECT_DIRTY: &str = "workspace \"I\" {\n    configuration {\n        scope softwaresystem\n    }\n    model {\n        person \"Alice\" \"CEO\"\n    }\n    views {\n        systemLandscape main {\n            include *\n        }\n    }\n}\n";
+
+/// The same, with the disconnected severity downgraded on the element.
+const INSPECT_WARN: &str = "workspace \"I\" {\n    configuration {\n        scope softwaresystem\n    }\n    model {\n        person \"Alice\" \"CEO\" {\n            properties {\n                \"structurizr.inspection.model.element.disconnected\" \"warning\"\n            }\n        }\n    }\n    views {\n        systemLandscape main {\n            include *\n        }\n    }\n}\n";
+
+/// A fully clean workspace (documented, related, on a view).
+const INSPECT_CLEAN: &str = "workspace \"I\" {\n    configuration {\n        scope softwaresystem\n    }\n    model {\n        alice = person \"Alice\" \"CEO\"\n        bank = softwareSystem \"Bank\" \"Banking system\"\n        alice -> bank \"Uses\" \"HTTPS\"\n    }\n    views {\n        systemLandscape main {\n            include *\n        }\n    }\n}\n";
+
+/// No views at all: `open` creates the default views, whose keys ARE
+/// automatically generated — the reference reports key + layout per
+/// model view (landscape, then context).
+const INSPECT_DEFAULT_VIEWS: &str = "workspace \"I\" {\n    configuration {\n        scope softwaresystem\n    }\n    model {\n        alice = person \"Alice\" \"CEO\"\n        bank = softwareSystem \"Bank\" \"Banking system\"\n        alice -> bank \"Uses\" \"HTTPS\"\n    }\n}\n";
+
+#[test]
+fn inspect_clean_workspace_exit_zero_silent() {
+    let ws = inspect_fixture("clean.dsl", INSPECT_CLEAN);
+    let out = run(&["inspect", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(0), "clean workspace");
+    assert!(out.stdout.is_empty(), "human format is silent when clean");
+}
+
+#[test]
+fn inspect_human_report_exit_one_golden() {
+    let ws = inspect_fixture("dirty.dsl", INSPECT_DIRTY);
+    let out = run(&["inspect", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1), "violations reported — P4-D1");
+    // The message is the reference `toString` verbatim (terminology
+    // lowercased, canonical name minus the `Type://` prefix).
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "model.element.disconnected | ERROR | The person \"Alice\" is disconnected - add a relationship to/from it, or consider removing it from the model.\n"
+    );
+}
+
+#[test]
+fn inspect_json_schema_document_exit_one() {
+    let ws = inspect_fixture("dirty.dsl", INSPECT_DIRTY);
+    let out = run(&["inspect", "--format", "json", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1));
+    let text = String::from_utf8(out.stdout).unwrap();
+    // The frozen schema-1 shape (docs/inspect-schema.md): schema first,
+    // run order, lowercase severity, message verbatim.
+    assert!(
+        text.starts_with("{\n  \"schema\": 1,\n  \"violations\": [\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("\"type\": \"model.element.disconnected\""),
+        "{text}"
+    );
+    assert!(text.contains("\"severity\": \"error\""), "{text}");
+    assert!(text.ends_with("    }\n  ]\n}\n"), "{text}");
+}
+
+#[test]
+fn inspect_severity_threshold_filters() {
+    let ws = inspect_fixture("warn.dsl", INSPECT_WARN);
+    // The default threshold (`info`) keeps the WARNING…
+    let out = run(&["inspect", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("| WARNING |"),
+        "element property downgrades the severity"
+    );
+    // …and `error` filters it out (exit flips to 0 — exit counts only
+    // REPORTED violations).
+    let out = run(
+        &[
+            "inspect",
+            "--severity-threshold",
+            "error",
+            ws.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.stdout, b"");
+}
+
+#[test]
+fn inspect_only_except_filters() {
+    let ws = inspect_fixture("dirty.dsl", INSPECT_DIRTY);
+    // `--except` exact type match ⇒ clean.
+    let out = run(
+        &[
+            "inspect",
+            "--except",
+            "model.element.disconnected",
+            ws.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    // `--only` with a type that never fired ⇒ nothing reported.
+    let out = run(
+        &["inspect", "--only", "model.empty", ws.to_str().unwrap()],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    // `--only` matching keeps it.
+    let out = run(
+        &[
+            "inspect",
+            "--only",
+            "model.element.disconnected",
+            ws.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    // `--only` BEFORE `--except`: the same type in both ⇒ filtered.
+    let out = run(
+        &[
+            "inspect",
+            "--only",
+            "model.element.disconnected",
+            "--except",
+            "model.element.disconnected",
+            ws.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+}
+
+#[test]
+fn inspect_quiet_is_exit_code_only() {
+    let ws = inspect_fixture("dirty.dsl", INSPECT_DIRTY);
+    let out = run(&["--quiet", "inspect", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.stdout, b"");
+    assert_eq!(out.stderr, b"");
+}
+
+#[test]
+fn inspect_default_views_report_generated_keys() {
+    let ws = inspect_fixture("default-views.dsl", INSPECT_DEFAULT_VIEWS);
+    let out = run(&["inspect", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1));
+    // `open` installs the default views; their keys ARE auto-generated
+    // (the pinned `createDefaultViews`), and neither the landscape nor
+    // the context view gets automatic layout — key + layout per view,
+    // in `all_views` order.
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "views.view.key | ERROR | The view with key \"SystemLandscape-001\" has an automatically generated view key and this is not guaranteed to be stable over time.\n\
+         views.view.layout | ERROR | The view with key \"SystemLandscape-001\" has an automatically generated view key and this may cause manual layout information to be lost in the future.\n\
+         views.view.key | ERROR | The view with key \"SystemContext-001\" has an automatically generated view key and this is not guaranteed to be stable over time.\n\
+         views.view.layout | ERROR | The view with key \"SystemContext-001\" has an automatically generated view key and this may cause manual layout information to be lost in the future.\n"
+    );
+}
+
+#[test]
+fn inspect_unknown_workspace_exit_three() {
+    let missing = inspect_temp("absent.dsl");
+    let out = run(&["inspect", missing.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(3), "unreadable input is I/O");
+}
