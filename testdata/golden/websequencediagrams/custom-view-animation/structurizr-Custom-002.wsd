@@ -1,0 +1,6 @@
+title Custom View: 
+
+participant <<Element>>\nA as A
+participant <<Element>>\nB as B
+
+A->B: 

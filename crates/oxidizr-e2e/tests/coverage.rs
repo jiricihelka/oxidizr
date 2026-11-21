@@ -44,6 +44,13 @@ const ALLOWLIST: &[(u16, &str)] = &[
          gate as OXZ-4001, and DSL parsing cannot build one — T3 researched",
     ),
     (
+        5007,
+        "export not-implemented: since the WSD leg landed (P4 §P4-M2 N-5) only \
+         `static` — the JVM site generator, out of oxidizr scope — raises it, and \
+         the export matrix observes the four diagram formats only, so no manifest \
+         can carry the code — permanent",
+    ),
+    (
         5009,
         "export abort (M2, EXPORT-PLANTUML.md §14) needs a corrupt-diagram \
          workspace (dangling id / view-kind cast mismatch) through a diagram \

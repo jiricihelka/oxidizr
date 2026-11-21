@@ -34,6 +34,7 @@ pub mod paths;
 pub mod plantuml;
 pub mod property;
 pub mod themes;
+pub mod wsd;
 
 pub use diagram::{Diagram, DiagramExporter, Legend, WorkspaceExport, WorkspaceExporter};
 pub use error::ExportError;

@@ -1,0 +1,12 @@
+title Dynamic View: Software System
+
+actor <<Person>>\nUser as User
+participant <<Container>>\nWeb Application as Web Application
+participant <<Container>>\nMessage Bus as Message Bus
+participant <<Container>>\nApp 1 as App 1
+participant <<Container>>\nApp 2 as App 2
+
+User->Web Application: Updates details
+Web Application->Message Bus: Sends update event
+Message Bus->App 1: Broadcasts update event
+Message Bus->App 2: Broadcasts update event

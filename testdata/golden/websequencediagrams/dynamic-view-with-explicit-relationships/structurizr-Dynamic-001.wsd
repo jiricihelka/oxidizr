@@ -1,0 +1,6 @@
+title Dynamic View
+
+participant <<Software System>>\nA as A
+participant <<Software System>>\nB as B
+
+A->B: Async

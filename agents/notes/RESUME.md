@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1…N-4 done, next N-5 WSD exporter)**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1…N-5 done, next N-6 `!docs`/`!adrs`)**)
 
 ## State
 
@@ -81,11 +81,29 @@
   skip notes ride `LogItem::NoteLine`; bytes via `to_vec`+`emit_bytes`
   like `dsl2json`; clap `ImportCmdFormat` spells `c4plantuml`, dashed
   flags `--view-key`/`--view-name`; 9 goldens in `tests/cli.rs` §P4-M2
-  incl. the re-open read-check asserting `createDefaultViews` fires).
-  Next: **N-5/M2e WSD exporter** (reference
-  `websequencediagrams/WebSequenceDiagramsExporter`, 171 LOC, dynamic
-  views only → `oxidizr export --format websequencediagrams`) → N-6
-  `!docs`/`!adrs` (retires OXZ-5003; close P4-V7/V8 first) + M2 close
+  incl. the re-open read-check asserting `createDefaultViews` fires) and
+  **N-5/M2e** (`WebSequenceDiagramsExporter` port in
+  `oxidizr-export/src/wsd.rs`: `WsdDialect` on the shared `Engine` —
+  boundary hooks empty, `render_as_sequence_diagram` +
+  `owns_sequence_document` true so the dialect owns the dynamic walk via
+  `sequence_document`; `find_terminology` = the `Terminology` port
+  (instance unwrap, per-kind override-or-default, `CustomElement` ⇒
+  metadata-else-`"Element"`); `export_all` exports ONLY Custom + Dynamic
+  views (static/deployment overloads return `null`); dynamic header
+  `title <name>` (+ real-newline description), participants from the rel
+  endpoints source-then-destination first-seen (`actor` for Person, else
+  `participant`, literal `\n` separator), UNCONDITIONAL blank after
+  participants, stored-order rels (`->`/`->>`, response swaps +
+  `-->`/`-->>`; desc = view override trim-empty → model description →
+  EMPTY after `": "` — oracle witness); custom views ride the engine
+  base-body walk; no frames/legend, ext `wsd`, key = view key; oracle
+  9/9 fixtures byte-parity + `oracle verify` all wsd legs ok;
+  `cargo xtask oracle gen --wsd` gen/verify legs + 11 goldens/9 fixtures
+  + `export_wsd_goldens.rs`; OXZ-5007 allow-listed PERMANENT in the
+  coverage gate (only `static` raises it now); 161 e2e sidecars
+  re-blessed — wsd slots flip from the 5007 probe).
+  Next: **N-6/M2f `!docs`/`!adrs`** (retires OXZ-5003; close P4-V7/V8
+  first — read the Java matcher before trusting globs) + M2 close
   ritual (oracle read gate, fixtures w/ attribution, bless
   307×unchanged, full e2e tier). Then M3 (`query`/`init`/completions),
   M5 (oracle legs + carry-ins + cargo-dist + changelog catch-up).

@@ -40,8 +40,8 @@ pub enum ExportFormat {
     C4PlantUml(ColorMode),
     /// `mermaid`.
     Mermaid,
-    /// `websequencediagrams` (kept out of the Phase 2 scope, see
-    /// `PHASE_2.md`).
+    /// `websequencediagrams` — the `WebSequenceDiagramsExporter` port
+    /// (P4 §P4-M2 N-5): custom and dynamic views only, `.wsd` files.
     WebSequenceDiagrams,
     /// `static` — the reference site generator; not an oxidizr goal.
     Static,
@@ -123,10 +123,11 @@ impl ExportFormat {
     /// one file per diagram plus `-key` legend and numbered frame files, the
     /// id-keyed names of the reference write loop. `json` and `theme` are the
     /// implemented `WorkspaceExporter` pair (M0); `plantuml`/`structurizr`,
-    /// `plantuml/c4plantuml` and `mermaid` are the implemented
-    /// `DiagramExporter` trio (M2–M4). The remaining registry formats
-    /// report [`ExportError::NotImplemented`]; [`ExportFormat::Unknown`] is
-    /// the CALLER's exit-0 note path (the reference never gets here).
+    /// `plantuml/c4plantuml`, `mermaid` (M2–M4) and `websequencediagrams`
+    /// (P4 §P4-M2 N-5) are the implemented `DiagramExporter` quartet. The
+    /// remaining registry formats report [`ExportError::NotImplemented`];
+    /// [`ExportFormat::Unknown`] is the CALLER's exit-0 note path (the
+    /// reference never gets here).
     ///
     /// # Errors
     ///
@@ -162,6 +163,11 @@ impl ExportFormat {
                 let mut engine = Engine::new(workspace, ColorScheme::Light);
                 engine.export_all(&mut crate::mermaid::MermaidDialect::new())?
             }
+            // `WebSequenceDiagramsExporter` carries no color scheme and its
+            // static-structure/deployment overloads return `null`, so the
+            // view loop (Custom + Dynamic only) lives in `wsd::export_all`
+            // rather than on the engine.
+            Self::WebSequenceDiagrams => crate::wsd::export_all(workspace)?,
             Self::Json => {
                 let export = WorkspaceExport::new(oxidizr_json::to_vec(workspace)?, "json".into());
                 return workspace_export_files(&export, false, workspace_file_name);
@@ -337,18 +343,29 @@ mod tests {
 
     #[test]
     fn other_registry_formats_stay_not_implemented() {
-        // `mermaid` landed at M4-b (see the Mermaid arm tests + the
-        // `export_mermaid` API suite); these two are the registry's last
-        // unlanded entries.
-        for raw in ["websequencediagrams", "static"] {
-            let err = ExportFormat::parse(raw)
-                .export(&workspace(), "ws.dsl")
-                .expect_err("unlanded format");
-            assert!(
-                matches!(&err, ExportError::NotImplemented { format } if format == &ExportFormat::parse(raw).label()),
-                "{raw}: {err}"
-            );
-        }
+        // `mermaid` landed at M4-b and `websequencediagrams` at P4 §P4-M2
+        // N-5 (see the arm tests below + the `export_*` API suites);
+        // `static` is the registry's last unlanded entry.
+        let err = ExportFormat::parse("static")
+            .export(&workspace(), "ws.dsl")
+            .expect_err("unlanded format");
+        assert!(
+            matches!(&err, ExportError::NotImplemented { format }
+                if format == &ExportFormat::Static.label()),
+            "{err}"
+        );
+    }
+
+    /// P4 §P4-M2 N-5: `websequencediagrams` dispatches into
+    /// `wsd::export_all` — a landscape-only workspace writes NO files (the
+    /// reference's static-structure/deployment overloads return `null`) but
+    /// the export SUCCEEDS.
+    #[test]
+    fn websequencediagrams_lands_the_wsd_dialect() {
+        let files = ExportFormat::parse("websequencediagrams")
+            .export(&workspace(), "ws.dsl")
+            .expect("wsd export");
+        assert!(files.is_empty(), "{files:?}");
     }
 
     /// M4-b: `mermaid` exports through `MermaidDialect` — `.mmd` files

@@ -115,9 +115,9 @@ pub struct ExportReport {
     pub files: usize,
 }
 
-/// The export matrix (P2T-D2): the three landed diagram formats plus the
-/// reference-known-but-unlanded `websequencediagrams` as a compat probe —
-/// its OXZ-5007 is the coverage trigger the allow-list note anticipates.
+/// The export matrix (P2T-D2): the four landed diagram formats —
+/// `websequencediagrams` joined at P4 §P4-M2 N-5 (its slot recorded the
+/// OXZ-5007 compat probe until that landing).
 /// All four are present whenever the `export` section is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportReports {
@@ -127,7 +127,7 @@ pub struct ExportReports {
     pub plantuml_c4: ExportReport,
     /// `--format mermaid`.
     pub mermaid: ExportReport,
-    /// `--format websequencediagrams` (known-unlanded compat probe).
+    /// `--format websequencediagrams`.
     pub websequencediagrams: ExportReport,
 }
 

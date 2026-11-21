@@ -105,8 +105,8 @@ fn real_main(args: Vec<String>) -> Result<()> {
                 }
                 _ => {
                     bail!(
-                        "usage: cargo xtask oracle gen [--plantuml [--c4] | --mermaid | --theme] \
-                         [--fixture NAME]… | verify"
+                        "usage: cargo xtask oracle gen [--plantuml [--c4] | --mermaid | --wsd \
+                         | --theme] [--fixture NAME]… | verify"
                     )
                 }
             }
@@ -152,9 +152,9 @@ fn print_help() {
          cargo xtask e2e mutate [SEED]        generate e2e/corpus/mutated fixtures\n\
          \x20              FILTER matches `<kind>/<name>` substrings; review the diff\n\
          cargo xtask oracle gen [--fixture N]…  generate JSON goldens via the reference binary\n\
-         \x20   [--plantuml|--mermaid|--theme] + --fixture N…\n\
-         \x20     generate diagram (golden/plantuml[-c4|mermaid]/<N>/) or theme\n\
-         \x20     (golden/theme/<N>.json) goldens\n\
+         \x20   [--plantuml|--mermaid|--wsd|--theme] + --fixture N…\n\
+         \x20     generate diagram (golden/plantuml[-c4|mermaid|websequencediagrams]/<N>/) or\n\
+         \x20     theme (golden/theme/<N>.json) goldens\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
          \n\
          pinned reference: commit {REFERENCE_COMMIT}, app release {REFERENCE_APP_VERSION}\n\
@@ -1051,19 +1051,22 @@ enum GenMode {
     Plantuml,
     C4,
     Mermaid,
+    Wsd,
     Theme,
 }
 
 /// `oracle gen` option parsing: `--fixture NAME` repeats, `--plantuml`
 /// selects the diagram goldens, `--c4` (with `--plantuml`) the
 /// `plantuml/c4plantuml` dialect, `--mermaid` the Mermaid goldens
-/// (`golden/mermaid/`, M4-d) and `--theme` the theme goldens
-/// (`golden/theme/`, also M4-d).
+/// (`golden/mermaid/`, M4-d), `--wsd` the `WebSequenceDiagrams` goldens
+/// (`golden/websequencediagrams/`, P4 §P4-M2 N-5) and `--theme` the theme
+/// goldens (`golden/theme/`, also M4-d).
 fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Result<()> {
     let mut fixtures = Vec::new();
     let mut plantuml = false;
     let mut c4 = false;
     let mut mermaid = false;
+    let mut wsd = false;
     let mut theme = false;
     while let Some(a) = args.next() {
         if a == "--plantuml" {
@@ -1078,6 +1081,10 @@ fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Re
             mermaid = true;
             continue;
         }
+        if a == "--wsd" {
+            wsd = true;
+            continue;
+        }
         if a == "--theme" {
             theme = true;
             continue;
@@ -1088,8 +1095,8 @@ fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Re
     }
     ensure!(!c4 || plantuml, "oracle gen --c4 needs --plantuml too");
     ensure!(
-        usize::from(plantuml) + usize::from(mermaid) + usize::from(theme) <= 1,
-        "oracle gen: --plantuml, --mermaid and --theme are mutually exclusive"
+        usize::from(plantuml) + usize::from(mermaid) + usize::from(wsd) + usize::from(theme) <= 1,
+        "oracle gen: --plantuml, --mermaid, --wsd and --theme are mutually exclusive"
     );
     let mode = if plantuml && c4 {
         GenMode::C4
@@ -1097,6 +1104,8 @@ fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Re
         GenMode::Plantuml
     } else if mermaid {
         GenMode::Mermaid
+    } else if wsd {
+        GenMode::Wsd
     } else if theme {
         GenMode::Theme
     } else {
@@ -1107,7 +1116,7 @@ fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Re
     }
     ensure!(
         mode == GenMode::Json || !fixtures.is_empty(),
-        "oracle gen --plantuml/--mermaid/--theme needs at least one --fixture"
+        "oracle gen --plantuml/--mermaid/--wsd/--theme needs at least one --fixture"
     );
     cmd_oracle_gen(oracle, &fixtures, mode)
 }
@@ -1115,9 +1124,14 @@ fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Re
 fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], mode: GenMode) -> Result<()> {
     let root = repo_root()?;
     let golden_dir = root.join("testdata").join("golden");
-    if mode == GenMode::Plantuml || mode == GenMode::C4 || mode == GenMode::Mermaid {
+    if mode == GenMode::Plantuml
+        || mode == GenMode::C4
+        || mode == GenMode::Mermaid
+        || mode == GenMode::Wsd
+    {
         let (subdir, format, ext) = match mode {
             GenMode::Mermaid => ("mermaid", "mermaid", ".mmd"),
+            GenMode::Wsd => ("websequencediagrams", "websequencediagrams", ".wsd"),
             GenMode::C4 => ("plantuml-c4", "plantuml/c4plantuml", ".puml"),
             _ => ("plantuml", "plantuml", ".puml"),
         };
@@ -1422,6 +1436,7 @@ fn verify_diagram_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>
         ("plantuml", "plantuml", ".puml"),
         ("plantuml-c4", "plantuml/c4plantuml", ".puml"),
         ("mermaid", "mermaid", ".mmd"),
+        ("websequencediagrams", "websequencediagrams", ".wsd"),
     ] {
         let puml_base = root.join("testdata").join("golden").join(subdir);
         let mut puml_dirs: Vec<PathBuf> = fs::read_dir(&puml_base)

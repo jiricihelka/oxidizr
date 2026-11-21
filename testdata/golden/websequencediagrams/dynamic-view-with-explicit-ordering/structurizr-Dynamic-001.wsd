@@ -1,0 +1,8 @@
+title Dynamic View
+
+participant <<Software System>>\nA as A
+participant <<Software System>>\nB as B
+participant <<Software System>>\nC as C
+
+A->B: 
+B->C: 

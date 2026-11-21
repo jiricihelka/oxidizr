@@ -26,10 +26,8 @@
       "files": 1
     },
     "websequencediagrams": {
-      "exit": "error",
-      "codes": [
-        5007
-      ],
+      "exit": "ok",
+      "codes": [],
       "files": 0
     }
   }

@@ -15,10 +15,10 @@
 //! failure like any other I/O problem). Phase 2 M0 added `export` (reference
 //! `-w/--workspace`, required `-f/--format`, optional `-o/--output`): `theme`,
 //! `json` and the Structurizr `plantuml` diagram leg (M2-d) write through the
-//! `oxidizr_export` dispatch; `plantuml/c4plantuml` landed at M3-b and
-//! `mermaid` at M4-b; only `websequencediagrams`
-//! raises OXZ-5007; unknown format strings stay the exit-0
-//! note, mirroring `ExportCommand` (`agents/plan/build/PHASE_2.md`).
+//! `oxidizr_export` dispatch; `plantuml/c4plantuml` landed at M3-b,
+//! `mermaid` at M4-b and `websequencediagrams` at P4 §P4-M2 N-5; the
+//! remaining registry formats raise OXZ-5007; unknown format strings stay
+//! the exit-0 note, mirroring `ExportCommand` (`agents/plan/build/PHASE_2.md`).
 //!
 //! Since Phase 1T T0-d the command bodies live in [`oxidizr_api`]
 //! (`Request → execute() → Outcome`); this crate adds ONLY the argv surface,

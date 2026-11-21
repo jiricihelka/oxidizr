@@ -1,0 +1,12 @@
+title Dynamic View
+
+participant <<Software System>>\nA as A
+participant <<Software System>>\nB as B
+participant <<Software System>>\nC as C
+participant <<Software System>>\nD as D
+participant <<Software System>>\nE as E
+
+A->B: Makes a request to
+B->C: Gets data from
+B->D: Gets data from
+B->E: Sends data to

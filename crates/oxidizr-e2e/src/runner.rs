@@ -242,9 +242,9 @@ pub fn export_capture(
 
 /// The export matrix (P2T-D2): applies when the entry's export input (DSL
 /// first, else the JSON fixture — the `validate` rule) parses successfully
-/// and carries ≥ 1 view. The unlanded-but-known `websequencediagrams` slot
-/// records the OXZ-5007 compat reality (the coverage allow-list anticipates
-/// it); theme failures (OXZ-5001/5008) surface per format before dispatch,
+/// and carries ≥ 1 view; the `websequencediagrams` slot landed at
+/// P4 §P4-M2 N-5 (its sidecar recorded the OXZ-5007 compat probe until
+/// then); theme failures (OXZ-5001/5008) surface per format before dispatch,
 /// exactly like the reference ordering.
 fn observe_export(
     entry: &Entry,

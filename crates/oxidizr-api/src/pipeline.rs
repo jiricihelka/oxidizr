@@ -851,8 +851,9 @@ fn load_export_workspace(
 /// files, and the reference's viewless `log.error` branch), the C4
 /// dialect (M3-b — no legend files, custom views skipped) and the Mermaid
 /// exporter (M4-b — `.mmd` files, custom views exported, the standalone
-/// `sequenceDiagram` form); the one unlanded registry format
-/// (`websequencediagrams`) raises OXZ-5007; unknown strings mirror the
+/// `sequenceDiagram` form) and the `WebSequenceDiagrams` exporter (P4
+/// §P4-M2 N-5 — `.wsd` files, custom + dynamic views only); the unlanded
+/// registry formats (`static`) raise OXZ-5007; unknown strings mirror the
 /// reference's class-load miss — `Unknown export format: …`, exit 0. Theme
 /// pre-loading (`ThemeUtils.loadThemes`, P2-D3, M1-d) runs for
 /// `DiagramExporter` formats BEFORE the export attempt — exactly the
@@ -903,8 +904,8 @@ fn export_cmd(
     }
     if export_format.is_diagram() {
         // `ExportCommand` 222-227: `ThemeUtils.loadThemes` BEFORE the export
-        // — reference order, so theme failures precede the OXZ-5007 an
-        // unlanded diagram format raises. Themes append to the non-serialized
+        // — reference order, so theme failures precede any export error the
+        // diagram format itself raises. Themes append to the non-serialized
         // `Styles.themes` (resolution-time only, P2-D2).
         let store = theme_store(workspace_file.to_str(), opts);
         if let Err(e) = store.load_themes(&mut workspace) {
