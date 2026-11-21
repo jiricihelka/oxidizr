@@ -3066,6 +3066,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxidizr-inspect"
+version = "0.1.0"
+dependencies = [
+ "expect-test",
+ "oxidizr-core",
+ "proptest",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "oxidizr-json"
 version = "0.1.0"
 dependencies = [

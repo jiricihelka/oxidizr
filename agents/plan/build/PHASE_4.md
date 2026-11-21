@@ -124,8 +124,9 @@ crates/
   `ManualLayoutInspection`, `GeneratedKeyInspection`, `EmptyViewInspection`):
   `oxidizr-inspect` crate, one module per inspection, severity via
   `SeverityStrategy` ported incl. **`PropertyBasedSeverityStrategy`** (workspace
-  properties `structurizr.inspections.<InspectionName> = ignored|info|warning|error`
-  — exact key format is verification item P4-V2).
+  properties `structurizr.inspection.<lowercased dotted type path>` =
+  `ignored|info|warning|error` — verified via P4-V2 2026-11-21, see the §P4-M1
+  decomposition; the earlier `structurizr.inspections.<Name>` guess was wrong).
 - `oxidizr inspect <WORKSPACE> [--severity-threshold warning|error] [--only NAME]…
   [--except NAME]… [--format human|json]` — advisory only: **no effect on the JSON
   contract**; `--severity-threshold error` exit 1 makes it a CI gate.
@@ -274,11 +275,76 @@ change (add+remove — the keys embed them); P4-V1 may refine the
 `idChanged` taxonomy BEFORE the schema is published (it is v0-only until
 the M0d stamp).
 
+## §P4-M1 — `inspect` decomposition (started 2026-11-21; items I-1…I-4, commits M1a…M1d)
+
+New crate `oxidizr-inspect` (deps: `oxidizr-core` only — the engine is pure
+model logic; format+pipeline live in `oxidizr-api` per the T0-d invariant,
+the CLI stays the argv shim). Ports `structurizr-inspection` @ `ad34036`:
+`DefaultInspector` (run ORDER = the report contract — violations keep
+execution order, no sort), `PropertyBasedSeverityStrategy`, `Violation`
+(`type | severity | message` = the reference `toString`). **P4-V2 CLOSED at
+decomposition** (read from the pinned Java, corrections to P4-D7 baked in):
+
+- Property prefix is `structurizr.inspection.` (SINGULAR; the P4-D7 text
+  guessed `structurizr.inspections.<InspectionName>` — WRONG), keys are the
+  lowercased dotted TYPE path (`structurizr.inspection.model.component.description`)
+  with wildcard fallbacks generated longest-first (`…model.component.*` →
+  `…model.*` → `structurizr.inspection.*`); relationship types rewrite
+  `.relationship.` → `.relationship[<srcType>-><dstType>].` (lowercase Java
+  simple names: `softwaresystem`, `deploymentnode`, …), the SPECIFIC key tried
+  first, and for relationship-scoped types the generic `…model.*` / `*`
+  fallbacks are NOT tried (Java `subList(0, n-2)` quirk — ported).
+- Holders searched inner→outer, first key hit wins: element ⇒ element →
+  parent → grandparent → model → workspace; relationship ⇒ relationship →
+  linked → source → source.parent → model → workspace; view ⇒ view-config →
+  workspace; element-style ⇒ style → view-config → workspace; model-level ⇒
+  model → workspace. Values `error|warning|info|ignore` (case-insensitive);
+  NO match ⇒ ERROR — every inspection DEFAULTS to error, there are no
+  per-inspection Java defaults (P4-D7 "mirrored from Java defaults" = all
+  ERROR + this strategy). Unparseable values throw in Java; we map them to
+  ERROR (errors-as-values rule, `agents/notes/process/faithful-port.md`).
+- `structurizr.inspection` = `"false"` (any case) skips the whole run
+  (`DefaultInspector` ctor); the four `structurizr.inspection.{error,warning,
+  info,ignore}` counters are harness artifacts written onto the workspace —
+  NOT computed here (the oracle strip already documents them).
+- Type catalog (24 distinct `getType()` strings; three classes share
+  `workspace.scope`, both documentation ones share `documentation.embeddedview`):
+  `workspace.tooling`, `workspace.scope`, `model.empty`,
+  `model.{person,softwaresystem,container,component,deploymentnode,infrastructurenode}.description`,
+  `model.{container,component,deploymentnode,infrastructurenode}.technology`,
+  `model.softwaresystem.{documentation,decisions}`, `model.deploymentnode.empty`,
+  `model.element.disconnected`, `model.element.noview`,
+  `model.relationship.{description,technology}`, `views.empty`,
+  `views.view.{key,empty,layout}`, `views.styles.element.metadata`,
+  `documentation.embeddedview`.
+- Iteration order (faithful): elements = `Model.getElements()` TreeSet ⇒
+  NUMERIC-id sort (`ModelItem.compareTo`); each element's OUTGOING
+  relationships in numeric-id order (source-side ownership ⇒ each
+  relationship inspected exactly once); per-kind loops run in
+  `DefaultInspector` order; views iterate per kind in declaration order.
+- Plan-doc correction: the "proptest `inspect(validate-clean) == []`" is
+  unsatisfiable as written (missing descriptions are VALID but ERROR-flagged)
+  — replaced by a **complete-workspace generator** proptest (descriptions +
+  technologies + scope set + every element on a named view ⇒ `inspect == []`).
+
+| Item | Deliverable | C |
+|---|---|---|
+| **I-1** | Crate skeleton + severity machinery: `oxidizr-inspect` (`lib`, `Severity`, `Violation {type, severity, message}`, `Inspection` type consts, `PropertyBasedSeverityStrategy` port incl. the wildcard chain, holder order, relationship rewrite + `subList` quirk, `"false"` kill-switch, value parsing ⇒ ERROR fallback); unit tests for every chain leg + holder precedence + relationship specificity — **DONE 2026-11-21** (11 unit tests; deviation note: Java THROWS on unparseable severity values, we map to ERROR — errors-as-values, fail-loud for CI) | M1a |
+| **I-2** | Model-side inspections (workspace tooling/scope, `model.*` incl. disconnected/noview/empty-model/empty-deployment-node/multiple-systems, relationship description/technology, embedded-view missing/generated-key for workspace + softwaresystem/container/component documentables): exact Java message strings, `terminologyFor` (view-config terminology override, lowercased) + `nameOf` (canonical minus `Type://`) helpers; per-inspection trigger snapshots (`expect!`) on builder-built fixtures | M1b |
+| **I-3** | View-side inspections (`views.empty`, per-view key/empty/manual-layout loops per kind, multi-system context/container-view scope checks, element-style metadata) + `inspect(workspace)` full run in `DefaultInspector` order; run-order integration snapshot; complete-workspace proptest (`inspect == []`) + corpus sweep (`testdata/dsl` never panics) | M1c |
+| **I-4** | Pipeline + CLI: `Request::Inspect`, `inspect_cmd` via `api::open`; `oxidizr inspect <WORKSPACE> [--severity-threshold info\|warning\|error] [--only T]… [--except T]… [--format human\|json] [--quiet]`; human = `type \| SEVERITY \| message` lines (renderer-colored, PLAIN goldens), json = `{schema:1, violations:[{type,severity,message}]}` in run order; IGNORE never reported, threshold filters (rank `error>warning>info`), `--only` applied before `--except` (exact type match); exit 1 iff any REPORTED violation (`ExitClass::Differences` generalized to findings — same code 1, P4-D1 extension unchanged); CLI goldens; bless + PROGRESS/RESUME close | M1d |
+
 ## P4-D12 Verification list
 
 - P4-V1 diff identity rules vs real-world edit sequences (identifier/canonical-name
   stability limits) — refine `idChanged` taxonomy before freezing `schema: 1`.
-- P4-V2 exact inspection severity property keys + Java default severities.
+- P4-V2 exact inspection severity property keys + Java default severities —
+  **CLOSED 2026-11-21** (read from `structurizr-inspection` @ `ad34036`: keys are
+  `structurizr.inspection.<lowercased dotted type path>` with `*` wildcard
+  fallbacks + the `[srcType->dstType]` relationship rewrite; ALL inspections
+  default to ERROR, properties override — full findings + port plan in the
+  §P4-M1 decomposition above; P4-D7's `structurizr.inspections.<Name>` guess
+  was wrong).
 - P4-V3 macro/syntax inventory: reference plantuml/mermaid importer accepted forms vs
   vendored real-world samples (drives importer scope).
 - P4-V4 filter/expression grammar full token inventory (what `query` can promise)

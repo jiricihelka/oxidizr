@@ -1,0 +1,24 @@
+[package]
+name = "oxidizr-inspect"
+description = "oxidizr-inspect: advisory inspections ported from structurizr-inspection (P4 §P4-M1, F- inspect-parity) — pure model logic over oxidizr-core"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# The engine is pure model logic (the §P4-M1 posture): `oxidizr-core` only.
+# Loading (dsl/json) and the human/json report live in `oxidizr-api` per the
+# T0-d bodies-in-API invariant; the JSON contract is never touched (advisory
+# only, P4-D7).
+oxidizr-core = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+expect-test = { workspace = true }
+proptest = { workspace = true }
