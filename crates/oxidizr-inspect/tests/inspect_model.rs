@@ -164,6 +164,7 @@ fn empty_workspace_snapshot() {
     expect![[r#"
         workspace.scope | ERROR | This workspace has no defined scope. It is recommended that the workspace scope is set to "Landscape" or "SoftwareSystem".
         model.empty | ERROR | The model is empty.
+        views.empty | ERROR | This workspace has no views.
     "#]]
     .assert_eq(&snap(&violations));
 }
@@ -183,8 +184,9 @@ fn kill_switch_and_scope_configuration() {
         ..Workspace::default()
     };
     let violations = inspect(&ws);
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].inspection, "model.empty");
+    // model.empty (model phase) then views.empty (view phase).
+    let kinds: Vec<&str> = violations.iter().map(|v| v.inspection).collect();
+    assert_eq!(kinds, ["model.empty", "views.empty"]);
 }
 
 #[test]
@@ -205,6 +207,9 @@ fn workspace_tooling_and_documentation_snapshot() {
         documentation.embeddedview | ERROR | The following views are embedded into documentation for the workspace but do not exist in the workspace: Missing-1
         documentation.embeddedview | ERROR | The following views are embedded into documentation for the workspace via an automatically generated view key: Gen-1
         model.empty | ERROR | The model is empty.
+        views.view.key | ERROR | The view with key "Gen-1" has an automatically generated view key and this is not guaranteed to be stable over time.
+        views.view.empty | ERROR | The view with key "Gen-1" is empty.
+        views.view.layout | ERROR | The view with key "Gen-1" has an automatically generated view key and this may cause manual layout information to be lost in the future.
     "#]]
     .assert_eq(&snap(&violations));
 }
@@ -296,6 +301,9 @@ fn disconnected_and_noview_fire_for_unlinked_elements() {
             "model.person.description",
             "model.element.disconnected",
             "model.element.noview",
+            // the view phase runs after the model phase (viewless
+            // workspace ⇒ views.empty)
+            "views.empty",
         ]
     );
     assert_eq!(
@@ -420,6 +428,8 @@ fn property_severity_overrides_and_ignore() {
             ("model.person.description", Severity::Warning),
             ("model.element.disconnected", Severity::Ignore),
             ("model.element.noview", Severity::Ignore),
+            // view phase (no views configured); no property matches it.
+            ("views.empty", Severity::Error),
         ]
     );
     // IGNORE violations are still REPORTED by the engine (the reference

@@ -22,3 +22,5 @@ thiserror = { workspace = true }
 [dev-dependencies]
 expect-test = { workspace = true }
 proptest = { workspace = true }
+# Corpus sweep only (I-3): parse the vendored `testdata/dsl` fixtures.
+oxidizr-dsl = { workspace = true }

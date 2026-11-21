@@ -1,5 +1,5 @@
-//! The `DefaultInspector` port: workspace + model phases (§P4-M1 I-2;
-//! the view phase joins in I-3).
+//! The `DefaultInspector` port: workspace, model and view phases
+//! (§P4-M1 I-2/I-3).
 //!
 //! Run order IS the report contract (documented in `lib.rs`): workspace
 //! inspections, then the model (every element in `ModelItem.compareTo`
@@ -35,6 +35,9 @@ use oxidizr_core::model::Relationship;
 use oxidizr_core::model::SoftwareSystem;
 use oxidizr_core::model::SoftwareSystemInstance;
 use oxidizr_core::properties::Properties;
+use oxidizr_core::views::ElementStyle;
+use oxidizr_core::views::ViewBase;
+use oxidizr_core::views::ViewContent;
 
 use crate::severity::Severity;
 use crate::strategy;
@@ -294,7 +297,7 @@ impl<'a> Engine<'a> {
     fn run(mut self) -> Vec<Violation> {
         self.workspace_phase();
         self.model_phase();
-        // The view phase joins with §P4-M1 I-3.
+        self.view_phase();
         self.out
     }
 
@@ -756,6 +759,190 @@ impl<'a> Engine<'a> {
         for r in rels {
             self.relationship(r);
         }
+    }
+
+    // -- view phase (§P4-M1 I-3) ---------------------------------------------
+
+    /// views-level holders (`AbstractViewsInspection`: view-config →
+    /// workspace).
+    fn views_holders(&self) -> [Option<&'a Properties>; 2] {
+        [
+            Some(&self.ws.views.configuration.properties),
+            Some(&self.ws.properties),
+        ]
+    }
+
+    /// per-view holders (`AbstractViewInspection`/`AbstractModelView…`:
+    /// view → view-config → workspace).
+    fn view_holders(&self, base: &'a ViewBase) -> [Option<&'a Properties>; 3] {
+        [
+            Some(&base.properties),
+            Some(&self.ws.views.configuration.properties),
+            Some(&self.ws.properties),
+        ]
+    }
+
+    /// element-style holders (`ElementStyleMetadataInspection`: style →
+    /// view-config → workspace).
+    fn style_holders(&self, style: &'a ElementStyle) -> [Option<&'a Properties>; 3] {
+        [
+            Some(&style.properties),
+            Some(&self.ws.views.configuration.properties),
+            Some(&self.ws.properties),
+        ]
+    }
+
+    /// `runViewInspections` — the reference order verbatim: views.empty,
+    /// the per-kind model-view loops (key/empty/layout) with the two
+    /// multi-system scope checks woven in at their exact positions, the
+    /// generated-key-only filtered/image loops, then the element styles.
+    fn view_phase(&mut self) {
+        // The 'a reference is COPIED out so the loops stay out of `self`'s
+        // borrow while violations are pushed.
+        let ws = self.ws;
+        // EmptyViewsInspection.
+        if ws.views.all_views().is_empty() {
+            let severity = strategy::severity_from(types::VIEWS_EMPTY, &self.views_holders());
+            self.push(
+                types::VIEWS_EMPTY,
+                severity,
+                "This workspace has no views.".to_owned(),
+            );
+        }
+        for v in &ws.views.custom_views {
+            self.model_view(&v.base, &v.content);
+        }
+        for v in &ws.views.system_landscape_views {
+            self.model_view(&v.base, &v.content);
+        }
+        // SystemContextViewsForMultipleSoftwareSystemsInspection
+        // (distinct `softwareSystemId`s over the SC views).
+        let systems: HashSet<&Id> = ws
+            .views
+            .system_context_views
+            .iter()
+            .map(|v| &v.software_system_id)
+            .collect();
+        if systems.len() > 1 {
+            let severity = strategy::severity_from(types::WORKSPACE_SCOPE, &self.views_holders());
+            self.push(
+                types::WORKSPACE_SCOPE,
+                severity,
+                format!(
+                    "System context views exist for {} software systems. It is \
+                     recommended that a workspace includes system context views \
+                     for a single software system only.",
+                    systems.len()
+                ),
+            );
+        }
+        for v in &ws.views.system_context_views {
+            self.model_view(&v.base, &v.content);
+        }
+        // ContainerViewsForMultipleSoftwareSystemsInspection.
+        let systems: HashSet<&Id> = ws
+            .views
+            .container_views
+            .iter()
+            .map(|v| &v.software_system_id)
+            .collect();
+        if systems.len() > 1 {
+            let severity = strategy::severity_from(types::WORKSPACE_SCOPE, &self.views_holders());
+            self.push(
+                types::WORKSPACE_SCOPE,
+                severity,
+                format!(
+                    "Container views exist for {} software systems. It is \
+                     recommended that a workspace includes container views for \
+                     a single software system only.",
+                    systems.len()
+                ),
+            );
+        }
+        for v in &ws.views.container_views {
+            self.model_view(&v.base, &v.content);
+        }
+        for v in &ws.views.component_views {
+            self.model_view(&v.base, &v.content);
+        }
+        for v in &ws.views.dynamic_views {
+            self.model_view(&v.base, &v.content);
+        }
+        for v in &ws.views.deployment_views {
+            self.model_view(&v.base, &v.content);
+        }
+        // Filtered/image views get the generated-key inspection only.
+        for v in &ws.views.filtered_views {
+            self.generated_key(&v.base);
+        }
+        for v in &ws.views.image_views {
+            self.generated_key(&v.base);
+        }
+        // ElementStyleMetadataInspection: fires on metadata = FALSE only
+        // (`getMetadata() != null && !getMetadata()`).
+        for style in &ws.views.configuration.styles.element_styles {
+            if style.metadata == Some(false) {
+                let severity = strategy::severity_from(
+                    types::STYLE_ELEMENT_METADATA,
+                    &self.style_holders(style),
+                );
+                self.push(
+                    types::STYLE_ELEMENT_METADATA,
+                    severity,
+                    format!(
+                        "The element style for tag \"{}\" has metadata hidden, \
+                         which may introduce ambiguity on rendered diagrams.",
+                        style.tag
+                    ),
+                );
+            }
+        }
+    }
+
+    /// The three inspections the reference runs for every model-view
+    /// kind: `GeneratedKeyInspection`, `EmptyViewInspection`
+    /// (`getElements().isEmpty()`), `ManualLayoutInspection` (generated
+    /// key AND no automatic layout).
+    fn model_view(&mut self, base: &'a ViewBase, content: &'a ViewContent) {
+        self.generated_key(base);
+        if content.elements.is_empty() {
+            let severity = strategy::severity_from(types::VIEW_EMPTY, &self.view_holders(base));
+            self.push(
+                types::VIEW_EMPTY,
+                severity,
+                format!("The view with key \"{}\" is empty.", base.key),
+            );
+        }
+        if base.generated_key && content.automatic_layout.is_none() {
+            let severity = strategy::severity_from(types::VIEW_LAYOUT, &self.view_holders(base));
+            self.push(
+                types::VIEW_LAYOUT,
+                severity,
+                format!(
+                    "The view with key \"{}\" has an automatically generated \
+                     view key and this may cause manual layout information to \
+                     be lost in the future.",
+                    base.key
+                ),
+            );
+        }
+    }
+
+    /// `GeneratedKeyInspection`.
+    fn generated_key(&mut self, base: &'a ViewBase) {
+        if !base.generated_key {
+            return;
+        }
+        let severity = strategy::severity_from(types::VIEW_KEY, &self.view_holders(base));
+        self.push(
+            types::VIEW_KEY,
+            severity,
+            format!(
+                "The view with key \"{}\" has an automatically generated view \
+                 key and this is not guaranteed to be stable over time.",
+                base.key
+            ),
+        );
     }
 }
 

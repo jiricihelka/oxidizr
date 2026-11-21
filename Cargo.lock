@@ -3071,6 +3071,7 @@ version = "0.1.0"
 dependencies = [
  "expect-test",
  "oxidizr-core",
+ "oxidizr-dsl",
  "proptest",
  "thiserror 2.0.21",
 ]
