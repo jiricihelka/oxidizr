@@ -133,6 +133,30 @@ output (Phase 1 flag); F9 is the Phase 1T interlude (test infra, `build/PHASE_1T
 - Compatibility: none — the contract pipeline never references the
   file; workspaces that never use it see zero behavior change.
 
+### F12 — C4-PlantUML / Mermaid diagram-model importers ✅ (signed off 2026-11-21, questions tool)
+
+- Problem: P4-D8 promised "reference-importer scope as the ceiling" (R-1),
+  but the P4-V3 inventory (pinned monorepo `ad34036`, 2026-11-21) found
+  the reference has NO C4-PlantUML/Mermaid→model parser at all —
+  `structurizr-import`'s PlantUML/Mermaid importers merely encode diagram
+  text into a render-server URL in an `ImageView` (kroki-shaped, network,
+  already deferred by P4-D8). No ceiling exists; the feature needs its
+  own scope, so it is an additional feature, not a port.
+- Feature: `oxidizr import <FILE> [--format c4plantuml|mermaid|image]
+  [--view-key K --view-name N] -o <WORKSPACE>` — hand-rolled macro-subset
+  parsers producing model + one view containing exactly the declared
+  elements/relationships (macro inventory and fidelity bar in
+  `build/PHASE_4.md` P4-D8 + §P4-M2; unknown macros = warning + skip,
+  never fail-all). The `image` leg IS the reference port (file →
+  `ImageView` data-URI/content-type/title). Decomposition:
+  `build/PHASE_4.md` §P4-M2.
+- Compatibility: purely additive — new crate `oxidizr-import`, new CLI
+  subcommand; output is standard Structurizr JSON the official tooling
+  loads (oracle read check gates it); nothing in the contract pipeline
+  changes (bless 307×unchanged remains the tripwire). Fidelity bar is
+  SEMANTIC (element/relationship sets match the source diagram, like the
+  P2 exports), not byte-level — there is no reference output to match.
+
 ## Ideas (💡 not agreed — sign-off required before implementing)
 
 | # | Idea | Compat analysis |

@@ -137,6 +137,11 @@ crates/
 
 ## P4-D8 Diagram importers (`oxidizr-import`)
 
+> **REVISED by P4-V3 (2026-11-21)**: no reference model-parser ceiling
+> exists — the C4-PlantUML/Mermaid→model importers ship as agreed
+> additional feature **F12**; the `image` leg is the reference port
+> (`ImageView` data URIs); full findings + decomposition in §P4-M2.
+
 - `oxidizr import <FILE> [--format c4plantuml|mermaid|image] [--view-key K --view-name N]
   -o <WORKSPACE.json>` (extension sniff when `--format` absent; kroki deferred — it is
   a network fetch wrapper, D5-adjacent, 💡 later).
@@ -334,6 +339,59 @@ decomposition** (read from the pinned Java, corrections to P4-D7 baked in):
 | **I-3** | View-side inspections (`views.empty`, per-view key/empty/manual-layout loops per kind, multi-system context/container-view scope checks, element-style metadata) + `inspect(workspace)` full run in `DefaultInspector` order; run-order integration snapshot; complete-workspace proptest (`inspect == []`) + corpus sweep (`testdata/dsl` never panics) — **DONE 2026-11-21** (view phase in `run.rs` verified verbatim against `DefaultInspector` — each model-view kind runs the key/empty/layout trio, the two multi-system checks count DISTINCT `softwareSystemId`s at their exact loop positions, filtered/image get the generated-key inspection ONLY, styles fire on `metadata == Some(false)`; `inspect_views.rs` run-order snapshot + holder-chain severity tests (view→view-config→workspace, style→view-config→workspace, views→view-config→workspace, inner-first exact-match wins, `*` wildcard fallback); `inspect_complete.rs` complete-workspace proptest; `inspect_corpus.rs` sweep over `testdata/dsl` — lossy-read for the Latin-1 fixture, unparsable fixtures skipped, engine total on every parsed workspace) | M1c |
 | **I-4** | Pipeline + CLI: `Request::Inspect`, `inspect_cmd` via `api::open`; `oxidizr inspect <WORKSPACE> [--severity-threshold info\|warning\|error] [--only T]… [--except T]… [--format human\|json] [--quiet]`; human = `type \| SEVERITY \| message` lines (renderer-colored, PLAIN goldens), json = `{schema:1, violations:[{type,severity,message}]}` in run order; IGNORE never reported, threshold filters (rank `error>warning>info`), `--only` applied before `--except` (exact type match); exit 1 iff any REPORTED violation (`ExitClass::Differences` generalized to findings — same code 1, P4-D1 extension unchanged); CLI goldens; bless + PROGRESS/RESUME close — **DONE 2026-11-21** (`docs/inspect-schema.md` written next to the diff schema; `Severity` re-exported from `oxidizr-api`; 8 CLI goldens incl. the `open` default-views leg REPORTING the generated `SystemLandscape-001`/`SystemContext-001` keys — the pinned `createDefaultViews` quirk, and the element-property severity downgrade through `--severity-threshold`) | M1d |
 
+## §P4-M2 — importers decomposition (started 2026-11-21; items N-1…N-6, commits M2a…M2f)
+
+Three arcs in one milestone (P4-D8 diagram import + P4-D10-adjacent WSD
+exporter + P4-D13 `!docs`/`!adrs`) ⇒ charter decomposition up front.
+**P4-V3 CLOSED at decomposition** (2026-11-21, read from the pinned
+monorepo `ad34036` — `structurizr-import` + `structurizr-dsl` +
+`ImageUtils` + `structurizr-export`), and it REVISES P4-D8:
+
+- The reference `structurizr-import` diagram "importers" are NOT model
+  parsers: PlantUML/Mermaid importers deflate/base64 the diagram text
+  into a render-SERVER URL written to an `ImageView` (kroki-shaped; the
+  fetch is network ⇒ stays deferred exactly as the plan's kroki clause
+  already decided); `ImageImporter` wraps a LOCAL file → `ImageView`
+  (data-URI content + guessed content type + `title = file.getName()`).
+- NO C4-PlantUML/Mermaid→model parser exists ANYWHERE in the monorepo —
+  the P4-D8 "reference-importer scope as the ceiling" (R-1) has no
+  ceiling. Signed off 2026-11-21 (questions tool) as **F12** in
+  `ADDITIONAL_FEATURES.md`: the macro importers ship as an agreed
+  additional feature — scope = the P4-D8 macro list + vendored real-world
+  samples, warning-and-skip, SEMANTIC fidelity bar (element/relationship
+  sets match the source), output must load cleanly in the reference
+  (oracle read gate) and stays pure Structurizr JSON.
+- `ImageUtils` port specifics (the `--format image` leg): content type is
+  JVM `guessContentTypeFromName` (`.png`→`image/png`, `.jpg/.jpeg`→
+  `image/jpeg`, `.gif`→`image/gif`, `.svg`→`image/svg+xml`; anything not
+  `image/*` ⇒ "is not a supported image file" error); data URI =
+  `data:<ct>;base64,` + base64 — SVG as RAW bytes, but non-SVG passes
+  through an AWT `ImageIO` READ+WRITE RE-ENCODINE (JVM-version-dependent
+  bytes!). Port deviation (register in DEVIATIONS.md): ALL formats embed
+  the raw file bytes — deterministic, same shape, and for SVG exactly
+  what the reference does.
+- `!docs`/`!adrs` (P4-D13-1, retiring OXZ-5003): `DocsParser` grammar
+  `!docs <path> [fqn]` + `exclude <filename|regex>…`; paths resolve
+  RELATIVE TO THE DSL FILE; the JVM picks importers by FQN — the Rust
+  port picks by statement (`!docs` = `DefaultDocumentationImporter` +
+  `FormatFinder` md/adoc; `!adrs` = the decision-importer family with
+  per-directory format detection: adr-tools, MADR, log4brains,
+  structurizr-native). P4-V7 (status/date parsing corners) and P4-V8
+  (exclude matching: read the Java matcher before trusting `globset`)
+  CLOSE with N-6's first commit.
+
+Items (each ends green; commits M2a…M2f):
+
+| # | Deliverable | Commit |
+| --- | --- | --- |
+| **N-1** | `oxidizr-import` crate skeleton (deps: `oxidizr-core` + `oxidizr-diag`, errors as values) + the **image importer** port (`ImageView` content/content-type/title semantics above, raw-bytes data URIs, `base64` workspace dep) + `data:` URI helper reuse check against the D10 embed machinery | M2a |
+| **N-2** | **C4-PlantUML model importer** (F12): line-oriented macro parser (`Person(_Ext)?`, `Person_Boundary`, `System(_Ext|_Boundary|_Backup|_Db|_Queue|_LandingPage)?`, `Container(_Ext)?`, `Container_Boundary`, `Component`, `Rel(_[A-Za-z]+)?` incl. the `System_Rel`-style prefixes as tags, `System_Ext_P`-style layout hints tolerated, `!include`/`!$`/`!$`-style preprocessor + `LAYOUT_*`/`SHOW_*`/`skinparam`/`title`/block devices tolerated), boundary nesting ⇒ grouped elements, tags from macro args, aliases (`$alias`) resolution; model + ONE view (elements = declared, relationships = implied-below-added) via `WorkspaceBuilder`; unknown macro ⇒ warning + skip (never fail-all); vendored C4-PlantUML samples + semantic-set assertions + `expect!` goldens | M2b |
+| **N-3** | **Mermaid C4 model importer** (F12): `C4Context|C4Container|C4Component|C4Deployment` bodies — `Person/Person_Ext/System/System_Ext/Container/Container_Ext/Component/Component_Ext(alias, "name", "desc" [, "tags"])`, `System_Boundary/Container_Boundary/Container_Boundary_Ext(alias, "name") { … }`, `Rel(_[A-Za-z]+)?(alias|src, alias|dst, "label" [, "tech" [, "tags"]])`, `BiRel`, `UpdateElementTag/UpdateLayoutConfig/UpdateRelStyle/SetLayoutTag/Enter_Boundary/Leave_Boundary/SHOW_*/`title tolerated; `-->` plain-flowchart edges NOT promised; same warning-and-skip + fixture bar | M2c |
+| **N-4** | CLI arc: `Request::Import { input, format, view_key, view_name, output }` + `import_cmd` (fresh workspace per diagram; format by `--format` else extension sniff `.puml/.iuml/.c4p`→c4plantuml, `.mmd/.mermaid`→mermaid, image extensions→image; warnings ride `Outcome::log`, workspace bytes via the standard writer — format by output extension, like `dsl2json`); `oxidizr import <FILE> [--format …] [--view-key K --view-name N] [-o OUT]` ships COMPLETE with all three formats (no half-shipped surface); CLI goldens per format + the read-check (imported JSON re-opens clean through `api::open`) | M2d |
+| **N-5** | **WSD exporter** (reference port: `websequencediagrams/WebSequenceDiagramsExporter`, 171 LOC, dynamic views only) → `oxidizr export --format websequencediagrams`; P2 exporter-family ritual (Diagram value, goldens, semantic comparator where the oracle speaks WSD) | M2e |
+| **N-6** | **`!docs`/`!adrs` importers** (P4-D13-1): ports of `DefaultDocumentationImporter`/`FormatFinder` (+ recursive walk) and the decision family (`AbstractDecisionImporter` id/status/date parsing, `AdrTools`/`Madr`/`Log4brains`, structurizr-native `.md`+`.json`? — inventory per P4-V7 FIRST); the DSL statements already parse (P1) — wire real import at the OXZ-5003 site, retire the diagnostic + the deferred-corpus exclusion in `testdata/README.md`; P4-V8 decides exclude matching (Java regex vs glob ⇒ `globset` returns only if globs); vendored ADR corpora + goldens | M2f |
+| **Close** | oracle read gate green (Category B, `$OXIDZR_STRUCTURIZR_BIN`), fixtures vendored with attribution (`testdata/import/*` + README contract row), bless 307×unchanged, full e2e tier, PROGRESS/RESUME stamps | M2f |
+
 ## P4-D12 Verification list
 
 - P4-V1 diff identity rules vs real-world edit sequences (identifier/canonical-name
@@ -346,7 +404,10 @@ decomposition** (read from the pinned Java, corrections to P4-D7 baked in):
   §P4-M1 decomposition above; P4-D7's `structurizr.inspections.<Name>` guess
   was wrong).
 - P4-V3 macro/syntax inventory: reference plantuml/mermaid importer accepted forms vs
-  vendored real-world samples (drives importer scope).
+  vendored real-world samples (drives importer scope) — **CLOSED 2026-11-21**
+  (pinned monorepo read: NO model-parser importers exist in the reference —
+  `structurizr-import` diagrams = ImageView server-URL/data-URI wrappers;
+  macro importers = F12 additional feature; full findings in §P4-M2).
 - P4-V4 filter/expression grammar full token inventory (what `query` can promise)
   from `ExpressionBuilder`-class sources.
 - P4-V5 `lsp-server` version + stdio framing behavior under fast edits.
