@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); next §P4-M3 `query`/`init`/`completions`/`generate`**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` DONE (M3a), next O-2 `init` (M3b)**)
 
 ## State
 
@@ -75,7 +75,43 @@
   A/B legs green `TZ=UTC` (see §P4-M2 surface below, esp. the
   Java empty-input `split` fix). Surface notes below; permanent contract
   `build/IMPORT-DOCS-ADRS.md`. Close stamps: PHASE_4 N-6 + Close rows,
-  PROGRESS status board + `P4-M2` milestone log. **Next: §P4-M3**
+  PROGRESS status board + `P4-M2` milestone log.
+- **§P4-M3 O-1 `query` DONE 2026-11-21** (M3a, F6): `oxidizr query <WS>
+  --filter EXPR [--kind element|relationship|view|all] [--format
+  table|ids|json] [-o]` — the DSL item-expression grammar IS the query
+  language (P4-D3 corrected: `oxidizr_dsl::query::run(&Workspace, expr)`
+  public entry = engine reuse via `adopt` + the extracted
+  `register_json_identifiers`; P4-V4 CLOSED, token table in
+  `docs/query-schema.md`). Surface note below. **Next: O-2 `init`
+  (M3b), O-3 `completions` (M3c), O-4 `generate` (M3d), M3 close.**
+
+## §P4-M3 O-1 query surface (`oxidizr-dsl/src/query.rs` + `oxidizr-api/src/query.rs` — read before touching)
+
+- **One parser, one evaluator**: `oxidizr_dsl::query::run` = the pinned
+  `ExpressionParser` port on `ExprScope::Model` (`adopt` + JSON-identifier
+  register; `Parser::new` is `pub(crate)`); Model-scope unmatched ⇒ EMPTY,
+  never throws — `query_cmd` maps a THROWING arm to Diagnostics with the
+  reference message (NO new diagnostic codes; zero matches exits 0 —
+  informational). Grammar facts (test-proven): values are BARE tokens;
+  `element.type==` takes the enum spelling (`SoftwareSystem`); no `!=`
+  forms for type/group/properties; bare `->` throws.
+- **View matcher mirrors `parseExpression` EXACTLY**: `" && "` checked
+  BEFORE `" || "`; split halves go to the SINGLE-arm evaluator (no
+  recursion — a compound half compares its whole remainder as the literal
+  value); Java `split` `[0]`/`[1]` ⇒ a THIRD arm is DROPPED. Subset =
+  `key|title|description ==|!= value` (arm prefix case-insensitive, values
+  case-sensitive `equals`); views have NO tags; outside-subset arms match
+  NOTHING (the base-parser `default:` fail-soft).
+- **Report layer** (`oxidizr-api/src/query.rs`, pure): rows via `adopt` —
+  canonical names + EFFECTIVE tags (diff D-4 machinery); `--kind view`
+  skips model evaluation; formats table/ids/schema-1 (`docs/query-schema.md`);
+  JSON sections follow `--kind`, engine result order, key order frozen.
+- Tests: 5 DSL + 5 API unit, `query_probes.rs` 6 (twin-identical over 15
+  filters, corpus never-panics — open-stage Io (`iso-8859.dsl`) skipped),
+  4 CLI goldens. `to_request` gained `#[allow(too_many_lines)]` (the
+  argv→Request table precedent, like diff.rs field matrix).
+
+## §P4-M2 importers surface (`oxidizr-import` + engine `run_import` — read before touching) **Next: §P4-M3**
   (`query`/`init`/`completions`/`generate` per PHASE_4), then M5 (oracle
   legs, carry-ins, cargo-dist, changelog catch-up).
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user

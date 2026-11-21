@@ -38,7 +38,8 @@ use std::path::PathBuf;
 use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
 use clap::{Parser, Subcommand, ValueEnum};
 use oxidizr_api::{
-    ApiOptions, ExitClass, FmtMode, ImportFormat, Input, LogItem, Outcome, Request, Severity,
+    ApiOptions, ExitClass, FmtMode, ImportFormat, Input, LogItem, Outcome, QueryFormat, QueryKind,
+    Request, Severity,
 };
 
 use report::{Issue, Renderer};
@@ -216,6 +217,31 @@ pub enum Command {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
+    /// Query one workspace with the DSL filter grammar (`query`, F6,
+    /// §P4-M3 O-1): model items through the pinned `ExpressionParser`
+    /// arms (`element.tag==Web`, `user->system`, ` && `/` || ` …), views
+    /// through the documented key/title/description subset —
+    /// `docs/query-schema.md`. Informational: exit 0 even on zero
+    /// matches; only a THROWING grammar arm exits 1.
+    Query {
+        /// Workspace file (`.dsl` or `.json`).
+        workspace: PathBuf,
+        /// Filter expression, e.g. `element.tag==Element` (REQUIRED —
+        /// `query` without a filter would list the whole workspace).
+        #[arg(long)]
+        filter: String,
+        /// Which classes to report; `all` (the default) runs the model
+        /// grammar AND the view subset over every class.
+        #[arg(long, value_enum, default_value_t = QueryCmdKind::All)]
+        kind: QueryCmdKind,
+        /// `table` (default) prints `id  kind  name  [tags]` rows,
+        /// `ids` one id/key per line, `json` the schema-1 document.
+        #[arg(long, value_enum, default_value_t = QueryCmdFormat::Table)]
+        format: QueryCmdFormat,
+        /// Output file (`None` = stdout bytes).
+        #[arg(long, short = 'o')]
+        output: Option<PathBuf>,
+    },
     /// Open the workspace in the native viewer window (F10, §P3-M8) —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
@@ -280,6 +306,34 @@ pub enum ImportCmdFormat {
     Mermaid,
     /// Image file → one `ImageView` (reference port).
     Image,
+}
+
+/// `oxidizr query --kind` values (§P4-M3 O-1, F6): which report classes
+/// the query includes; maps onto [`oxidizr_api::QueryKind`].
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
+pub enum QueryCmdKind {
+    /// Matching elements only.
+    Element,
+    /// Matching relationships only.
+    Relationship,
+    /// Matching views only (the documented view subset).
+    View,
+    /// Elements, relationships AND views (the default).
+    #[default]
+    All,
+}
+
+/// `oxidizr query --format` values (§P4-M3 O-1, F6): output shape; maps
+/// onto [`oxidizr_api::QueryFormat`] (`docs/query-schema.md`).
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
+pub enum QueryCmdFormat {
+    /// `id  kind  name  [tags]` rows (the default).
+    #[default]
+    Table,
+    /// One id (or view key) per line — pipeline-friendly.
+    Ids,
+    /// Schema-1 document on stdout.
+    Json,
 }
 
 /// `oxidizr view --theme` values (F10) — mirrors the viewer's own
@@ -347,6 +401,7 @@ pub fn run() -> anyhow::Result<i32> {
 /// is not a byte-contract command and never becomes a [`Request`]. The
 /// global `--quiet` reaches `diff` (exit code only, §P4-M0 D-3) — the other
 /// commands consume it in the [`Renderer`].
+#[allow(clippy::too_many_lines)] // one arm per `Command` variant: the argv → Request table
 fn to_request(command: Command, quiet: bool) -> Option<Request> {
     Some(match command {
         Command::Dsl2Json { dsl, output } => Request::Dsl2Json {
@@ -440,6 +495,28 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             }),
             view_key,
             view_name,
+            output,
+        },
+        Command::Query {
+            workspace,
+            filter,
+            kind,
+            format,
+            output,
+        } => Request::Query {
+            workspace,
+            filter,
+            kind: match kind {
+                QueryCmdKind::Element => QueryKind::Element,
+                QueryCmdKind::Relationship => QueryKind::Relationship,
+                QueryCmdKind::View => QueryKind::View,
+                QueryCmdKind::All => QueryKind::All,
+            },
+            format: match format {
+                QueryCmdFormat::Table => QueryFormat::Table,
+                QueryCmdFormat::Ids => QueryFormat::Ids,
+                QueryCmdFormat::Json => QueryFormat::Json,
+            },
             output,
         },
         // §P3-M8: dispatched in `run` before the pipeline is reached.
@@ -549,6 +626,7 @@ mod tests {
             Command::Diff { .. } => "diff",
             Command::Inspect { .. } => "inspect",
             Command::Import { .. } => "import",
+            Command::Query { .. } => "query",
             Command::View { .. } => "view",
         }
     }

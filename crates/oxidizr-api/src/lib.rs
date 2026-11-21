@@ -19,6 +19,7 @@ pub mod diagnostic;
 pub mod diff;
 pub mod open;
 pub mod pipeline;
+pub mod query;
 pub mod reconcile;
 pub mod suggest;
 
@@ -31,3 +32,6 @@ pub use pipeline::{
     ApiOptions, ExitClass, FmtMode, ImportFormat, Input, LogItem, Outcome, Request, StdinReader,
     execute,
 };
+// §P4-M3 O-1: the `Request::Query` enums travel on the API surface (the
+// CLI maps its clap enums onto these).
+pub use query::{QueryFormat, QueryKind};

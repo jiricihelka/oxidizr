@@ -258,6 +258,25 @@ pub enum Request {
         /// Output file (`None` = stdout bytes).
         output: Option<PathBuf>,
     },
+    /// Query one workspace with the DSL filter grammar (`query`, F6,
+    /// §P4-M3 O-1): model items through [`oxidizr_dsl::query`] (the
+    /// pinned `ExpressionParser` port), views through the documented
+    /// key/title/description subset (`docs/query-schema.md`). Zero
+    /// matches is success — `query` is informational; a THROWING grammar
+    /// arm exits [`ExitClass::Diagnostics`] (the P4-D1 exit family).
+    Query {
+        /// Workspace file (`.dsl` or `.json`) — a file path, like `diff`.
+        workspace: PathBuf,
+        /// The filter expression (no default: `query` without a filter
+        /// would list the whole workspace — the CLI makes it required).
+        filter: String,
+        /// Which report classes `--kind` includes.
+        kind: crate::query::QueryKind,
+        /// Output shape (`--format`).
+        format: crate::query::QueryFormat,
+        /// Output file (`None` = stdout bytes).
+        output: Option<PathBuf>,
+    },
 }
 
 /// The full result of one [`execute`]: exit class, ordered human log, and
@@ -374,6 +393,13 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
             output.as_deref(),
             opts,
         ),
+        Request::Query {
+            workspace,
+            filter,
+            kind,
+            format,
+            output,
+        } => query_cmd(&workspace, &filter, kind, format, output.as_deref(), opts),
     }
 }
 
@@ -1264,6 +1290,41 @@ fn import_cmd(
     let bytes = oxidizr_json::to_vec(&imported.workspace)
         .map_err(|e| out.fail(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
     emit_bytes(&mut out, bytes, output).map_err(|e| out.fail(e, ExitClass::Io))?;
+    Ok(out)
+}
+
+/// `oxidizr query` (§P4-M3 O-1, F6): load via [`crate::open::open`]
+/// (like `diff`/`inspect` — a `.dsl` installs the default views, so
+/// `SystemLandscape-001`-style generated keys are queryable), evaluate
+/// the filter through [`oxidizr_dsl::query`] (the pinned
+/// `ExpressionParser` port), render the matched classes with
+/// [`crate::query`]. Zero matches is success — `query` is informational
+/// (unlike `diff`/`inspect`, which exit 1 on findings); a THROWING
+/// grammar arm is a diagnostics failure with the reference message,
+/// never a new diagnostic code (the corpus gate stays untouched, P4-D12).
+fn query_cmd(
+    workspace: &Path,
+    filter: &str,
+    kind: crate::query::QueryKind,
+    format: crate::query::QueryFormat,
+    output: Option<&Path>,
+    opts: &ApiOptions,
+) -> Result<Outcome, Fail> {
+    let opened = crate::open::open(&Input::File(workspace.to_path_buf()), opts).map_err(Fail)?;
+    let result = oxidizr_dsl::query::run(&opened.workspace, filter).map_err(|e| {
+        Fail::new(
+            suggest::decorate(Issue::from_dsl(&e), Some(&opened.workspace)),
+            ExitClass::Diagnostics,
+        )
+    })?;
+    let mut out = Outcome {
+        exit: ExitClass::Ok,
+        ..Outcome::default()
+    };
+    let bytes = crate::query::report_bytes(&opened.workspace, filter, kind, format, &result)
+        .map_err(|e| out.fail(Issue::error(codes::CLI_IO, e), ExitClass::Io))?;
+    emit_bytes(&mut out, bytes, output).map_err(|e| out.fail(e, ExitClass::Io))?;
+    out.log.extend(opened.log);
     Ok(out)
 }
 

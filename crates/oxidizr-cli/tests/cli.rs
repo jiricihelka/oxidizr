@@ -1250,3 +1250,143 @@ fn import_read_check_reopens_clean_with_default_views() {
         "createDefaultViews fires at open for the model-only import"
     );
 }
+
+// §P4-M3 / F6 — `oxidizr query` (O-1): the DSL filter grammar as a query
+// language (`docs/query-schema.md`). Exit codes 0/1/2 only (the command
+// is informational — zero matches stays 0, P4-D1 family); the `table`
+// rows, `ids` lines and the schema-1 JSON document are pinned below on
+// the vendored `testdata/probes/diff/base.dsl` fixture.
+
+fn probe_ws(name: &str) -> PathBuf {
+    testdata().join("probes/diff").join(name)
+}
+
+#[test]
+fn query_table_rows_golden() {
+    let out = run(
+        &[
+            "query",
+            probe_ws("base.dsl").to_str().unwrap(),
+            "--filter",
+            "element.tag==Element",
+            "--kind",
+            "element",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "1  Person  Person://Alice  Element,Person\n\
+         2  Person  Person://Bob  Element,Person\n\
+         3  SoftwareSystem  SoftwareSystem://Bank  Element,Software System\n\
+         4  Container  Container://Bank.Web  Element,Container\n\
+         5  Container  Container://Bank.DB  Element,Container\n\
+         6  SoftwareSystem  SoftwareSystem://Mail  Element,Software System\n",
+        "table = `id  kind  canonicalName  [tags]` (EFFECTIVE tags)"
+    );
+}
+
+#[test]
+fn query_ids_one_per_line_and_zero_matches_stays_zero() {
+    let out = run(
+        &[
+            "query",
+            probe_ws("base.dsl").to_str().unwrap(),
+            "--filter",
+            "element.tag==Element",
+            "--kind",
+            "element",
+            "--format",
+            "ids",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "1\n2\n3\n4\n5\n6\n");
+    // Zero matches is success with NO bytes (query is informational).
+    let out = run(
+        &[
+            "query",
+            probe_ws("base.dsl").to_str().unwrap(),
+            "--filter",
+            "element.tag==NoSuchTag",
+            "--format",
+            "ids",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        out.stdout.is_empty(),
+        "zero matches: no bytes: {:?}",
+        out.stdout
+    );
+}
+
+#[test]
+fn query_json_schema_document_golden() {
+    let out = run(
+        &[
+            "query",
+            probe_ws("base.dsl").to_str().unwrap(),
+            "--filter",
+            "alice->bank",
+            "--format",
+            "json",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "{\n  \"schema\": 1,\n  \"filter\": \"alice->bank\",\n  \"kind\": \"all\",\n  \
+         \"elements\": [],\n  \"relationships\": [\n    {\n      \"id\": \"7\",\n      \
+         \"kind\": \"Relationship\",\n      \
+         \"canonicalName\": \"Relationship://Person://Alice -> SoftwareSystem://Bank \
+         (Uses)\",\n      \"tags\": [\n        \"Relationship\"\n      ]\n    }\n  \
+         ],\n  \"views\": []\n}\n",
+        "schema-1 document (docs/query-schema.md), key order frozen"
+    );
+}
+
+#[test]
+fn query_view_subset_and_throwing_arm() {
+    // The documented view subset (`key==…`) — the fixture's explicit-key
+    // landscape view.
+    let out = run(
+        &[
+            "query",
+            probe_ws("base.dsl").to_str().unwrap(),
+            "--filter",
+            "key==landscape",
+            "--kind",
+            "view",
+            "--format",
+            "ids",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "landscape\n");
+    // A THROWING reference arm (`element.parent==<unknown>`) exits 1 with
+    // the reference message — no new diagnostic code appears.
+    let out = run(
+        &[
+            "query",
+            probe_ws("base.dsl").to_str().unwrap(),
+            "--filter",
+            "element.parent==nobody",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("The parent element \"nobody\" does not exist"),
+        "{err}"
+    );
+    // Usage error (missing the required `--filter`) stays clap's 2.
+    let out = run(&["query", probe_ws("base.dsl").to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(2));
+}

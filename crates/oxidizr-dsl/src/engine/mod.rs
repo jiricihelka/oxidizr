@@ -23,7 +23,7 @@
 
 mod ctx;
 mod error;
-mod expr;
+pub(crate) mod expr; // crate-visible: the public `query` entry runs this evaluator
 mod find;
 mod idents;
 mod rel;
@@ -437,7 +437,7 @@ pub(crate) struct GroupRecord {
 }
 
 impl<'a> Parser<'a> {
-    fn new(opts: ParseOptions<'a>) -> Self {
+    pub(crate) fn new(opts: ParseOptions<'a>) -> Self {
         let mut archetypes = HashMap::new();
         for kind in [
             tok::GROUP,
@@ -1620,22 +1620,7 @@ impl<'a> Parser<'a> {
         // relationships carrying `structurizr.dsl.identifier` enter the
         // (context-shared) register so `!element <identifier>` finds them.
         if is_json {
-            let (elements, relationships) = json_dsl_identifiers(self.builder.workspace());
-            for (identifier, item) in elements {
-                self.ids
-                    .register_element(
-                        Some(&identifier),
-                        idents::RegItem::Element(item),
-                        None,
-                        &identifier,
-                    )
-                    .map_err(DslError::stmt)?;
-            }
-            for (identifier, item) in relationships {
-                self.ids
-                    .register_relationship(Some(&identifier), &item, &identifier)
-                    .map_err(DslError::stmt)?;
-            }
+            self.register_json_identifiers()?;
         }
         // `DslUtils.clearDsl(workspace)` (the base's own retention is
         // discarded — the EXTENDING file is the source) and the reference's
@@ -1646,6 +1631,31 @@ impl<'a> Parser<'a> {
         // runs on an empty stack, so this is the parser-level flag.
         self.builder.remove_property("structurizr.dsl");
         self.dsl_portable = false;
+        Ok(())
+    }
+
+    /// `WorkspaceParser.registerIdentifiers` over the ADOPTED workspace:
+    /// elements AND relationships carrying `structurizr.dsl.identifier`
+    /// enter the (context-shared) register. Shared by the `workspace
+    /// extends` JSON-base leg and the public [`crate::query`] entry, so
+    /// identifiers resolve identically in both consumers.
+    pub(crate) fn register_json_identifiers(&mut self) -> Result<(), DslError> {
+        let (elements, relationships) = json_dsl_identifiers(self.builder.workspace());
+        for (identifier, item) in elements {
+            self.ids
+                .register_element(
+                    Some(&identifier),
+                    idents::RegItem::Element(item),
+                    None,
+                    &identifier,
+                )
+                .map_err(DslError::stmt)?;
+        }
+        for (identifier, item) in relationships {
+            self.ids
+                .register_relationship(Some(&identifier), &item, &identifier)
+                .map_err(DslError::stmt)?;
+        }
         Ok(())
     }
 
