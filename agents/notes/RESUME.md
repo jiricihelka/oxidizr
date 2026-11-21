@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); next: M2 importers**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1+N-2 done, next N-3 Mermaid)**)
 
 ## State
 
@@ -57,12 +57,22 @@
   exit 1 iff REPORTED. Full e2e tier green + bless 307×unchanged +
   `cargo xtask ci` green; stamps: PHASE_4 §P4-M1 CLOSED header (I-rows all
   DONE), PROGRESS status board + `P4-M1` milestone log. Surface notes below.
-- **Next: M2 importers** (`build/PHASE_4.md` — new crate `oxidizr-import`:
-  C4-PlantUML → Mermaid → image (`ImageView` content) importers; the
-  `!docs`/`!adrs` import work retires OXZ-5003). Decompose in PHASE_4.md
-  before implementation if it touches >~4 modules. Then M3
-  (`query`/`init`/completions), M5 (oracle legs + carry-ins + cargo-dist +
-  changelog catch-up).
+- **M2 importers IN PROGRESS** (decomposition N-1…N-6 in
+  `build/PHASE_4.md`; commits M2a…M2f). Done: **N-1/M2a `b7f66e5`**
+  (crate skeleton + image importer port, D14) and **N-2/M2b**
+  (C4-PlantUML model importer: `macrocall.rs` shared plumbing +
+  `c4plantuml.rs`, signatures pinned from plantuml-stdlib/C4-PlantUML;
+  **plan correction stamped**: importers produce the MODEL ONLY —
+  `CustomView.checkElementCanBeAdded` permits only `CustomElement`s and
+  no scoped view accepts a mixed C4 set, so default views install at
+  open via `api::open`; Rel label ⇒ model description). Next: **N-3/M2c
+  Mermaid C4 importer** (reuse `macrocall`; `C4Context|C4Container|
+  C4Component` bodies, `Enter_Boundary`/`Leave_Boundary`, update-macros
+  tolerated, `-->` edges NOT promised) → N-4 CLI arc → N-5 WSD exporter
+  → N-6 `!docs`/`!adrs` (retires OXZ-5003; close P4-V7/V8 first) + M2
+  close ritual (oracle read gate, fixtures w/ attribution, bless
+  307×unchanged, full e2e tier). Then M3 (`query`/`init`/completions),
+  M5 (oracle legs + carry-ins + cargo-dist + changelog catch-up).
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams

@@ -21,7 +21,9 @@
 //!   crate is pure construction via the reference `WorkspaceBuilder`
 //!   rules (generated view keys, view order, id allocation).
 
+pub mod c4plantuml;
 pub mod image;
+pub mod macrocall;
 
 use std::path::PathBuf;
 
@@ -34,7 +36,10 @@ use thiserror::Error;
 /// construct here).
 #[derive(Debug, Clone)]
 pub struct Imported {
-    /// The imported workspace (one view, `ImageView` or model view).
+    /// The imported workspace: the `image` leg carries one `ImageView`,
+    /// the macro legs carry the model only (no view kind may host a
+    /// mixed C4 element set — see `c4plantuml` module docs; the default
+    /// views install at open via `api::open`).
     pub workspace: Workspace,
     /// Human-readable skip notes, source order; rendered by the CLI.
     pub warnings: Vec<String>,
