@@ -24,13 +24,12 @@
 //! (see `agents/plan/COMPAT.md` / the oracle strip rule) — this crate
 //! never computes or stores them.
 
+mod run;
 mod severity;
-// allow: the run engine (§P4-M1 I-2/I-3) is the consumer — REMOVE this
-// allow when `inspect` lands and wires it up.
-#[allow(dead_code)]
 mod strategy;
 mod violation;
 
+pub use run::inspect;
 pub use severity::{ParseThresholdError, Severity};
 pub use violation::Violation;
 
