@@ -29,6 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
+| P4 | §P4-LSP `oxidizr-lsp` (L0–L5, prioritized) | **COMPLETE 2026-11-21** — LSP first (user directive): diagnostics/completion/hover/formatting/`initializationOptions`/`--version` all shipped; headless core + stdio binary, transcript + 54 lib tests, no `oxidizr-json` bytes touched (bless 307×unchanged). Commits L0 `a38f905` → L5 (this). Log below (`build/PHASE_4.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -150,6 +151,52 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P4-LSP — `oxidizr-lsp` language server ✅ (2026-11-21, COMPLETE)
+
+LSP prioritized by user directive (F5, P4-D5; the §P4-LSP decomposition
+ran FIRST — items L-1…L-7, commits L0…L5, `build/PHASE_4.md`). New
+crate: headless server core (pure functions, Category A testable) + the
+thin stdio binary (the R-2 viewer ritual mirrored).
+
+- **L0** `a38f905` — crate scaffold: `lsp-server 0.10` + `lsp-types
+  0.97` (P4-V5 probe), the `Server::handle` state machine, the
+  `initialize`/`shutdown`/`exit` handshake, FULL-document sync, and the
+  `expect-test` transcript harness over `Connection::memory()`.
+- **L1** `e11271f` — `publishDiagnostics` on open/change/close: the
+  EXACT CLI pipeline over `api::open(Input::Bytes)`, `.json` URIs
+  routed to the `json2json` leg (the URI decides — `Input::Bytes`
+  carries no extension), UTF-16 column mapper, cap 100, EMPTY publish
+  on close.
+- **L2** `fedd7aa` — cursor-aware completion: `engine::cursor_scope`
+  replays tokenize+scope over the lines strictly BEFORE the cursor;
+  items = `permitted_tokens()` + directives + contextual identifiers +
+  keyword-gated snippets (`rel` gates on `->`).
+- **L3** `e13af48` — hover: keyword/directive cards + model cards
+  (kind, reference canonical name via `oxidizr_core::canonical`,
+  technology, tags, relationship counts) from the LAST SUCCESSFUL parse
+  per URI (`Server::last_good` kept across failing reparses, dropped on
+  close); model card beats keyword card.
+- **L4** `16d9ab5` — formatting: `textDocument/formatting` = ONE
+  whole-buffer TextEdit from `fmt::format` (canonical 4-space,
+  conservative unquoting; EMPTY array when canonical or `.json` — the
+  byte contract never sees the printer); `rangeFormatting` WIDENS to
+  whole top-level statements (documented deviation — the canonical
+  print is global); broken buffers format (lossless CST).
+- **L5** (this commit) — `config.rs`: `initializationOptions`
+  `{strict, themesDir, allowNet=false, maxNumberOfProblems}` — total
+  hand-rolled parse over `serde_json::Value` (bad field ⇒ ignored, the
+  defaults NEVER fail `initialize`); the three flags ride `ApiOptions`
+  on every pipeline run, network OFF without `allowNet` (D5); the cap
+  rides every publish (0 literal). `--version`/`-V` pinned by
+  `tests/version.rs`; `docs/lsp-editors.md` (capability table, options,
+  helix/neovim/vscode notes, smoke checklist).
+- Close: `cargo xtask ci` green; oxidizr-lsp 54 lib tests + transcript +
+  version smoke; stdio smokes green on the real binary (hover cards,
+  canonical print + statement-widening, the `maxNumberOfProblems: 1`
+  cap on the wire); full e2e tier (`OXIDZR_E2E_FULL=1`) green +
+  `cargo xtask e2e bless` → 307×unchanged — the JSON byte contract
+  untouched end of the milestone.
 
 ### P3-M11 — post-v0.3.0: twelve-item UX batch + F11 viewport sidecar ✅ (2026-11-20/21, COMPLETE)
 

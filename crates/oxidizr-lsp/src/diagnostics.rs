@@ -19,13 +19,16 @@
 use lsp_types::{
     CodeDescription, Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Uri,
 };
-use oxidizr_api::{ApiOptions, Input, Issue, LogItem, Snippet};
+use oxidizr_api::{Input, Issue, LogItem, Snippet};
 use oxidizr_core::Workspace;
 use oxidizr_diag::Severity;
 
-/// `maxNumberOfProblems` default (P4-D5; the initializationOption lands
-/// with L-5). A pathological DSL sprays one error per line; an editor
-/// gutter copes with 100.
+use crate::config::Config;
+
+/// `maxNumberOfProblems` default (P4-D5), overridden per connection by
+/// the `initializationOptions` of §L-7 ([`crate::config::Config`]). A
+/// pathological DSL sprays one error per line; an editor gutter copes
+/// with 100.
 pub const MAX_DIAGNOSTICS: usize = 100;
 
 /// The registry document every `OXZ-nnnn` code links to (the `href` the
@@ -35,26 +38,27 @@ const DOCS_BASE: &str = "https://github.com/jiricihelka/oxidizr/blob/main/docs/d
 /// Collect the diagnostics for one buffer. `uri` decides the format:
 /// `*.json` validates through `oxidizr_json::from_slice` (the `json2json`
 /// read leg, hydrate validation included); everything else parses as DSL.
+/// The per-connection [`Config`] supplies the pipeline flags (§L-7) and
+/// the `maxNumberOfProblems` cap.
 #[must_use]
-pub fn collect(uri: &Uri, text: &str) -> Vec<Diagnostic> {
+pub fn collect(uri: &Uri, text: &str, config: &Config) -> Vec<Diagnostic> {
     let issues = if is_json(uri) {
         json_issues(text)
     } else {
-        dsl_issues(text)
+        dsl_issues(text, &config.api_options())
     };
     let mut out: Vec<Diagnostic> = issues
         .iter()
         .map(|issue| to_diagnostic(text, issue))
         .collect();
-    out.truncate(MAX_DIAGNOSTICS);
+    out.truncate(config.max_problems);
     out
 }
 
 /// DSL route: the viewer-facing open — a partial parse reports every
 /// statement error (D1 recovery), a fatal parse reports the failure.
-fn dsl_issues(text: &str) -> Vec<Issue> {
-    let opts = ApiOptions::default();
-    let log = match oxidizr_api::open(&Input::Bytes(text.as_bytes().to_vec()), &opts) {
+fn dsl_issues(text: &str, opts: &oxidizr_api::ApiOptions) -> Vec<Issue> {
+    let log = match oxidizr_api::open(&Input::Bytes(text.as_bytes().to_vec()), opts) {
         Ok(opened) => opened.log,
         Err(outcome) => outcome.log,
     };
@@ -90,13 +94,13 @@ pub(crate) fn is_json(uri: &Uri) -> bool {
 /// PREVIOUS workspace for that URI, which is what makes hover survive
 /// mid-typing.
 #[must_use]
-pub fn workspace(uri: &Uri, text: &str) -> Option<Workspace> {
+pub fn workspace(uri: &Uri, text: &str, config: &Config) -> Option<Workspace> {
     if is_json(uri) {
         return oxidizr_json::from_slice(text.as_bytes()).ok();
     }
     let opened = oxidizr_api::open(
         &Input::Bytes(text.as_bytes().to_vec()),
-        &ApiOptions::default(),
+        &config.api_options(),
     )
     .ok()?;
     opened
@@ -191,7 +195,7 @@ mod tests {
     #[test]
     fn valid_dsl_reports_nothing() {
         let text = "workspace {\n  model {\n  }\n}\n";
-        let diags = collect(&uri("ws.dsl"), text);
+        let diags = collect(&uri("ws.dsl"), text, &Config::default());
         assert_eq!(diags, Vec::<Diagnostic>::new());
     }
 
@@ -200,7 +204,7 @@ mod tests {
         // Line 3 is the source line the engine quotes; the range must land
         // on it, not at the buffer start.
         let text = "workspace {\n  model {\n    this is not dsl ~~~~\n  }\n}\n";
-        let diags = collect(&uri("ws.dsl"), text);
+        let diags = collect(&uri("ws.dsl"), text, &Config::default());
         assert!(!diags.is_empty(), "the broken statement must report");
         let first = &diags[0];
         assert_eq!(first.severity, Some(DiagnosticSeverity::ERROR));
@@ -227,7 +231,7 @@ mod tests {
     fn json_buffers_validate_through_the_read_leg() {
         // .json URI ⇒ JSON, although Input::Bytes alone would say DSL.
         let broken = r#"{ "name": "ws", }"#;
-        let diags = collect(&uri("ws.json"), broken);
+        let diags = collect(&uri("ws.json"), broken, &Config::default());
         assert_eq!(diags.len(), 1, "{diags:?}");
         assert!(
             diags[0].message.starts_with("failed to parse JSON:"),
@@ -238,7 +242,7 @@ mod tests {
         // The lenient read COERCES scalars (D3), so the next rejection
         // the leg adds is hydrate validation — duplicate element names.
         let duplicate = r#"{"name": "w", "model": {"people": [{"id": "1", "name": "a"}, {"id": "2", "name": "a"}], "relationships": []}}"#;
-        let diags = collect(&uri("ws.json"), duplicate);
+        let diags = collect(&uri("ws.json"), duplicate, &Config::default());
         assert_eq!(diags.len(), 1, "{diags:?}");
         assert!(
             diags[0].message.starts_with("workspace validation failed:"),
@@ -247,7 +251,7 @@ mod tests {
         );
         // A sound workspace stays quiet.
         let good = r#"{ "name": "ws", "description": "", "version": "" }"#;
-        let diags = collect(&uri("ws.json"), good);
+        let diags = collect(&uri("ws.json"), good, &Config::default());
         assert_eq!(diags, Vec::<Diagnostic>::new());
     }
 

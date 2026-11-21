@@ -30,9 +30,9 @@ use lsp_types::request::{
 };
 use lsp_types::{
     CompletionOptions, CompletionParams, CompletionResponse, DocumentFormattingParams,
-    DocumentRangeFormattingParams, HoverParams, HoverProviderCapability, InitializeResult, OneOf,
-    PublishDiagnosticsParams, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Uri,
+    DocumentRangeFormattingParams, HoverParams, HoverProviderCapability, InitializeParams,
+    InitializeResult, OneOf, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
 };
 use oxidizr_core::Workspace;
 
@@ -47,11 +47,15 @@ pub struct Document {
 }
 
 /// Per-connection server state: the open-document store, the hover
-/// store and the shutdown latch.
+/// store, the configuration and the shutdown latch.
 #[derive(Debug, Default)]
 pub struct Server {
     /// Open buffers keyed by document URI.
     docs: HashMap<Uri, Document>,
+    /// The `initializationOptions` (§P4-LSP L5, item L-7), captured on
+    /// `initialize` — defaults until then, malformed options included
+    /// ([`crate::config::Config`] is total).
+    config: crate::config::Config,
     /// The LAST SUCCESSFUL parse per document (§P4-LSP L3): replaced on
     /// `didOpen`/`didChange` ONLY by a clean pipeline run, so a buffer
     /// mid-typing keeps hovers over the model as it last parsed; dropped
@@ -70,10 +74,10 @@ impl Server {
 
     /// The advertised server capabilities: full-document sync, the L-4
     /// completion provider (`resolveProvider` stays off — items are
-    /// fully built in one pass) and the L-5 hover provider. Diagnostics
-    /// need no capability (publishDiagnostics is server-pushed). Later
-    /// items add their providers here (L4
-    /// `document_formatting_provider`).
+    /// fully built in one pass), the L-5 hover provider and the L-6
+    /// formatting pair. Diagnostics need no capability
+    /// (publishDiagnostics is server-pushed); the L-7 configuration
+    /// rides `initializationOptions`, not the capability set.
     #[must_use]
     pub fn capabilities() -> ServerCapabilities {
         ServerCapabilities {
@@ -117,7 +121,7 @@ impl Server {
 
     fn on_request(&mut self, request: &Request) -> Vec<Message> {
         match request.method.as_str() {
-            Initialize::METHOD => Self::initialize_response(request),
+            Initialize::METHOD => self.initialize_response(request),
             Shutdown::METHOD => {
                 self.shutdown = true;
                 // The spec: shutdown's result is null; `exit` follows.
@@ -138,7 +142,15 @@ impl Server {
         }
     }
 
-    fn initialize_response(request: &Request) -> Vec<Message> {
+    fn initialize_response(&mut self, request: &Request) -> Vec<Message> {
+        // §P4-LSP L5 (item L-7): capture the client's
+        // `initializationOptions`. The read is TOTAL — a missing or
+        // malformed options blob, or even malformed params, keeps the
+        // defaults; configuration never costs the handshake.
+        let options = serde_json::from_value::<InitializeParams>(request.params.clone())
+            .ok()
+            .and_then(|params| params.initialization_options);
+        self.config = crate::config::Config::from_options(options.as_ref());
         let result = InitializeResult {
             capabilities: Self::capabilities(),
             server_info: Some(ServerInfo {
@@ -321,7 +333,7 @@ impl Server {
     /// previous one — a buffer mid-typing still hovers the model as it
     /// last parsed ([`crate::diagnostics::workspace`] is the judge).
     fn remember(&mut self, uri: &Uri, text: &str) {
-        if let Some(workspace) = crate::diagnostics::workspace(uri, text) {
+        if let Some(workspace) = crate::diagnostics::workspace(uri, text, &self.config) {
             self.last_good.insert(uri.clone(), workspace);
         }
     }
@@ -347,7 +359,7 @@ impl Server {
         };
         let params = PublishDiagnosticsParams::new(
             uri.clone(),
-            crate::diagnostics::collect(uri, &doc.text),
+            crate::diagnostics::collect(uri, &doc.text, &self.config),
             Some(doc.version),
         );
         vec![Notification::new(PublishDiagnostics::METHOD.to_owned(), params).into()]
@@ -909,6 +921,75 @@ mod tests {
             panic!("expected an error response");
         };
         assert_eq!(error.code, ErrorCode::InvalidParams as i32);
+    }
+
+    /// `initialize` with raw JSON options; asserts the handshake itself
+    /// answered ok (options must NEVER cost it, §L-7).
+    fn initialize_with(server: &mut Server, options: &serde_json::Value) {
+        let params = serde_json::json!({
+            "processId": null,
+            "capabilities": {},
+            "initializationOptions": options,
+        });
+        let init = Request {
+            id: RequestId::from(1),
+            method: Initialize::METHOD.to_owned(),
+            params,
+        };
+        let (out, stop) = server.handle(&init.into());
+        assert!(!stop);
+        let sent = responses(&out);
+        let [response] = sent.as_slice() else {
+            panic!("initialize must answer exactly once");
+        };
+        assert!(response.response_result.is_ok(), "{response:?}");
+    }
+
+    /// `didOpen` capturing the publish the open triggers.
+    fn open_capture(server: &mut Server, text: &str) -> Vec<PublishDiagnosticsParams> {
+        let open = notify(
+            DidOpenTextDocument::METHOD,
+            serde_json::to_value(DidOpenTextDocumentParams {
+                text_document: lsp_types::TextDocumentItem {
+                    uri: url(),
+                    language_id: "dsl".to_owned(),
+                    version: 1,
+                    text: text.to_owned(),
+                },
+            })
+            .unwrap(),
+        );
+        let (out, _) = server.handle(&open);
+        publishes(&out)
+    }
+
+    /// Three distinct junk lines ⇒ three recovered errors (D1 recovery
+    /// reports every broken statement).
+    const DIRTY: &str = "workspace {\n  model {\n    a ~~~\n    b ~~~\n    c ~~~\n  }\n}\n";
+
+    #[test]
+    fn initialization_options_cap_the_publish() {
+        let mut server = Server::new();
+        initialize_with(
+            &mut server,
+            &serde_json::json!({ "maxNumberOfProblems": 2 }),
+        );
+        let published = open_capture(&mut server, DIRTY);
+        assert_eq!(
+            published[0].diagnostics.len(),
+            2,
+            "the cap truncates the publish (L-7)"
+        );
+    }
+
+    #[test]
+    fn malformed_options_keep_defaults_and_the_handshake() {
+        // A bare scalar where the options object belongs: initialize
+        // still answers ok and the FULL cap (defaults) publishes.
+        let mut server = Server::new();
+        initialize_with(&mut server, &serde_json::json!(42));
+        let published = open_capture(&mut server, DIRTY);
+        assert_eq!(published[0].diagnostics.len(), 3, "{DIRTY:?}");
     }
 
     #[test]

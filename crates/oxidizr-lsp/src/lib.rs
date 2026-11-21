@@ -16,6 +16,7 @@
 //! L4 formatting → L5 config + close.
 
 pub mod completion;
+pub mod config;
 pub mod diagnostics;
 pub mod formatting;
 pub mod hover;

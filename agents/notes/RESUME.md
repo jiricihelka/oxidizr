@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP L0–L4 shipped — L5 config + milestone close next**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5) — M0 `diff` next**)
 
 ## State
 
@@ -33,18 +33,16 @@
 
 ## Next: Phase 4 (`build/PHASE_4.md` — authoritative, read it first)
 
-- **§P4-LSP in flight** (F5 prioritized 2026-11-21): L0 `a38f905`,
-  L1 `e11271f`, L2 `fedd7aa`, L3 `e13af48`, L4 (this commit) — **L5 is
-  next** (item L-7: `initializationOptions` `{strict, themesDir,
-  allowNet=false, maxNumberOfProblems}` — wire `maxNumberOfProblems` to
-  the 100 default in `diagnostics.rs`; `oxidizr-lsp --version`;
-  `docs/lsp-editors.md`), and with it the milestone close = full e2e
-  tier + bless 307×unchanged + PROGRESS. The `unknown_method` test
-  example now rides `textDocument/documentSymbol` (§P4-LSP never ships
-  it).
-- After §P4-LSP: M0 `diff`, M1 `inspect`, M2 importers, M3
+- **§P4-LSP CLOSED 2026-11-21** (F5 prioritized per user directive):
+  L0 `a38f905`, L1 `e11271f`, L2 `fedd7aa`, L3 `e13af48`, L4 `16d9ab5`,
+  L5 (this commit) — full e2e tier green + bless 307×unchanged +
+  `cargo xtask ci` green; close-out notes in PHASE_4.md (L-7 DONE row)
+  and PROGRESS.md (status board + `P4-LSP` milestone log).
+- **Next: M0 `diff`** (F3), then M1 `inspect`, M2 importers, M3
   query/init/completions, M5 oracle + carry-ins + cargo-dist + changelog
-  catch-up.
+  catch-up. M0: read its `build/PHASE_4.md` section first; the
+  exit-code contract ADDS `1 = differences found` (P4 opening scope) —
+  decompose in PHASE_4.md if the milestone touches >~4 modules.
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams
@@ -130,6 +128,22 @@
   unopened doc ⇒ EMPTY array, malformed params ⇒ `InvalidParams`.
   Formatter quirk pinned by tests: conservative unquoting — `name "x"`
   prints `name x`.
+- **Config (L5)** (`config.rs` + `server.rs` + `diagnostics.rs`):
+  `initializationOptions` `{strict, themesDir, allowNet=false,
+  maxNumberOfProblems}` parsed by a HAND-ROLLED total read over
+  `serde_json::Value` (no serde-derive dep): `Config::from_options(
+  Option<&Value>)` reads each key independently, wrong-typed or unknown
+  keys are IGNORED, a non-object value is "no options" — configuration
+  NEVER fails `initialize`. Manual `Default` (derived would zero
+  `max_problems`; the default is `MAX_DIAGNOSTICS` = 100; `0` is honored
+  literally, negatives/fractions via `as_u64` fall to the default).
+  `Server::config` is captured in `initialize_response` (now `&mut
+  self`, params parsed `ok()`-style); `diagnostics::collect`/`workspace`
+  take `&Config` so `api_options()` (`strict`/`themes_dir`/`allow_net` →
+  `ApiOptions`, D5: no network without `allowNet`) rides EVERY pipeline
+  run and `max_problems` caps every publish. `--version`/`-V` pinned by
+  `tests/version.rs` through `CARGO_BIN_EXE_oxidizr-lsp` (own-package
+  bin — no e2e-style binary walk needed).
 - lsp-types 0.97: `completion_provider` IS `CompletionOptions` (no
   provider wrapper); `CompletionResponse::Array`; `Position::new`;
   `HoverRequest` (NOT `Hover`) is the request type — METHOD
