@@ -20,6 +20,7 @@ use lsp_types::{
     CodeDescription, Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Uri,
 };
 use oxidizr_api::{ApiOptions, Input, Issue, LogItem, Snippet};
+use oxidizr_core::Workspace;
 use oxidizr_diag::Severity;
 
 /// `maxNumberOfProblems` default (P4-D5; the initializationOption lands
@@ -77,6 +78,30 @@ fn json_issues(text: &str) -> Vec<Issue> {
 
 fn is_json(uri: &Uri) -> bool {
     uri.as_str().to_ascii_lowercase().ends_with(".json")
+}
+
+/// The hover store's source (§P4-LSP L3): the buffer parsed to a
+/// [`Workspace`] ONLY when the pipeline is CLEAN — DSL: `api::open`
+/// succeeds AND the partial-open log carries NO issue (a D1 recovery
+/// logged errors, the buffer is not trustworthy); JSON: `from_slice`
+/// succeeds. Any failure is `None` — and the server then keeps the
+/// PREVIOUS workspace for that URI, which is what makes hover survive
+/// mid-typing.
+#[must_use]
+pub fn workspace(uri: &Uri, text: &str) -> Option<Workspace> {
+    if is_json(uri) {
+        return oxidizr_json::from_slice(text.as_bytes()).ok();
+    }
+    let opened = oxidizr_api::open(
+        &Input::Bytes(text.as_bytes().to_vec()),
+        &ApiOptions::default(),
+    )
+    .ok()?;
+    opened
+        .log
+        .into_iter()
+        .all(|item| !matches!(item, LogItem::Issue(_)))
+        .then_some(opened.workspace)
 }
 
 /// One [`Issue`] → one LSP diagnostic: message and code ride VERBATIM

@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP L0–L2 shipped — L3 hover next**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP L0–L3 shipped — L4 formatting next**)
 
 ## State
 
@@ -34,10 +34,11 @@
 ## Next: Phase 4 (`build/PHASE_4.md` — authoritative, read it first)
 
 - **§P4-LSP in flight** (F5 prioritized 2026-11-21): L0 `a38f905`,
-  L1 `e11271f`, L2 (this commit) — **L3 hover is next**, then L4
-  formatting (`oxidizr_dsl::fmt::format`), L5 config +
-  `docs/lsp-editors.md` + milestone close (full e2e tier + bless
-  307×unchanged + PROGRESS).
+  L1 `e11271f`, L2 `fedd7aa`, L3 (this commit) — **L4 formatting is
+  next** (`oxidizr_dsl::fmt::format`, one TextEdit; the
+  `unknown_method` test example moves to the next-open method),
+  L5 config + `docs/lsp-editors.md` + milestone close (full e2e tier +
+  bless 307×unchanged + PROGRESS).
 - After §P4-LSP: M0 `diff`, M1 `inspect`, M2 importers, M3
   query/init/completions, M5 oracle + carry-ins + cargo-dist + changelog
   catch-up.
@@ -88,8 +89,34 @@
   view blocks); the CLOSED root still lists `[name, description, …,
   model, views, configuration]` — `expects_workspace` is what marks a
   fresh file, not an empty keyword list.
+- **Hover (L3)** (`hover.rs` + `server.rs`): token under the cursor =
+  quoted string STRICTLY containing it (unescaped-quote pairing from the
+  line start; an unclosed quote hovers as opened), else word run
+  (`[A-Za-z0-9_]`, a leading `!` joins). Legs: model card beats keyword
+  card; identifier match (`structurizr.dsl.identifier` property the
+  parser records) beats name match; directives compare case-free,
+  keywords exact. `Server::last_good: HashMap<Uri, Workspace>` —
+  replaced ONLY by a clean pipeline run (`diagnostics::workspace`:
+  `api::open` ok AND log carries NO `LogItem::Issue`; JSON URIs:
+  `from_slice` ok), kept across failing reparses (broken buffer hovers
+  the model as last parsed), dropped on `didClose`. Wire: unopened doc /
+  nothing hoverable ⇒ JSON null; malformed params ⇒ `InvalidParams`;
+  capability `hover_provider = Simple(true)`.
+- **DSL facts pinned by hover fixtures** (each produced a real parse
+  error first): positional strings are name + DESCRIPTION (technology is
+  the block statement); a bare `deploymentNode` in `model` is INVALID —
+  needs a `deploymentEnvironment` wrapper (OXZ-2001 expected list);
+  `infrastructureNode` is positional-only `<name> [desc] [tech]` — opens
+  NO block (OXZ-2002); qualified `s.c` identifier refs need
+  `!identifiers hierarchical` (corpus: deployment-groups-hierarchical.dsl);
+  `containerInstance` form is `containerInstance <id>` /
+  `<system-ident>.<container-ident>` — NEVER `s:c`.
 - lsp-types 0.97: `completion_provider` IS `CompletionOptions` (no
   provider wrapper); `CompletionResponse::Array`; `Position::new`;
+  `HoverRequest` (NOT `Hover`) is the request type — METHOD
+  `textDocument/hover`, Result `Option<Hover>`, `HoverParams` field is
+  `text_document_position_params` (flattened, differs from completion's
+  `text_document_position`); `HoverProviderCapability::Simple(bool)`;
   `len_utf16()`/`len_utf8()` return `usize` on the pinned nightly.
 
 ## §P3-M11 UX batch surface (shell/paint/scene/layered/statefile — read before touching)

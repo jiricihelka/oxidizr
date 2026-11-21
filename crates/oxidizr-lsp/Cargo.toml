@@ -33,6 +33,9 @@ oxidizr-diag = { workspace = true }
 # machine over the lines before the cursor — the menu can never disagree
 # with what the parser would accept.
 oxidizr-dsl = { workspace = true }
+# L-5 hover (P4-D5): the LAST SUCCESSFUL parse is a `Workspace`; its
+# reference canonical names come from `oxidizr_core::canonical`.
+oxidizr-core = { workspace = true }
 
 [dev-dependencies]
 expect-test = { workspace = true }

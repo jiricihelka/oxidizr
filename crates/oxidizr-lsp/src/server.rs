@@ -10,10 +10,12 @@
 //! **full-document sync** (`didOpen`/`didChange`/`didClose`); L-3 added
 //! the diagnostics republish on all three (a close ends with an EMPTY
 //! publish, clearing the editor's squiggles); L-4 added
-//! `textDocument/completion` over the stored buffer. Requests with no
-//! implemented feature answer `MethodNotFound` (L3 hover, L4 formatting
-//! are open) — replying is mandatory, an unanswered request hangs the
-//! client.
+//! `textDocument/completion` over the stored buffer; L-5 added
+//! `textDocument/hover` — keyword cards from the raw text, model cards
+//! from the LAST SUCCESSFUL parse ([`Server::last_good`], kept across a
+//! failing reparse). Requests with no implemented feature answer
+//! `MethodNotFound` (L4 formatting is open) — replying is mandatory, an
+//! unanswered request hangs the client.
 
 use std::collections::HashMap;
 
@@ -22,12 +24,13 @@ use lsp_types::notification::{
     DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Exit, Notification as _,
     PublishDiagnostics,
 };
-use lsp_types::request::{Completion, Initialize, Request as _, Shutdown};
+use lsp_types::request::{Completion, HoverRequest, Initialize, Request as _, Shutdown};
 use lsp_types::{
-    CompletionOptions, CompletionParams, CompletionResponse, InitializeResult,
-    PublishDiagnosticsParams, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Uri,
+    CompletionOptions, CompletionParams, CompletionResponse, HoverParams, HoverProviderCapability,
+    InitializeResult, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
 };
+use oxidizr_core::Workspace;
 
 /// One open buffer (full sync: the text is always the WHOLE document).
 #[derive(Debug, Clone)]
@@ -39,12 +42,17 @@ pub struct Document {
     pub version: i32,
 }
 
-/// Per-connection server state: the open-document store and the
-/// shutdown latch. Feature state joins per item (L1 last-good parses).
+/// Per-connection server state: the open-document store, the hover
+/// store and the shutdown latch.
 #[derive(Debug, Default)]
 pub struct Server {
     /// Open buffers keyed by document URI.
     docs: HashMap<Uri, Document>,
+    /// The LAST SUCCESSFUL parse per document (§P4-LSP L3): replaced on
+    /// `didOpen`/`didChange` ONLY by a clean pipeline run, so a buffer
+    /// mid-typing keeps hovers over the model as it last parsed; dropped
+    /// on `didClose`.
+    last_good: HashMap<Uri, Workspace>,
     /// Set by `shutdown`; a following `exit` then means "clean".
     shutdown: bool,
 }
@@ -56,11 +64,11 @@ impl Server {
         Self::default()
     }
 
-    /// The advertised server capabilities: full-document sync and the
-    /// L-4 completion provider (`resolveProvider` stays off — items are
-    /// fully built in one pass). Diagnostics need no capability
-    /// (publishDiagnostics is server-pushed). Later items add their
-    /// providers here (L3 `hover_provider`, L4
+    /// The advertised server capabilities: full-document sync, the L-4
+    /// completion provider (`resolveProvider` stays off — items are
+    /// fully built in one pass) and the L-5 hover provider. Diagnostics
+    /// need no capability (publishDiagnostics is server-pushed). Later
+    /// items add their providers here (L4
     /// `document_formatting_provider`).
     #[must_use]
     pub fn capabilities() -> ServerCapabilities {
@@ -71,6 +79,7 @@ impl Server {
                 trigger_characters: Some(vec!["!".to_owned()]),
                 ..CompletionOptions::default()
             }),
+            hover_provider: Some(HoverProviderCapability::Simple(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -105,6 +114,7 @@ impl Server {
                 vec![Response::new_ok(request.id.clone(), serde_json::Value::Null).into()]
             }
             Completion::METHOD => self.completion_response(request),
+            HoverRequest::METHOD => self.hover_response(request),
             other => vec![
                 Response::new_err(
                     request.id.clone(),
@@ -163,6 +173,30 @@ impl Server {
         vec![Response::new_ok(request.id.clone(), CompletionResponse::Array(response)).into()]
     }
 
+    /// `textDocument/hover` (§P4-LSP L3, item L-5): the token under the
+    /// cursor against the stored buffer and the document's last good
+    /// parse. An unopened document (or a cursor with nothing hoverable)
+    /// answers the spec's NULL result — hover is pure opportunism.
+    /// Malformed params are the client's bug: `InvalidParams`.
+    fn hover_response(&self, request: &Request) -> Vec<Message> {
+        let Ok(params) = serde_json::from_value::<HoverParams>(request.params.clone()) else {
+            return vec![
+                Response::new_err(
+                    request.id.clone(),
+                    ErrorCode::InvalidParams as i32,
+                    format!("malformed {}", HoverRequest::METHOD),
+                )
+                .into(),
+            ];
+        };
+        let cursor = params.text_document_position_params;
+        let uri = &cursor.text_document.uri;
+        let response = self.document(uri).and_then(|doc| {
+            crate::hover::hover(&doc.text, cursor.position, self.last_good.get(uri))
+        });
+        vec![Response::new_ok(request.id.clone(), response).into()]
+    }
+
     fn on_notification(&mut self, notification: &Notification) -> (Vec<Message>, bool) {
         match notification.method.as_str() {
             DidOpenTextDocument::METHOD => {
@@ -190,10 +224,12 @@ impl Server {
 
     fn did_open(&mut self, params: lsp_types::DidOpenTextDocumentParams) -> Vec<Message> {
         let uri = params.text_document.uri;
+        let text = params.text_document.text;
+        self.remember(&uri, &text);
         self.docs.insert(
             uri.clone(),
             Document {
-                text: params.text_document.text,
+                text,
                 version: params.text_document.version,
             },
         );
@@ -208,6 +244,7 @@ impl Server {
             return Vec::new();
         };
         let uri = params.text_document.uri;
+        self.remember(&uri, &change.text);
         self.docs.insert(
             uri.clone(),
             Document {
@@ -218,12 +255,23 @@ impl Server {
         self.publish(&uri)
     }
 
+    /// Hover-store update (§P4-LSP L-5): a CLEAN pipeline parse replaces
+    /// the document's last good [`Workspace`]; a failing parse keeps the
+    /// previous one — a buffer mid-typing still hovers the model as it
+    /// last parsed ([`crate::diagnostics::workspace`] is the judge).
+    fn remember(&mut self, uri: &Uri, text: &str) {
+        if let Some(workspace) = crate::diagnostics::workspace(uri, text) {
+            self.last_good.insert(uri.clone(), workspace);
+        }
+    }
+
     /// Closing drops the buffer AND clears the editor's squiggles with a
     /// final EMPTY publish (the spec's ask; version `None` — there is no
     /// buffer left to stamp).
     fn did_close(&mut self, params: &lsp_types::DidCloseTextDocumentParams) -> Vec<Message> {
         let uri = params.text_document.uri.clone();
         self.docs.remove(&uri);
+        self.last_good.remove(&uri);
         let cleared = PublishDiagnosticsParams::new(uri, Vec::new(), None);
         vec![Notification::new(PublishDiagnostics::METHOD.to_owned(), cleared).into()]
     }
@@ -367,6 +415,11 @@ mod tests {
             "the L-4 directive trigger is advertised"
         );
         assert_eq!(
+            value.pointer("/capabilities/hoverProvider").unwrap(),
+            &serde_json::json!(true),
+            "the L-5 hover provider is advertised"
+        );
+        assert_eq!(
             value.pointer("/serverInfo/name").unwrap(),
             &serde_json::json!("oxidizr-lsp")
         );
@@ -471,9 +524,9 @@ mod tests {
     #[test]
     fn unknown_method_gets_method_not_found_with_the_same_id() {
         let mut server = Server::new();
-        // L-4 implemented `completion`, so the fallback needs a method
-        // that IS still open (L3 hover).
-        let (out, stop) = server.handle(&request("textDocument/hover"));
+        // L-5 implemented `hover`, so the fallback needs a method that
+        // IS still open (L4 formatting).
+        let (out, stop) = server.handle(&request("textDocument/formatting"));
         assert!(!stop);
         let sent = responses(&out);
         let [response] = sent.as_slice() else {
@@ -483,17 +536,13 @@ mod tests {
             panic!("expected an error response");
         };
         assert_eq!(error.code, ErrorCode::MethodNotFound as i32);
-        assert!(error.message.contains("textDocument/hover"));
+        assert!(error.message.contains("textDocument/formatting"));
         assert_eq!(response.id, RequestId::from(7), "clients match on the id");
     }
 
-    /// A `textDocument/completion` request over `text` at line 0,
-    /// char 0 — WITHOUT opening the document (the store is the gate).
-    fn completion_request(
-        server: &mut Server,
-        method: &str,
-        params: serde_json::Value,
-    ) -> Response {
+    /// Send one feature request (`method` + `params`) through the state
+    /// machine and return its response.
+    fn feature_request(server: &mut Server, method: &str, params: serde_json::Value) -> Response {
         let message: Message = Request {
             id: RequestId::from(9),
             method: method.to_owned(),
@@ -537,7 +586,7 @@ mod tests {
             .unwrap(),
         );
         server.handle(&open);
-        let response = completion_request(
+        let response = feature_request(
             &mut server,
             Completion::METHOD,
             completion_params(url(), 2, 0),
@@ -563,7 +612,7 @@ mod tests {
         // Editors race `didChange` against requests — an empty menu, not
         // an error popup, is the contract (L-4).
         let mut server = Server::new();
-        let response = completion_request(
+        let response = feature_request(
             &mut server,
             Completion::METHOD,
             completion_params(url(), 0, 0),
@@ -577,7 +626,123 @@ mod tests {
     #[test]
     fn malformed_completion_params_get_invalid_params() {
         let mut server = Server::new();
-        let response = completion_request(&mut server, Completion::METHOD, serde_json::json!(42));
+        let response = feature_request(&mut server, Completion::METHOD, serde_json::json!(42));
+        let Err(error) = &response.response_result else {
+            panic!("expected an error response");
+        };
+        assert_eq!(error.code, ErrorCode::InvalidParams as i32);
+    }
+
+    fn hover_params(uri: Uri, line: u32, character: u32) -> serde_json::Value {
+        serde_json::to_value(HoverParams {
+            text_document_position_params: lsp_types::TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: lsp_types::Position::new(line, character),
+            },
+            work_done_progress_params: lsp_types::WorkDoneProgressParams::default(),
+        })
+        .unwrap()
+    }
+
+    fn open_dsl(server: &mut Server, text: &str) {
+        let open = notify(
+            DidOpenTextDocument::METHOD,
+            serde_json::to_value(DidOpenTextDocumentParams {
+                text_document: lsp_types::TextDocumentItem {
+                    uri: url(),
+                    language_id: "dsl".to_owned(),
+                    version: 1,
+                    text: text.to_owned(),
+                },
+            })
+            .unwrap(),
+        );
+        server.handle(&open);
+    }
+
+    /// `hover` markup of an ok response (panics with the response value
+    /// in hand when the contract is broken).
+    fn hover_text(response: &Response) -> String {
+        let Ok(value) = &response.response_result else {
+            panic!("hover must answer ok, got {response:?}");
+        };
+        value["contents"]["value"]
+            .as_str()
+            .unwrap_or_else(|| panic!("markdown hover expected: {value}"))
+            .to_owned()
+    }
+
+    const HOISTED: &str = "workspace {\n  model {\n    p = person \"P\"\n  }\n}\n";
+
+    #[test]
+    fn hover_answers_keyword_cards_from_the_stored_text() {
+        let mut server = Server::new();
+        open_dsl(&mut server, HOISTED);
+        let response =
+            feature_request(&mut server, HoverRequest::METHOD, hover_params(url(), 1, 4));
+        let text = hover_text(&response);
+        assert!(text.contains("static model"), "{text}");
+    }
+
+    #[test]
+    fn hover_answers_model_cards_from_the_last_good_parse() {
+        let mut server = Server::new();
+        open_dsl(&mut server, HOISTED);
+        // The identifier `p` (line 2, char 4) — the identifier property
+        // the parser recorded, not the `person` keyword beside it.
+        let response =
+            feature_request(&mut server, HoverRequest::METHOD, hover_params(url(), 2, 4));
+        let text = hover_text(&response);
+        assert!(text.contains("Person://P"), "{text}");
+    }
+
+    #[test]
+    fn hover_survives_a_broken_reparse() {
+        // The last good parse is kept across a failing change — the
+        // quoted `"P"` (line 2, char 16) still renders its card.
+        let mut server = Server::new();
+        open_dsl(&mut server, HOISTED);
+        let change = notify(
+            DidChangeTextDocument::METHOD,
+            serde_json::to_value(lsp_types::DidChangeTextDocumentParams {
+                text_document: VersionedTextDocumentIdentifier {
+                    uri: url(),
+                    version: 2,
+                },
+                content_changes: vec![TextDocumentContentChangeEvent {
+                    range: None,
+                    range_length: None,
+                    text: "workspace {\n  model {\n    p = person \"P\" ~~~\n  }\n}\n".to_owned(),
+                }],
+            })
+            .unwrap(),
+        );
+        server.handle(&change);
+        let response = feature_request(
+            &mut server,
+            HoverRequest::METHOD,
+            hover_params(url(), 2, 16),
+        );
+        let text = hover_text(&response);
+        assert!(text.contains("Person://P"), "{text}");
+    }
+
+    #[test]
+    fn hover_for_an_unopened_document_is_null() {
+        // The spec's "no hover" is JSON null, not an error (L-5).
+        let mut server = Server::new();
+        let response =
+            feature_request(&mut server, HoverRequest::METHOD, hover_params(url(), 0, 0));
+        assert_eq!(
+            response.response_result.as_ref().unwrap(),
+            &serde_json::Value::Null
+        );
+    }
+
+    #[test]
+    fn malformed_hover_params_get_invalid_params() {
+        let mut server = Server::new();
+        let response = feature_request(&mut server, HoverRequest::METHOD, serde_json::json!(42));
         let Err(error) = &response.response_result else {
             panic!("expected an error response");
         };
