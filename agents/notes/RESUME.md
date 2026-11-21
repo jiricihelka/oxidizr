@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1+N-2 done, next N-3 Mermaid)**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1+N-2+N-3 done, next N-4 CLI)**)
 
 ## State
 
@@ -59,20 +59,30 @@
   DONE), PROGRESS status board + `P4-M1` milestone log. Surface notes below.
 - **M2 importers IN PROGRESS** (decomposition N-1…N-6 in
   `build/PHASE_4.md`; commits M2a…M2f). Done: **N-1/M2a `b7f66e5`**
-  (crate skeleton + image importer port, D14) and **N-2/M2b**
+  (crate skeleton + image importer port, D14), **N-2/M2b `888bdf8`**
   (C4-PlantUML model importer: `macrocall.rs` shared plumbing +
   `c4plantuml.rs`, signatures pinned from plantuml-stdlib/C4-PlantUML;
   **plan correction stamped**: importers produce the MODEL ONLY —
   `CustomView.checkElementCanBeAdded` permits only `CustomElement`s and
   no scoped view accepts a mixed C4 set, so default views install at
-  open via `api::open`; Rel label ⇒ model description). Next: **N-3/M2c
-  Mermaid C4 importer** (reuse `macrocall`; `C4Context|C4Container|
-  C4Component` bodies, `Enter_Boundary`/`Leave_Boundary`, update-macros
-  tolerated, `-->` edges NOT promised) → N-4 CLI arc → N-5 WSD exporter
-  → N-6 `!docs`/`!adrs` (retires OXZ-5003; close P4-V7/V8 first) + M2
-  close ritual (oracle read gate, fixtures w/ attribution, bless
-  307×unchanged, full e2e tier). Then M3 (`query`/`init`/completions),
-  M5 (oracle legs + carry-ins + cargo-dist + changelog catch-up).
+  open via `api::open`; Rel label ⇒ model description) and
+  **N-3/M2c** (Mermaid C4 importer: `c4plantuml` machinery made
+  dialect-parameterized — `Dialect{PlantUml,Mermaid}` picks the
+  positional slots (Mermaid tags one slot earlier; Rel `$descr`
+  keyword-only via `usize::MAX`), `%%` comments
+  (`macrocall::strip_comments_mermaid`), `Container_Boundary_Ext` =
+  container scope + `External`, chrome `Enter_Boundary`/
+  `Leave_Boundary`/`Set*`/`Show*`/`Hide*`/`CLEAR_*` tolerated, skip
+  warnings noun `dialect.name()`; shared golden digest in
+  `src/testutil.rs`; `src/mermaid.rs` 7 tests). Next: **N-4/M2d CLI
+  arc** (`Request::Import` + `import_cmd` in pipeline, `oxidizr import
+  <FILE> [--format c4plantuml|mermaid|image] [-o OUT]`, extension
+  sniff, warnings ride `Outcome::log`, CLI goldens + re-open read
+  check) → N-5 WSD exporter → N-6 `!docs`/`!adrs` (retires OXZ-5003;
+  close P4-V7/V8 first) + M2 close ritual (oracle read gate, fixtures
+  w/ attribution, bless 307×unchanged, full e2e tier). Then M3
+  (`query`/`init`/completions), M5 (oracle legs + carry-ins +
+  cargo-dist + changelog catch-up).
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams

@@ -111,6 +111,49 @@ fn text_at(chars: &[char], i: usize, word: &str) -> bool {
         .all(|(k, c)| chars.get(i + k) == Some(&c))
 }
 
+/// Removes `Mermaid` comments: `%%` to end of line, outside double-
+/// quoted strings. `%%{init}%%` config directives vanish with the
+/// comment; `'` and `rem` are NOT comment forms here.
+#[must_use]
+pub fn strip_comments_mermaid(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\n' {
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        if c == '"' {
+            out.push(c);
+            i += 1;
+            // Strings copy verbatim to the closing quote (EOL ends an
+            // unterminated one).
+            while i < chars.len() && chars[i] != '\n' {
+                if chars[i] == '"' {
+                    out.push('"');
+                    i += 1;
+                    break;
+                }
+                out.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        if c == '%' && chars.get(i + 1) == Some(&'%') {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
 /// The tiny preprocessor the macro importers tolerate: `!$name = value`
 /// variable definitions (with `?=` set-if-absent and `+=` append), and
 /// silent tolerance of every other `!` directive — `!include`, `!theme`,
@@ -340,7 +383,8 @@ impl Call {
 
     /// The value of argument `idx` with keyword name `key` — the keyword
     /// form wins over the positional slot, empty values read as `None`
-    /// (C4-PlantUML defaults every optional to `""`).
+    /// (C4-PlantUML defaults every optional to `""`). An `idx` past the
+    /// last positional (e.g. `usize::MAX`) reads keyword-only.
     #[must_use]
     pub fn arg(&self, idx: usize, key: &str) -> Option<&str> {
         let raw = self.kwargs.iter().find(|(k, _)| k == key).map_or_else(

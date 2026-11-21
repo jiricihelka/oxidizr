@@ -311,7 +311,9 @@ enum Boundary {
 fn boundary_of(name: &str) -> Option<Boundary> {
     match name {
         "System_Boundary" => Some(Boundary::System),
-        "Container_Boundary" => Some(Boundary::Container),
+        // `Container_Boundary_Ext` is the Mermaid spelling of an
+        // external container scope (the `_Ext` name adds the tag).
+        "Container_Boundary" | "Container_Boundary_Ext" => Some(Boundary::Container),
         "Enterprise_Boundary"
         | "Person_Boundary"
         | "Boundary"
@@ -364,10 +366,80 @@ fn rel_kind(name: &str) -> Option<RelKind> {
 
 /// Macro-name prefixes that style/lay out rather than model
 /// (`LAYOUT_WITH_LEGEND`, `UpdateRelStyle`, `AddElementTag`, `Lay_Out`,
-/// `SET_*`, `SHOW_*`/`HIDE_*`, `Remove*`) — tolerated silently.
+/// `SET_*`, `SHOW_*`/`HIDE_*`, `Remove*`, the Mermaid `Set*`/`Show*`/
+/// `Hide*`/`CLEAR_*`/`Enter_Boundary`/`Leave_Boundary` chrome) —
+/// tolerated silently.
 const TOLERATED: &[&str] = &[
-    "LAYOUT", "SHOW_", "HIDE_", "Lay_", "SET_", "Update", "Add", "Remove",
+    "LAYOUT",
+    "SHOW_",
+    "HIDE_",
+    "Lay_",
+    "SET_",
+    "SHOW",
+    "SET",
+    "Update",
+    "Add",
+    "Remove",
+    "Set",
+    "Show",
+    "Hide",
+    "CLEAR",
+    "Enter_Boundary",
+    "Leave_Boundary",
 ];
+
+/// The two macro languages sharing this machinery (N-2/N-3): identical
+/// macro names and scope semantics, different positional slots for the
+/// optional `$tags`/`$descr` — Mermaid spells `Person` as
+/// `(alias, label, descr, ?tags)`, `Container`/`Component` as
+/// `(alias, label, techn, descr, ?tags)` and `Rel` as
+/// `(from, to, label, techn, ?tags)`: its slot 4 is `$tags` where
+/// C4-`PlantUML` has `$descr`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Dialect {
+    PlantUml,
+    Mermaid,
+}
+
+impl Dialect {
+    #[must_use]
+    const fn name(self) -> &'static str {
+        match self {
+            Self::PlantUml => "PlantUML",
+            Self::Mermaid => "Mermaid",
+        }
+    }
+
+    const fn tags_person(self) -> usize {
+        match self {
+            Self::PlantUml => 4,
+            Self::Mermaid => 3,
+        }
+    }
+
+    const fn tags_container(self) -> usize {
+        match self {
+            Self::PlantUml => 5,
+            Self::Mermaid => 4,
+        }
+    }
+
+    /// `usize::MAX` reads keyword-only: Mermaid has no positional
+    /// `$descr` (its `Rel` slot 4 is `$tags`).
+    const fn rel_descr(self) -> usize {
+        match self {
+            Self::PlantUml => 4,
+            Self::Mermaid => usize::MAX,
+        }
+    }
+
+    const fn rel_tags(self) -> usize {
+        match self {
+            Self::PlantUml => 6,
+            Self::Mermaid => 4,
+        }
+    }
+}
 
 #[derive(Clone)]
 enum Scope {
@@ -385,10 +457,20 @@ enum Scope {
 /// failures are warnings by contract, never fail-all); the signature
 /// mirrors the `image` leg for the shared CLI path.
 pub fn import(text: &str) -> Result<Imported, ImportError> {
-    let cleaned = strip_comments(text);
+    import_dialect(&strip_comments(text), Dialect::PlantUml)
+}
+
+/// The shared macro-diagram pipeline (comment-stripped text in, model
+/// out) — [`crate::mermaid`] (N-3) reuses it with [`Dialect::Mermaid`].
+///
+/// # Errors
+///
+/// Same never-fail-all contract as [`import`].
+#[allow(clippy::unnecessary_wraps)] // the Result is the shared CLI contract, see import()
+pub(crate) fn import_dialect(cleaned: &str, dialect: Dialect) -> Result<Imported, ImportError> {
     let mut pp = Preprocessor::default();
     let fed: Vec<String> = cleaned.lines().filter_map(|l| pp.feed(l)).collect();
-    let mut im = Importer::default();
+    let mut im = Importer::new(dialect);
     for line in join_logical_lines(fed.iter().map(String::as_str)) {
         im.line(&line);
     }
@@ -398,8 +480,8 @@ pub fn import(text: &str) -> Result<Imported, ImportError> {
     })
 }
 
-#[derive(Default)]
 struct Importer {
+    dialect: Dialect,
     builder: WorkspaceBuilder,
     warnings: Vec<String>,
     aliases: HashMap<String, Id>,
@@ -411,6 +493,17 @@ struct Importer {
 }
 
 impl Importer {
+    fn new(dialect: Dialect) -> Self {
+        Self {
+            dialect,
+            builder: WorkspaceBuilder::default(),
+            warnings: Vec::new(),
+            aliases: HashMap::new(),
+            scopes: Vec::new(),
+            pending: Vec::new(),
+        }
+    }
+
     fn warn(&mut self, msg: impl Into<String>) {
         self.warnings.push(msg.into());
     }
@@ -431,7 +524,7 @@ impl Importer {
 
     /// One logical line: leading `}` close scopes, then at most one
     /// macro call, then the trailing `{`/`}` keep the scope stack in
-    /// sync; non-call lines are chrome (with `title` captured, raw
+    /// sync; non-call lines are chrome (`title`/`Title:` tolerated, raw
     /// arrows warned).
     fn line(&mut self, line: &str) {
         let mut rest = line.trim();
@@ -468,7 +561,10 @@ impl Importer {
         let lower = rest.to_ascii_lowercase();
         let is_title = lower == "title" || lower.starts_with("title ");
         if !is_title && contains_arrow(rest) {
-            self.warn(format!("skipped unsupported PlantUML relationship: {rest}"));
+            self.warn(format!(
+                "skipped unsupported {} relationship: {rest}",
+                self.dialect.name()
+            ));
         }
         for _ in 0..rest.matches('{').count() {
             self.take_pending_or_pass();
@@ -521,7 +617,7 @@ impl Importer {
             (
                 call.arg(3, "descr").map(str::to_owned),
                 call.arg(2, "techn").map(str::to_owned),
-                call.arg(5, "tags"),
+                call.arg(self.dialect.tags_container(), "tags"),
             )
         } else {
             (
@@ -529,7 +625,7 @@ impl Importer {
                 // `System`'s optional `$type` renders where technology
                 // goes — keep it as technology.
                 call.arg(6, "type").map(str::to_owned),
-                call.arg(4, "tags"),
+                call.arg(self.dialect.tags_person(), "tags"),
             )
         };
         let csv = tag_csv(tags, spec.extra);
@@ -578,7 +674,12 @@ impl Importer {
         }
         let label = call.pos(1).unwrap_or("");
         let descr = call.arg(4, "descr").map(str::to_owned);
-        let csv = tag_csv(call.arg(2, "tags"), &[]);
+        let extra: &[&str] = if call.name.ends_with("_Ext") {
+            EXT
+        } else {
+            &[]
+        };
+        let csv = tag_csv(call.arg(2, "tags"), extra);
         let created = if b == Boundary::System {
             self.builder
                 .add_software_system(label, descr, csv.as_deref())
@@ -644,13 +745,16 @@ impl Importer {
                 return;
             }
         };
-        let description = match (label.is_empty(), call.arg(4, "descr")) {
+        let description = match (
+            label.is_empty(),
+            call.arg(self.dialect.rel_descr(), "descr"),
+        ) {
             (true, d) => d.map(str::to_owned),
             (false, None) => Some(label.to_owned()),
             (false, Some(d)) => Some(format!("{label}, {d}")),
         };
         let technology = call.arg(3, "techn").map(str::to_owned);
-        let csv = tag_csv(call.arg(6, "tags"), &[]);
+        let csv = tag_csv(call.arg(self.dialect.rel_tags(), "tags"), &[]);
         let pairs: Vec<(Id, Id)> = match kind {
             RelKind::Forward => vec![(source, destination)],
             RelKind::Backward => vec![(destination, source)],
@@ -727,92 +831,12 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::testutil::digest;
     use expect_test::expect;
-    use oxidizr_core::Workspace;
     use oxidizr_core::tags::TagKind;
 
     fn import_ok(src: &str) -> Imported {
         import(src).unwrap()
-    }
-
-    /// id → display name (containers/components path-qualified).
-    fn names(ws: &Workspace) -> HashMap<&str, String> {
-        let mut map = HashMap::new();
-        for p in &ws.model.people {
-            map.insert(p.item.id.as_str(), p.item.name.clone());
-        }
-        for s in &ws.model.software_systems {
-            map.insert(s.item.id.as_str(), s.item.name.clone());
-            for c in &s.containers {
-                map.insert(
-                    c.item.id.as_str(),
-                    format!("{} / {}", s.item.name, c.item.name),
-                );
-                for k in &c.components {
-                    map.insert(
-                        k.item.id.as_str(),
-                        format!("{} / {} / {}", s.item.name, c.item.name, k.item.name),
-                    );
-                }
-            }
-        }
-        map
-    }
-
-    /// Compact model digest for the expect goldens: elements (nested
-    /// under their parents), relationships, warnings.
-    #[allow(clippy::format_push_string)] // test digest: format! reads best here
-    fn digest(im: &Imported) -> String {
-        let ws = &im.workspace;
-        let n = names(ws);
-        let mut out = String::new();
-        for p in &ws.model.people {
-            out.push_str(&format!(
-                "person {} [{}] {:?}\n",
-                p.item.name,
-                p.item.tags.serialized_for(TagKind::Person),
-                p.item.description
-            ));
-        }
-        for s in &ws.model.software_systems {
-            out.push_str(&format!(
-                "system {} [{}] {:?}\n",
-                s.item.name,
-                s.item.tags.serialized_for(TagKind::SoftwareSystem),
-                s.item.description
-            ));
-            for c in &s.containers {
-                out.push_str(&format!(
-                    "  container {} [{}] tech={:?} {:?}\n",
-                    c.item.name,
-                    c.item.tags.serialized_for(TagKind::Container),
-                    c.technology,
-                    c.item.description
-                ));
-                for k in &c.components {
-                    out.push_str(&format!(
-                        "    component {} [{}] tech={:?}\n",
-                        k.item.name,
-                        k.item.tags.serialized_for(TagKind::Component),
-                        k.technology
-                    ));
-                }
-            }
-        }
-        for r in &ws.model.relationships {
-            out.push_str(&format!(
-                "rel {} -> {} \"{}\" tech={:?} [{}]\n",
-                n[r.source.as_str()],
-                n[r.destination.as_str()],
-                r.description.clone().unwrap_or_default(),
-                r.technology,
-                r.tags.stored().join("+")
-            ));
-        }
-        for w in &im.warnings {
-            out.push_str(&format!("warn: {w}\n"));
-        }
-        out
     }
 
     #[test]

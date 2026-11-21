@@ -24,6 +24,10 @@
 pub mod c4plantuml;
 pub mod image;
 pub mod macrocall;
+pub mod mermaid;
+
+#[cfg(test)]
+pub(crate) mod testutil;
 
 use std::path::PathBuf;
 
