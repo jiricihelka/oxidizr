@@ -166,6 +166,27 @@ impl Tags {
         self.serialized(kind.default_tags())
     }
 
+    /// The EFFECTIVE tag list — `getTags()` as `defaults ++ stored`, deduped
+    /// keeping first position (the same view [`Tags::serialized`] joins).
+    /// Loaders represent the same effective list differently (the DSL path
+    /// keeps kind defaults DERIVED, a JSON load re-stores the CSV), so
+    /// format-agnostic comparison must go through this view (§P4-M0 D-4).
+    #[must_use]
+    pub fn effective<'a>(&'a self, defaults: &[&'a str]) -> Vec<&'a str> {
+        let mut out: Vec<&str> = Vec::with_capacity(self.stored.len() + defaults.len());
+        for d in defaults {
+            if !out.contains(d) {
+                out.push(d);
+            }
+        }
+        for t in &self.stored {
+            if !out.contains(&t.as_str()) {
+                out.push(t);
+            }
+        }
+        out
+    }
+
     /// `getTags()`: `defaults ++ stored`, deduped keeping first position, joined
     /// with `,`.
     #[must_use]

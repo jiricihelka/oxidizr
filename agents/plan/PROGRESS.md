@@ -29,6 +29,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P2 | M5 hardening + v0.2.0 | **COMPLETE 2026-11-18** — proptest export panic-suite (`export_never_panics.rs`), `oxidizr export --help`/README/diagnostics refresh, P2-V5/V6 verification items closed, full `oracle verify` green (4 json + 90 diagram + 6 theme), `bench save M4`. **Phase 2 complete, tagged v0.2.0 (local)** |
 | P2T | e2e export coverage (interlude) | **COMPLETE 2026-11-18** — PT1–PT5: manifest-v2 export matrix (plantuml/c4/mermaid + 5007 probe) over the corpus, fixtures 160–166, 5007+5008 off the allow-list (5009 permanent, probed), full-tier export invariants, corpus export benches + `2T` baseline. Net caught 2 pre-existing P2 bugs (fixed) + a latent-red Windows smoke leg (fixed). No tag (1T precedent). Log below (`build/PHASE_2T.md`) |
 | P2R | small-scope refactors (interlude) | **COMPLETE 2026-11-19** — PR0–PR6: 65-row findings register swept in 5 waves (core/dsl/export/json+api+cli/tooling) + `redundant_clone` nursery ratchet (V-R2 KEEP, §D4 table), zero behavior change — every commit quartet + full tier 8/8 + bless corpus-diff=0 (net pre-proven on the unmodified tree, V-R1); `2R` baseline committed, `bench cmp 2T` 23/23 faster-or-equal (`m7_dsl_parse_corpus` 13.7→7.1 ms); close `oracle verify` 4+90+6 green. No tag (1T/2T precedent). Log below (`build/PHASE_2R.md`) |
+| P4 | §P4-M0 `oxidizr diff` (D-1…D-4) | **COMPLETE 2026-11-21** — canonical-identity model diff (F3, P4-D1/D2): engine + body in `oxidizr-api` (bodies-in-API invariant), schema-1 JSON frozen (`docs/diff-schema.md`), human ± report, `oxidizr diff A B [--format human|json] [--ignore-layout] [--quiet]`, exit 1 on differences (`ExitClass::Differences`). Loader representations never surface: `structurizr.dsl*` provenance stamps never compared, tags compared as the reference EFFECTIVE `getTags()` view, empty text reads absent — a `.dsl` and its JSON twin diff EMPTY; `diff(a, a)` determinism sweep over the corpus. Fixtures `testdata/probes/diff/*` + `tests/diff_probes.rs` (6). bless 307×unchanged. Commits M0a `c121cbe` → M0d (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-LSP `oxidizr-lsp` (L0–L5, prioritized) | **COMPLETE 2026-11-21** — LSP first (user directive): diagnostics/completion/hover/formatting/`initializationOptions`/`--version` all shipped; headless core + stdio binary, transcript + 54 lib tests, no `oxidizr-json` bytes touched (bless 307×unchanged). Commits L0 `a38f905` → L5 (this). Log below (`build/PHASE_4.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
@@ -151,6 +152,59 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P4-M0 — `oxidizr diff` ✅ (2026-11-21, COMPLETE)
+
+F3 workspace-aware diff (P4-D1/D2; the §P4-M0 decomposition D-1…D-4,
+commits M0a…M0d, `build/PHASE_4.md`). No new crate: engine and command
+body in `oxidizr-api` (the T0-d bodies-in-API invariant), the CLI stays
+the argv/replay shim. No `oxidizr-json` byte contact (bless 307×
+unchanged at close).
+
+- **M0a** `c121cbe` — engine (`oxidizr-api/src/diff.rs`): identity by
+  canonical name via `WorkspaceBuilder::adopt` — elements keyed by
+  `canonical_name_full` (the `Person://` URI prefix IS the type),
+  relationships by `relationship_canonical_name`, views by key, styles
+  by (kind, tag); SAME identity with a drifted id ⇒ `idChanged`, NEVER
+  add+remove (the F1 rationale); element NAME / relationship
+  DESCRIPTION changes ARE identity changes (both embedded in the key);
+  duplicate canonical names pair positionally (`#N`); dangling refs
+  fall back to `Unresolved://<id>`; geometry gated by `ignore_layout`,
+  membership never.
+- **M0b** `85b3297` — schema 1 frozen: `{schema:1, added, removed,
+  changed, idChanged}`, all keys always present, stable key order
+  (`preserve_order`), absent ⇒ `null`, additive-only evolution policy;
+  `docs/diff-schema.md` + expect-test snapshot.
+- **M0c** `4c7612e` — pipeline + CLI: `Request::Diff`,
+  `ExitClass::Differences` (code 1 — the documented P4-D1 extension of
+  the P1-D8 contract, GNU-diff convention; the e2e Exit map folds it
+  onto the same recorded `error`), `ApiOptions.color` by addition (CLI
+  fills the `report::Renderer` rule, API/e2e stay PLAIN), `oxidizr diff
+  A B [--format human|json] [--ignore-layout] [--quiet]`, `diff_cmd`
+  loading BOTH sides via `api::open`. Trap 1 (CLI smoke): the loader
+  regenerates `structurizr.dsl*` provenance stamps per parse — NEVER
+  compared, or `diff(a, a)` is non-empty on every DSL input.
+- **M0d** (this commit) — fixtures + close: hand-curated pairs under
+  `testdata/probes/diff/*` (`base.dsl`/`edited.dsl` + their `dsl2json`
+  JSON twins, README contract row) covering EVERY report category in
+  one story (add, remove, the relationship-description rename pair,
+  field/style changes, membership, the id drift);
+  `crates/oxidizr-api/tests/diff_probes.rs` — pair snapshots (schema-1
+  document, `--ignore-layout` gate, human report), the cross-format
+  witnesses (`.dsl` ≡ its JSON twin ⇒ EMPTY) and the `diff(a, a)`
+  two-independent-loads determinism sweeps over `testdata/dsl` (107)
+  + the legal JSON corpus. Trap 2 (the cross pair): loaders represent
+  the SAME model differently — DSL keeps kind-default tags DERIVED and
+  `description` `""`, JSON re-stores the CSV and omits empty text —
+  so comparison goes through the reference EFFECTIVE views: new
+  `Tags::effective` (`getTags()` = defaults ++ stored, deduped),
+  empty text reads as ABSENT (`docs/diff-schema.md` updated).
+  `testdata/validation/*` stays OUT of the emptiness sweeps: those
+  fixtures are deliberately invalid (duplicates/dangling refs pair
+  non-empty by design).
+- Close: `cargo xtask ci` green (api 30 lib incl. 13 diff + probes 6 +
+  cli 30); full e2e tier (`OXIDZR_E2E_FULL=1`) green + `cargo xtask
+  e2e bless` → 307×unchanged.
 
 ### P4-LSP — `oxidizr-lsp` language server ✅ (2026-11-21, COMPLETE)
 

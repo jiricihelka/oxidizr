@@ -1,0 +1,136 @@
+{
+  "configuration" : { },
+  "description" : "P4-M0 fixture pair — edited side",
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "description" : "Adversary",
+      "id" : "1",
+      "name" : "Mallory",
+      "properties" : {
+        "structurizr.dsl.identifier" : "mallory"
+      },
+      "tags" : "Element,Person"
+    }, {
+      "description" : "Primary user, promoted",
+      "group" : "Staff",
+      "id" : "2",
+      "name" : "Alice",
+      "properties" : {
+        "structurizr.dsl.identifier" : "alice"
+      },
+      "relationships" : [ {
+        "description" : "Uses over HTTPS",
+        "destinationId" : "4",
+        "id" : "7",
+        "sourceId" : "2",
+        "tags" : "Relationship",
+        "technology" : "HTTPS"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "description" : "SMTP relay",
+      "documentation" : { },
+      "id" : "3",
+      "name" : "Mail",
+      "properties" : {
+        "structurizr.dsl.identifier" : "mail"
+      },
+      "tags" : "Element,Software System,Mailgun"
+    }, {
+      "containers" : [ {
+        "description" : "Front end",
+        "documentation" : { },
+        "id" : "5",
+        "name" : "Web",
+        "properties" : {
+          "structurizr.dsl.identifier" : "web"
+        },
+        "relationships" : [ {
+          "description" : "Reads and writes",
+          "destinationId" : "6",
+          "id" : "8",
+          "sourceId" : "5",
+          "tags" : "Relationship",
+          "technology" : "JDBC"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "nginx"
+      }, {
+        "description" : "Storage",
+        "documentation" : { },
+        "id" : "6",
+        "name" : "DB",
+        "properties" : {
+          "structurizr.dsl.identifier" : "db"
+        },
+        "tags" : "Element,Container",
+        "technology" : "PostgreSQL"
+      } ],
+      "description" : "Core banking",
+      "documentation" : { },
+      "id" : "4",
+      "name" : "Bank",
+      "properties" : {
+        "structurizr.dsl.identifier" : "bank"
+      },
+      "relationships" : [ {
+        "description" : "Sends via",
+        "destinationId" : "3",
+        "id" : "9",
+        "sourceId" : "4",
+        "tags" : "Relationship",
+        "technology" : "SMTP"
+      } ],
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "Diff probe",
+  "properties" : {
+    "structurizr.dsl" : "d29ya3NwYWNlICJEaWZmIHByb2JlIiAiUDQtTTAgZml4dHVyZSBwYWlyIOKAlCBlZGl0ZWQgc2lkZSIgewogICAgbW9kZWwgewogICAgICAgIG1hbGxvcnkgPSBwZXJzb24gIk1hbGxvcnkiICJBZHZlcnNhcnkiCiAgICAgICAgc3RhZmYgPSBncm91cCAiU3RhZmYiIHsKICAgICAgICAgICAgYWxpY2UgPSBwZXJzb24gIkFsaWNlIiAiUHJpbWFyeSB1c2VyLCBwcm9tb3RlZCIKICAgICAgICB9CiAgICAgICAgbWFpbCA9IHNvZnR3YXJlU3lzdGVtICJNYWlsIiAiU01UUCByZWxheSIgIk1haWxndW4iCiAgICAgICAgYmFuayA9IHNvZnR3YXJlU3lzdGVtICJCYW5rIiAiQ29yZSBiYW5raW5nIiB7CiAgICAgICAgICAgIHdlYiA9IGNvbnRhaW5lciAiV2ViIiAiRnJvbnQgZW5kIiAibmdpbngiCiAgICAgICAgICAgIGRiID0gY29udGFpbmVyICJEQiIgIlN0b3JhZ2UiICJQb3N0Z3JlU1FMIgogICAgICAgIH0KCiAgICAgICAgYWxpY2UgLT4gYmFuayAiVXNlcyBvdmVyIEhUVFBTIiAiSFRUUFMiCiAgICAgICAgd2ViIC0+IGRiICJSZWFkcyBhbmQgd3JpdGVzIiAiSkRCQyIKICAgICAgICBiYW5rIC0+IG1haWwgIlNlbmRzIHZpYSIgIlNNVFAiCiAgICB9CiAgICB2aWV3cyB7CiAgICAgICAgc3lzdGVtTGFuZHNjYXBlICJsYW5kc2NhcGUiIHsKICAgICAgICAgICAgaW5jbHVkZSAqCiAgICAgICAgfQogICAgICAgIHN0eWxlcyB7CiAgICAgICAgICAgIGVsZW1lbnQgIlBlcnNvbiIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjNDQ1NTY2CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiU29mdHdhcmUgU3lzdGVtIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICNhYWJiY2MKICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQ=="
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : {
+        "elements" : [ {
+          "background" : "#445566",
+          "tag" : "Person"
+        }, {
+          "background" : "#aabbcc",
+          "tag" : "Software System"
+        } ]
+      },
+      "terminology" : { }
+    },
+    "systemLandscapeViews" : [ {
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "4",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "landscape",
+      "name" : "System Landscape View",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "7"
+      }, {
+        "id" : "9"
+      } ]
+    } ]
+  }
+}

@@ -22,6 +22,11 @@
 //! View GEOMETRY (`position[…]`, `vertices[…]`, `automaticLayout`,
 //! `dimensions`, `animations`) is gated by [`DiffOptions::ignore_layout`].
 //! Image-view content blobs are never compared (base64 payloads).
+//! Loader-representation rule (D-4): comparison goes through the reference
+//! EFFECTIVE views — tags via `getTags()` (defaults ++ stored, deduped),
+//! empty text reads as ABSENT, and the loader-regenerated `structurizr.dsl*`
+//! provenance stamps are NEVER compared — so a `.dsl` and its JSON twin
+//! diff EMPTY (pinned by `tests/diff_probes.rs`).
 //! Output is deterministic: every category is sorted before returning.
 
 use std::collections::BTreeMap;
@@ -31,6 +36,7 @@ use oxidizr_core::builder::WorkspaceBuilder;
 use oxidizr_core::ids::Id;
 use oxidizr_core::model::{DeploymentNode, Model, ModelItem, Relationship, SoftwareSystem};
 use oxidizr_core::properties::Properties;
+use oxidizr_core::tags::{TagKind, relationship_defaults};
 use oxidizr_core::views::{
     Animation, AutomaticLayout, Dimensions, ElementStyle, RelationshipStyle, View, ViewContent,
 };
@@ -318,7 +324,7 @@ fn index_model(
     for ce in &model.custom_elements {
         let key = canon(&ce.item.id);
         let tail = bracket(&key);
-        let mut fields = base_fields(&ce.item);
+        let mut fields = base_fields(&ce.item, TagKind::CustomElement);
         push(&mut fields, "group", opt(ce.group.as_ref()));
         insert_item(
             index,
@@ -334,7 +340,7 @@ fn index_model(
     for p in &model.people {
         let key = canon(&p.item.id);
         let tail = bracket(&key);
-        let mut fields = base_fields(&p.item);
+        let mut fields = base_fields(&p.item, TagKind::Person);
         push(&mut fields, "group", opt(p.group.as_ref()));
         insert_item(
             index,
@@ -374,7 +380,7 @@ fn index_model(
 fn index_system_tree(s: &SoftwareSystem, canon: &dyn Fn(&Id) -> String, index: &mut Index) {
     let s_key = canon(&s.item.id);
     let s_tail = bracket(&s_key);
-    let mut fields = base_fields(&s.item);
+    let mut fields = base_fields(&s.item, TagKind::SoftwareSystem);
     push(&mut fields, "group", opt(s.group.as_ref()));
     let s_path = format!("model.softwareSystems[{s_tail}]");
     insert_item(
@@ -389,7 +395,7 @@ fn index_system_tree(s: &SoftwareSystem, canon: &dyn Fn(&Id) -> String, index: &
     );
     for c in &s.containers {
         let c_key = canon(&c.item.id);
-        let mut fields = base_fields(&c.item);
+        let mut fields = base_fields(&c.item, TagKind::Container);
         push(&mut fields, "group", opt(c.group.as_ref()));
         push(&mut fields, "technology", opt(c.technology.as_ref()));
         let c_name = &c.item.name;
@@ -406,7 +412,7 @@ fn index_system_tree(s: &SoftwareSystem, canon: &dyn Fn(&Id) -> String, index: &
         );
         for k in &c.components {
             let k_key = canon(&k.item.id);
-            let mut fields = base_fields(&k.item);
+            let mut fields = base_fields(&k.item, TagKind::Component);
             push(&mut fields, "group", opt(k.group.as_ref()));
             push(&mut fields, "technology", opt(k.technology.as_ref()));
             let k_name = &k.item.name;
@@ -430,7 +436,7 @@ fn walk_node(node: &DeploymentNode, canon: &dyn Fn(&Id) -> String, index: &mut I
     let tail = bracket(&key);
     // `DeploymentNode://Default/a/b` → `Default/a/b` under deploymentNodes.
     let path = format!("model.deploymentNodes[{tail}]");
-    let mut fields = base_fields(&node.item);
+    let mut fields = base_fields(&node.item, TagKind::DeploymentNode);
     push(&mut fields, "group", opt(node.group.as_ref()));
     push(&mut fields, "technology", opt(node.technology.as_ref()));
     push(&mut fields, "instances", json!(&node.instances));
@@ -452,7 +458,7 @@ fn walk_node(node: &DeploymentNode, canon: &dyn Fn(&Id) -> String, index: &mut I
     for infra in &node.infrastructure_nodes {
         let i_key = canon(&infra.item.id);
         let i_name = bracket(&i_key).rsplit('/').next().unwrap_or("").to_owned();
-        let mut fields = base_fields(&infra.item);
+        let mut fields = base_fields(&infra.item, TagKind::InfrastructureNode);
         push(&mut fields, "group", opt(infra.group.as_ref()));
         push(&mut fields, "technology", opt(infra.technology.as_ref()));
         insert_item(
@@ -468,7 +474,7 @@ fn walk_node(node: &DeploymentNode, canon: &dyn Fn(&Id) -> String, index: &mut I
     }
     for ssi in &node.software_system_instances {
         let s_key = canon(&ssi.item.id);
-        let mut fields = base_fields(&ssi.item);
+        let mut fields = base_fields(&ssi.item, TagKind::SoftwareSystemInstance);
         push(&mut fields, "group", opt(ssi.group.as_ref()));
         push(
             &mut fields,
@@ -490,7 +496,7 @@ fn walk_node(node: &DeploymentNode, canon: &dyn Fn(&Id) -> String, index: &mut I
     }
     for ci in &node.container_instances {
         let c_key = canon(&ci.item.id);
-        let mut fields = base_fields(&ci.item);
+        let mut fields = base_fields(&ci.item, TagKind::ContainerInstance);
         push(&mut fields, "group", opt(ci.group.as_ref()));
         push(
             &mut fields,
@@ -519,7 +525,8 @@ fn rel_fields(r: &Relationship) -> Fields {
     let mut fields = Fields::new();
     push(&mut fields, "technology", opt(r.technology.as_ref()));
     push(&mut fields, "url", opt(r.url.as_ref()));
-    push(&mut fields, "tags", tags(&r.tags));
+    let defaults = relationship_defaults(r.linked_relationship_id.is_some(), r.interaction_style);
+    push(&mut fields, "tags", tags(&r.tags, &defaults));
     push_props(&mut fields, &r.properties);
     fields
 }
@@ -955,13 +962,15 @@ fn relationship_style_fields(s: &RelationshipStyle) -> Fields {
 // Field plumbing
 // ---------------------------------------------------------------------------
 
-/// The `ModelItem` fields every element shares.
-fn base_fields(item: &ModelItem) -> Fields {
+/// The `ModelItem` fields every element shares. `kind` selects the
+/// derived-default tag stack the EFFECTIVE view is computed against (the
+/// loaders represent the same list differently — §P4-M0 D-4).
+fn base_fields(item: &ModelItem, kind: TagKind) -> Fields {
     let mut fields = Fields::new();
     push(&mut fields, "name", json!(&item.name));
     push(&mut fields, "description", opt(item.description.as_ref()));
     push(&mut fields, "url", opt(item.url.as_ref()));
-    push(&mut fields, "tags", tags(&item.tags));
+    push(&mut fields, "tags", tags(&item.tags, kind.default_tags()));
     push_props(&mut fields, &item.properties);
     fields
 }
@@ -972,12 +981,23 @@ fn push(fields: &mut Fields, name: &str, value: Value) {
     fields.insert(name.to_owned(), value);
 }
 
+/// An empty string is `""` on one loader and absent on the other (the
+/// reference `ModelItem` defaults `description` to `""`, the JSON writer
+/// omits empty text), so both read as ABSENT (§P4-M0 D-4 — the same
+/// format-agnostic rule as the effective tags view).
 fn opt(o: Option<&String>) -> Value {
-    o.map_or(Value::Null, |s| json!(s))
+    match o {
+        Some(s) if s.is_empty() => Value::Null,
+        Some(s) => json!(s),
+        None => Value::Null,
+    }
 }
 
-fn tags(t: &oxidizr_core::tags::Tags) -> Value {
-    json!(t.stored())
+/// The EFFECTIVE tag list (`getTags()` = defaults ++ stored, deduped):
+/// the DSL path keeps kind defaults DERIVED while a JSON load re-stores
+/// the CSV, so stored-only comparison would flag every cross-format pair.
+fn tags(t: &oxidizr_core::tags::Tags, defaults: &[&str]) -> Value {
+    json!(t.effective(defaults))
 }
 
 fn groups(g: &[String]) -> Value {
@@ -1296,6 +1316,28 @@ mod tests {
         let d = diff(&a, &b, &DiffOptions::default());
         assert_eq!(d.changed.len(), 2);
         assert!(d.changed.iter().all(|c| c.path == "workspace"));
+    }
+
+    #[test]
+    fn cross_loader_representation_diffs_empty() {
+        // The same model on both loaders: the DSL path keeps kind defaults
+        // DERIVED (stored tags empty, `description` defaults to ""), a JSON
+        // load re-stores the tag CSV and omits empty text. Comparison goes
+        // through the EFFECTIVE views, so the pair must diff EMPTY
+        // (§P4-M0 D-4 — caught by the `testdata/probes/diff` cross pair).
+        let mut a = ws();
+        a.model.people[0].item.description = Some(String::new());
+        let mut b = ws();
+        b.model.people[0].item.description = None;
+        b.model.people[0].item.tags = Tags::from_json_csv("Element,Person");
+        b.model.relationships[0].tags = Tags::from_json_csv("Relationship");
+        b.model.software_systems[0].item.tags.add("Extra"); // custom tag present on both sides
+        a.model.software_systems[0].item.tags.add("Extra");
+        assert!(
+            diff(&a, &b, &DiffOptions::default()).is_empty(),
+            "{:?}",
+            diff(&a, &b, &DiffOptions::default())
+        );
     }
 
     #[test]

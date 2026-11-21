@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); M0 `diff` in flight — M0a–M0c shipped, M0d close next**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); next: M1 `inspect`**)
 
 ## State
 
@@ -38,19 +38,20 @@
   L5 `a950748` — full e2e tier green + bless 307×unchanged +
   `cargo xtask ci` green; close-out notes in PHASE_4.md (L-7 DONE row)
   and PROGRESS.md (status board + `P4-LSP` milestone log).
-- **M0 `diff` IN FLIGHT** (F3; decomposition = §P4-M0 D-1…D-4, commits
-  M0a…M0d): **M0a–M0c DONE** — engine (`oxidizr-api/src/diff.rs`,
-  identity by canonical name via `adopt`, `idChanged` category,
-  `ignore_layout` gate, provenance `structurizr.dsl*` stamps never
-  compared); schema-1 JSON + `docs/diff-schema.md`; pipeline
-  (`Request::Diff`, `ExitClass::Differences` = 1, `ApiOptions.color`) +
-  CLI `oxidizr diff A B [--format human|json] [--ignore-layout]
-  [--quiet]` + CLI goldens. **Next M0d (close)**: fixture pairs under
-  `testdata/probes/diff/*` (README contract row), `diff(a, a)` EMPTY
-  property sweep over `testdata/dsl`, full e2e tier + bless 307×
-  unchanged + PROGRESS milestone log. Then M1 `inspect`, M2 importers,
-  M3 query/init/completions, M5 oracle + carry-ins + cargo-dist +
-  changelog catch-up.
+- **§P4-M0 `diff` CLOSED 2026-11-21** (F3; D-1…D-4, commits M0a `c121cbe`,
+  M0b `85b3297`, M0c `4c7612e`, M0d this): engine `oxidizr-api/src/diff.rs`
+  (identity by canonical name, `idChanged`, `ignore_layout` gate) + schema
+  1 (`docs/diff-schema.md`) + pipeline/CLI (`oxidizr diff A B [--format
+  human|json] [--ignore-layout] [--quiet]`, exit 1) + fixtures
+  `testdata/probes/diff/*` + `crates/oxidizr-api/tests/diff_probes.rs`
+  (snapshots + corpus sweeps) + `Tags::effective` in core. Full e2e tier
+  green + bless 307×unchanged + `cargo xtask ci` green; stamps: PHASE_4
+  §P4-M0 CLOSED row, PROGRESS status board + `P4-M0` milestone log.
+- **Next: M1 `inspect`** (`build/PHASE_4.md` — new crate `oxidizr-inspect`
+  per P4-D1, catalog-driven inspections port + `oxidizr inspect`
+  subcommand; R-4 mitigation: catalog + per-inspection oracle snapshots).
+  Then M2 importers, M3 query/init/completions, M5 oracle + carry-ins +
+  cargo-dist + changelog catch-up.
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams
@@ -167,6 +168,50 @@
   `len_utf16()`/`len_utf8()` return `usize` on the pinned nightly;
   `usize: From<u32>` does NOT exist — u32 spans go through
   `usize::try_from(..)` or `as usize` (cst.rs style).
+
+## §P4-M0 diff surface (`oxidizr-api/src/diff.rs` + pipeline + CLI — read before touching)
+
+- **Identity** (P4-D2): elements keyed by `canonical_name_full` via
+  `WorkspaceBuilder::adopt` (the `Person://` URI prefix IS the type),
+  relationships by `relationship_canonical_name`, views by key, styles by
+  (kind, tag). SAME identity + drifted id ⇒ `idChanged`, NEVER add+remove;
+  element NAME / relationship DESCRIPTION changes ARE identity changes
+  (embedded in the key ⇒ add+remove pairs); duplicate canonical names pair
+  positionally (`#N`); dangling refs ⇒ `Unresolved://<id>` fallback keys.
+- **THE THREE REPRESENTATION TRAPS** (each broke a smoke/probe BEFORE it
+  could ship; all pinned by tests): (1) `structurizr.dsl*` properties are
+  loader-REGENERATED per parse (fresh UUID per item + base64 source
+  snapshot) — NEVER compared (`push_props` skips the prefix); (2) loaders
+  represent tags differently — the DSL path keeps kind defaults DERIVED, a
+  JSON load re-stores the CSV (reference `setTags`) — so tags compare as
+  the reference EFFECTIVE view `getTags()` = defaults ++ stored, deduped
+  (new `oxidizr_core::tags::Tags::effective`; `base_fields` takes the
+  `TagKind`, `rel_fields` computes `relationship_defaults(linked, style)`);
+  (3) the DSL parser defaults `description` to `""` while the JSON writer
+  OMITS empty text — `opt()` reads empty strings as ABSENT. Consequence:
+  a `.dsl` and its JSON twin diff EMPTY (`a_dsl_and_its_json_twin_diff_empty`).
+- **Pipeline/CLI**: `Request::Diff { a, b, json, ignore_layout, quiet }` →
+  `diff_cmd` (both sides via `api::open`; partial DSL opens ride the log
+  informationally); `ExitClass::Differences` = code 1 (the documented P4-D1
+  extension; the e2e `Exit::from_class` folds it onto `error`, the corpus
+  never emits it); `ApiOptions.color` — CLI fills `!no_color && NO_COLOR
+  unset`, API/e2e stay PLAIN. `--quiet` = exit code ONLY (no bytes, no
+  chatter). CLI flag spelling: `#[arg(long = "ignore-layout")]` REQUIRED
+  (the `Command` lowercase rename would flatten it to `--ignorelayout`).
+- **Tests**: 13 unit tests in `diff.rs`; `tests/diff_probes.rs` (6): the
+  pair snapshots (`expect!`, re-bless `UPDATE_EXPECT=1 cargo test -p
+  oxidizr-api --test diff_probes`), the two-load determinism sweeps
+  (`testdata/dsl` unopenables SKIPPED, floor assert; `testdata/validation/*`
+  EXCLUDED — deliberately invalid fixtures self-pair non-empty ABOVE the
+  `Unresolved://` fallback by design); CLI goldens in `oxidizr-cli`
+  (`diff_*`, temp fixtures, `NO_COLOR=1`): human headers `added (N):`,
+  lines `+ path (kind)` / `~ path field: <json> -> <json>`, silent-when-
+  equal exit 0, differences exit 1, missing side exit 3.
+- **Fixtures** `testdata/probes/diff/*`: `base.dsl`/`edited.dsl` hand-curated
+  edit story + `base.json`/`edited.json` = `dsl2json` twins (README
+  contract row; NOT oracle-witnessed — Structurizr has no `diff`). The
+  story covers every category: add/remove, the relationship-description
+  rename pair, field/style changes, membership shift, id drift.
 
 ## §P3-M11 UX batch surface (shell/paint/scene/layered/statefile — read before touching)
 

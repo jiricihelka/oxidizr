@@ -33,6 +33,14 @@ plus the `c4-props` probe (property-driven legs, below).
    no vendored fixture reaches — `c4plantuml.tags`/`.stereotypes`/
    `.elementProperties`/`.relationshipProperties`/`.stdlib=false` +
    `plantuml.sequenceDiagram` box leg; witnessed as a `plantuml-c4` golden).
+  `diff/` (§P4-M0 D-4): hand-curated `diff` fixture PAIRS — `base.dsl` /
+  `edited.dsl` (an edit story covering every report category: add, remove,
+  the relationship-description rename pair, field/style changes, membership
+  and the id drift) plus their JSON twins `base.json` / `edited.json`
+  (written by `oxidizr dsl2json`, then frozen: the pair is the cross-format
+  witness — a `.dsl` and its JSON twin MUST diff EMPTY). No oracle goldens:
+  Structurizr has no `diff`; consumed by
+  `crates/oxidizr-api/tests/diff_probes.rs` (snapshots + corpus sweeps).
 * `read-corpus/` + `validation/` — 21 JSON workspaces (back-compat read + validation rules,
   from `structurizr-client/src/test/resources`). In `validation/`, 15 fixtures must fail
   `hydrate()` with the reference message and 1

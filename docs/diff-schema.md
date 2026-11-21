@@ -69,11 +69,15 @@ Locked-in consequences of identity-by-canonical-name (§P4-M0):
 
 ## Fields compared
 
-Per item: `name`, `description`, `url`, `tags` (stored tags as a JSON
-array — kind defaults are derived, not stored), `group`, `technology`,
+Per item: `name`, `description`, `url`, `tags` (the EFFECTIVE list —
+reference `getTags()`: kind defaults prepended, deduped, then the stored
+custom tags; the loaders represent the same list differently, so stored-
+only comparison would flag every cross-format pair), `group`, `technology`,
 `instances`, `deploymentGroups`, plus one `properties.<key>` field per
-free-form property. Views compare `kind`, `title`, `description`,
-scope ids (`softwareSystemId`, `containerId`, `elementId`,
+free-form property. Empty text compares as ABSENT (`""` on one loader,
+omitted on the other — the reference defaults `description` to `""`, the
+JSON writer omits empty text). Views compare `kind`, `title`,
+`description`, scope ids (`softwareSystemId`, `containerId`, `elementId`,
 `environment`, `baseViewKey`, …), boundary flags, `filterMode` /
 `filterTags`, `paperSize`, and membership `elements` / `relationships`
 (sorted canonical-name arrays) — ALWAYS, membership is not layout.
