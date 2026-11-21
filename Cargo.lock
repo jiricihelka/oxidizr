@@ -2995,6 +2995,7 @@ dependencies = [
  "oxidizr-dsl",
  "oxidizr-export",
  "oxidizr-json",
+ "serde_json",
 ]
 
 [[package]]

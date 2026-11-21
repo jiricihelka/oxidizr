@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5) — M0 `diff` next**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); M0 `diff` in flight — M0a engine shipped, M0b schema next**)
 
 ## State
 
@@ -35,14 +35,18 @@
 
 - **§P4-LSP CLOSED 2026-11-21** (F5 prioritized per user directive):
   L0 `a38f905`, L1 `e11271f`, L2 `fedd7aa`, L3 `e13af48`, L4 `16d9ab5`,
-  L5 (this commit) — full e2e tier green + bless 307×unchanged +
+  L5 `a950748` — full e2e tier green + bless 307×unchanged +
   `cargo xtask ci` green; close-out notes in PHASE_4.md (L-7 DONE row)
   and PROGRESS.md (status board + `P4-LSP` milestone log).
-- **Next: M0 `diff`** (F3), then M1 `inspect`, M2 importers, M3
-  query/init/completions, M5 oracle + carry-ins + cargo-dist + changelog
-  catch-up. M0: read its `build/PHASE_4.md` section first; the
-  exit-code contract ADDS `1 = differences found` (P4 opening scope) —
-  decompose in PHASE_4.md if the milestone touches >~4 modules.
+- **M0 `diff` IN FLIGHT** (F3; decomposition = §P4-M0 D-1…D-4, commits
+  M0a…M0d): **M0a DONE** — `oxidizr-api/src/diff.rs` engine (identity
+  by canonical name via `adopt`, `idChanged` category, `ignore_layout`
+  gate, deterministic sort; 10 unit tests). **Next M0b**: schema-1 JSON
+  (`{schema:1, added, removed, changed, idChanged}`) +
+  `docs/diff-schema.md`; then M0c pipeline/CLI (`Request::Diff`,
+  `ExitClass::Differences` = 1, `oxidizr diff A B`), M0d fixtures +
+  close. Then M1 `inspect`, M2 importers, M3 query/init/completions,
+  M5 oracle + carry-ins + cargo-dist + changelog catch-up.
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams

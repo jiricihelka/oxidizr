@@ -16,6 +16,7 @@
 //! (P3-M1-1, not a byte-contract path).
 
 pub mod diagnostic;
+pub mod diff;
 pub mod open;
 pub mod pipeline;
 pub mod reconcile;

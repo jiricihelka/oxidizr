@@ -252,6 +252,29 @@ Deferred (already 💡-registered in P4-D5): semantic tokens, rename,
 code actions, incremental sync. Risk R-3 (LSP UX surprises) mitigated by
 full-sync + the offset→UTF-16 mapper being pure + transcript tests.
 
+## §P4-M0 — `diff` decomposition (started 2026-11-21; items D-1…D-4, commits M0a…M0d)
+
+Pure model logic over two loaded `Workspace`s — no `oxidizr-json` byte
+contact, no new crate (P4-D1: `diff` is an `oxidizr-cli` subcommand; the
+BODY lives in `oxidizr-api` per the T0-d invariant "bodies in the API").
+The identity engine rides EXISTING seams: `WorkspaceBuilder::adopt` +
+`canonical_name_full` / `relationship_canonical_name` (the reconcile
+precedent), `canonical::relationship` for the relationship key,
+`ViewSet::all_views()` traversal order, `Styles` vectors.
+
+| Item | Deliverable | C |
+|---|---|---|
+| **D-1** | `oxidizr-api/src/diff.rs`: identity model per P4-D2 — elements keyed by canonical name (the `Person://X` URI prefix IS the type), relationships by `relationship_canonical_name` (`A -> B [description]`), views by key, styles by (kind, tag); SAME identity with a different id ⇒ `idChanged`, NEVER add+remove. Field-level compare (description, tags, technology, group, url, properties per-key, + workspace metadata); views compare base + content ids RESOLVED to canonical names, geometry fields gated by `ignore_layout`; `Diff` as pure data, sorted stable (`path`, `field`); property: `diff(a, a)` EMPTY for every fixture — **DONE 2026-11-21** (10 unit tests pinned on a hand-built fixture: rename = identity pair incl. the relationship whose key embeds the name, consistent id shift = `idChanged` only, `ignore_layout` gate, positional `#N` pairing for duplicate canonical names) | M0a |
+| **D-2** | `--format json`: the frozen SCHEMA 1 document `{schema:1, added:[{path,kind}], removed:[…], changed:[{path, field, before, after}], idChanged:[{path, before, after}]}` with dotted canonical paths (`model.softwareSystems[Payment System]`); `docs/diff-schema.md` (additive-only policy, R-2); expect-test snapshots | M0b |
+| **D-3** | Pipeline + CLI: `Request::Diff`, `ExitClass::Differences` (= 1, the documented P4-D1 extension), human format colored ± grouped by category (`ApiOptions` gains `color` by addition — CLI fills `!no_color && NO_COLOR unset`, defaults PLAIN so API/e2e bytes are stable); `oxidizr diff A B [--format human|json] [--ignore-layout] [--quiet]` (`--quiet` = exit code only), loads via `api::open` BOTH sides | M0c |
+| **D-4** | Fixtures + close: vendored hand-curated pairs (`*.dsl`, `*.json` pairs) under `testdata/probes/diff/*` (README contract row), json snapshots on the pairs, full e2e tier + bless 307×unchanged + PROGRESS/RESUME | M0d |
+
+Locked-in consequences (decided here, documented in `diff-schema.md`):
+a relationship DESCRIPTION or any element NAME change IS an identity
+change (add+remove — the keys embed them); P4-V1 may refine the
+`idChanged` taxonomy BEFORE the schema is published (it is v0-only until
+the M0d stamp).
+
 ## P4-D12 Verification list
 
 - P4-V1 diff identity rules vs real-world edit sequences (identifier/canonical-name
