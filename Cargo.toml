@@ -12,6 +12,7 @@ members = [
     "crates/oxidizr-cli",
     "crates/oxidizr-lsp",
     "crates/oxidizr-inspect",
+    "crates/oxidizr-import",
     "crates/oxidizr-viewer",
     "crates/oxidizr-e2e",
     "crates/xtask",
@@ -35,6 +36,7 @@ oxidizr-dsl = { path = "crates/oxidizr-dsl", version = "0.1.0" }
 oxidizr-json = { path = "crates/oxidizr-json", version = "0.1.0" }
 oxidizr-export = { path = "crates/oxidizr-export", version = "0.1.0" }
 oxidizr-inspect = { path = "crates/oxidizr-inspect", version = "0.1.0" }
+oxidizr-import = { path = "crates/oxidizr-import", version = "0.1.0" }
 oxidizr-layout = { path = "crates/oxidizr-layout", version = "0.1.0" }
 oxidizr-api = { path = "crates/oxidizr-api", version = "0.1.0" }
 oxidizr-e2e = { path = "crates/oxidizr-e2e", version = "0.1.0" }

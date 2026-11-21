@@ -223,6 +223,27 @@ as a tombstone so old references keep resolving.
   whose minted relationships are id-visible, recording them as a
   deviation-documented DIFF instead of editing expectations (COMPAT.md).
 
+## D14 — `import --format image`: raw file bytes, not the AWT re-encode (permanent)
+
+- Structurizr: `ImageUtils.getImageAsBase64` embeds SVG as raw bytes, but
+  runs NON-SVG images through an AWT `ImageIO` read + write (`ImageIO.read`
+  → `ImageIO.write(buf, "png"|"jpeg"|"gif")`) before base64 — the payload
+  bytes are JVM-version-dependent (decoders/encoders ship with the runtime;
+  metadata, filtering and even entropy coding drift between releases).
+- oxidizr (2026-11-21, §P4-M2 N-1): the data URI embeds the RAW file bytes
+  for EVERY type. Same shape (`data:<ct>;base64,` + standard-alphabet
+  base64), same content-type table (`.png/.jpg/.jpeg/.gif/.svg`; anything
+  else fails the reference's "is not a supported image file" check), but a
+  re-compressed payload instead of an AWT re-encoded one. For SVG the
+  behavior is byte-identical to the reference.
+- Nature: permanent — the deviation is unavoidable: matching it would mean
+  embedding vendored PNG/JPEG/GIF codecs and pinning a JVM, and even then
+  only per-JVM-version. std-only + determinism win; the
+  output stays a valid Structurizr `ImageView` that loads in the official
+  tooling (the read gate checks exactly that). The URL variant of the
+  reference importer (network fetch) stays deferred with the kroki leg
+  (D5, P4-D8).
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact

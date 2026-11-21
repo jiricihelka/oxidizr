@@ -1,0 +1,25 @@
+[package]
+name = "oxidizr-import"
+description = "oxidizr-import: diagram-model importers (P4 §P4-M2, F12 + F-inspect-adjacent image port) — C4-PlantUML / Mermaid / image files in, a Structurizr workspace out"
+publish = true
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Importers BUILD workspaces (pure model/view construction via the
+# reference `WorkspaceBuilder` rules); loading, writing and reporting
+# stay in `oxidizr-api` per the T0-d invariant. The `image` leg ports
+# `structurizr-import` `diagrams/image` + `ImageUtils` (data URIs ⇒
+# `base64`, the D10 viewer icon stack's same pin).
+oxidizr-core = { workspace = true }
+base64 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+expect-test = { workspace = true }
