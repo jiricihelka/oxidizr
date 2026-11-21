@@ -37,7 +37,9 @@ use std::path::PathBuf;
 
 use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
 use clap::{Parser, Subcommand, ValueEnum};
-use oxidizr_api::{ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request, Severity};
+use oxidizr_api::{
+    ApiOptions, ExitClass, FmtMode, ImportFormat, Input, LogItem, Outcome, Request, Severity,
+};
 
 use report::{Issue, Renderer};
 
@@ -189,6 +191,31 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = InspectFormat::Human)]
         format: InspectFormat,
     },
+    /// Import one diagram into a fresh workspace (`import`, F12,
+    /// §P4-M2 N-4): the C4-`PlantUML`/`Mermaid` macro legs produce the
+    /// MODEL (the default views install at open), the `image` leg is the
+    /// reference `ImageImporter` port (one `ImageView`).
+    Import {
+        /// Diagram file (`.puml`/`.iuml`/`.c4p`, `.mmd`/`.mermaid`, or a
+        /// `.png`/`.jpg`/`.jpeg`/`.gif`/`.svg` image; `-` = stdin, which
+        /// needs an explicit `--format`).
+        file: Option<PathBuf>,
+        /// Import format; the default sniffs the file extension
+        /// (`.puml`/`.iuml`/`.c4p` → `c4plantuml`, `.mmd`/`.mermaid` →
+        /// `mermaid`, image extensions → `image`).
+        #[arg(long, value_enum)]
+        format: Option<ImportCmdFormat>,
+        /// `ImageView` key (image leg; omitted = generated `Image-001`,
+        /// reference `generateViewKey`).
+        #[arg(long = "view-key")]
+        view_key: Option<String>,
+        /// `ImageView` title (image leg; omitted = the file name).
+        #[arg(long = "view-name")]
+        view_name: Option<String>,
+        /// Output file (`None` = stdout bytes).
+        #[arg(long, short = 'o')]
+        output: Option<PathBuf>,
+    },
     /// Open the workspace in the native viewer window (F10, §P3-M8) —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
@@ -238,6 +265,21 @@ pub enum InspectThreshold {
     Warning,
     /// Errors only.
     Error,
+}
+
+/// `oxidizr import --format` values (§P4-M2 N-4, F12): which
+/// `oxidizr-import` engine processes the source; omitted = sniffed from
+/// the file extension. `C4PlantUml` spells its value `c4plantuml` — the
+/// clap default would kebab-case it to `c4-plant-uml`.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug)]
+pub enum ImportCmdFormat {
+    /// C4-`PlantUML` macro diagram → the model.
+    #[value(name = "c4plantuml")]
+    C4PlantUml,
+    /// `Mermaid` C4 diagram → the model.
+    Mermaid,
+    /// Image file → one `ImageView` (reference port).
+    Image,
 }
 
 /// `oxidizr view --theme` values (F10) — mirrors the viewer's own
@@ -383,6 +425,23 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             json: format == InspectFormat::Json,
             quiet,
         },
+        Command::Import {
+            file,
+            format,
+            view_key,
+            view_name,
+            output,
+        } => Request::Import {
+            input: input_of(file.as_deref()),
+            format: format.map(|f| match f {
+                ImportCmdFormat::C4PlantUml => ImportFormat::C4PlantUml,
+                ImportCmdFormat::Mermaid => ImportFormat::Mermaid,
+                ImportCmdFormat::Image => ImportFormat::Image,
+            }),
+            view_key,
+            view_name,
+            output,
+        },
         // §P3-M8: dispatched in `run` before the pipeline is reached.
         Command::View { .. } => return None,
     })
@@ -489,6 +548,7 @@ mod tests {
             Command::Export { .. } => "export",
             Command::Diff { .. } => "diff",
             Command::Inspect { .. } => "inspect",
+            Command::Import { .. } => "import",
             Command::View { .. } => "view",
         }
     }
@@ -524,6 +584,26 @@ mod tests {
         ])
         .unwrap();
         Cli::try_parse_from(["oxidizr", "export", "-w", "ws.dsl", "-f", "theme"]).unwrap();
+        // §P4-M2 N-4: `import` parses bare, with the sniffed format, and
+        // with every explicit option (`c4plantuml` is the spelled value).
+        Cli::try_parse_from(["oxidizr", "import", "diagram.puml"]).unwrap();
+        Cli::try_parse_from([
+            "oxidizr",
+            "import",
+            "-",
+            "--format",
+            "c4plantuml",
+            "--view-key",
+            "img",
+            "--view-name",
+            "Diagram",
+            "-o",
+            "ws.json",
+        ])
+        .unwrap();
+        assert!(
+            Cli::try_parse_from(["oxidizr", "import", "d.dsl", "--format", "plantuml"]).is_err()
+        );
         Cli::try_parse_from([
             "oxidizr",
             "export",

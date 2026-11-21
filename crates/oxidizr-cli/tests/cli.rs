@@ -893,3 +893,360 @@ fn inspect_unknown_workspace_exit_three() {
     let out = run(&["inspect", missing.to_str().unwrap()], None);
     assert_eq!(out.status.code(), Some(3), "unreadable input is I/O");
 }
+
+// §P4-M2 / F12 — `oxidizr import` (N-4): one diagram → a fresh
+// workspace. The macro legs (C4-`PlantUML`, `Mermaid`) produce the
+// MODEL only (the default views install at open — the read-check), the
+// image leg is the reference `ImageImporter` port (D14: raw bytes
+// embedded). Format by `--format` else extension sniff; skip notes ride
+// stderr (warning-and-skip); unguessable formats exit 2. Self-contained
+// fixtures in a temp dir (the `inspect` precedent).
+
+fn import_temp(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("oxidizr-cli-import-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name)
+}
+
+fn import_fixture(name: &str, source: &str) -> PathBuf {
+    let path = import_temp(name);
+    std::fs::write(&path, source).unwrap();
+    path
+}
+
+/// A real 1×1 PNG — the reference embeds the RAW bytes (D14) and the
+/// `.png` extension picks `image/png` (`ImageUtils`).
+fn import_png_fixture() -> PathBuf {
+    let path = import_temp("dot.png");
+    std::fs::write(
+        &path,
+        [
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 218, 99, 252, 207,
+            192, 80, 15, 0, 4, 133, 1, 128, 132, 169, 140, 33, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66,
+            96, 130,
+        ],
+    )
+    .unwrap();
+    path
+}
+
+const IMPORT_CONTEXT_PUML: &str = r#"Person(customer, "Personal Banking Customer", "A customer of the bank.")
+System(banking, "Internet Banking System", "Allows customers to view information about their bank accounts.")
+Rel(customer, banking, "Uses", "HTTPS")
+"#;
+
+const IMPORT_CONTEXT_PUML_GOLDEN: &str = r#"{
+  "configuration" : { },
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "description" : "A customer of the bank.",
+      "id" : "1",
+      "name" : "Personal Banking Customer",
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "2",
+        "id" : "3",
+        "sourceId" : "1",
+        "tags" : "Relationship",
+        "technology" : "HTTPS"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "description" : "Allows customers to view information about their bank accounts.",
+      "documentation" : { },
+      "id" : "2",
+      "name" : "Internet Banking System",
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    }
+  }
+}"#;
+
+const IMPORT_DEMO_MMD: &str = r#"C4Context
+title Demo
+Person(customer, "Customer", "A person.")
+System(banking, "Banking")
+Rel(customer, banking, "Uses", "HTTPS")
+bob --> banking
+"#;
+
+const IMPORT_DEMO_MMD_GOLDEN: &str = r#"{
+  "configuration" : { },
+  "documentation" : { },
+  "id" : 0,
+  "model" : {
+    "people" : [ {
+      "description" : "A person.",
+      "id" : "1",
+      "name" : "Customer",
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "2",
+        "id" : "3",
+        "sourceId" : "1",
+        "tags" : "Relationship",
+        "technology" : "HTTPS"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "documentation" : { },
+      "id" : "2",
+      "name" : "Banking",
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "views" : {
+    "configuration" : {
+      "styles" : { },
+      "terminology" : { }
+    }
+  }
+}"#;
+
+const PNG_DATA_URI: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+/// The generated-key form: `Image-001` + `generatedKey` (reference
+/// `generateViewKey`), title and name both the file name.
+fn image_golden(key: &str, generated: bool, title: &str) -> String {
+    format!(
+        r#"{{
+  "configuration" : {{ }},
+  "documentation" : {{ }},
+  "id" : 0,
+  "model" : {{ }},
+  "views" : {{
+    "configuration" : {{
+      "styles" : {{ }},
+      "terminology" : {{ }}
+    }},
+    "imageViews" : [ {{
+      "content" : "{PNG_DATA_URI}",
+      "contentType" : "image/png",{}
+      "key" : "{key}",
+      "name" : "{title}",
+      "order" : 1,
+      "title" : "{title}"
+    }} ]
+  }}
+}}"#,
+        if generated {
+            "\n      \"generatedKey\" : true,"
+        } else {
+            ""
+        }
+    )
+}
+
+#[test]
+fn import_c4plantuml_sniffed_extension_stdout() {
+    let puml = import_fixture("context.puml", IMPORT_CONTEXT_PUML);
+    let out = run(&["import", puml.to_str().unwrap()], None);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        IMPORT_CONTEXT_PUML_GOLDEN
+    );
+    assert_eq!(out.stderr, b"", "a clean diagram stays silent");
+}
+
+#[test]
+fn import_mermaid_sniffed_extension_and_skip_note() {
+    let mmd = import_fixture("demo.mmd", IMPORT_DEMO_MMD);
+    let out = run(&["import", mmd.to_str().unwrap()], None);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        IMPORT_DEMO_MMD_GOLDEN
+    );
+    // warning-and-skip (P4-D8 R-1): the raw flowchart edge is a NOTE on
+    // stderr, the model still imports, the exit stays 0.
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "skipped unsupported Mermaid relationship: bob --> banking\n"
+    );
+}
+
+#[test]
+fn import_unknown_macro_warns_and_skips() {
+    let puml = import_fixture("unknown.puml", "Person(a, \"A\")\nFoo(bar)\n");
+    let out = run(&["import", puml.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "unknown macro \"Foo\" — skipped\n"
+    );
+}
+
+#[test]
+fn import_image_reference_port_generated_key() {
+    let png = import_png_fixture();
+    let out = run(&["import", png.to_str().unwrap()], None);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        image_golden("Image-001", true, "dot.png")
+    );
+}
+
+#[test]
+fn import_image_view_key_and_name_options() {
+    let png = import_png_fixture();
+    let out = run(
+        &[
+            "import",
+            png.to_str().unwrap(),
+            "--format",
+            "image",
+            "--view-key",
+            "k1",
+            "--view-name",
+            "My View",
+        ],
+        None,
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // An explicit key is no longer `generatedKey`; the title follows the
+    // name override (the reference `view.setTitle` twist).
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        image_golden("k1", false, "My View")
+    );
+}
+
+#[test]
+fn import_output_file_matches_stdout_bytes() {
+    let puml = import_fixture("context.puml", IMPORT_CONTEXT_PUML);
+    let out_file = import_temp("context.json");
+    let _ = std::fs::remove_file(&out_file);
+    let out = run(
+        &[
+            "import",
+            puml.to_str().unwrap(),
+            "-o",
+            out_file.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.stdout, b"", "-o moves the payload to the file");
+    let written = std::fs::read(&out_file).unwrap();
+    assert_eq!(
+        String::from_utf8(written).unwrap(),
+        IMPORT_CONTEXT_PUML_GOLDEN,
+        "the file carries exactly the bytes stdout would"
+    );
+}
+
+#[test]
+fn import_usage_errors() {
+    // Unguessable extension: the name decides BEFORE any I/O (the file
+    // never needs to exist).
+    let txt = import_temp("diagram.txt");
+    let out = run(&["import", txt.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(2));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("OXZ-5006") && err.contains("cannot guess the import format of"),
+        "{err}"
+    );
+
+    // A nameless input (stdin) has nothing to sniff.
+    let out = run(&["import", "-"], Some(b"System(s, \"S\")\n"));
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("cannot guess the import format of stdin")
+    );
+
+    // The image leg reads the bytes off disk — no stdin form.
+    let out = run(
+        &["import", "-", "--format", "image"],
+        Some(b"not really a png"),
+    );
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("image import needs a file"));
+}
+
+#[test]
+fn import_stdin_with_explicit_format() {
+    let out = run(
+        &["import", "-", "--format", "c4plantuml"],
+        Some(b"System(s, \"S\")\n"),
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains(r#""name" : "S""#));
+}
+
+/// Hermetic options for the read-check (the `oxidizr-api` `open` tests'
+/// posture: empty env map, no stdin, no network).
+fn import_opts() -> oxidizr_api::ApiOptions {
+    oxidizr_api::ApiOptions {
+        strict: false,
+        keep_unknown: false,
+        env: Some(std::collections::BTreeMap::new()),
+        stdin: None,
+        allow_net: false,
+        themes_dir: None,
+        color: false,
+    }
+}
+
+#[test]
+fn import_read_check_reopens_clean_with_default_views() {
+    // The N-4 read-check: the imported JSON re-opens through
+    // `oxidizr_api::open` with NOTHING to report, and the default views
+    // install THERE (the model-only contract, N-2).
+    let puml = import_fixture("context.puml", IMPORT_CONTEXT_PUML);
+    let out_file = import_temp("read-check.json");
+    let _ = std::fs::remove_file(&out_file);
+    let out = run(
+        &[
+            "import",
+            puml.to_str().unwrap(),
+            "-o",
+            out_file.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    let opened = oxidizr_api::open(&oxidizr_api::Input::File(out_file), &import_opts()).unwrap();
+    assert!(
+        opened.log.is_empty(),
+        "the imported workspace re-opens clean"
+    );
+    assert_eq!(opened.workspace.model.software_systems.len(), 1);
+    assert_eq!(opened.workspace.model.people.len(), 1);
+    assert!(
+        !opened.workspace.views.all_views().is_empty(),
+        "createDefaultViews fires at open for the model-only import"
+    );
+}

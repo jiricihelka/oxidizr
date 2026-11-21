@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1+N-2+N-3 done, next N-4 CLI)**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1…N-4 done, next N-5 WSD exporter)**)
 
 ## State
 
@@ -74,15 +74,21 @@
   container scope + `External`, chrome `Enter_Boundary`/
   `Leave_Boundary`/`Set*`/`Show*`/`Hide*`/`CLEAR_*` tolerated, skip
   warnings noun `dialect.name()`; shared golden digest in
-  `src/testutil.rs`; `src/mermaid.rs` 7 tests). Next: **N-4/M2d CLI
-  arc** (`Request::Import` + `import_cmd` in pipeline, `oxidizr import
-  <FILE> [--format c4plantuml|mermaid|image] [-o OUT]`, extension
-  sniff, warnings ride `Outcome::log`, CLI goldens + re-open read
-  check) → N-5 WSD exporter → N-6 `!docs`/`!adrs` (retires OXZ-5003;
-  close P4-V7/V8 first) + M2 close ritual (oracle read gate, fixtures
-  w/ attribution, bless 307×unchanged, full e2e tier). Then M3
-  (`query`/`init`/completions), M5 (oracle legs + carry-ins +
-  cargo-dist + changelog catch-up).
+  `src/testutil.rs`; `src/mermaid.rs` 7 tests) and **N-4/M2d** (CLI
+  arc: `ImportFormat` in `pipeline.rs` + re-exported from `oxidizr-api`;
+  `import_cmd` — explicit `--format` wins, else `sniff_format` on the
+  file name, nameless input / image-from-stdin ⇒ Usage(2) + OXZ-5006;
+  skip notes ride `LogItem::NoteLine`; bytes via `to_vec`+`emit_bytes`
+  like `dsl2json`; clap `ImportCmdFormat` spells `c4plantuml`, dashed
+  flags `--view-key`/`--view-name`; 9 goldens in `tests/cli.rs` §P4-M2
+  incl. the re-open read-check asserting `createDefaultViews` fires).
+  Next: **N-5/M2e WSD exporter** (reference
+  `websequencediagrams/WebSequenceDiagramsExporter`, 171 LOC, dynamic
+  views only → `oxidizr export --format websequencediagrams`) → N-6
+  `!docs`/`!adrs` (retires OXZ-5003; close P4-V7/V8 first) + M2 close
+  ritual (oracle read gate, fixtures w/ attribution, bless
+  307×unchanged, full e2e tier). Then M3 (`query`/`init`/completions),
+  M5 (oracle legs + carry-ins + cargo-dist + changelog catch-up).
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams

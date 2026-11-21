@@ -28,5 +28,6 @@ pub use open::{Opened, open};
 // API surface (the CLI maps its clap enum onto it).
 pub use oxidizr_inspect::Severity;
 pub use pipeline::{
-    ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request, StdinReader, execute,
+    ApiOptions, ExitClass, FmtMode, ImportFormat, Input, LogItem, Outcome, Request, StdinReader,
+    execute,
 };

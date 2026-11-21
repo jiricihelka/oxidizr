@@ -137,6 +137,18 @@ pub enum FmtMode {
     Check,
 }
 
+/// `oxidizr import` legs (§P4-M2 N-4, F12): which `oxidizr-import`
+/// engine processes the source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportFormat {
+    /// C4-`PlantUML` macro diagram → the model.
+    C4PlantUml,
+    /// `Mermaid` C4 diagram → the model.
+    Mermaid,
+    /// Image file → a workspace with one `ImageView` (reference port).
+    Image,
+}
+
 /// One command invocation — the argv surface of P1-D8 in value form.
 #[derive(Debug, Clone)]
 pub enum Request {
@@ -224,6 +236,27 @@ pub enum Request {
         json: bool,
         /// `--quiet`: exit code only (no bytes, no log chatter).
         quiet: bool,
+    },
+    /// Import one diagram into a fresh workspace (`import`, F12,
+    /// §P4-M2 N-4): the C4-`PlantUML`/`Mermaid` macro legs produce the
+    /// MODEL ONLY (no view kind hosts a mixed C4 set — the default views
+    /// install at open, see `oxidizr_import::c4plantuml`); the image leg
+    /// is the reference `ImageImporter` port (one `ImageView`).
+    Import {
+        /// Diagram source. Sniffing the format from the name needs
+        /// [`Input::File`]; nameless inputs require `format`.
+        input: Input,
+        /// Import format; `None` = sniffed from the file name
+        /// (`.puml`/`.iuml`/`.c4p` → C4-`PlantUML`, `.mmd`/`.mermaid` →
+        /// `Mermaid`, the reference image extensions → image).
+        format: Option<ImportFormat>,
+        /// `ImageView` key (image leg; empty/absent ⇒ generated
+        /// `Image-001`, reference `generateViewKey`).
+        view_key: Option<String>,
+        /// `ImageView` title (image leg; absent ⇒ the file name).
+        view_name: Option<String>,
+        /// Output file (`None` = stdout bytes).
+        output: Option<PathBuf>,
     },
 }
 
@@ -327,6 +360,20 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
             json,
             quiet,
         } => inspect_cmd(&workspace, threshold, &only, &except, json, quiet, opts),
+        Request::Import {
+            input,
+            format,
+            view_key,
+            view_name,
+            output,
+        } => import_cmd(
+            &input,
+            format,
+            view_key.as_deref(),
+            view_name.as_deref(),
+            output.as_deref(),
+            opts,
+        ),
     }
 }
 
@@ -1122,6 +1169,100 @@ fn inspect_cmd(
         out.bytes = Some(text.into_bytes());
     }
     out.log.extend(opened.log);
+    Ok(out)
+}
+
+/// `oxidizr import` format sniff (§P4-M2 N-4): `.puml`/`.iuml`/`.c4p` →
+/// C4-`PlantUML`, `.mmd`/`.mermaid` → `Mermaid`, the reference image
+/// extensions (the `ImageUtils` table behind
+/// [`oxidizr_import::image::content_type_of`]) → image.
+/// `None` = not guessable from the name.
+fn sniff_format(name: &str) -> Option<ImportFormat> {
+    let dot = name.rfind('.')?;
+    match name[dot..].to_ascii_lowercase().as_str() {
+        ".puml" | ".iuml" | ".c4p" => Some(ImportFormat::C4PlantUml),
+        ".mmd" | ".mermaid" => Some(ImportFormat::Mermaid),
+        _ => oxidizr_import::image::content_type_of(name).map(|_| ImportFormat::Image),
+    }
+}
+
+/// The `import` body (§P4-M2 N-4, F12): ONE diagram → a fresh workspace
+/// through `oxidizr-import`. Format: `--format` else [`sniff_format`];
+/// the importers' skip notes ride [`Outcome::log`] (warning-and-skip,
+/// never fail-all — P4-D8 R-1); the workspace bytes go through the
+/// standard writer exactly like `dsl2json`. Macro legs produce the MODEL
+/// ONLY (the default views install at open — the read-check below);
+/// `--view-key`/`--view-name` are image-leg options.
+fn import_cmd(
+    input: &Input,
+    format: Option<ImportFormat>,
+    view_key: Option<&str>,
+    view_name: Option<&str>,
+    output: Option<&Path>,
+    opts: &ApiOptions,
+) -> Result<Outcome, Fail> {
+    let mut out = Outcome::default();
+    let format = match (format, input) {
+        (Some(f), _) => f,
+        (None, Input::File(p)) => {
+            let name = p.to_string_lossy();
+            match sniff_format(&name) {
+                Some(f) => f,
+                None => {
+                    return Err(out.fail(
+                        Issue::error(
+                            codes::CLI_IO,
+                            format!("cannot guess the import format of `{name}` — pass --format"),
+                        ),
+                        ExitClass::Usage,
+                    ));
+                }
+            }
+        }
+        (None, _) => {
+            // A nameless input has nothing to sniff (stdin/bytes).
+            return Err(out.fail(
+                Issue::error(
+                    codes::CLI_IO,
+                    "cannot guess the import format of stdin — pass --format",
+                ),
+                ExitClass::Usage,
+            ));
+        }
+    };
+    let imported = if format == ImportFormat::Image {
+        // The reference `ImageImporter` reads the bytes off disk, so the
+        // image leg has no stdin form.
+        let Input::File(path) = input else {
+            return Err(out.fail(
+                Issue::error(
+                    codes::CLI_IO,
+                    "image import needs a file (the reference reads the bytes off disk)",
+                ),
+                ExitClass::Usage,
+            ));
+        };
+        oxidizr_import::image::import_image(
+            path,
+            &oxidizr_import::image::ImageImport {
+                view_key,
+                view_name,
+            },
+        )
+    } else {
+        let source = read_input(input, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
+        if format == ImportFormat::C4PlantUml {
+            oxidizr_import::c4plantuml::import(&source.text)
+        } else {
+            oxidizr_import::mermaid::import(&source.text)
+        }
+    }
+    .map_err(|e| out.fail(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
+    out.log
+        .extend(imported.warnings.into_iter().map(LogItem::NoteLine));
+    let bytes = oxidizr_json::to_vec(&imported.workspace)
+        .map_err(|e| out.fail(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
+    emit_bytes(&mut out, bytes, output).map_err(|e| out.fail(e, ExitClass::Io))?;
     Ok(out)
 }
 

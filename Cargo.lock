@@ -2995,6 +2995,7 @@ dependencies = [
  "oxidizr-diag",
  "oxidizr-dsl",
  "oxidizr-export",
+ "oxidizr-import",
  "oxidizr-inspect",
  "oxidizr-json",
  "serde_json",
