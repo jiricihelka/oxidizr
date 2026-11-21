@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` (M3a) + O-2 `init` (M3b) + O-3 `completions` (M3c) + O-4 `generate` (M3d) DONE, next: M3 close ritual, then §P4-M5**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 CLOSED (O-1…O-4, M3a–M3d); next: §P4-M5 (release: F4 `oracle` user command, cargo-dist 3-OS + tag `v0.4.0`, changelog, P4-V6)**)
 
 ## State
 
@@ -103,7 +103,13 @@
    stamp + surface note below). New OXZ-5010 `GENERATE` for filter
    patterns outside the std-only subset. `cargo xtask oracle landscape`
    = the Category B leg (10 facts match).
-   **Next: M3 close ritual (bless + full tier + stamps), then §P4-M5.**
+ - **§P4-M3 CLOSED 2026-11-21** (O-1…O-4, commits M3a `da0ff38`, M3b
+   `905ef9f`, M3c `4224cb0`, M3d `579d2aa`, close this): close ritual =
+   `cargo xtask ci` green + bless 307×unchanged (clean `testdata/`) +
+   full e2e tier green + PHASE_4 CLOSED header/Close row + PROGRESS
+   status board + `P4-M3` milestone log.
+   **Next: §P4-M5 — F4 `oracle` user command, P4-D13 carry-ins,
+   cargo-dist 3-OS + tag `v0.4.0` (local), changelog catch-up, P4-V6.**
 
 ## §P4-M3 O-4 generate surface (`oxidizr-api/src/generate.rs` + `pipeline::generate_cmd` — read before touching)
 

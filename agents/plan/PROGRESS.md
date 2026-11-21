@@ -33,6 +33,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P4 | §P4-LSP `oxidizr-lsp` (L0–L5, prioritized) | **COMPLETE 2026-11-21** — LSP first (user directive): diagnostics/completion/hover/formatting/`initializationOptions`/`--version` all shipped; headless core + stdio binary, transcript + 54 lib tests, no `oxidizr-json` bytes touched (bless 307×unchanged). Commits L0 `a38f905` → L5 (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-M1 `inspect` (I-1…I-4) | **COMPLETE 2026-11-21** — `structurizr-inspection` port: new crate `oxidizr-inspect` (pure model logic over core — advisory only, the JSON byte contract untouched), `DefaultInspector` run order verbatim (workspace+model+view phases, messages VERBATIM, quirks included: `Model.isEmpty()` counts only people/systems/nodes, noview alone uses `getName()`, filtered/image are generated-key-only), severity-strategy port (P4-V2: `structurizr.inspection.<dotted type>` keys, `*` fallbacks, inner-first holder chains, relationship `[srcType->dstType]` specificity), `oxidizr inspect <WS> [--severity-threshold info\|warning\|error] [--only T]… [--except T]… [--format human\|json] [--quiet]` — schema-1 document (`docs/inspect-schema.md`), exit 1 iff REPORTED (P4-D1 family). 15 lib + 19 inspect tests + 8 CLI goldens; corpus sweep (`testdata/dsl` never panics); complete-workspace proptest `inspect == []`; bless 307×unchanged. Commits M1a `cad75b9` → M1d (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-M2 importers (N-1…N-6) | **COMPLETE 2026-11-21** — `oxidizr-import`: image + C4-PlantUML + Mermaid importer ports (`oxidizr import`, F12 semantic bar, MODEL ONLY), WSD exporter (`export -f websequencediagrams`, oracle 9/9 byte-parity), `!docs`/`!adrs` engine wiring (core-compat bar): `DefaultDocumentationImporter`/`FormatFinder` + the decision family (AdrTools/Madr/Log4brains + structurizr-native) behind a six-FQN registry, std-only `regexlite` for the Java-regex `exclude` full-match (P4-V8), UTC date parsing (P4-V7/D15), raw-bytes `Image.content` (D14/D16); OXZ-5003 retired to a tombstone (both fixtures now surface the real `end()`-stage OXZ-2002, sidecars re-blessed); oracle A/B green on the big-bank + include-directory fixtures (documentation byte-parity) — which caught the **Java empty-input `split` special case** (`"".split(",")` → `[""]`, JVM-proven): the empty tags token now stores an empty tag ⇒ reference `"Element,Deployment Node,"`. Permanent contract `build/IMPORT-DOCS-ADRS.md`; deviations D15/D16. Commits M2a `b7f66e5` → M2f (this). Log below (`build/PHASE_4.md`) |
+| P4 | §P4-M3 extras (`query`/`init`/`completions`/`generate`, O-1…O-4) | **COMPLETE 2026-11-21** — four new commands, oxidizr-added surfaces specced P4-D3/D4/D9/D10: `oxidizr query <WS> --filter EXPR [--kind …] [--format table\|ids\|json]` (the DSL item-expression grammar IS the query language — P4-V4 closed, public `oxidizr_dsl::query::run`, schema `docs/query-schema.md`); `oxidizr init [DIR] [--template minimal\|c4] [--force]` (`include_str!` scaffold, templates stored CANONICAL, idempotent, exit 0 even all-skipped); `oxidizr completions <shell>` (`clap_complete` — the ONE new dep, dispatched before the pipeline); `oxidizr generate system-landscape <1..N> [--include R] [--exclude R] [--relationships first\|all] [-o]` (reference `SystemLandscapeGenerator` port — oracle witness: adds NO views, description/url LAST-wins, `{workspace:<id>}/diagrams` hyperlink, std-only full-match `pathfilter` engine with OXZ-5010 for unsupported constructs, "Two or more workspaces must be provided" verbatim on zero workspaces — ONE legal). Category A goldens + CLI exit-family tests + new Category B leg `cargo xtask oracle landscape` (10 facts match `TZ=UTC`). bless 307×unchanged, full e2e tier green. Commits M3a `da0ff38` → M3d `579d2aa` (this). Log below (`build/PHASE_4.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -154,6 +155,46 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P4-M3 — `query` / `init` / `completions` / `generate` ✅ (2026-11-21, COMPLETE)
+
+The extras milestone (the §P4-M3 decomposition O-1…O-4, commits
+M3a…M3d, `build/PHASE_4.md`). Four commands, none of which Structurizr
+ships as such (the port where it does: `generate system-landscape`);
+every design decision recorded as P4-D3/D4/D9/D10 with the oracle
+witnesses for the ambiguous merge behavior.
+
+- **M3a** `da0ff38` — `oxidizr query` (F6, P4-D3): the DSL
+  item-expression grammar IS the query language — public
+  `oxidizr_dsl::query::run(&Workspace, expr)` (engine reuse via
+  `adopt` + the extracted `register_json_identifiers`), P4-V4 CLOSED
+  (token inventory in `docs/query-schema.md`); report layer
+  `oxidizr-api/src/query.rs` (table/ids/json schema-1, the `->`
+  relationship arm, views by the key/name/tag predicate subset).
+- **M3b** `905ef9f` — `oxidizr init` (F7, P4-D4): `include_str!`
+  scaffold (zero network, zero deps), templates stored CANONICAL (they
+  pass `fmt --check` — the printer's unquoting IS the required
+  spelling), idempotent (skip notes, `--force`), exit 0 even
+  all-skipped; report bytes are the golden contract.
+- **M3c** `4224cb0` — `oxidizr completions` (P4-D10): `clap_complete`
+  (the ONE new dep) renders bash/zsh/fish/elvish/powershell from the
+  argv surface itself; dispatched in `run` before the pipeline (like
+  `view`), never a `Request`.
+- **M3d** `579d2aa` — `oxidizr generate system-landscape` (P4-D9): the
+  reference `SystemLandscapeGenerator` port (`oxidizr-api/src/generate.rs`)
+  — the oracle witness settled the row's open question (the generator
+  adds NO views). Merge contract: name-first person/system clone,
+  description AND url set unconditionally per workspace (LAST wins,
+  nulls nuke), group first-wins, stored-tags union, one shared id
+  counter, `{workspace:<id>}/diagrams` on each source workspace's
+  first container-bearing system, `findElement` people-first. The
+  `--include`/`--exclude` legs ride `pathfilter`, a std-only
+  `Pattern.matches` twin over the FULL path (`{m,n}`/lookaround/… ⇒
+  the new OXZ-5010, never a silent widening). Category A goldens +
+  CLI exit-family goldens + the Category B leg `cargo xtask oracle
+  landscape` (10 facts match, `TZ=UTC`).
+- **Close** — `cargo xtask ci` green, bless 307×unchanged (new commands
+  never touch the corpus-pinned pipeline outputs), full e2e tier green.
 
 ### P4-M2 — `oxidizr-import` + `!docs`/`!adrs` ✅ (2026-11-21, COMPLETE)
 
