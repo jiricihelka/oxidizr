@@ -1,0 +1,7 @@
+# oxidizr viewer sidecar (F11 state file)
+*.oxidizr.json
+
+# exported diagrams
+*.puml
+*.svg
+*.png

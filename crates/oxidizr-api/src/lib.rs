@@ -17,6 +17,7 @@
 
 pub mod diagnostic;
 pub mod diff;
+pub mod init;
 pub mod open;
 pub mod pipeline;
 pub mod query;
@@ -24,6 +25,7 @@ pub mod reconcile;
 pub mod suggest;
 
 pub use diagnostic::{Issue, Snippet};
+pub use init::InitTemplate;
 pub use open::{Opened, open};
 // §P4-M1 I-4: the `Request::Inspect` threshold type travels through the
 // API surface (the CLI maps its clap enum onto it).

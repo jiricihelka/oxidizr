@@ -1,0 +1,13 @@
+{
+    // `oxidizr-lsp` is the Structurizr-DSL language server (stdio).
+    // With an LSP-client extension (e.g. "lsp-devtools" or a generic
+    // client), register the binary for *.dsl files:
+    //
+    //     command: "oxidizr-lsp", args: [], filetypes: ["dsl"]
+    //
+    // It provides diagnostics (OXZ codes), scope-aware completion,
+    // hover and formatting. `oxidizr --help` lists the CLI commands.
+    "files.associations": {
+        "*.dsl": "plaintext"
+    }
+}

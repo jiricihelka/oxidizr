@@ -1390,3 +1390,77 @@ fn query_view_subset_and_throwing_arm() {
     let out = run(&["query", probe_ws("base.dsl").to_str().unwrap()], None);
     assert_eq!(out.status.code(), Some(2));
 }
+
+// §P4-M3 / F7 — `oxidizr init` (O-2, P4-D4): the scaffold contract —
+// created/skipped report on the five template files (relative paths in
+// template ORDER, the next-commands footer), exit 0 for created AND
+// skipped runs, `--force` overwrite, clap's 2 for a bad `--template`.
+// The workspace-JSON goldens of both templates ride the API tier
+// (`oxidizr-api/tests/init_probes.rs`).
+
+fn init_temp(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir()
+        .join(format!("oxidizr-cli-init-{}", std::process::id()))
+        .join(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    dir
+}
+
+const INIT_CREATED: &str = "created workspace.dsl\n\
+    created README.md\n\
+    created .gitignore\n\
+    created .editorconfig\n\
+    created .vscode/settings.json\n\
+    next steps:\n  \
+    oxidizr validate workspace.dsl\n  \
+    oxidizr export workspace.dsl -f plantuml\n";
+
+const INIT_SKIPPED: &str = "skipped workspace.dsl (exists, use --force to overwrite)\n\
+    skipped README.md (exists, use --force to overwrite)\n\
+    skipped .gitignore (exists, use --force to overwrite)\n\
+    skipped .editorconfig (exists, use --force to overwrite)\n\
+    skipped .vscode/settings.json (exists, use --force to overwrite)\n\
+    next steps:\n  \
+    oxidizr validate workspace.dsl\n  \
+    oxidizr export workspace.dsl -f plantuml\n";
+
+#[test]
+fn init_creates_then_skips_then_forces() {
+    let dir = init_temp("cycle");
+    let d = dir.to_str().unwrap();
+    let out = run(&["init", d], None);
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        INIT_CREATED,
+        "c4 default"
+    );
+    // Idempotent re-run: everything skipped, exit stays 0.
+    let out = run(&["init", d], None);
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), INIT_SKIPPED);
+    // --force re-creates the whole set.
+    let out = run(&["init", d, "--force"], None);
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), INIT_CREATED);
+}
+
+#[test]
+fn init_minimal_template_and_scaffold_validates() {
+    let dir = init_temp("minimal");
+    let d = dir.to_str().unwrap();
+    let out = run(&["init", d, "--template", "minimal"], None);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        String::from_utf8_lossy(&out.stdout).starts_with("created workspace.dsl\n"),
+        "{:?}",
+        out.stdout
+    );
+    // P4-D4 teeth through the binary: the scaffold validates.
+    let ws = dir.join("workspace.dsl");
+    let out = run(&["validate", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(0));
+    // …and a bad template value stays clap's 2.
+    let out = run(&["init", d, "--template", "bogus"], None);
+    assert_eq!(out.status.code(), Some(2));
+}

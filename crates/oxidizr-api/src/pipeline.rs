@@ -14,6 +14,7 @@
 //! `fmt --write -` usage exit never blocks on an open pipe).
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use oxidizr_core::{Workspace, WorkspaceBuilder};
@@ -277,6 +278,20 @@ pub enum Request {
         /// Output file (`None` = stdout bytes).
         output: Option<PathBuf>,
     },
+    /// Scaffold a starter project (`init`, F7, §P4-M3 O-2, P4-D4): the
+    /// embedded template files (`include_str!` — zero network, zero new
+    /// deps) written into `dir` (created when missing). Idempotent:
+    /// existing files are SKIPPED with a note unless `force`; the human
+    /// report (created/skipped tree + next commands) rides
+    /// [`Outcome::bytes`].
+    Init {
+        /// Target directory (the CLI default is the current directory).
+        dir: PathBuf,
+        /// Starter content (`--template`).
+        template: crate::init::InitTemplate,
+        /// `--force`: overwrite existing files.
+        force: bool,
+    },
 }
 
 /// The full result of one [`execute`]: exit class, ordered human log, and
@@ -400,6 +415,11 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
             format,
             output,
         } => query_cmd(&workspace, &filter, kind, format, output.as_deref(), opts),
+        Request::Init {
+            dir,
+            template,
+            force,
+        } => init_cmd(&dir, template, force),
     }
 }
 
@@ -1325,6 +1345,48 @@ fn query_cmd(
         .map_err(|e| out.fail(Issue::error(codes::CLI_IO, e), ExitClass::Io))?;
     emit_bytes(&mut out, bytes, output).map_err(|e| out.fail(e, ExitClass::Io))?;
     out.log.extend(opened.log);
+    Ok(out)
+}
+
+/// `oxidizr init` (§P4-M3 O-2, F7, P4-D4): write the [`crate::init`]
+/// scaffold into `dir` (created when missing). Idempotent — existing
+/// files are skipped with a note unless `force`; every existing-file
+/// note keeps exit `Ok` (nothing failed). The report is RELATIVE paths
+/// in template order (deterministic bytes — the CLI goldens pin it),
+/// followed by the next commands. I/O failures abort with the FIRST
+/// [`Issue::io`] (exit 3), partial tree left on disk (documented,
+/// like `fmt --write` per-file effects).
+fn init_cmd(dir: &Path, template: crate::init::InitTemplate, force: bool) -> Result<Outcome, Fail> {
+    let mut out = Outcome::default();
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        return Err(Fail::new(
+            Issue::io(&format!("failed to create `{}`", dir.display()), &e),
+            ExitClass::Io,
+        ));
+    }
+    let mut report = String::new();
+    for (rel, content) in crate::init::files(template) {
+        let path = dir.join(rel);
+        if path.exists() && !force {
+            let _ = writeln!(report, "skipped {rel} (exists, use --force to overwrite)");
+            continue;
+        }
+        let result = (|| -> std::io::Result<()> {
+            if let Some(parent) = path.parent().filter(|p| *p != dir) {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, content)
+        })();
+        if let Err(e) = result {
+            return Err(out.fail(
+                Issue::io(&format!("failed to write `{}`", path.display()), &e),
+                ExitClass::Io,
+            ));
+        }
+        let _ = writeln!(report, "created {rel}");
+    }
+    report.push_str("next steps:\n  oxidizr validate workspace.dsl\n  oxidizr export workspace.dsl -f plantuml\n");
+    out.bytes = Some(report.into_bytes());
     Ok(out)
 }
 

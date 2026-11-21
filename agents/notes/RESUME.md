@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` DONE (M3a), next O-2 `init` (M3b)**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` (M3a) + O-2 `init` (M3b) DONE, next O-3 `completions` (M3c)**)
 
 ## State
 
@@ -82,8 +82,34 @@
   language (P4-D3 corrected: `oxidizr_dsl::query::run(&Workspace, expr)`
   public entry = engine reuse via `adopt` + the extracted
   `register_json_identifiers`; P4-V4 CLOSED, token table in
-  `docs/query-schema.md`). Surface note below. **Next: O-2 `init`
-  (M3b), O-3 `completions` (M3c), O-4 `generate` (M3d), M3 close.**
+  `docs/query-schema.md`). Surface note below.
+ - **§P4-M3 O-2 `init` DONE 2026-11-21** (M3b, F7, P4-D4): `oxidizr init
+   [DIR] [--template minimal|c4] [--force]` — `include_str!` scaffold
+   (zero network, zero new deps), idempotent, exit 0 even all-skipped;
+   templates stored CANONICAL (pass `fmt --check` — the printer's
+   conservative unquoting is the required spelling); CI teeth = scaffold
+   validates + masked `dsl2json` expect! golden per template. Surface
+   note below. **Next: O-3 `completions` (M3c), O-4 `generate` (M3d),
+   M3 close.**
+
+## §P4-M3 O-2 init surface (`oxidizr-api/src/init.rs` + `templates/` — read before touching)
+
+- **Templates are canonical DSL bytes**: `templates/{minimal,c4}/workspace.dsl`
+  must pass `validate` AND `fmt --check` (drift breaks CI — intended).
+  Adopt the PRINTER output, never hand-quote: `person User`,
+  `systemLandscape landscape` are the canonical spellings. Grammar fact
+  that failed the first draft: view headers take `[identifier] [key]
+  [description]` ONLY — titles via in-view `title`/`description`
+  statements.
+- **Report bytes are the contract** (CLI + probe goldens pin them):
+  five `created <rel>\n` lines in template order (workspace.dsl,
+  README.md, .gitignore, .editorconfig, .vscode/settings.json), skip
+  variant `skipped <rel> (exists, use --force to overwrite)`, then the
+  `next steps:` footer. Exit 0 even when everything is skipped; Io
+  failure = exit 3 with the first `Issue::io`; nested dirs created.
+- **Golden mask**: `init_probes.rs` strips every `structurizr.*` key
+  from `properties` objects (loader-regenerated UUIDs/base64 per parse —
+  the oracle-protocol class) before the expect! compare.
 
 ## §P4-M3 O-1 query surface (`oxidizr-dsl/src/query.rs` + `oxidizr-api/src/query.rs` — read before touching)
 

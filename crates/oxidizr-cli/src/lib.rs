@@ -38,8 +38,8 @@ use std::path::PathBuf;
 use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
 use clap::{Parser, Subcommand, ValueEnum};
 use oxidizr_api::{
-    ApiOptions, ExitClass, FmtMode, ImportFormat, Input, LogItem, Outcome, QueryFormat, QueryKind,
-    Request, Severity,
+    ApiOptions, ExitClass, FmtMode, ImportFormat, InitTemplate, Input, LogItem, Outcome,
+    QueryFormat, QueryKind, Request, Severity,
 };
 
 use report::{Issue, Renderer};
@@ -242,6 +242,23 @@ pub enum Command {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
+    /// Scaffold a starter project (`init`, F7, §P4-M3 O-2, P4-D4): the
+    /// `include_str!`-embedded template files — zero network, zero new
+    /// deps — written into DIR (created when missing; default `.`).
+    /// Idempotent: existing files are SKIPPED with a note unless
+    /// `--force`; the report lists the tree + the next commands.
+    Init {
+        /// Target directory (created when missing).
+        dir: Option<PathBuf>,
+        /// Starter content; `c4` (the default) is the canonical
+        /// 3-software-system landscape, `minimal` a single system.
+        // `C4` would kebab-case to `c-4` (the `c4plantuml` lesson).
+        #[arg(long, value_enum, default_value_t = InitCmdTemplate::C4)]
+        template: InitCmdTemplate,
+        /// Overwrite existing files instead of skipping them.
+        #[arg(long)]
+        force: bool,
+    },
     /// Open the workspace in the native viewer window (F10, §P3-M8) —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
@@ -334,6 +351,17 @@ pub enum QueryCmdFormat {
     Ids,
     /// Schema-1 document on stdout.
     Json,
+}
+
+/// `oxidizr init --template` values (§P4-M3 O-2, F7, P4-D4): starter
+/// content; maps onto [`oxidizr_api::InitTemplate`].
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
+pub enum InitCmdTemplate {
+    /// A single software system + landscape view.
+    Minimal,
+    /// The canonical 3-software-system C4 landscape (the default).
+    #[default]
+    C4,
 }
 
 /// `oxidizr view --theme` values (F10) — mirrors the viewer's own
@@ -519,6 +547,18 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             },
             output,
         },
+        Command::Init {
+            dir,
+            template,
+            force,
+        } => Request::Init {
+            dir: dir.unwrap_or_else(|| PathBuf::from(".")),
+            template: match template {
+                InitCmdTemplate::Minimal => InitTemplate::Minimal,
+                InitCmdTemplate::C4 => InitTemplate::C4,
+            },
+            force,
+        },
         // §P3-M8: dispatched in `run` before the pipeline is reached.
         Command::View { .. } => return None,
     })
@@ -627,6 +667,7 @@ mod tests {
             Command::Inspect { .. } => "inspect",
             Command::Import { .. } => "import",
             Command::Query { .. } => "query",
+            Command::Init { .. } => "init",
             Command::View { .. } => "view",
         }
     }
