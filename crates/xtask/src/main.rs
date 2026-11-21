@@ -103,10 +103,14 @@ fn real_main(args: Vec<String>) -> Result<()> {
                     ensure!(args.next().is_none(), "unexpected argument");
                     cmd_oracle_verify(&oracle)
                 }
+                Some("landscape") => {
+                    ensure!(args.next().is_none(), "unexpected argument");
+                    cmd_oracle_landscape(&oracle)
+                }
                 _ => {
                     bail!(
                         "usage: cargo xtask oracle gen [--plantuml [--c4] | --mermaid | --wsd \
-                         | --theme] [--fixture NAME]… | verify"
+                         | --theme] [--fixture NAME]… | verify | landscape"
                     )
                 }
             }
@@ -156,6 +160,7 @@ fn print_help() {
          \x20     generate diagram (golden/plantuml[-c4|mermaid|websequencediagrams]/<N>/) or\n\
          \x20     theme (golden/theme/<N>.json) goldens\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
+         cargo xtask oracle landscape          A/B the landscape generator (slow, §P4-M3 O-4)\n\
          \n\
          pinned reference: commit {REFERENCE_COMMIT}, app release {REFERENCE_APP_VERSION}\n\
          oracle discovery: $OXIDZR_STRUCTURIZR_BIN, then `structurizr` on PATH"
@@ -1220,6 +1225,179 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
         goldens.len()
     );
     Ok(())
+}
+
+/// `cargo xtask oracle landscape` — §P4-M3 O-4 Category B leg (run
+/// sparingly, like `export-verify`). Writes the witness alpha/beta
+/// fixtures under the scratch dir, runs BOTH generators (reference
+/// `generate system-landscape -i <dir> -o out.json` with `TZ=UTC`, ours
+/// in-process through [`oxidizr_api::pipeline::execute`]) and compares
+/// SEMANTIC fact vectors: workspace name + scope, the element
+/// `kind|name|description|url` set and the relationship
+/// `source -> destination | description` triples. Endpoint ids are
+/// RESOLVED TO NAMES (the shared counter legitimately differs where the
+/// scan order differs); properties are not compared at all (the loader
+/// regenerates the `structurizr.*` keys per parse).
+/// The witness alpha/beta fixtures for the `oracle landscape` leg (the
+/// same shapes the 2026-11-21 witness ran: Alice merge + container-bearing
+/// systems + the `First`-strategy edge set).
+const LANDSCAPE_FIXTURES: [(&str, &str); 2] = [
+    (
+        "alpha",
+        "workspace \"Alpha\" {\n\
+         \x20   model {\n\
+         \x20       alice = person \"Alice\" \"Alpha Alice\" {\n\
+         \x20           url \"https://alpha.example/alice\"\n\
+         \x20           tag \"Staff\"\n\
+         \x20       }\n\
+         \x20       billing = softwareSystem \"Billing\" \"Alpha billing description\" {\n\
+         \x20           api = container \"Billing API\"\n\
+         \x20       }\n\
+         \x20       crm = softwareSystem \"CRM\" \"Alpha CRM description\"\n\
+         \x20       alice -> billing \"Uses\" \"HTTP\" {\n\
+         \x20           url \"https://rel/uses\"\n\
+         \x20           tag \"CustomRel\"\n\
+         \x20       }\n\
+         \x20       alice -> crm \"Uses\"\n\
+         \x20       billing -> crm \"Synchronises with\"\n\
+         \x20   }\n\
+         }\n",
+    ),
+    (
+        "beta",
+        "workspace \"Beta\" {\n\
+         \x20   model {\n\
+         \x20       alice = person \"Alice\" \"Beta Alice\" {\n\
+         \x20           tag \"External\"\n\
+         \x20       }\n\
+         \x20       crm = softwareSystem \"CRM\" \"Beta CRM description\" {\n\
+         \x20           ui = container \"CRM UI\"\n\
+         \x20       }\n\
+         \x20       warehouse = softwareSystem \"Warehouse\" \"Beta warehouse\"\n\
+         \x20       alice -> crm \"Uses\"\n\
+         \x20       alice -> crm \"Reports on\"\n\
+         \x20       crm -> warehouse \"Pushes orders to\"\n\
+         \x20   }\n\
+         }\n",
+    ),
+];
+
+fn cmd_oracle_landscape(oracle: &Path) -> Result<()> {
+    use oxidizr_api::pipeline::{ApiOptions, ExitClass, Request, execute};
+    const FIXTURES: [(&str, &str); 2] = LANDSCAPE_FIXTURES;
+    let tmp = scratch("landscape");
+    let _ = fs::remove_dir_all(&tmp);
+    for (tag, text) in FIXTURES {
+        let dir = tmp.join(tag);
+        fs::create_dir_all(&dir)?;
+        fs::write(dir.join("workspace.dsl"), text)?;
+    }
+    let produced = tmp.join("landscape.json");
+    let output = Command::new(oracle)
+        .env("TZ", "UTC")
+        .arg("generate")
+        .arg("system-landscape")
+        .arg("-i")
+        .arg(&tmp)
+        .arg("-o")
+        .arg(&produced)
+        .output()
+        .with_context(|| format!("failed to run {}", oracle.display()))?;
+    ensure!(
+        output.status.success(),
+        "reference generate system-landscape failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let theirs = fs::read(&produced)?;
+    let ours = execute(
+        Request::Generate {
+            inputs: vec![tmp.clone()],
+            include: None,
+            exclude: None,
+            strategy: oxidizr_api::RelationshipsStrategy::First,
+            output: None,
+        },
+        &ApiOptions::default(),
+    );
+    let _ = fs::remove_dir_all(&tmp);
+    ensure!(
+        matches!(ours.exit, ExitClass::Ok),
+        "oxidizr generate system-landscape exited {:?}: {:?}",
+        ours.exit,
+        ours.log
+    );
+    let ours = ours.bytes.context("oxidizr generate produced no bytes")?;
+    let ours = landscape_facts(&ours)?;
+    let theirs = landscape_facts(&theirs)?;
+    if ours == theirs {
+        println!("ok: landscape facts match ({} facts)", ours.len());
+        return Ok(());
+    }
+    let mut failed = Vec::new();
+    for line in ours.iter().filter(|l| !theirs.contains(l)) {
+        failed.push(format!("MISMATCH ours only: {line}"));
+    }
+    for line in theirs.iter().filter(|l| !ours.contains(l)) {
+        failed.push(format!("MISMATCH theirs only: {line}"));
+    }
+    for line in &failed {
+        println!("{line}");
+    }
+    bail!(
+        "landscape facts differ ({} mismatched fact line(s))",
+        failed.len()
+    );
+}
+
+/// The semantic fact vector of a landscape JSON (sorted within sections;
+/// endpoint ids resolved through the document's own element ids).
+fn landscape_facts(bytes: &[u8]) -> Result<Vec<String>> {
+    let doc: serde_json::Value = serde_json::from_slice(bytes).context("landscape JSON")?;
+    let text = |v: &serde_json::Value| v.as_str().unwrap_or_default().to_string();
+    let mut facts = vec![
+        format!("name = {}", text(&doc["name"])),
+        format!("scope = {}", text(&doc["configuration"]["scope"])),
+    ];
+    let mut names = serde_json::Map::new();
+    let mut elements = Vec::new();
+    for (key, kind) in [("people", "Person"), ("softwareSystems", "Software System")] {
+        for element in doc["model"][key].as_array().cloned().unwrap_or_default() {
+            names.insert(
+                text(&element["id"]),
+                serde_json::Value::String(text(&element["name"])),
+            );
+            elements.push(format!(
+                "element {kind} | {} | {} | {}",
+                text(&element["name"]),
+                text(&element["description"]),
+                text(&element["url"])
+            ));
+        }
+    }
+    let mut rels = Vec::new();
+    for key in ["people", "softwareSystems"] {
+        for element in doc["model"][key].as_array().cloned().unwrap_or_default() {
+            let source = text(&element["name"]);
+            for rel in element["relationships"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+            {
+                let destination = names
+                    .get(&text(&rel["destinationId"]))
+                    .map_or_else(|| "?".to_string(), text);
+                rels.push(format!(
+                    "rel {source} -> {destination} | {}",
+                    text(&rel["description"])
+                ));
+            }
+        }
+    }
+    elements.sort();
+    rels.sort();
+    facts.extend(elements);
+    facts.extend(rels);
+    Ok(facts)
 }
 
 /// Top-level `golden/*.json` only — the subdirectories are the diagram

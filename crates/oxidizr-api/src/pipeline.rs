@@ -292,6 +292,26 @@ pub enum Request {
         /// `--force`: overwrite existing files.
         force: bool,
     },
+    /// Derive the system landscape of 1..N workspaces (`generate
+    /// system-landscape`, §P4-M3 O-4, P4-D9): the
+    /// [`crate::generate::system_landscape`] port — app-layer ONLY, and
+    /// the oracle witness settled that the reference adds NO views. The
+    /// output is ALWAYS standard JSON (regardless of the `-o` name).
+    Generate {
+        /// Input paths (1..N; the CLI enforces): directories are scanned
+        /// recursively (sorted; `include`/`exclude` full-path filters),
+        /// explicit files always load (documented deviation — the
+        /// reference applied its include to a single `-i` file too).
+        inputs: Vec<PathBuf>,
+        /// `--include` pattern (default [`crate::generate::DEFAULT_INCLUDE`]).
+        include: Option<String>,
+        /// `--exclude` pattern.
+        exclude: Option<String>,
+        /// `--relationships` duplicate-edge policy.
+        strategy: crate::generate::RelationshipsStrategy,
+        /// Output file (`None` = stdout bytes).
+        output: Option<PathBuf>,
+    },
 }
 
 /// The full result of one [`execute`]: exit class, ordered human log, and
@@ -420,6 +440,20 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
             template,
             force,
         } => init_cmd(&dir, template, force),
+        Request::Generate {
+            inputs,
+            include,
+            exclude,
+            strategy,
+            output,
+        } => generate_cmd(
+            &inputs,
+            include.as_deref(),
+            exclude.as_deref(),
+            strategy,
+            output.as_deref(),
+            opts,
+        ),
     }
 }
 
@@ -1388,6 +1422,137 @@ fn init_cmd(dir: &Path, template: crate::init::InitTemplate, force: bool) -> Res
     report.push_str("next steps:\n  oxidizr validate workspace.dsl\n  oxidizr export workspace.dsl -f plantuml\n");
     out.bytes = Some(report.into_bytes());
     Ok(out)
+}
+
+/// `oxidizr generate system-landscape` (§P4-M3 O-4, P4-D9): the filters
+/// compile FIRST (an unsupported `--include`/`--exclude` pattern aborts
+/// with OXZ-5010 before any file is touched), the workspaces load (sorted
+/// recursive scans filtered over the FULL path like the reference
+/// `Pattern.matches`; an explicit file positional ALWAYS loads —
+/// documented deviation) and merge through
+/// [`crate::generate::system_landscape`]. A file that fails to load is
+/// the reference per-file `log.warn` skip (a note); ZERO loadable
+/// workspaces is the ported reference `IllegalArgumentException` text
+/// (exit 1). The JSON output NEVER carries views (the witness).
+fn generate_cmd(
+    inputs: &[PathBuf],
+    include: Option<&str>,
+    exclude: Option<&str>,
+    strategy: crate::generate::RelationshipsStrategy,
+    output: Option<&Path>,
+    opts: &ApiOptions,
+) -> Result<Outcome, Fail> {
+    let mut out = Outcome::default();
+    let compile =
+        |pattern: &str, flag: &str| -> Result<crate::generate::pathfilter::PathFilter, Fail> {
+            crate::generate::pathfilter::PathFilter::compile(pattern).map_err(|reason| {
+                Fail::new(
+                    Issue::error(
+                        codes::GENERATE,
+                        format!("invalid `{flag}` pattern `{pattern}`: {reason}"),
+                    ),
+                    ExitClass::Diagnostics,
+                )
+            })
+        };
+    let include = compile(
+        include.unwrap_or(crate::generate::DEFAULT_INCLUDE),
+        "--include",
+    )?;
+    let exclude = exclude
+        .map(|pattern| compile(pattern, "--exclude"))
+        .transpose()?;
+    let mut files: Vec<PathBuf> = Vec::new();
+    for path in inputs {
+        if path.is_dir() {
+            let mut found = Vec::new();
+            if let Err(e) = scan_dir(path, &mut found) {
+                return Err(Fail::new(
+                    Issue::io(&format!("failed to read `{}`", path.display()), &e),
+                    ExitClass::Io,
+                ));
+            }
+            found.sort();
+            files.extend(found.into_iter().filter(|file| {
+                let text = file.to_string_lossy();
+                include.is_match(&text) && exclude.as_ref().is_none_or(|skip| !skip.is_match(&text))
+            }));
+        } else if path.is_file() {
+            files.push(path.clone());
+        } else {
+            return Err(Fail::new(
+                Issue::error(
+                    codes::CLI_IO,
+                    format!(
+                        "cannot read `{}` (no such file or directory)",
+                        path.display()
+                    ),
+                ),
+                ExitClass::Io,
+            ));
+        }
+    }
+    let mut workspaces = Vec::new();
+    for file in &files {
+        match load_for_generate(file, opts) {
+            Ok(workspace) => workspaces.push(workspace),
+            Err(problem) => out.log.push(LogItem::NoteLine(format!(
+                "Could not parse {}: {problem}",
+                file.display()
+            ))),
+        }
+    }
+    if workspaces.is_empty() {
+        return Err(out.fail(
+            Issue::error(codes::GENERATE, "Two or more workspaces must be provided"),
+            ExitClass::Diagnostics,
+        ));
+    }
+    let landscape = crate::generate::system_landscape(&workspaces, strategy);
+    out.log
+        .extend(landscape.warnings.into_iter().map(LogItem::NoteLine));
+    let bytes = oxidizr_json::to_vec(&landscape.workspace)
+        .map_err(|e| out.fail(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
+    emit_bytes(&mut out, bytes, output).map_err(|e| out.fail(e, ExitClass::Io))?;
+    Ok(out)
+}
+
+/// One directory's files, recursive (the order is sorted by the caller —
+/// deterministic scans are the Category-A golden contract).
+fn scan_dir(dir: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            scan_dir(&path, files)?;
+        } else {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// The `validate` extension dispatch (`oxidizr init` O-2's loader twin):
+/// `.json` reads JSON, `.dsl` parses DSL — and the reference `DslParser`
+/// THROWS on any statement error, so a recovered parse is NOT a loaded
+/// workspace here: the file takes the skip, reason in hand.
+fn load_for_generate(path: &Path, opts: &ApiOptions) -> Result<Workspace, String> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    let source = read_input(&Input::File(path.to_path_buf()), opts).map_err(|e| e.message)?;
+    match ext.as_deref() {
+        Some("json") => oxidizr_json::from_slice(source.text.as_bytes())
+            .map_err(|e| Issue::from_json(&e, &source.text, &source.display).message),
+        Some("dsl") => {
+            let result = parse_dsl_input(&source, opts).map_err(|e| e.message)?;
+            if let Some(first) = result.errors.first() {
+                return Err(Issue::from_dsl(first).message);
+            }
+            Ok(result.workspace)
+        }
+        _ => Err("cannot determine the workspace format (expected `.dsl` or `.json`)".to_string()),
+    }
 }
 
 /// One human report line: the reference `Violation.toString()` verbatim;

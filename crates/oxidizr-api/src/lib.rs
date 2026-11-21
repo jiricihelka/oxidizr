@@ -17,6 +17,7 @@
 
 pub mod diagnostic;
 pub mod diff;
+pub mod generate;
 pub mod init;
 pub mod open;
 pub mod pipeline;
@@ -25,6 +26,9 @@ pub mod reconcile;
 pub mod suggest;
 
 pub use diagnostic::{Issue, Snippet};
+// §P4-M3 O-4: the `Request::Generate` strategy travels on the API surface
+// (the CLI maps its clap enum onto it).
+pub use generate::RelationshipsStrategy;
 pub use init::InitTemplate;
 pub use open::{Opened, open};
 // §P4-M1 I-4: the `Request::Inspect` threshold type travels through the

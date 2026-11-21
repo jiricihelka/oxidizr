@@ -39,7 +39,7 @@ use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault a
 use clap::{CommandFactory as _, Parser, Subcommand, ValueEnum};
 use oxidizr_api::{
     ApiOptions, ExitClass, FmtMode, ImportFormat, InitTemplate, Input, LogItem, Outcome,
-    QueryFormat, QueryKind, Request, Severity,
+    QueryFormat, QueryKind, RelationshipsStrategy, Request, Severity,
 };
 
 use report::{Issue, Renderer};
@@ -259,6 +259,15 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Landscape generators (`generate`, §P4-M3 O-4, P4-D9): the ONE
+    /// subcommand is the reference `SystemLandscapeGenerator` port — the
+    /// output NEVER carries views (the oracle witness settled the open
+    /// P4-D9 question).
+    Generate {
+        /// Generator to run (only `system-landscape` exists).
+        #[command(subcommand)]
+        command: GenerateCommand,
+    },
     /// Emit a shell-completion script for this CLI to stdout (`completions`,
     /// §P4-M3 O-3): rendered by `clap_complete` from the argv surface itself
     /// — dispatched in `run` BEFORE the pipeline (it never opens a
@@ -280,6 +289,51 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = ViewTheme::System)]
         theme: ViewTheme,
     },
+}
+
+/// `oxidizr generate` subcommands (§P4-M3 O-4).
+#[derive(Subcommand, Debug)]
+pub enum GenerateCommand {
+    /// Merge 1..N workspaces into the system-landscape workspace
+    /// (`SystemLandscapeGenerator` port): name-first person/system clone
+    /// with description/url last-wins and group/tags/properties merge,
+    /// relationship re-derivation, and the `{workspace:<id>}/diagrams`
+    /// hyperlink on each source workspace's first container-bearing
+    /// system. Always JSON, never views.
+    SystemLandscape {
+        /// Workspace files and/or directories (1..N). Directories are
+        /// scanned recursively (sorted) and filtered by
+        /// `--include`/`--exclude`; an explicit file ALWAYS loads
+        /// (documented deviation — the reference applied its include to
+        /// a single `-i` file too).
+        #[arg(required = true)]
+        inputs: Vec<PathBuf>,
+        /// Full-path include regex (full match, like the reference's
+        /// `Pattern.matches`); default `.*workspace.(json|dsl)`.
+        #[arg(long)]
+        include: Option<String>,
+        /// Full-path exclude regex (wins over `--include`).
+        #[arg(long)]
+        exclude: Option<String>,
+        /// Which duplicate source→destination edges survive the merge.
+        #[arg(long, value_enum, default_value_t = RelationshipsArg::First)]
+        relationships: RelationshipsArg,
+        /// Output file (`None` = stdout; ALWAYS JSON).
+        #[arg(long, short = 'o')]
+        output: Option<PathBuf>,
+    },
+}
+
+/// `oxidizr generate system-landscape --relationships` values: the
+/// reference `RelationshipsStrategy`; maps onto
+/// [`oxidizr_api::RelationshipsStrategy`].
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
+pub enum RelationshipsArg {
+    /// Keep the FIRST edge per source→destination pair (the default).
+    #[default]
+    First,
+    /// Keep one edge per distinct description.
+    All,
 }
 
 /// `oxidizr diff --format` values (§P4-M0 D-3): the human ± report (the
@@ -577,6 +631,25 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             },
             force,
         },
+        Command::Generate {
+            command:
+                GenerateCommand::SystemLandscape {
+                    inputs,
+                    include,
+                    exclude,
+                    relationships,
+                    output,
+                },
+        } => Request::Generate {
+            inputs,
+            include,
+            exclude,
+            strategy: match relationships {
+                RelationshipsArg::First => RelationshipsStrategy::First,
+                RelationshipsArg::All => RelationshipsStrategy::All,
+            },
+            output,
+        },
         // §P3-M8 + §P4-M3 O-3: dispatched in `run` before the pipeline is
         // reached (`view` = the GUI shell, `completions` = the argv table).
         Command::View { .. } | Command::Completions { .. } => return None,
@@ -687,12 +760,14 @@ mod tests {
             Command::Import { .. } => "import",
             Command::Query { .. } => "query",
             Command::Init { .. } => "init",
+            Command::Generate { .. } => "generate",
             Command::Completions { .. } => "completions",
             Command::View { .. } => "view",
         }
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // the argv matrix IS the content
     fn surface_parses() {
         Cli::try_parse_from(["oxidizr", "dsl2json", "ws.dsl", "-o", "ws.json"]).unwrap();
         Cli::try_parse_from(["oxidizr", "json2json", "-"]).unwrap();
@@ -797,11 +872,48 @@ mod tests {
         Cli::try_parse_from(["oxidizr", "completions", "powershell"]).unwrap();
         assert!(Cli::try_parse_from(["oxidizr", "completions", "csh"]).is_err());
         assert!(Cli::try_parse_from(["oxidizr", "completions"]).is_err());
+        // §P4-M3 O-4: `generate system-landscape` takes 1..N inputs and
+        // the full filter/strategy surface; zero inputs and unknown
+        // strategies are clap usage errors (exit 2).
+        Cli::try_parse_from(["oxidizr", "generate", "system-landscape", "ws.dsl"]).unwrap();
+        Cli::try_parse_from([
+            "oxidizr",
+            "generate",
+            "system-landscape",
+            "dir",
+            "extra.json",
+            "--include",
+            r".*alpha.*",
+            "--exclude",
+            r".*beta.*",
+            "--relationships",
+            "all",
+            "-o",
+            "landscape.json",
+        ])
+        .unwrap();
+        assert!(Cli::try_parse_from(["oxidizr", "generate", "system-landscape"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "oxidizr",
+                "generate",
+                "system-landscape",
+                "a",
+                "--relationships",
+                "none"
+            ])
+            .is_err()
+        );
     }
 
     #[test]
     fn command_names_stable() {
         let cli = Cli::try_parse_from(["oxidizr", "dsl2json"]).unwrap();
         assert_eq!(command_name(&cli.command), "dsl2json");
+        // §P4-M3 O-4: the `generate` family reports ONE name (the
+        // generator is a subcommand, like `export --format`).
+        let cli =
+            Cli::try_parse_from(["oxidizr", "generate", "system-landscape", "ws.dsl"]).unwrap();
+        assert_eq!(command_name(&cli.command), "generate");
     }
 }

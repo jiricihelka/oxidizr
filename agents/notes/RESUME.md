@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` (M3a) + O-2 `init` (M3b) + O-3 `completions` (M3c) DONE, next O-4 `generate` (M3d) then M3 close**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` (M3a) + O-2 `init` (M3b) + O-3 `completions` (M3c) + O-4 `generate` (M3d) DONE, next: M3 close ritual, then §P4-M5**)
 
 ## State
 
@@ -95,8 +95,41 @@
    (the ONE new dep, workspace table) — dispatched in `run` before the
    pipeline like `view` (renders the argv table itself, never a
    `Request`; script = stdout payload, exit 0; unknown shell = clap 2).
-   **Next: O-4 `generate system-landscape` (M3d — oracle-witness the
-   reference `generate` view behavior FIRST), M3 close.**
+ - **§P4-M3 O-4 `generate system-landscape` DONE 2026-11-21** (M3d,
+   P4-D9): `oxidizr generate system-landscape <1..N paths> [--include
+   R] [--exclude R] [--relationships first|all] [-o]` — the reference
+   `SystemLandscapeGenerator` port in `oxidizr-api/src/generate.rs`
+   (oracle witness: adds NO views; contract in the PHASE_4 O-4 DONE
+   stamp + surface note below). New OXZ-5010 `GENERATE` for filter
+   patterns outside the std-only subset. `cargo xtask oracle landscape`
+   = the Category B leg (10 facts match).
+   **Next: M3 close ritual (bless + full tier + stamps), then §P4-M5.**
+
+## §P4-M3 O-4 generate surface (`oxidizr-api/src/generate.rs` + `pipeline::generate_cmd` — read before touching)
+
+- **Merge contract (witnessed 2026-11-21, TZ=UTC legs)**: name-first
+  person/system clone; description AND url set UNCONDITIONALLY per
+  workspace (LAST wins, nulls nuke); group first-wins; stored-tags union
+  via `Tags::add`; properties/perspectives merge; one shared id counter
+  (elements then relationships); `{workspace:<id>}/diagrams` onto the
+  FIRST container-bearing system per workspace; `findElement` is
+  people-first (a same-named person shadows a system). `First` keeps
+  one edge per source→destination pair, `All` one per distinct
+  description (the `hasEfferentRelationshipWith` twin).
+- **`pathfilter` is a FULL-match std-only engine** (the reference =
+  `Pattern.matches` over the FULL path incl. directory components).
+  Supports literals, `.`, `\d \D \w \W \s \S`, `[...]` classes (shorthands
+  ONLY as escapes — `[d]` is the letter), groups, `|`, `* + ?` (lazy
+  spellings parse, greediness is irrelevant to a boolean match), `^`/`$`.
+  `{m,n}`/lookaround/`\p{…}`/named groups/inline flags ⇒ OXZ-5010 exit 1
+  — NEVER widen silently. Engine gotcha: `star()` must try the
+  zero-iteration continuation at its own position or `.*x` cannot match
+  text starting at `x`.
+- **Exit family**: 0 ok · 1 zero workspaces ("Two or more workspaces
+  must be provided" verbatim — ONE workspace is LEGAL, witnessed) or
+  bad pattern · 2 clap usage · 3 missing path. Explicit file
+  positionals ALWAYS load (documented deviation); load failures are
+  per-file `Could not parse …` notes; output ALWAYS JSON.
 
 ## §P4-M3 O-2 init surface (`oxidizr-api/src/init.rs` + `templates/` — read before touching)
 

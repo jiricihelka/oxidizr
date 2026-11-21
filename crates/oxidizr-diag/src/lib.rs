@@ -200,6 +200,10 @@ pub mod codes {
     /// oxidizr surfaces the abort as this diagnostic instead of a panic
     /// (Phase 2 M2).
     pub const EXPORT_ABORT: Code = Code::new(5009);
+    /// `generate system-landscape` failure (§P4-M3 O-4, P4-D9): an
+    /// `--include`/`--exclude` pattern outside the std-only full-match
+    /// subset, or no workspace matched the filters.
+    pub const GENERATE: Code = Code::new(5010);
     /// Model/view validation failure — reference `hydrate()`/validate message
     /// verbatim (M6 CLI `validate`).
     pub const VALIDATION: Code = Code::new(3001);

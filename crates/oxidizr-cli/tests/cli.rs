@@ -1538,3 +1538,90 @@ fn completions_other_shells_render() {
     assert_eq!(run(&["completions", "csh"], None).status.code(), Some(2));
     assert_eq!(run(&["completions"], None).status.code(), Some(2));
 }
+
+/// §P4-M3 O-4: the `generate system-landscape` argv surface through the
+/// binary — the exit family (0 · zero-workspaces 1 · OXZ-5010 pattern 1
+/// · missing path 3 · usage 2) and the `-o` file (ALWAYS JSON).
+#[test]
+fn generate_system_landscape_merges_into_the_output_file() {
+    let dir = init_temp("generate");
+    for (tag, text) in [
+        (
+            "alpha",
+            "workspace \"Alpha\" {\n    model {\n        a = person \"Alice\" \"A\"\n        s = softwareSystem \"Billing\" \"B\"\n        a -> s \"Uses\"\n    }\n}\n",
+        ),
+        (
+            "beta",
+            "workspace \"Beta\" {\n    model {\n        s = softwareSystem \"CRM\" \"C\"\n        s2 = softwareSystem \"Warehouse\" \"W\"\n        s -> s2 \"Pushes orders to\"\n    }\n}\n",
+        ),
+    ] {
+        let ws_dir = dir.join(tag);
+        std::fs::create_dir_all(&ws_dir).unwrap();
+        std::fs::write(ws_dir.join("workspace.dsl"), text).unwrap();
+    }
+    let out_file = dir.join("landscape.json");
+    let out = run(
+        &[
+            "generate",
+            "system-landscape",
+            dir.to_str().unwrap(),
+            "-o",
+            out_file.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let json = std::fs::read_to_string(&out_file).unwrap();
+    assert!(json.contains("\"System Landscape\""), "{json}");
+    assert!(json.contains("\"scope\" : \"Landscape\""), "{json}");
+    assert!(json.contains("\"Warehouse\""), "beta merged: {json}");
+
+    // Zero matches: the ported reference message, exit 1.
+    let out = run(
+        &[
+            "generate",
+            "system-landscape",
+            dir.to_str().unwrap(),
+            "--include",
+            r".*gamma.*",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("Two or more workspaces must be provided"),
+        "{:?}",
+        out.stderr
+    );
+
+    // Unsupported construct: OXZ-5010, exit 1.
+    let out = run(
+        &[
+            "generate",
+            "system-landscape",
+            dir.to_str().unwrap(),
+            "--exclude",
+            r"a{2}",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("OXZ-5010"), "{stderr}");
+    assert!(stderr.contains("unsupported construct"), "{stderr}");
+
+    // Missing path: exit 3; zero inputs: clap usage 2.
+    let out = run(
+        &[
+            "generate",
+            "system-landscape",
+            dir.join("nowhere").to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(3));
+    assert_eq!(
+        run(&["generate", "system-landscape"], None).status.code(),
+        Some(2)
+    );
+}
