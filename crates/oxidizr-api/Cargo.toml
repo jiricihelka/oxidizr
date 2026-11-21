@@ -20,3 +20,7 @@ oxidizr-export = { workspace = true }
 # §P4-M0 diff: the `before`/`after` values of a field-level change are
 # `serde_json::Value` (the schema-1 document D-2 renders them verbatim).
 serde_json = { workspace = true }
+
+[dev-dependencies]
+# §P4-M0 D-2: the schema-1 serialization snapshot (`expect!`).
+expect-test = { workspace = true }

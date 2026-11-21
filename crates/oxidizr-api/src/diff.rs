@@ -101,6 +101,48 @@ impl Diff {
             && self.changed.is_empty()
             && self.id_changed.is_empty()
     }
+
+    /// The frozen SCHEMA 1 document (P4-D2, `docs/diff-schema.md`):
+    /// `{schema:1, added:[{path,kind}], removed:[…], changed:[{path,
+    /// field, before, after}], idChanged:[{path, before, after}]}`.
+    /// All four categories are ALWAYS present (empty arrays included)
+    /// and the key order is the documented one — `serde_json`'s
+    /// `preserve_order` keeps map insertion order, so the serialization
+    /// of a given `Diff` is a stable byte string. Absent field values
+    /// are `null` (the engine's uniform absent convention).
+    #[must_use]
+    pub fn to_json(&self) -> Value {
+        json!({
+            "schema": 1,
+            "added": self
+                .added
+                .iter()
+                .map(|e| json!({ "path": e.path, "kind": e.kind }))
+                .collect::<Vec<Value>>(),
+            "removed": self
+                .removed
+                .iter()
+                .map(|e| json!({ "path": e.path, "kind": e.kind }))
+                .collect::<Vec<Value>>(),
+            "changed": self
+                .changed
+                .iter()
+                .map(|c| {
+                    json!({
+                        "path": c.path,
+                        "field": c.field,
+                        "before": c.before,
+                        "after": c.after,
+                    })
+                })
+                .collect::<Vec<Value>>(),
+            "idChanged": self
+                .id_changed
+                .iter()
+                .map(|c| json!({ "path": c.path, "before": c.before, "after": c.after }))
+                .collect::<Vec<Value>>(),
+        })
+    }
 }
 
 /// Compare two loaded workspaces (P4-D2; both sides already through the
@@ -912,6 +954,7 @@ fn compare_fields(path: &str, a: &Fields, b: &Fields, out: &mut Vec<Change>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use expect_test::expect;
     use oxidizr_core::model::{Person, SoftwareSystem};
     use oxidizr_core::tags::Tags;
     use oxidizr_core::views::{
@@ -1206,5 +1249,99 @@ mod tests {
         assert_eq!(d.changed.len(), 1);
         assert_eq!(d.changed[0].path, "model.people[Alice]");
         assert_eq!(d.changed[0].after, json!("twin"));
+    }
+
+    #[test]
+    fn schema_one_document_snapshot() {
+        // One of every category: rename (add+remove pair incl. the
+        // relationship), a field change, a property change and a
+        // consistent id shift. The pretty serialization is the CLI
+        // `--format json` payload (M0c) — key order and shape are the
+        // frozen schema (docs/diff-schema.md).
+        let a = ws();
+        let mut b = ws();
+        b.model.people[0].item.name = "Alicia".into();
+        b.model.software_systems[0].item.url = Some("https://pay".into());
+        b.model.software_systems[0]
+            .item
+            .properties
+            .insert("owner", "team-a");
+        b.model.relationships[0].destination = Id::from_num(77);
+        b.model.software_systems[0].item.id = Id::from_num(77);
+        let d = diff(&a, &b, &DiffOptions::default());
+        expect![[r#"
+            {
+              "schema": 1,
+              "added": [
+                {
+                  "path": "model.people[Alicia]",
+                  "kind": "person"
+                },
+                {
+                  "path": "model.relationships[Person://Alicia -> SoftwareSystem://Pay (uses)]",
+                  "kind": "relationship"
+                }
+              ],
+              "removed": [
+                {
+                  "path": "model.people[Alice]",
+                  "kind": "person"
+                },
+                {
+                  "path": "model.relationships[Person://Alice -> SoftwareSystem://Pay (uses)]",
+                  "kind": "relationship"
+                }
+              ],
+              "changed": [
+                {
+                  "path": "model.softwareSystems[Pay]",
+                  "field": "properties.owner",
+                  "before": null,
+                  "after": "team-a"
+                },
+                {
+                  "path": "model.softwareSystems[Pay]",
+                  "field": "url",
+                  "before": null,
+                  "after": "https://pay"
+                },
+                {
+                  "path": "views[L1]",
+                  "field": "elements",
+                  "before": [
+                    "Person://Alice"
+                  ],
+                  "after": [
+                    "Person://Alicia"
+                  ]
+                },
+                {
+                  "path": "views[L1]",
+                  "field": "position[Alice]",
+                  "before": {
+                    "x": 10,
+                    "y": 20
+                  },
+                  "after": null
+                },
+                {
+                  "path": "views[L1]",
+                  "field": "position[Alicia]",
+                  "before": null,
+                  "after": {
+                    "x": 10,
+                    "y": 20
+                  }
+                }
+              ],
+              "idChanged": [
+                {
+                  "path": "model.softwareSystems[Pay]",
+                  "before": "2",
+                  "after": "77"
+                }
+              ]
+            }"#]]
+        .assert_eq(&serde_json::to_string_pretty(&d.to_json()).unwrap());
     }
 }
