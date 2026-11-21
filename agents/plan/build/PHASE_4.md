@@ -53,9 +53,12 @@ crates/
 
 - No new language: the **DSL filter/expression grammar is the query language**
   (agreed). P1 parses that grammar for filtered views; P4 exposes it:
-  `oxidizr_dsl::filter::parse(expr) -> oxidizr_core::filter::Predicate` (already the
-  type the P3 filtered-view evaluator consumes — one parser, one evaluator, three
-  consumers: filtered views, `query`, `inspect`).
+  ~~`oxidizr_dsl::filter::parse(expr) -> oxidizr_core::filter::Predicate`
+  (already the type the P3 filtered-view evaluator consumes — one parser,
+  one evaluator, three consumers: filtered views, `query`, `inspect`)~~
+  **CORRECTED 2026-11-21** — no `Predicate` type exists; the engine's
+  `ExpressionParser` port (`engine/expr.rs`) IS the evaluator and is
+  reused via a public `oxidizr_dsl::query` module (§P4-M3 preamble).
 - `oxidizr query <WORKSPACE> --filter EXPR [--kind element|relationship|view|all]
   [--format table|json|ids] [-o]`
   - default `table`: `id  kind  canonicalName  [tags…]`; `ids` = one id per line
@@ -392,6 +395,42 @@ Items (each ends green; commits M2a…M2f):
 | **N-5** | **WSD exporter** (reference port: `websequencediagrams/WebSequenceDiagramsExporter`, 171 LOC, dynamic views only) → `oxidizr export --format websequencediagrams`; P2 exporter-family ritual (Diagram value, goldens, semantic comparator where the oracle speaks WSD) — **DONE 2026-11-21** (`oxidizr-export/src/wsd.rs` = `WsdDialect` on the shared `Engine` (all boundary hooks empty; `render_as_sequence_diagram`/`owns_sequence_document` true ⇒ the dialect owns the dynamic walk via `sequence_document`) + `find_terminology` (the `Terminology.findTerminology` port: instance unwrap, per-kind override-or-default, `CustomElement` ⇒ metadata-else-`"Element"`, config ignored) + `export_all` (exports ONLY `View::Custom` + `View::Dynamic` — the static/deployment overloads return `null`; custom views ride the engine base-body walk: view-order elements, id-sorted rels, guarded blank; dynamic: header `title <name>` (+ real-newline description), participants from the relationship endpoints source-then-destination first-seen (`actor` for a `Person`, else `participant`, literal `\\n` before `<name> as <name>`), UNCONDITIONAL blank after participants, stored-order relationships (`->`/`->>`, response swaps + `-->`/`-->>`; view override trims-empty to the model description, both absent ⇒ EMPTY after `": "` — oracle witness), no frames/legend, ext `wsd`, key = view key; 8 unit tests incl. the `custom-view-animation` byte witness; oracle 9/9 fixtures byte-parity (scratch sweep) + `golden/websequencediagrams/` 11 files/9 fixtures via `cargo xtask oracle gen --wsd` (new gen mode + verify leg) + `export_wsd_goldens.rs` Category A; format dispatch arm + arm test, the unlanded test now `static`-only; OXZ-5007 allow-listed PERMANENT in the coverage gate (only `static` raises it, the export matrix runs the four diagram formats); 161 e2e sidecars re-blessed: the wsd slots flip from the 5007 probe to observed values) | M2e |
 | **N-6** | **`!docs`/`!adrs` importers** (P4-D13-1): ports of `DefaultDocumentationImporter`/`FormatFinder` (+ recursive walk) and the decision family (`AbstractDecisionImporter` id/status/date parsing, `AdrTools`/`Madr`/`Log4brains`, structurizr-native `.md`+`.json`? — inventory per P4-V7 FIRST); the DSL statements already parse (P1) — wire real import at the OXZ-5003 site, retire the diagnostic + the deferred-corpus exclusion in `testdata/README.md`; P4-V8 decides exclude matching (Java regex vs glob ⇒ `globset` returns only if globs); vendored ADR corpora + goldens — **DONE 2026-11-21** (ports `docs.rs`/`decisions.rs` + std-only `regexlite` for the P4-V8 full-match exclude; engine `run_import` per the pinned `end()` order — skip on string parses, `loadClass` first, empty-exclude guard, reluctant image pass; OXZ-5003 retired to a tombstone, m4 register 69 clean / 35 registered, e2e bless diff = exactly the two intended sidecars; oracle A/B green — documentation byte-parity on both positive fixtures, negative legs match the JVM error text verbatim; A/B caught + fixed the Java empty-input `split` special case ⇒ `"Element,Deployment Node,"`; contract `IMPORT-DOCS-ADRS.md`, deviations D15/D16) | M2f |
 | **Close** | oracle read gate green (Category B, `$OXIDZR_STRUCTURIZR_BIN`), fixtures vendored with attribution (`testdata/import/*` + README contract row), bless 307×unchanged, full e2e tier, PROGRESS/RESUME stamps — **CLOSED 2026-11-21** (commit M2f): A/B positive legs byte-parity on `documentation` + masked-workspace parity, negative legs verbatim; the corpora were already vendored byte-exact under `testdata/dsl/{docs,decisions}/` (README rows) so no `testdata/import/*` tree was needed; bless = 305×unchanged + the 2 reviewed OXZ-5003-retirement sidecars; full e2e tier + `cargo xtask ci` green | M2f |
+
+## §P4-M3 — `query`/`init`/`completions`/`generate` decomposition (started 2026-11-21; items O-1…O-4, commits M3a…M3d)
+
+**Plan correction (reality vs P4-D3, stamped before implementation):** the
+`oxidizr_core::filter::Predicate` type P4-D3 assumed DOES NOT EXIST —
+`core::filter` is the P3-D3 tag-based FILTERED-VIEW evaluator (mode + tag
+list, webapp semantics), not an expression type. The query language is the
+ITEM expression grammar (`ExpressionParser` @ `ad34036`), already ported
+and pinned in `oxidizr-dsl/src/engine/expr.rs` (`ExprScope::{Model,Static,
+Deployment,Custom}`). The fix reuses THAT evaluator (one parser, one
+evaluator — the plan's intent) instead of duplicating the grammar: a thin
+public `oxidizr_dsl::query` module feeds an adopted workspace into the
+engine's `ExprScope::Model` evaluation. P4-V4 (grammar inventory — what
+`query` can promise) closes with O-1's first commit.
+
+`generate` signature witness (reference CLI 2026.10.26, app code not in
+the vendored monorepo, help output pinned 2026-11-21):
+`generate [-exclude R] -i <path> [-include R] -o <path> [-relationships first|all]`
+— ONE output workspace from (potentially) MULTIPLE input workspaces
+(`SystemLandscapeGenerator.generate(Collection<Workspace>)` @
+`structurizr-core/util` — vendored and read; it creates NO views and sets
+name `System Landscape` + scope `Landscape`; whether the app subcommand
+adds views after the generator is an O-4 oracle-witness question). Our
+surface keeps P4-D9's spelling (`oxidizr generate system-landscape`,
+`--format dsl|json`, `-o`) widened to 1..N positional workspaces +
+`--include`/`--exclude`/`--relationships` to match the reference.
+
+Items (each ends green; commits M3a…M3d):
+
+| Item | Scope | Commit |
+|---|---|---|
+| **O-1** | `query` (P4-D3): close P4-V4 (grammar token inventory from the pinned `ExpressionParser`/`ExpressionBuilder` + our `expr.rs` port); public `oxidizr_dsl::query::run(&Workspace, expr) -> QueryResult` (engine reuse: `WorkspaceBuilder::adopt` + the `structurizr.dsl.identifier` register path from the JSON-extends leg + `ExprScope::Model`); `Request::Query` + `oxidizr query <WS> --filter EXPR [--kind element\|relationship\|view\|all] [--format table\|json\|ids] [-o]` — table `id kind canonicalName [tags…]`, ids one-per-line, json = schema-1 doc (next to the diff/inspect schemas); views by the documented key/name/tag predicate subset (V4 cataloged); tests: evaluator matrix (P3-V5 corners), CLI goldens on vendored workspaces, proptest: `--kind element --format ids` output identical from the `.dsl` and its JSON twin | M3a |
+| **O-2** | `init` (P4-D4): `oxidizr init [DIR] [--template minimal\|c4] [--force]` — `include_str!` templates (`workspace.dsl` + README + `.gitignore` + `.editorconfig` + `.vscode/settings.json` with the lsp note), zero network zero deps; idempotent (existing files skipped with a note, `--force` overwrites); prints the tree + next commands; the c4 template = the canonical 3-system starter; CI teeth: template output passes `validate` + a `dsl2json` golden (drift breaks CI — intended) | M3b |
+| **O-3** | `completions` (P4-D10): `oxidizr completions <bash\|fish\|zsh\|powershell\|elvish>` via `clap_complete` (the one adopted new dep), per-shell goldens + `bash -n`/`zsh -n` smoke where the shell exists | M3c |
+| **O-4** | `generate system-landscape` (P4-D9): `SystemLandscapeGenerator` port (name-first person/system clone, description-elsewhere-wins, group first-wins, url/tags/properties/perspectives clone; relationship re-derivation `interactsWith`/`uses`/`delivers` guarded by `hasEfferentRelationshipWith` per First/All; `{workspace:<id>}/diagrams` hyperlink onto the first CONTAINER-BEARING system; "Person or software system with name … not found" warning path); 1..N workspaces + `--include`/`--exclude` regex filters + `--relationships first\|all`; app-layer ONLY (Locked list: no view generation in parser/library — whether the reference app adds views post-generator is an oracle witness BEFORE we decide); deterministic ⇒ Category A goldens + a Category B oracle leg via `$OXIDZR_STRUCTURIZR_BIN generate system-landscape` | M3d |
+| **Close** | `cargo xtask ci` green, bless (expect unchanged — new commands never touch the pipeline outputs the corpus pins), full e2e tier, PROGRESS/RESUME stamps | M3d |
 
 ## P4-D12 Verification list
 
