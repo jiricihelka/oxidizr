@@ -29,6 +29,7 @@ oxidizr-json = { workspace = true }
 oxidizr-viewer = { workspace = true, optional = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
+clap_complete = { workspace = true }
 miette = { workspace = true }
 
 [[bin]]

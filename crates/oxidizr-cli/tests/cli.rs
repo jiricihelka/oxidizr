@@ -1464,3 +1464,77 @@ fn init_minimal_template_and_scaffold_validates() {
     let out = run(&["init", d, "--template", "bogus"], None);
     assert_eq!(out.status.code(), Some(2));
 }
+
+// §P4-M3 / O-3 — `oxidizr completions` (P4-D10): the script IS the
+// output contract per shell (clap_complete renders the argv table). The
+// goldens pin the shell-specific entry lines + a real subcommand so a
+// surface regression cannot silently emit an empty/stale script; the
+// syntax smokes (`bash -n`, `zsh -n`) run only where the shell exists.
+// An unknown shell name stays clap's usage error (exit 2).
+
+/// Generate the script for one shell (exit must be 0); returns stdout.
+fn completions_run(shell: &str) -> String {
+    let out = run(&["completions", shell], None);
+    assert_eq!(out.status.code(), Some(0), "completions {shell}");
+    let script = String::from_utf8(out.stdout).unwrap();
+    assert!(script.contains("dsl2json"), "{shell}: surface present");
+    script
+}
+
+/// `sh -n`-style syntax check where the shell binary exists.
+fn shell_syntax_ok(shell: &str, script: &str) {
+    if which(shell).is_none() {
+        return; // smoke is opportunistic (the plan: "where the shell exists")
+    }
+    let path = init_temp("syntax").with_extension(shell);
+    let _ = std::fs::create_dir_all(path.parent().unwrap());
+    std::fs::write(&path, script).unwrap();
+    let out = std::process::Command::new(shell)
+        .arg("-n")
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{shell} -n: {:?}", out.stderr);
+}
+
+fn which(shell: &str) -> Option<PathBuf> {
+    std::process::Command::new(shell)
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|_| PathBuf::from(shell))
+}
+
+#[test]
+fn completions_bash_and_zsh_scripts_are_valid() {
+    let bash = completions_run("bash");
+    assert!(bash.starts_with("_oxidizr() {"), "bash entry line");
+    assert!(
+        bash.contains("complete -F _oxidizr -o bashdefault -o default oxidizr"),
+        "bash registration"
+    );
+    shell_syntax_ok("bash", &bash);
+    let zsh = completions_run("zsh");
+    assert!(zsh.starts_with("#compdef oxidizr"), "zsh entry line");
+    shell_syntax_ok("zsh", &zsh);
+}
+
+#[test]
+fn completions_other_shells_render() {
+    let fish = completions_run("fish");
+    assert!(fish.contains("complete -c oxidizr"), "fish registration");
+    let pwsh = completions_run("powershell");
+    assert!(
+        pwsh.contains("Register-ArgumentCompleter -Native -CommandName 'oxidizr'"),
+        "powershell registration"
+    );
+    let elvish = completions_run("elvish");
+    assert!(
+        elvish.contains("set edit:completion:arg-completer[oxidizr]"),
+        "elvish registration"
+    );
+    // Unknown shells are clap usage errors (exit 2), never a stack.
+    assert_eq!(run(&["completions", "csh"], None).status.code(), Some(2));
+    assert_eq!(run(&["completions"], None).status.code(), Some(2));
+}

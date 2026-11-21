@@ -50,6 +50,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+# §P4-M3 O-3: the one adopted new dep (P4-D10 `completions`); sync, clap-lineage.
+clap_complete = "4"
 miette = { version = "7", features = ["fancy"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 

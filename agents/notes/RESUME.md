@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` (M3a) + O-2 `init` (M3b) DONE, next O-3 `completions` (M3c)**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 in progress: O-1 `query` (M3a) + O-2 `init` (M3b) + O-3 `completions` (M3c) DONE, next O-4 `generate` (M3d) then M3 close**)
 
 ## State
 
@@ -89,8 +89,14 @@
    templates stored CANONICAL (pass `fmt --check` — the printer's
    conservative unquoting is the required spelling); CI teeth = scaffold
    validates + masked `dsl2json` expect! golden per template. Surface
-   note below. **Next: O-3 `completions` (M3c), O-4 `generate` (M3d),
-   M3 close.**
+   note below.
+ - **§P4-M3 O-3 `completions` DONE 2026-11-21** (M3c, P4-D10): `oxidizr
+   completions <bash|elvish|fish|powershell|zsh>` via `clap_complete`
+   (the ONE new dep, workspace table) — dispatched in `run` before the
+   pipeline like `view` (renders the argv table itself, never a
+   `Request`; script = stdout payload, exit 0; unknown shell = clap 2).
+   **Next: O-4 `generate system-landscape` (M3d — oracle-witness the
+   reference `generate` view behavior FIRST), M3 close.**
 
 ## §P4-M3 O-2 init surface (`oxidizr-api/src/init.rs` + `templates/` — read before touching)
 

@@ -36,7 +36,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory as _, Parser, Subcommand, ValueEnum};
 use oxidizr_api::{
     ApiOptions, ExitClass, FmtMode, ImportFormat, InitTemplate, Input, LogItem, Outcome,
     QueryFormat, QueryKind, Request, Severity,
@@ -259,6 +259,15 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Emit a shell-completion script for this CLI to stdout (`completions`,
+    /// §P4-M3 O-3): rendered by `clap_complete` from the argv surface itself
+    /// — dispatched in `run` BEFORE the pipeline (it never opens a
+    /// workspace, so it is not a [`Request`], like `view`).
+    Completions {
+        /// Target shell (`bash`, `elvish`, `fish`, `powershell`, `zsh`).
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
     /// Open the workspace in the native viewer window (F10, §P3-M8) —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
@@ -397,6 +406,15 @@ pub enum ViewTheme {
 pub fn run() -> anyhow::Result<i32> {
     let cli = Cli::parse();
     let renderer = Renderer::new(cli.no_color, cli.quiet);
+    // §P4-M3 O-3: `completions` renders the argv surface via
+    // `clap_complete` — CLI-only machinery, dispatched before the
+    // pipeline like `view` (the script is stdout payload, never an
+    // `Outcome` byte contract).
+    if let Command::Completions { shell } = &cli.command {
+        let mut command = Cli::command();
+        clap_complete::generate(*shell, &mut command, "oxidizr", &mut std::io::stdout());
+        return Ok(0);
+    }
     // §P3-M8 / F10: `view` is the GUI shell, not a pipeline command —
     // it dispatches before anything touches `oxidizr-api`.
     if let Command::View { file, theme } = &cli.command {
@@ -559,8 +577,9 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             },
             force,
         },
-        // §P3-M8: dispatched in `run` before the pipeline is reached.
-        Command::View { .. } => return None,
+        // §P3-M8 + §P4-M3 O-3: dispatched in `run` before the pipeline is
+        // reached (`view` = the GUI shell, `completions` = the argv table).
+        Command::View { .. } | Command::Completions { .. } => return None,
     })
 }
 
@@ -668,6 +687,7 @@ mod tests {
             Command::Import { .. } => "import",
             Command::Query { .. } => "query",
             Command::Init { .. } => "init",
+            Command::Completions { .. } => "completions",
             Command::View { .. } => "view",
         }
     }
@@ -772,6 +792,11 @@ mod tests {
         assert!(Cli::try_parse_from(["oxidizr", "merge"]).is_err());
         // `validate` needs at least one file (clap usage error, exit 2).
         assert!(Cli::try_parse_from(["oxidizr", "validate"]).is_err());
+        // §P4-M3 O-3: `completions` takes exactly one known shell token.
+        Cli::try_parse_from(["oxidizr", "completions", "bash"]).unwrap();
+        Cli::try_parse_from(["oxidizr", "completions", "powershell"]).unwrap();
+        assert!(Cli::try_parse_from(["oxidizr", "completions", "csh"]).is_err());
+        assert!(Cli::try_parse_from(["oxidizr", "completions"]).is_err());
     }
 
     #[test]
