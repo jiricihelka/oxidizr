@@ -76,7 +76,9 @@ fn json_issues(text: &str) -> Vec<Issue> {
     }
 }
 
-fn is_json(uri: &Uri) -> bool {
+/// Format route: `*.json` validates/formats as JSON, everything else is
+/// DSL (shared by the diagnostics, hover and formatting pipelines).
+pub(crate) fn is_json(uri: &Uri) -> bool {
     uri.as_str().to_ascii_lowercase().ends_with(".json")
 }
 

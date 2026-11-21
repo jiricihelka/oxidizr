@@ -13,9 +13,10 @@
 //! `textDocument/completion` over the stored buffer; L-5 added
 //! `textDocument/hover` — keyword cards from the raw text, model cards
 //! from the LAST SUCCESSFUL parse ([`Server::last_good`], kept across a
-//! failing reparse). Requests with no implemented feature answer
-//! `MethodNotFound` (L4 formatting is open) — replying is mandatory, an
-//! unanswered request hangs the client.
+//! failing reparse); L-6 added the two formatting requests (canonical
+//! print via `oxidizr_dsl::fmt`). Requests with no implemented feature
+//! answer `MethodNotFound` — replying is mandatory, an unanswered
+//! request hangs the client.
 
 use std::collections::HashMap;
 
@@ -24,11 +25,14 @@ use lsp_types::notification::{
     DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Exit, Notification as _,
     PublishDiagnostics,
 };
-use lsp_types::request::{Completion, HoverRequest, Initialize, Request as _, Shutdown};
+use lsp_types::request::{
+    Completion, Formatting, HoverRequest, Initialize, RangeFormatting, Request as _, Shutdown,
+};
 use lsp_types::{
-    CompletionOptions, CompletionParams, CompletionResponse, HoverParams, HoverProviderCapability,
-    InitializeResult, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
-    TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
+    CompletionOptions, CompletionParams, CompletionResponse, DocumentFormattingParams,
+    DocumentRangeFormattingParams, HoverParams, HoverProviderCapability, InitializeResult, OneOf,
+    PublishDiagnosticsParams, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Uri,
 };
 use oxidizr_core::Workspace;
 
@@ -80,6 +84,12 @@ impl Server {
                 ..CompletionOptions::default()
             }),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            // L-6: both printers answer from the stored buffer; the
+            // canonical style is the formatter's OWN contract (4-space
+            // indent), so the `FormattingOptions` a client sends are
+            // read but deliberately not honored.
+            document_formatting_provider: Some(OneOf::Left(true)),
+            document_range_formatting_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -115,6 +125,8 @@ impl Server {
             }
             Completion::METHOD => self.completion_response(request),
             HoverRequest::METHOD => self.hover_response(request),
+            Formatting::METHOD => self.formatting_response(request),
+            RangeFormatting::METHOD => self.range_formatting_response(request),
             other => vec![
                 Response::new_err(
                     request.id.clone(),
@@ -195,6 +207,55 @@ impl Server {
             crate::hover::hover(&doc.text, cursor.position, self.last_good.get(uri))
         });
         vec![Response::new_ok(request.id.clone(), response).into()]
+    }
+
+    /// `textDocument/formatting` (§P4-LSP L4, item L-6): the canonical
+    /// print of the stored buffer as ONE whole-document `TextEdit`. An
+    /// unopened document answers the EMPTY array (nothing to print);
+    /// so does a `.json` buffer — the byte contract never sees the DSL
+    /// printer ([`crate::formatting`]). Malformed params are the
+    /// client's bug: `InvalidParams`.
+    fn formatting_response(&self, request: &Request) -> Vec<Message> {
+        let Ok(params) = serde_json::from_value::<DocumentFormattingParams>(request.params.clone())
+        else {
+            return vec![
+                Response::new_err(
+                    request.id.clone(),
+                    ErrorCode::InvalidParams as i32,
+                    format!("malformed {}", Formatting::METHOD),
+                )
+                .into(),
+            ];
+        };
+        let uri = &params.text_document.uri;
+        let edits = self.document(uri).map_or_else(Vec::new, |doc| {
+            crate::formatting::full_document(uri, &doc.text)
+        });
+        vec![Response::new_ok(request.id.clone(), edits).into()]
+    }
+
+    /// `textDocument/rangeFormatting` (§P4-LSP L4, item L-6): the
+    /// request widened to WHOLE top-level statements — canonical style
+    /// is a global re-print, the choice is documented in
+    /// [`crate::formatting`].
+    fn range_formatting_response(&self, request: &Request) -> Vec<Message> {
+        let Ok(params) =
+            serde_json::from_value::<DocumentRangeFormattingParams>(request.params.clone())
+        else {
+            return vec![
+                Response::new_err(
+                    request.id.clone(),
+                    ErrorCode::InvalidParams as i32,
+                    format!("malformed {}", RangeFormatting::METHOD),
+                )
+                .into(),
+            ];
+        };
+        let uri = &params.text_document.uri;
+        let edits = self.document(uri).map_or_else(Vec::new, |doc| {
+            crate::formatting::range(uri, &doc.text, params.range)
+        });
+        vec![Response::new_ok(request.id.clone(), edits).into()]
     }
 
     fn on_notification(&mut self, notification: &Notification) -> (Vec<Message>, bool) {
@@ -420,6 +481,20 @@ mod tests {
             "the L-5 hover provider is advertised"
         );
         assert_eq!(
+            value
+                .pointer("/capabilities/documentFormattingProvider")
+                .unwrap(),
+            &serde_json::json!(true),
+            "the L-6 formatting provider is advertised"
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/documentRangeFormattingProvider")
+                .unwrap(),
+            &serde_json::json!(true),
+            "the L-6 range-formatting provider is advertised"
+        );
+        assert_eq!(
             value.pointer("/serverInfo/name").unwrap(),
             &serde_json::json!("oxidizr-lsp")
         );
@@ -524,9 +599,9 @@ mod tests {
     #[test]
     fn unknown_method_gets_method_not_found_with_the_same_id() {
         let mut server = Server::new();
-        // L-5 implemented `hover`, so the fallback needs a method that
-        // IS still open (L4 formatting).
-        let (out, stop) = server.handle(&request("textDocument/formatting"));
+        // L-6 implemented BOTH formatting requests, so the fallback
+        // example is a method §P4-LSP never ships.
+        let (out, stop) = server.handle(&request("textDocument/documentSymbol"));
         assert!(!stop);
         let sent = responses(&out);
         let [response] = sent.as_slice() else {
@@ -536,7 +611,7 @@ mod tests {
             panic!("expected an error response");
         };
         assert_eq!(error.code, ErrorCode::MethodNotFound as i32);
-        assert!(error.message.contains("textDocument/formatting"));
+        assert!(error.message.contains("textDocument/documentSymbol"));
         assert_eq!(response.id, RequestId::from(7), "clients match on the id");
     }
 
@@ -743,6 +818,93 @@ mod tests {
     fn malformed_hover_params_get_invalid_params() {
         let mut server = Server::new();
         let response = feature_request(&mut server, HoverRequest::METHOD, serde_json::json!(42));
+        let Err(error) = &response.response_result else {
+            panic!("expected an error response");
+        };
+        assert_eq!(error.code, ErrorCode::InvalidParams as i32);
+    }
+
+    /// `textDocument/formatting` (or, with `range`, `rangeFormatting`)
+    /// — the `options` are the spec's minimum (`tabSize`,
+    /// `insertSpaces`); the server reads but does not honor them.
+    fn formatting_params(uri: Uri, range: Option<lsp_types::Range>) -> serde_json::Value {
+        // The identifier is BUILT so `uri` rides by value (the `json!`
+        // macro would only borrow it).
+        let text_document = serde_json::to_value(TextDocumentIdentifier { uri }).unwrap();
+        let mut params = serde_json::json!({
+            "textDocument": text_document,
+            "options": { "tabSize": 4, "insertSpaces": true },
+        });
+        if let Some(range) = range {
+            params["range"] = serde_json::to_value(range).unwrap();
+        }
+        params
+    }
+
+    #[test]
+    fn formatting_prints_the_stored_buffer_canonically() {
+        let mut server = Server::new();
+        open_dsl(&mut server, HOISTED);
+        let response = feature_request(
+            &mut server,
+            Formatting::METHOD,
+            formatting_params(url(), None),
+        );
+        let Ok(value) = &response.response_result else {
+            panic!("formatting must answer ok");
+        };
+        let [edit] = value.as_array().unwrap().as_slice() else {
+            panic!("one whole-buffer edit: {value}");
+        };
+        assert_eq!(edit["range"]["start"]["line"], serde_json::json!(0));
+        let text = edit["newText"].as_str().unwrap();
+        assert!(text.contains("\n    model {\n"), "{text}"); // 4-space canon
+        assert!(text.ends_with("}\n"), "{text}");
+    }
+
+    #[test]
+    fn range_formatting_widens_to_the_statement() {
+        let mut server = Server::new();
+        open_dsl(&mut server, HOISTED);
+        let selection = lsp_types::Range::new(
+            lsp_types::Position::new(2, 4),
+            lsp_types::Position::new(2, 8),
+        );
+        let response = feature_request(
+            &mut server,
+            RangeFormatting::METHOD,
+            formatting_params(url(), Some(selection)),
+        );
+        let Ok(value) = &response.response_result else {
+            panic!("range formatting must answer ok");
+        };
+        let [edit] = value.as_array().unwrap().as_slice() else {
+            panic!("the statement joins into one edit: {value}");
+        };
+        // The `p = person` line belongs to the ONE workspace statement:
+        // the edit spans the whole buffer, not the requested chars.
+        assert_eq!(edit["range"]["start"]["line"], serde_json::json!(0));
+        assert_eq!(edit["range"]["start"]["character"], serde_json::json!(0));
+    }
+
+    #[test]
+    fn formatting_an_unopened_document_is_empty() {
+        let mut server = Server::new();
+        let response = feature_request(
+            &mut server,
+            Formatting::METHOD,
+            formatting_params(url(), None),
+        );
+        assert_eq!(
+            response.response_result.as_ref().unwrap(),
+            &serde_json::json!([])
+        );
+    }
+
+    #[test]
+    fn malformed_formatting_params_get_invalid_params() {
+        let mut server = Server::new();
+        let response = feature_request(&mut server, Formatting::METHOD, serde_json::json!(42));
         let Err(error) = &response.response_result else {
             panic!("expected an error response");
         };

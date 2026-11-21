@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP L0–L3 shipped — L4 formatting next**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP L0–L4 shipped — L5 config + milestone close next**)
 
 ## State
 
@@ -34,11 +34,14 @@
 ## Next: Phase 4 (`build/PHASE_4.md` — authoritative, read it first)
 
 - **§P4-LSP in flight** (F5 prioritized 2026-11-21): L0 `a38f905`,
-  L1 `e11271f`, L2 `fedd7aa`, L3 (this commit) — **L4 formatting is
-  next** (`oxidizr_dsl::fmt::format`, one TextEdit; the
-  `unknown_method` test example moves to the next-open method),
-  L5 config + `docs/lsp-editors.md` + milestone close (full e2e tier +
-  bless 307×unchanged + PROGRESS).
+  L1 `e11271f`, L2 `fedd7aa`, L3 `e13af48`, L4 (this commit) — **L5 is
+  next** (item L-7: `initializationOptions` `{strict, themesDir,
+  allowNet=false, maxNumberOfProblems}` — wire `maxNumberOfProblems` to
+  the 100 default in `diagnostics.rs`; `oxidizr-lsp --version`;
+  `docs/lsp-editors.md`), and with it the milestone close = full e2e
+  tier + bless 307×unchanged + PROGRESS. The `unknown_method` test
+  example now rides `textDocument/documentSymbol` (§P4-LSP never ships
+  it).
 - After §P4-LSP: M0 `diff`, M1 `inspect`, M2 importers, M3
   query/init/completions, M5 oracle + carry-ins + cargo-dist + changelog
   catch-up.
@@ -111,13 +114,37 @@
   `!identifiers hierarchical` (corpus: deployment-groups-hierarchical.dsl);
   `containerInstance` form is `containerInstance <id>` /
   `<system-ident>.<container-ident>` — NEVER `s:c`.
+- **Formatting (L4)** (`formatting.rs` + `server.rs`): `formatting` =
+  ONE whole-buffer TextEdit from `oxidizr_dsl::fmt::format`, EMPTY array
+  when canonical OR `.json` (byte contract never sees the DSL printer —
+  `diagnostics::is_json` is the shared `pub(crate)` route);
+  `rangeFormatting` WIDENS to the top-level statement(s) touched
+  (canonical style is a global re-print — mid-statement edits would
+  disagree with the next full format; documented deviation); cursor in
+  top-level trivia ⇒ NEXT statement, trailing ⇒ PREVIOUS; statement
+  walk over the lossless CST with brace delta from `TokenBare` ONLY
+  (quoted values/`"""`/comments never move depth), stray closers clamp
+  at 0, open braces at EOF end the statement at buffer end; statement
+  spans end on a line-terminator boundary (`terminator_end`);
+  `FormattingOptions` read but NOT honored (canonical = 4-space);
+  unopened doc ⇒ EMPTY array, malformed params ⇒ `InvalidParams`.
+  Formatter quirk pinned by tests: conservative unquoting — `name "x"`
+  prints `name x`.
 - lsp-types 0.97: `completion_provider` IS `CompletionOptions` (no
   provider wrapper); `CompletionResponse::Array`; `Position::new`;
   `HoverRequest` (NOT `Hover`) is the request type — METHOD
   `textDocument/hover`, Result `Option<Hover>`, `HoverParams` field is
   `text_document_position_params` (flattened, differs from completion's
   `text_document_position`); `HoverProviderCapability::Simple(bool)`;
-  `len_utf16()`/`len_utf8()` return `usize` on the pinned nightly.
+  `Formatting`/`RangeFormatting` ARE the request traits (METHODs
+  `textDocument/{,range}Formatting`, Result `Option<Vec<TextEdit>>`,
+  `DocumentFormattingParams{text_document, options}` + `range` on the
+  range variant); the two capabilities are
+  `Option<OneOf<bool, …Options>>` — `OneOf::Left(true)` serializes to
+  `true`; `FormattingOptions` JSON REQUIRES `tabSize`+`insertSpaces`.
+  `len_utf16()`/`len_utf8()` return `usize` on the pinned nightly;
+  `usize: From<u32>` does NOT exist — u32 spans go through
+  `usize::try_from(..)` or `as usize` (cst.rs style).
 
 ## §P3-M11 UX batch surface (shell/paint/scene/layered/statefile — read before touching)
 

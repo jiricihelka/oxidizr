@@ -3091,6 +3091,7 @@ dependencies = [
  "lsp-server",
  "lsp-types",
  "oxidizr-api",
+ "oxidizr-ast",
  "oxidizr-core",
  "oxidizr-diag",
  "oxidizr-dsl",
