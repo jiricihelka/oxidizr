@@ -27,6 +27,7 @@ mod expr;
 mod find;
 mod idents;
 mod rel;
+mod scope;
 mod stmt_config;
 mod stmt_deployment;
 mod stmt_line;
@@ -48,12 +49,14 @@ use crate::compat;
 use crate::preprocess::{Logical, text_block_value};
 
 // 2R R-dsl-09: externals consume only the parse surface (`parse_dsl`,
-// `ParseOptions`/`ParseResult`/`EnvLookup`/`InstalledThemes`, `DslError`) —
-// the engine's working types stay crate-internal.
+// `ParseOptions`/`ParseResult`/`EnvLookup`/`InstalledThemes`, `DslError`)
+// plus the §P4-LSP L-4 cursor helper (`cursor_scope`/`CursorScope`) — the
+// engine's working types stay crate-internal.
 pub(crate) use ctx::{ColorScheme, Ctx, DslEnvironment, DslGroup, Holder};
 pub use error::DslError;
 pub(crate) use idents::{IdentifierScope, IdentifiersRegister, PseudoKind, RegItem};
 use rel::RelArch;
+pub use scope::{CursorScope, DIRECTIVES, cursor_scope};
 pub(crate) use tokens::Tokens;
 pub(crate) use uuid::uuid_v4;
 

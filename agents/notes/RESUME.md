@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0 → P4 next, F5 LSP prioritized**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP L0–L2 shipped — L3 hover next**)
 
 ## State
 
@@ -33,9 +33,14 @@
 
 ## Next: Phase 4 (`build/PHASE_4.md` — authoritative, read it first)
 
-- **User priority (2026-11-21): F5 `lsp` FIRST** — save-time
-  diagnostics, completion, hover, built on the CST; the other P4 items
-  follow after.
+- **§P4-LSP in flight** (F5 prioritized 2026-11-21): L0 `a38f905`,
+  L1 `e11271f`, L2 (this commit) — **L3 hover is next**, then L4
+  formatting (`oxidizr_dsl::fmt::format`), L5 config +
+  `docs/lsp-editors.md` + milestone close (full e2e tier + bless
+  307×unchanged + PROGRESS).
+- After §P4-LSP: M0 `diff`, M1 `inspect`, M2 importers, M3
+  query/init/completions, M5 oracle + carry-ins + cargo-dist + changelog
+  catch-up.
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams
@@ -44,8 +49,48 @@
   subcommands. diff exit-code adds `1 = differences found`.
 - **Nothing may alter `oxidizr-json` bytes** (P4 opening clause) —
   bless 307×unchanged stays the tripwire.
-- P4-M0 = decomposition table into PHASE_4.md (same ritual as P3-M0:
-  docs commit, then per-item rows with DONE stamps at close).
+
+## §P4-LSP shipped surface (oxidizr-lsp + engine/scope.rs — read before touching)
+
+- **Crate ritual** (R-2 mirror): `oxidizr-lsp` = headless lib core
+  (`server.rs` state machine + `diagnostics.rs`/`completion.rs` pure
+  fns) + thin stdio `main.rs`; `run()` takes `Connection` BY VALUE and
+  destructures it — dropping `sender` ends lsp-server's writer thread
+  (joining io-threads while holding the connection HANGS). Transcript
+  harness (`tests/transcript.rs`) pins wire ORDER via
+  `Connection::memory()`; unit tests pin CONTENT.
+- **Diagnostics (L1)**: `.json` URIs route to `oxidizr_json::from_slice`
+  (`Input::Bytes` has no extension); DSL = `api::open(Input::Bytes)`;
+  UTF-16 column mapper `diagnostics::position`; cap 100; `didClose`
+  ends with an EMPTY publish.
+- **Completion (L2)**: `oxidizr_dsl::engine::cursor_scope(source,
+  cursor_byte)` replays the REAL engine over the lines BEFORE the
+  cursor (`Logical.span` is **(start, end)** — the guard is
+  `span.1 > cursor ⇒ break`; the cursor's own line is NEVER fed);
+  recovery mirrored (`stack.truncate(height)`, `fatal_file ⇒ stop`);
+  `ParseOptions::fragment()` + CLOSED `env_lookup` ⇒ FS-free and
+  deterministic. Returns purpose-shaped `CursorScope { keywords,
+  expects_workspace, identifiers, view_keys, tags }` — `Ctx`/`Parser`
+  stay `pub(crate)` (2R R-dsl-09). `DIRECTIVES` excludes the JVM-only
+  `!plugin`/`!script`. `IdentifiersRegister::all_identifiers()` drops
+  auto-UUID keys.
+- **Completion wire** (`completion.rs`): keywords→Keyword,
+  directives→Keyword, identifiers→Variable, view keys→Property,
+  tags→Field, snippets→Snippet (`per`/`sys`/`rel`; `rel` gates on
+  `->` — the Model scope has no `relationship` keyword); `!`-prefix leg
+  returns directives ONLY; prefix walker set `[A-Za-z0-9_!-]`;
+  `position_to_offset` clamps both ways (this nightly: `len_utf16()`
+  returns `usize`). Server: unknown doc ⇒ EMPTY array (not an error),
+  malformed params ⇒ `InvalidParams`; capability triggerCharacters
+  `["!"]`.
+- **Engine facts pinned by probes**: `systemLandscape "key1" "L"`
+  OPENS a view context even without `{` (scope-test fixtures must brace
+  view blocks); the CLOSED root still lists `[name, description, …,
+  model, views, configuration]` — `expects_workspace` is what marks a
+  fresh file, not an empty keyword list.
+- lsp-types 0.97: `completion_provider` IS `CompletionOptions` (no
+  provider wrapper); `CompletionResponse::Array`; `Position::new`;
+  `len_utf16()`/`len_utf8()` return `usize` on the pinned nightly.
 
 ## §P3-M11 UX batch surface (shell/paint/scene/layered/statefile — read before touching)
 

@@ -9,10 +9,11 @@
 //! L-2 shipped the `initialize`/`shutdown`/`exit` handshake and
 //! **full-document sync** (`didOpen`/`didChange`/`didClose`); L-3 added
 //! the diagnostics republish on all three (a close ends with an EMPTY
-//! publish, clearing the editor's squiggles). Requests with no
-//! implemented feature answer `MethodNotFound` (L2 completion, L3 hover,
-//! L4 formatting are open) — replying is mandatory, an unanswered
-//! request hangs the client.
+//! publish, clearing the editor's squiggles); L-4 added
+//! `textDocument/completion` over the stored buffer. Requests with no
+//! implemented feature answer `MethodNotFound` (L3 hover, L4 formatting
+//! are open) — replying is mandatory, an unanswered request hangs the
+//! client.
 
 use std::collections::HashMap;
 
@@ -21,10 +22,11 @@ use lsp_types::notification::{
     DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Exit, Notification as _,
     PublishDiagnostics,
 };
-use lsp_types::request::{Initialize, Request as _, Shutdown};
+use lsp_types::request::{Completion, Initialize, Request as _, Shutdown};
 use lsp_types::{
-    InitializeResult, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
-    TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
+    CompletionOptions, CompletionParams, CompletionResponse, InitializeResult,
+    PublishDiagnosticsParams, ServerCapabilities, ServerInfo, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Uri,
 };
 
 /// One open buffer (full sync: the text is always the WHOLE document).
@@ -54,15 +56,21 @@ impl Server {
         Self::default()
     }
 
-    /// The advertised server capabilities: full-document sync ONLY —
-    /// diagnostics need no capability (publishDiagnostics is
-    /// server-pushed). Later items add their providers here (L2
-    /// `completion_provider`, L3 `hover_provider`, L4
+    /// The advertised server capabilities: full-document sync and the
+    /// L-4 completion provider (`resolveProvider` stays off — items are
+    /// fully built in one pass). Diagnostics need no capability
+    /// (publishDiagnostics is server-pushed). Later items add their
+    /// providers here (L3 `hover_provider`, L4
     /// `document_formatting_provider`).
     #[must_use]
     pub fn capabilities() -> ServerCapabilities {
         ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+            completion_provider: Some(CompletionOptions {
+                // `!` opens the directive menu the moment it is typed.
+                trigger_characters: Some(vec!["!".to_owned()]),
+                ..CompletionOptions::default()
+            }),
             ..ServerCapabilities::default()
         }
     }
@@ -96,6 +104,7 @@ impl Server {
                 // The spec: shutdown's result is null; `exit` follows.
                 vec![Response::new_ok(request.id.clone(), serde_json::Value::Null).into()]
             }
+            Completion::METHOD => self.completion_response(request),
             other => vec![
                 Response::new_err(
                     request.id.clone(),
@@ -126,6 +135,32 @@ impl Server {
             ),
         };
         vec![response.into()]
+    }
+
+    /// `textDocument/completion` (§P4-LSP L2, item L-4): the stored
+    /// buffer replayed through the real scope machine. A document the
+    /// client never opened answers the EMPTY array — completion is
+    /// opportunistic, an empty menu beats an error popup (editors race
+    /// `didChange` against requests). Malformed params are the client's
+    /// bug: `InvalidParams`.
+    fn completion_response(&self, request: &Request) -> Vec<Message> {
+        let Ok(params) = serde_json::from_value::<CompletionParams>(request.params.clone()) else {
+            return vec![
+                Response::new_err(
+                    request.id.clone(),
+                    ErrorCode::InvalidParams as i32,
+                    format!("malformed {}", Completion::METHOD),
+                )
+                .into(),
+            ];
+        };
+        let cursor = params.text_document_position;
+        let response = self
+            .document(&cursor.text_document.uri)
+            .map_or_else(Vec::new, |doc| {
+                crate::completion::completions(&doc.text, cursor.position)
+            });
+        vec![Response::new_ok(request.id.clone(), CompletionResponse::Array(response)).into()]
     }
 
     fn on_notification(&mut self, notification: &Notification) -> (Vec<Message>, bool) {
@@ -325,6 +360,13 @@ mod tests {
             "full-document sync is the L-2 contract"
         );
         assert_eq!(
+            value
+                .pointer("/capabilities/completionProvider/triggerCharacters")
+                .unwrap(),
+            &serde_json::json!(["!"]),
+            "the L-4 directive trigger is advertised"
+        );
+        assert_eq!(
             value.pointer("/serverInfo/name").unwrap(),
             &serde_json::json!("oxidizr-lsp")
         );
@@ -429,7 +471,9 @@ mod tests {
     #[test]
     fn unknown_method_gets_method_not_found_with_the_same_id() {
         let mut server = Server::new();
-        let (out, stop) = server.handle(&request("textDocument/completion"));
+        // L-4 implemented `completion`, so the fallback needs a method
+        // that IS still open (L3 hover).
+        let (out, stop) = server.handle(&request("textDocument/hover"));
         assert!(!stop);
         let sent = responses(&out);
         let [response] = sent.as_slice() else {
@@ -439,8 +483,105 @@ mod tests {
             panic!("expected an error response");
         };
         assert_eq!(error.code, ErrorCode::MethodNotFound as i32);
-        assert!(error.message.contains("textDocument/completion"));
+        assert!(error.message.contains("textDocument/hover"));
         assert_eq!(response.id, RequestId::from(7), "clients match on the id");
+    }
+
+    /// A `textDocument/completion` request over `text` at line 0,
+    /// char 0 — WITHOUT opening the document (the store is the gate).
+    fn completion_request(
+        server: &mut Server,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Response {
+        let message: Message = Request {
+            id: RequestId::from(9),
+            method: method.to_owned(),
+            params,
+        }
+        .into();
+        let (out, _) = server.handle(&message);
+        let sent = responses(&out);
+        let [response] = sent.as_slice() else {
+            panic!("exactly one response to a request");
+        };
+        (*response).clone()
+    }
+
+    fn completion_params(uri: Uri, line: u32, character: u32) -> serde_json::Value {
+        serde_json::to_value(lsp_types::CompletionParams {
+            text_document_position: lsp_types::TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: lsp_types::Position::new(line, character),
+            },
+            work_done_progress_params: lsp_types::WorkDoneProgressParams::default(),
+            partial_result_params: lsp_types::PartialResultParams::default(),
+            context: None,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn completion_answers_from_the_stored_buffer() {
+        let mut server = Server::new();
+        let open = notify(
+            DidOpenTextDocument::METHOD,
+            serde_json::to_value(DidOpenTextDocumentParams {
+                text_document: lsp_types::TextDocumentItem {
+                    uri: url(),
+                    language_id: "dsl".to_owned(),
+                    version: 1,
+                    text: "workspace {\n  model {\n".to_owned(),
+                },
+            })
+            .unwrap(),
+        );
+        server.handle(&open);
+        let response = completion_request(
+            &mut server,
+            Completion::METHOD,
+            completion_params(url(), 2, 0),
+        );
+        let Ok(value) = &response.response_result else {
+            panic!("completion must answer ok");
+        };
+        let labels: Vec<&str> = value
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["label"].as_str().unwrap())
+            .collect();
+        assert!(labels.contains(&"person"), "the Model scope: {labels:?}");
+        assert!(
+            !labels.contains(&"views"),
+            "not the Workspace scope: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn completion_for_an_unopened_document_is_empty() {
+        // Editors race `didChange` against requests — an empty menu, not
+        // an error popup, is the contract (L-4).
+        let mut server = Server::new();
+        let response = completion_request(
+            &mut server,
+            Completion::METHOD,
+            completion_params(url(), 0, 0),
+        );
+        assert_eq!(
+            response.response_result.as_ref().unwrap(),
+            &serde_json::json!([])
+        );
+    }
+
+    #[test]
+    fn malformed_completion_params_get_invalid_params() {
+        let mut server = Server::new();
+        let response = completion_request(&mut server, Completion::METHOD, serde_json::json!(42));
+        let Err(error) = &response.response_result else {
+            panic!("expected an error response");
+        };
+        assert_eq!(error.code, ErrorCode::InvalidParams as i32);
     }
 
     #[test]

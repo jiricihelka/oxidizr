@@ -29,6 +29,10 @@ anyhow = { workspace = true }
 oxidizr-api = { workspace = true }
 oxidizr-json = { workspace = true }
 oxidizr-diag = { workspace = true }
+# L-4 completion (P4-D5): `engine::cursor_scope` replays the REAL scope
+# machine over the lines before the cursor — the menu can never disagree
+# with what the parser would accept.
+oxidizr-dsl = { workspace = true }
 
 [dev-dependencies]
 expect-test = { workspace = true }

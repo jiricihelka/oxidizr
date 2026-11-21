@@ -200,6 +200,19 @@ impl IdentifiersRegister {
         self.find_element(&RegItem::Element(id.clone()))
     }
 
+    /// Every EXPLICITLY registered element+relationship identifier
+    /// (elements first, registration order), auto-UUID keys dropped — the
+    /// completion inventory for P4 §P4-LSP L-4 (`cursor_scope`). UUID keys
+    /// come from statements without an `id =` prefix; nothing can be typed
+    /// with them, so they are noise.
+    pub(crate) fn all_identifiers(&self) -> impl Iterator<Item = &str> {
+        self.elements
+            .iter()
+            .map(|e| e.identifier.as_str())
+            .chain(self.relationships.iter().map(|e| e.identifier.as_str()))
+            .filter(|id| !looks_like_uuid(id))
+    }
+
     /// The identifier of a relationship id.
     #[allow(dead_code)] // Java parity surface: `Model.getRelationship` lookup.
     #[must_use]

@@ -3092,6 +3092,7 @@ dependencies = [
  "lsp-types",
  "oxidizr-api",
  "oxidizr-diag",
+ "oxidizr-dsl",
  "oxidizr-json",
  "serde_json",
 ]

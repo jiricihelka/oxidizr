@@ -15,5 +15,6 @@
 //! transcript harness) → L1 diagnostics → L2 completion → L3 hover →
 //! L4 formatting → L5 config + close.
 
+pub mod completion;
 pub mod diagnostics;
 pub mod server;
