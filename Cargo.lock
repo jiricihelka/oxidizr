@@ -3041,6 +3041,7 @@ dependencies = [
  "oxidizr-ast",
  "oxidizr-core",
  "oxidizr-diag",
+ "oxidizr-import",
  "oxidizr-json",
  "proptest",
 ]

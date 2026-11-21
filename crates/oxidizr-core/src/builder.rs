@@ -125,6 +125,39 @@ impl WorkspaceBuilder {
         &mut self.workspace
     }
 
+    /// The `Documentable` documentation of one DSL holder — the seam the
+    /// `!docs`/`!adrs` importers append to (P4-M2, `IMPORT-DOCS-ADRS.md`;
+    /// the reference contexts hold the `Documentable` directly).
+    /// `None` id ⇒ the workspace; `Some` ⇒ the software system / container
+    /// / component with that id (persons and relationships are not
+    /// `Documentable` in the reference — no arm matches them).
+    pub fn documentation_mut(
+        &mut self,
+        id: Option<&Id>,
+    ) -> Option<&mut crate::docs::Documentation> {
+        match id {
+            None => Some(&mut self.workspace.documentation),
+            Some(id) => {
+                for s in &mut self.workspace.model.software_systems {
+                    if &s.item.id == id {
+                        return Some(&mut s.documentation);
+                    }
+                    for c in &mut s.containers {
+                        if &c.item.id == id {
+                            return Some(&mut c.documentation);
+                        }
+                        for k in &mut c.components {
+                            if &k.item.id == id {
+                                return Some(&mut k.documentation);
+                            }
+                        }
+                    }
+                }
+                None
+            }
+        }
+    }
+
     /// Register an externally assigned id (JSON load / `!identifiers` import).
     // Java parity surface (`IdGeneratorStrategy#found`); `adopt` seeds the
     // counter directly, and no other consumer exists — kept per 2R

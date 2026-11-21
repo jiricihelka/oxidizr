@@ -27,7 +27,7 @@ after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxi
 | `OXZ-4002` | Error | `failed to write workspace: …` | the model cannot be written byte-faithfully (`JsonError::Write`, e.g. filtered view without base) |
 | `OXZ-5001` | Error | network disabled | theme URL fetch without `--allow-net` (D5, flag ships P2-M1; `!include <url>` / `workspace extends <url>` are rejected regardless of the flag — hardened P1 behavior) |
 | `OXZ-5002` | Error | JVM-only directive not supported | `!script`, `!plugin`, `!components`, `!impliedRelationships <fqcn>` (D2) |
-| `OXZ-5003` | Error | documentation import arrives in Phase 4 | `!docs`/`!adrs` statement parsed, importer deferred (D7, retired by P4-D13) |
+| `OXZ-5003` | — | (tombstone) | retired at P4-M2 (D7 by P4-D13): the `!docs`/`!adrs` importers landed (`agents/plan/build/IMPORT-DOCS-ADRS.md`); never emitted, must not be reused |
 | `OXZ-5004` | — | (tombstone) | retired at M5 (D9): `workspace extends` landed with file and JSON bases; never emitted, must not be reused |
 | `OXZ-5005` | Error | import arrives in Phase 4 | `plantuml`/`mermaid`/`kroki` render branches and `theme <file>` content load parsed, importer deferred (D11, retired by P4); raster `image <file>` stays OXZ-5002 (D10) |
 | `OXZ-5006` | Error | `cannot read/write …` | CLI I/O and input policy (M6): unreadable/unwritable file, stdio error, non-UTF-8 input (V-8: UTF-8 only), undetectable workspace format; exit code 3 |

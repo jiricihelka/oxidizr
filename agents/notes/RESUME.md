@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 IN PROGRESS (N-1…N-5 done, next N-6 `!docs`/`!adrs`)**)
+# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); next §P4-M3 `query`/`init`/`completions`/`generate`**)
 
 ## State
 
@@ -57,56 +57,27 @@
   exit 1 iff REPORTED. Full e2e tier green + bless 307×unchanged +
   `cargo xtask ci` green; stamps: PHASE_4 §P4-M1 CLOSED header (I-rows all
   DONE), PROGRESS status board + `P4-M1` milestone log. Surface notes below.
-- **M2 importers IN PROGRESS** (decomposition N-1…N-6 in
-  `build/PHASE_4.md`; commits M2a…M2f). Done: **N-1/M2a `b7f66e5`**
-  (crate skeleton + image importer port, D14), **N-2/M2b `888bdf8`**
-  (C4-PlantUML model importer: `macrocall.rs` shared plumbing +
-  `c4plantuml.rs`, signatures pinned from plantuml-stdlib/C4-PlantUML;
-  **plan correction stamped**: importers produce the MODEL ONLY —
-  `CustomView.checkElementCanBeAdded` permits only `CustomElement`s and
-  no scoped view accepts a mixed C4 set, so default views install at
-  open via `api::open`; Rel label ⇒ model description) and
-  **N-3/M2c** (Mermaid C4 importer: `c4plantuml` machinery made
-  dialect-parameterized — `Dialect{PlantUml,Mermaid}` picks the
-  positional slots (Mermaid tags one slot earlier; Rel `$descr`
-  keyword-only via `usize::MAX`), `%%` comments
-  (`macrocall::strip_comments_mermaid`), `Container_Boundary_Ext` =
-  container scope + `External`, chrome `Enter_Boundary`/
-  `Leave_Boundary`/`Set*`/`Show*`/`Hide*`/`CLEAR_*` tolerated, skip
-  warnings noun `dialect.name()`; shared golden digest in
-  `src/testutil.rs`; `src/mermaid.rs` 7 tests) and **N-4/M2d** (CLI
-  arc: `ImportFormat` in `pipeline.rs` + re-exported from `oxidizr-api`;
-  `import_cmd` — explicit `--format` wins, else `sniff_format` on the
-  file name, nameless input / image-from-stdin ⇒ Usage(2) + OXZ-5006;
-  skip notes ride `LogItem::NoteLine`; bytes via `to_vec`+`emit_bytes`
-  like `dsl2json`; clap `ImportCmdFormat` spells `c4plantuml`, dashed
-  flags `--view-key`/`--view-name`; 9 goldens in `tests/cli.rs` §P4-M2
-  incl. the re-open read-check asserting `createDefaultViews` fires) and
-  **N-5/M2e** (`WebSequenceDiagramsExporter` port in
-  `oxidizr-export/src/wsd.rs`: `WsdDialect` on the shared `Engine` —
-  boundary hooks empty, `render_as_sequence_diagram` +
-  `owns_sequence_document` true so the dialect owns the dynamic walk via
-  `sequence_document`; `find_terminology` = the `Terminology` port
-  (instance unwrap, per-kind override-or-default, `CustomElement` ⇒
-  metadata-else-`"Element"`); `export_all` exports ONLY Custom + Dynamic
-  views (static/deployment overloads return `null`); dynamic header
-  `title <name>` (+ real-newline description), participants from the rel
-  endpoints source-then-destination first-seen (`actor` for Person, else
-  `participant`, literal `\n` separator), UNCONDITIONAL blank after
-  participants, stored-order rels (`->`/`->>`, response swaps +
-  `-->`/`-->>`; desc = view override trim-empty → model description →
-  EMPTY after `": "` — oracle witness); custom views ride the engine
-  base-body walk; no frames/legend, ext `wsd`, key = view key; oracle
-  9/9 fixtures byte-parity + `oracle verify` all wsd legs ok;
-  `cargo xtask oracle gen --wsd` gen/verify legs + 11 goldens/9 fixtures
-  + `export_wsd_goldens.rs`; OXZ-5007 allow-listed PERMANENT in the
-  coverage gate (only `static` raises it now); 161 e2e sidecars
-  re-blessed — wsd slots flip from the 5007 probe).
-  Next: **N-6/M2f `!docs`/`!adrs`** (retires OXZ-5003; close P4-V7/V8
-  first — read the Java matcher before trusting globs) + M2 close
-  ritual (oracle read gate, fixtures w/ attribution, bless
-  307×unchanged, full e2e tier). Then M3 (`query`/`init`/completions),
-  M5 (oracle legs + carry-ins + cargo-dist + changelog catch-up).
+- **§P4-M2 importers CLOSED 2026-11-21** (N-1…N-6; commits M2a
+  `b7f66e5`, M2b `888bdf8`, M2c `97e3bcb`, M2d `1ea06c8`, M2e `e753d4e`,
+  M2f this): the `oxidizr-import` crate (image + C4-PlantUML + Mermaid
+  ports — F12 semantic bar, MODEL ONLY; surface notes in the
+  §P4-M2 rows of `build/PHASE_4.md`), the WSD exporter (oracle 9/9
+  byte-parity, `golden/websequencediagrams/`), and N-6/M2f =
+  `!docs`/`!adrs` engine wiring — `docs.rs` (`DefaultDocumentation-
+  Importer`/`FormatFinder` + recursive walk + the reluctant image pass),
+  `decisions.rs` (AdrTools/Madr/Log4brains family, UTC parsing = D15),
+  `regexlite.rs` (std-only Java-regex FULL-MATCH subset, P4-V8), engine
+  `run_import` (six-FQN registry, `loadClass` first, empty-exclude guard,
+  reluctant pass after ANY importer when the path is a directory);
+  OXZ-5003 retired to a tombstone (m4 register 69 clean / 35 registered;
+  e2e bless = 305×unchanged + the 2 reviewed sidecars: `04-deferred-
+  directives` 5002+5003→2002+5002, `15-adrs-dir` 5003→2002); oracle
+  A/B legs green `TZ=UTC` (see §P4-M2 surface below, esp. the
+  Java empty-input `split` fix). Surface notes below; permanent contract
+  `build/IMPORT-DOCS-ADRS.md`. Close stamps: PHASE_4 N-6 + Close rows,
+  PROGRESS status board + `P4-M2` milestone log. **Next: §P4-M3**
+  (`query`/`init`/`completions`/`generate` per PHASE_4), then M5 (oracle
+  legs, carry-ins, cargo-dist, changelog catch-up).
 - Scope: **F3 `diff`, F6 `query`, F7 `init`, F5 `lsp`, F4 `oracle` user
   command, inspect-parity**, diagram importers moved from P2
   (C4-PlantUML, Mermaid, image→CustomView), WebSequenceDiagrams
@@ -115,6 +86,56 @@
   subcommands. diff exit-code adds `1 = differences found`.
 - **Nothing may alter `oxidizr-json` bytes** (P4 opening clause) —
   bless 307×unchanged stays the tripwire.
+
+## §P4-M2 importers surface (`oxidizr-import` + engine `run_import` — read before touching)
+
+- **Two fidelity bars**: macro importers (F12) = SEMANTIC, model only,
+  goldens are OURS; `!docs`/`!adrs` = core-compat — the byte contract
+  where the format defines it. Permanent port contract:
+  `build/IMPORT-DOCS-ADRS.md` (pinned facts, error shapes, oracle
+  protocol). Deviations D15 (decision-date PARSING is UTC; oracle legs
+  run `TZ=UTC`) + D16 (docs `Image.content` = raw file bytes base64'd,
+  NO data-URI prefix).
+- **Engine `run_import` order** (the `end()` contract): skip if no
+  `current_file_raw()` (string parses import NOTHING) ⇒ resolve FQN
+  (registry = the six built-in FQNs; unknown ⇒ `"{prefix}{fqn} was not
+  found"` — `loadClass` BEFORE any path/regex error) ⇒ empty-exclude
+  guard (`"A regex must be provided."`) ⇒ `new File(parent, path)` join
+  (no `..` resolution) ⇒ import ⇒ reluctant `DefaultImageImporter(true)`
+  pass (BOTH contexts, after ANY importer, ONLY when the joined path is a
+  directory). `ImportError::Failed(m)` ⇒ prefix+m; `Io` ⇒
+  `"java.io.IOException: {e}"`. Ctx payloads carry the block-end
+  line/token ⇒ OXZ-2002 spans match the JVM text byte-for-byte.
+- **`exclude` = Java regex FULL MATCH** (P4-V8: `equals || matches`) ⇒
+  std-only `regexlite` (literals, `.`≠newline, `\d\D\w\W\s\S`,
+  classes, groups/alternation, greedy+lazy `* + ? {n,m}`; NO
+  `(?flags)`/`\b`/backrefs — unreachable in the corpus). `!adrs`
+  DEFAULT = adrtools; aliases case-sensitive `getOrDefault`; `end()`
+  dispatches by resolved CLASS (a `!docs` naming a decision importer
+  imports decisions).
+- **Java `split` semantics (compat bug caught by the oracle A/B and
+  fixed)**: `"".split(sep)` → `[""]` (ONE empty element — the
+  documented empty-input special case, JVM-proven on the pinned Java 21);
+  non-empty all-empty input stays `[]` (`",".split(",")` → `[]`). The
+  element/deployment-node parsers `addAll(token.split(","))` the TAGS_INDEX
+  token unfiltered, so `deploymentNode "X" "" "tech" ""` MUST store the
+  empty tag ⇒ `"tags": "Element,Deployment Node,"`. Fixed centrally in
+  `java_split_str`/`split_keeping_lead_dropping_trail` (`engine/mod.rs`);
+  the expression-split arms are `contains`-guarded (empty input
+  unreachable) and `java_index_or_oob` keeps its non-empty-`[]` message.
+- **Oracle A/B protocol** (`TZ=UTC`, app 2026.10.26): `oxidizr dsl2json`
+  vs reference `export --workspace X.dsl`, compare via `jq -S`; mask the
+  TWO established classes — `structurizr.dsl.identifier` UUIDs are
+  RANDOM per-parse on BOTH sides, and the reference CLI injects
+  `structurizr.inspection.*` counters into top-level `properties` at
+  export (strip; if it empties, delete the key — we never write it).
+  Read gate = reference re-exports OUR JSON (its JSON `setTags` drops a
+  trailing empty tag on re-import — the reference's OWN asymmetry, so
+  mask `"\u2026Node,"` → `"\u2026Node"` there). Negative legs: the
+  deferred fixtures' error text matches verbatim incl. line + token.
+- Tests: `oxidizr-import` 55 lib; `crates/oxidizr-dsl/tests/
+  p4m2_docs_adrs.rs` 5 (engine wiring incl. both negative arms); m4
+  register `m4_fixtures.rs` 69 clean / 35 registered.
 
 ## §P4-LSP shipped surface (oxidizr-lsp + engine/scope.rs — read before touching)
 

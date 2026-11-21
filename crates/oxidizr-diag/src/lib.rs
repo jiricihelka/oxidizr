@@ -173,8 +173,9 @@ pub mod codes {
     /// JVM-only directive not supported (`!script`, `!plugin`, `!components`,
     /// `!impliedRelationships <fqcn>`) (D2).
     pub const JVM_ONLY: Code = Code::new(5002);
-    /// `!docs`/`!adrs` parsed; importers arrive in Phase 4 (D7, retired by P4-D13).
-    pub const DOCS_DEFERRED: Code = Code::new(5003);
+    // 5003: TOMBSTONE — the `!docs`/`!adrs` importers landed at P4-M2
+    // (D7 retired by P4-D13, `IMPORT-DOCS-ADRS.md`); the code is never
+    // emitted again and must not be reused (`docs/diagnostics.md`).
     // 5004: TOMBSTONE — `workspace extends` landed in M5 (D9 retired); the
     // code is never emitted again and must not be reused (`docs/diagnostics.md`).
     /// Server-side import deferred: file-based theme inlining and the
@@ -410,7 +411,7 @@ mod tests {
     fn builder_sets_fields() {
         let mut files = Files::default();
         let s = span(&mut files);
-        let d = Diagnostic::warning(codes::DOCS_DEFERRED, "deferred")
+        let d = Diagnostic::warning(codes::IMPORT_DEFERRED, "deferred")
             .with_span(s)
             .with_suggestion("include")
             .with_note("lands in P4");

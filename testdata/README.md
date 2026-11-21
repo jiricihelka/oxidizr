@@ -48,13 +48,16 @@ plus the `c4-props` probe (property-driven legs, below).
   LOAD — the reference test name says `exceptionNotThrown` (uniqueness is per name+environment).
 * `golden/` — committed reference goldens (byte-parity gate; regenerate sparingly).
 
-## Deferred fixtures (D7 — `!docs`/`!adrs`, excluded from P1–P3 parse/golden gates)
+## Import fixtures (`!docs`/`!adrs` — shipped at P4-M2, D7 retired by P4-D13)
 
-These fixtures parse-statement-form only until the importers land in Phase 4 (P4-D13);
-loading them yields OXZ-5003. P4 retires this list. The machine-readable corpus
-classification (every corpus file: clean or registered first-error + code) is the
-`KNOWN_ERRORS` register in `crates/oxidizr-dsl/tests/m4_fixtures.rs` — entries are
-retired there as the milestones land (M5 extends, P4 importers/renderers).
+These fixtures run the real importers at context close (`end()`); the OXZ-5003
+deferral is a tombstone (P4-M2, `agents/plan/build/IMPORT-DOCS-ADRS.md`). The
+machine-readable corpus classification (every corpus file: clean or registered
+first-error + code) is the `KNOWN_ERRORS` register in
+`crates/oxidizr-dsl/tests/m4_fixtures.rs` — `docs/`/`decisions/` keep failing
+on their `com.structurizr.example.*` importer FQNs ("… was not found", exactly
+like the reference without plugin jars); the `big-bank-plc` and
+`include-directory` entries now import cleanly.
 
 - `dsl/big-bank-plc/model/internet-banking-system/details.dsl`
 - `dsl/decisions/workspace.dsl`

@@ -244,6 +244,39 @@ as a tombstone so old references keep resolving.
   reference importer (network fetch) stays deferred with the kroki leg
   (D5, P4-D8).
 
+## D15 — Decision date PARSING is UTC (reference: JVM default time zone)
+
+- Structurizr: the ADR importers parse dates with `SimpleDateFormat` in
+  `TimeZone.getDefault()` — the MACHINE time zone (`AbstractDecisionImporter
+  .timeZone`, never overridden by the DSL layer). The same `Date: 2016-02-12`
+  line lands on a different epoch second per box (this dev box = CET+0100 ⇒
+  midnight CET = the previous day 23:00 UTC), and JSON export then formats
+  that epoch back in pinned UTC (`AbstractJsonWriter` formatter IS UTC).
+- oxidizr (2026-11-21, §P4-M2 N-6): std-only, no tz database ⇒ date strings
+  (`yyyy-MM-dd`, `yyyyMMdd`, front-matter `date:`) are parsed as UTC
+  MIDNIGHT — the deterministic point in the reference's range. Export-side
+  formatting already matches (UTC-Z, seconds).
+- Compatibility impact: decision `date` values differ from a reference run
+  on a non-UTC box. The oracle legs for decision fixtures therefore run the
+  reference binary with `TZ=UTC` (JDK honors `TZ`), where the two agree
+  byte-exactly; Madr's mtime-based default date is epoch-based and TZ-free.
+
+## D16 — `!docs`/`!adrs` image import: raw file bytes, not the ImageIO re-encode
+
+- Structurizr: the reluctant `DefaultImageImporter` (auto-run after a
+  directory `!docs`/`!adrs` import) embeds documentation `Image`s as
+  `ImageUtils.getImageAsBase64` — SVG raw bytes, but PNG/JPEG/GIF pass an
+  `ImageIO` read+write RE-ENCODE before base64 (JVM-version-dependent
+  payload bytes — the exact D14 problem in the `Documentation.images`
+  payload instead of the `ImageView` data URI).
+- oxidizr (2026-11-21, §P4-M2 N-6): the `Image` `content` embeds the RAW
+  file bytes (standard-alphabet base64, no data-URI prefix — the bean shape
+  `{name, content, type}` is kept) for every type; SVG is byte-identical to
+  the reference.
+- Nature: permanent (same rationale as D14). The read gate confirms the
+  output loads and re-exports unchanged in the official tooling; date-safe +
+  svg-only fixtures keep the byte goldens reproducible.
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact

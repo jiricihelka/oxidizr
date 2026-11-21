@@ -530,6 +530,95 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Which `end()` context family started the import — it ONLY selects
+    /// the `RuntimeException` prefix. The resolved CLASS decides what runs
+    /// (a `!docs` naming a decision importer imports decisions — faithful
+    /// to `constructor.newInstance()` + `importDocumentation`).
+    fn run_import(
+        &mut self,
+        holder: &Holder,
+        path: &str,
+        fqn: &str,
+        excludes: &[String],
+        side: ImportSide,
+    ) -> Result<(), DslError> {
+        use oxidizr_import::{
+            ImportTarget,
+            decisions::DecisionKind,
+            docs::{DocsKind, import_docs, import_images},
+        };
+        let prefix = match side {
+            ImportSide::Documentation => "Error importing documentation: ",
+            ImportSide::Decisions => "Error importing decisions: ",
+        };
+        // `if (dslFile != null)` — string-sourced parses import NOTHING.
+        let Some(dsl_file) = self.current_file_raw() else {
+            return Ok(());
+        };
+        // `loadClass(fqn)` runs FIRST: an unknown importer beats every
+        // path/regex error (the JVM plugin-jar loader is out of reach —
+        // the registry is the six built-ins, D7).
+        let Some(target) = oxidizr_import::resolve_importer(fqn) else {
+            return Err(DslError::stmt(format!("{prefix}{fqn} was not found")));
+        };
+        // `documentationImporter.exclude(regex)` per token — an empty
+        // token is rejected there (`IllegalArgumentException`).
+        if excludes.iter().any(String::is_empty) {
+            return Err(DslError::stmt(format!("{prefix}A regex must be provided.")));
+        }
+        // `new File(dslFile.getParentFile(), path)` (no `..` resolution —
+        // the importers `getAbsolutePath`/`getCanonicalPath` themselves).
+        let base = std::path::Path::new(&dsl_file)
+            .parent()
+            .map_or_else(std::path::PathBuf::new, std::path::PathBuf::from);
+        let joined = base.join(path);
+        let id = match holder {
+            Holder::Workspace => None,
+            Holder::Item(id) => Some(id.clone()),
+            // `docs_holder` only yields Workspace/Item — unreachable.
+            _ => return Ok(()),
+        };
+        let Some(documentation) = self.builder.documentation_mut(id.as_ref()) else {
+            // A vanished holder id — the reference cannot construct this
+            // state (its `Documentable` is held by the context itself).
+            return Ok(());
+        };
+        let imported = match target {
+            ImportTarget::Docs => import_docs(DocsKind::Default, documentation, &joined, excludes),
+            ImportTarget::RecursiveDocs => {
+                import_docs(DocsKind::Recursive, documentation, &joined, excludes)
+            }
+            ImportTarget::Images => import_images(documentation, &joined, false),
+            ImportTarget::AdrTools => oxidizr_import::decisions::import_decisions(
+                DecisionKind::AdrTools,
+                documentation,
+                &joined,
+                excludes,
+            ),
+            ImportTarget::Madr => oxidizr_import::decisions::import_decisions(
+                DecisionKind::Madr,
+                documentation,
+                &joined,
+                excludes,
+            ),
+            ImportTarget::Log4brains => oxidizr_import::decisions::import_decisions(
+                DecisionKind::Log4brains,
+                documentation,
+                &joined,
+                excludes,
+            ),
+        };
+        imported.map_err(|e| DslError::stmt(format!("{prefix}{}", import_error_message(e))))?;
+        // Post-import RELUCTANT image pass — only when the joined path is
+        // a DIRECTORY (both `end()` shapes, pinned; it runs after ANY
+        // importer, a decision import included).
+        if joined.is_dir() {
+            import_images(documentation, &joined, true)
+                .map_err(|e| DslError::stmt(format!("{prefix}{}", import_error_message(e))))?;
+        }
+        Ok(())
+    }
+
     /// `DslContext.end()` side effects.
     fn end_ctx(&mut self, ctx: &Ctx) -> Result<(), DslError> {
         match ctx {
@@ -557,16 +646,21 @@ impl<'a> Parser<'a> {
                 self.seq_end_parallel(*view, !has_relationships);
                 Ok(())
             }
-            // D7: the !docs/!adrs importers land in Phase 4; the deferred
-            // error surfaces where the reference would have LOADED content.
-            Ctx::Documentation { .. } => Err(DslError::coded(
-                oxidizr_diag::codes::DOCS_DEFERRED,
-                "!docs documentation import arrives in Phase 4 (D7)",
-            )),
-            Ctx::Decisions { .. } => Err(DslError::coded(
-                oxidizr_diag::codes::DOCS_DEFERRED,
-                "!adrs decisions import arrives in Phase 4 (D7)",
-            )),
+            // P4-M2: `DocumentationDslContext.end()` /
+            // `DecisionsDslContext.end()` — the importer runs at context
+            // close, where the reference LOADED content (`IMPORT-DOCS-ADRS.md`).
+            Ctx::Documentation {
+                holder,
+                path,
+                fqn,
+                excludes,
+            } => self.run_import(holder, path, fqn, excludes, ImportSide::Documentation),
+            Ctx::Decisions {
+                holder,
+                path,
+                fqn,
+                excludes,
+            } => self.run_import(holder, path, fqn, excludes, ImportSide::Decisions),
             // `ImageViewDslContext.end()`: a view that ends without any
             // (light/dark/plain) content fails — checked on EVERY frame pop,
             // so `light { ... }` inside an empty image view fails there too.
@@ -1902,22 +1996,34 @@ pub(crate) fn base64_std(bytes: impl AsRef<[u8]>) -> String {
 }
 
 /// Java `String.split(",")`: leading and MIDDLE empties are kept, trailing
-/// empties dropped — and an all-empty split (including empty input) yields
-/// an EMPTY array, exactly like the reference (`"".split(",")` → `[]`).
+/// empties dropped — but EMPTY INPUT is the documented special case:
+/// `"".split(",")` → `[""]` (one empty element, JVM-proven on the pinned
+/// Java 21 — the oracle's `"Element,Deployment Node,"` tags for an empty
+/// `TAGS_INDEX` token proves it for the reference too).
 pub(crate) fn split_keeping_lead_dropping_trail(s: &str) -> Vec<&str> {
+    if s.is_empty() {
+        return vec![""];
+    }
     let parts: Vec<&str> = s.split(',').collect();
     drop_trailing_empties(&parts)
 }
 
-/// Java `String.split(String)` (literal), same all-empty ⇒ `[]` semantics.
+/// Java `String.split(String)` (LITERAL separator — all call sites pass
+/// one, which is what makes the empty-input ⇒ `[""]` special case valid).
+/// Non-empty all-empty input still yields `[]` (e.g. `","` → `[]`).
 pub(crate) fn java_split_str<'a>(s: &'a str, sep: &str) -> Vec<&'a str> {
+    if s.is_empty() {
+        return vec![""];
+    }
     let parts: Vec<&str> = s.split(sep).collect();
     drop_trailing_empties(&parts)
 }
 
 /// The reference out-of-bounds condition a Java `parts[i]` on a split
-/// result would hit (e.g. the expression `" && "` ⇒ `split` yields `[]`);
-/// surfaced as the pinned JVM message instead of a panic.
+/// result would hit (e.g. the expression `"|"` split on `" || "` yields
+/// `[]`, but the arm only runs when `contains` is true — the guard makes
+/// this unreachable for empty input); surfaced as the pinned JVM message
+/// instead of a panic.
 pub(crate) fn java_index_or_oob<'a>(parts: &'a [&'a str], i: usize) -> Result<&'a str, String> {
     parts
         .get(i)
@@ -1931,6 +2037,33 @@ fn drop_trailing_empties<'a>(parts: &[&'a str]) -> Vec<&'a str> {
         .rposition(|p| !p.is_empty())
         .map_or(0, |i| i + 1);
     parts[..end].to_vec()
+}
+
+/// Which `end()` context family started the import — it ONLY selects the
+/// `RuntimeException` prefix (`DocumentationDslContext` /
+/// `DecisionsDslContext`). The resolved CLASS decides what actually runs:
+/// a `!docs` naming a decision importer imports decisions (faithful to
+/// `constructor.newInstance()` + `importDocumentation`).
+#[derive(Clone, Copy)]
+enum ImportSide {
+    Documentation,
+    Decisions,
+}
+
+/// `catch (Exception e) → "Error importing …: " + e.getMessage()`: the
+/// importer ports carry the reference exception MESSAGES verbatim in
+/// [`oxidizr_import::ImportError::Failed`]; a raw OS failure maps to the
+/// `DocumentationImportException(cause)` shape (`getMessage()` = the
+/// cause's `toString()` — hence the `java.io.IOException:` prefix);
+/// everything else already displays the reference text.
+fn import_error_message(err: oxidizr_import::ImportError) -> String {
+    match err {
+        oxidizr_import::ImportError::Failed(msg) => msg,
+        oxidizr_import::ImportError::Io { source, .. } => {
+            format!("java.io.IOException: {source}")
+        }
+        other => other.to_string(),
+    }
 }
 
 /// `WorkspaceParser.registerIdentifiers` (JSON bases of `workspace extends`):
@@ -2148,7 +2281,13 @@ mod tests {
         assert_eq!(split_keeping_lead_dropping_trail("a,b,"), vec!["a", "b"]);
         assert_eq!(split_keeping_lead_dropping_trail(",a,"), vec!["", "a"]);
         assert_eq!(split_keeping_lead_dropping_trail(","), Vec::<&str>::new());
-        assert_eq!(split_keeping_lead_dropping_trail(""), Vec::<&str>::new());
+        // Java's documented empty-input special case: `"".split(",")`
+        // yields ONE empty element (JVM-proven, pinned Java 21) — this is
+        // what makes the reference emit `"Element,Deployment Node,"` for
+        // an empty TAGS_INDEX token.
+        assert_eq!(split_keeping_lead_dropping_trail(""), vec![""]);
+        assert_eq!(java_split_str("", "|"), vec![""]);
+        assert_eq!(java_split_str(",", ","), Vec::<&str>::new());
         assert_eq!(
             split_keeping_lead_dropping_trail("a,,b"),
             vec!["a", "", "b"]

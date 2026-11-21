@@ -175,17 +175,22 @@ pub enum Ctx {
     Configuration,
     /// `UsersDslContext`.
     Users,
-    /// `DocumentationDslContext` (`!docs {`). D7: the importer is deferred
-    /// to Phase 4, but the context must exist so `exclude` lines parse until
-    /// the deferred error surfaces on close.
+    /// `DocumentationDslContext` (`!docs {`). The payload feeds the
+    /// P4-M2 importer at context close (`end()`): path token, resolved
+    /// importer FQN, and the `exclude` tokens.
     Documentation {
-        #[allow(dead_code)] // D7: payload for the Phase-4 deferred importer.
         holder: Holder,
+        path: String,
+        fqn: String,
+        excludes: Vec<String>,
     },
-    /// `DecisionsDslContext` (`!adrs`/`!decisions {`).
+    /// `DecisionsDslContext` (`!adrs`/`!decisions {`). Same payload as
+    /// [`Ctx::Documentation`] — the `end()` shape is identical.
     Decisions {
-        #[allow(dead_code)] // D7: payload for the Phase-4 deferred importer.
         holder: Holder,
+        path: String,
+        fqn: String,
+        excludes: Vec<String>,
     },
 
     // ---- property / perspective containers ------------------------------

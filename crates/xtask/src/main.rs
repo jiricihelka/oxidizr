@@ -933,9 +933,15 @@ fn cmd_vendor(src: &Path) -> Result<()> {
                `agents/plan/build/WRITE-CATALOG.md`); goldens for them are generated the same way.\n\
              * `read-corpus/` + `validation/` — {json_count} JSON workspaces (back-compat read + validation rules).\n\
              * `golden/` — committed reference goldens (byte-parity gate; regenerate sparingly).\n\n\
-             ## Deferred fixtures (D7 — `!docs`/`!adrs`, excluded from P1–P3 parse/golden gates)\n\n\
-             These fixtures parse-statement-form only until the importers land in Phase 4 (P4-D13);\n\
-             loading them yields OXZ-5003. P4 retires this list.\n\n\
+             ## Import fixtures (`!docs`/`!adrs` — shipped at P4-M2, D7 retired by P4-D13)\n\n\
+             These fixtures run the real importers at context close (`end()`); the OXZ-5003\n\
+             deferral is a tombstone (P4-M2, `agents/plan/build/IMPORT-DOCS-ADRS.md`). The\n\
+             machine-readable corpus classification (every corpus file: clean or registered\n\
+             first-error + code) is the `KNOWN_ERRORS` register in\n\
+             `crates/oxidizr-dsl/tests/m4_fixtures.rs` — `docs/`/`decisions/` keep failing\n\
+             on their `com.structurizr.example.*` importer FQNs (\"… was not found\", exactly\n\
+             like the reference without plugin jars); the `big-bank-plc` and\n\
+             `include-directory` entries now import cleanly.\n\n\
              {}\n",
             deferred
                 .iter()
@@ -946,7 +952,7 @@ fn cmd_vendor(src: &Path) -> Result<()> {
     )?;
 
     println!(
-        "vendored {} .dsl fixtures + {} JSON files into testdata/ ({} deferred for D7)",
+        "vendored {} .dsl fixtures + {} JSON files into testdata/ ({} import fixtures)",
         dsl_count,
         json_count,
         deferred.len()

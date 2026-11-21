@@ -32,6 +32,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P4 | §P4-M0 `oxidizr diff` (D-1…D-4) | **COMPLETE 2026-11-21** — canonical-identity model diff (F3, P4-D1/D2): engine + body in `oxidizr-api` (bodies-in-API invariant), schema-1 JSON frozen (`docs/diff-schema.md`), human ± report, `oxidizr diff A B [--format human|json] [--ignore-layout] [--quiet]`, exit 1 on differences (`ExitClass::Differences`). Loader representations never surface: `structurizr.dsl*` provenance stamps never compared, tags compared as the reference EFFECTIVE `getTags()` view, empty text reads absent — a `.dsl` and its JSON twin diff EMPTY; `diff(a, a)` determinism sweep over the corpus. Fixtures `testdata/probes/diff/*` + `tests/diff_probes.rs` (6). bless 307×unchanged. Commits M0a `c121cbe` → M0d (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-LSP `oxidizr-lsp` (L0–L5, prioritized) | **COMPLETE 2026-11-21** — LSP first (user directive): diagnostics/completion/hover/formatting/`initializationOptions`/`--version` all shipped; headless core + stdio binary, transcript + 54 lib tests, no `oxidizr-json` bytes touched (bless 307×unchanged). Commits L0 `a38f905` → L5 (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-M1 `inspect` (I-1…I-4) | **COMPLETE 2026-11-21** — `structurizr-inspection` port: new crate `oxidizr-inspect` (pure model logic over core — advisory only, the JSON byte contract untouched), `DefaultInspector` run order verbatim (workspace+model+view phases, messages VERBATIM, quirks included: `Model.isEmpty()` counts only people/systems/nodes, noview alone uses `getName()`, filtered/image are generated-key-only), severity-strategy port (P4-V2: `structurizr.inspection.<dotted type>` keys, `*` fallbacks, inner-first holder chains, relationship `[srcType->dstType]` specificity), `oxidizr inspect <WS> [--severity-threshold info\|warning\|error] [--only T]… [--except T]… [--format human\|json] [--quiet]` — schema-1 document (`docs/inspect-schema.md`), exit 1 iff REPORTED (P4-D1 family). 15 lib + 19 inspect tests + 8 CLI goldens; corpus sweep (`testdata/dsl` never panics); complete-workspace proptest `inspect == []`; bless 307×unchanged. Commits M1a `cad75b9` → M1d (this). Log below (`build/PHASE_4.md`) |
+| P4 | §P4-M2 importers (N-1…N-6) | **COMPLETE 2026-11-21** — `oxidizr-import`: image + C4-PlantUML + Mermaid importer ports (`oxidizr import`, F12 semantic bar, MODEL ONLY), WSD exporter (`export -f websequencediagrams`, oracle 9/9 byte-parity), `!docs`/`!adrs` engine wiring (core-compat bar): `DefaultDocumentationImporter`/`FormatFinder` + the decision family (AdrTools/Madr/Log4brains + structurizr-native) behind a six-FQN registry, std-only `regexlite` for the Java-regex `exclude` full-match (P4-V8), UTC date parsing (P4-V7/D15), raw-bytes `Image.content` (D14/D16); OXZ-5003 retired to a tombstone (both fixtures now surface the real `end()`-stage OXZ-2002, sidecars re-blessed); oracle A/B green on the big-bank + include-directory fixtures (documentation byte-parity) — which caught the **Java empty-input `split` special case** (`"".split(",")` → `[""]`, JVM-proven): the empty tags token now stores an empty tag ⇒ reference `"Element,Deployment Node,"`. Permanent contract `build/IMPORT-DOCS-ADRS.md`; deviations D15/D16. Commits M2a `b7f66e5` → M2f (this). Log below (`build/PHASE_4.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -153,6 +154,83 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P4-M2 — `oxidizr-import` + `!docs`/`!adrs` ✅ (2026-11-21, COMPLETE)
+
+The importer milestone (the §P4-M2 decomposition N-1…N-6, commits
+M2a…M2f, `build/PHASE_4.md`). Two fidelity bars, both honored: the macro
+importers (F12 additional feature) are SEMANTIC (model only, goldens are
+ours); `!docs`/`!adrs` are core-compat (byte contract where the format
+defines it). Permanent port contract: `build/IMPORT-DOCS-ADRS.md`.
+
+- **M2a** `b7f66e5` — crate + image importer port (`ImageView` semantics,
+  raw-bytes data URIs — deviation D14; `ImageUtils` extension table).
+- **M2b** `888bdf8` — C4-PlantUML model importer (`macrocall.rs` shared
+  plumbing + `c4plantuml.rs` macro table pinned from C4-PlantUML;
+  MODEL ONLY plan correction — the reference permits no host view).
+- **M2c** `97e3bcb` — Mermaid C4 importer (dialect-parameterized reuse of
+  the M2b machinery, `mermaid.rs` + positional-slot table).
+- **M2d** `1ea06c8` — `oxidizr import` CLI arc (format sniff +
+  `--format`, warnings as `LogItem::NoteLine`, 9 goldens, re-open
+  read-check).
+- **M2e** `e753d4e` — WSD exporter (`export -f websequencediagrams`;
+  oracle 9/9 byte-parity, `golden/websequencediagrams/` corpus + verify
+  leg; OXZ-5007 allow-listed PERMANENT).
+- **M2f** (this commit) — `!docs`/`!adrs` engine wiring + ports:
+  - `docs.rs` = `DefaultDocumentationImporter`/`FormatFinder` (+ the
+    recursive walk, the reluctant `DefaultImageImporter(true)` pass that
+    runs in BOTH contexts' `end()` after ANY importer when the joined
+    path is a directory); `Image.content` = raw file bytes base64'd with
+    NO data-URI prefix (deviation D16 — the reference re-encodes non-SVG
+    via `ImageIO`).
+  - `decisions.rs` = the decision family: `AbstractDecisionImporter`
+    id/status/date parsing, `AdrTools` (default status `Proposed`, `Date:`
+    else NOW — fixtures always carry dates), `Madr` (front-matter `date:`
+    else mtime), `Log4brains`, structurizr-native; the port SORTS every
+    directory walk (the reference `listFiles` is FS-order — non-portable,
+    pinned in the contract doc). Decision-date PARSING is UTC-pinned
+    (deviation D15 — the reference parses in JVM-TZ; oracle legs run
+    `TZ=UTC`).
+  - `regexlite.rs` = the std-only Java-regex subset matcher (P4-V8
+    CLOSED: `exclude` is a Java regex FULL MATCH — literals, `.`≠newline,
+    `\d\D\w\W\s\S`, classes, groups/alternation, greedy+lazy
+    `* + ? {n,m}`; NO `(?flags)`/`\b`/backrefs — all unreachable in the
+    corpus).
+  - engine `run_import`: skip if no `current_file_raw()` (string parses
+    import NOTHING) ⇒ resolve FQN (unknown ⇒ `"… was not found"`,
+    `loadClass` BEFORE any path/regex error) ⇒ empty-exclude guard
+    (`"A regex must be provided."`) ⇒ `new File(parent, path)` join ⇒
+    import ⇒ reluctant image pass; `ImportError::Failed(m)` ⇒ prefix+m,
+    `Io` ⇒ `java.io.IOException: …`; ctx payloads carry the block-end
+    line/token so the OXZ-2002 spans match the JVM byte-for-byte.
+  - OXZ-5003 RETIRED to a tombstone (code, docs, coverage REGISTRY, m4
+    register — 69 clean / 35 registered, `testdata/README.md` + xtask
+    vendor text). The two deferred fixtures now surface the real
+    `end()`-stage errors: e2e bless re-run touched exactly
+    `invalid/04-deferred-directives` (5002+5003 → 2002+5002) and
+    `invalid/15-adrs-dir` (5003 → 2002) — the reviewed behavior-change
+    diff; everything else unchanged.
+  - oracle A/B legs (app 2026.10.26, `TZ=UTC`): positive —
+    `dsl2json` vs reference `export` on `big-bank-plc/internet-banking-
+    system.dsl` + `include-directory.dsl`: `jq -S .documentation`
+    IDENTICAL both; full-workspace IDENTICAL modulo the two established
+    diff classes (`structurizr.dsl.identifier` UUIDs are random per-parse
+    on BOTH sides; the reference CLI injects `structurizr.inspection.*`
+    counters into top-level `properties` at export). Negative — reference
+    vs oxidizr error text on `testdata/dsl/{docs,decisions}/workspace.dsl`
+    matches verbatim incl. line number and reported token.
+  - **Compat bug caught by the A/B and fixed**: Java `"".split(",")` →
+    `[""]` (the documented empty-input special case, JVM-proven on the
+    pinned Java 21; `",".split(",")` stays `[]`). The reference element/
+    deployment-node parsers `addAll(token.split(","))` the TAGS_INDEX
+    token unfiltered, so `deploymentNode "X" "" "tech" ""` MUST store the
+    empty tag ⇒ `"tags": "Element,Deployment Node,"`. `java_split_str`/
+    `split_keeping_lead_dropping_trail` now special-case empty input;
+    the expression-split arms are `contains`-guarded (unreachable) and
+    `java_index_or_oob` keeps its non-empty-`[]` OOB message. After the
+    fix, the masked full-workspace diff is EMPTY on both fixtures and
+    the read gate round-trips identical (the reference's JSON `setTags`
+    drops the trailing empty on RE-import — its own asymmetry, matched).
 
 ### P4-M0 — `oxidizr diff` ✅ (2026-11-21, COMPLETE)
 

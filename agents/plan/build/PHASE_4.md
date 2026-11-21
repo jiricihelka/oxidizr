@@ -372,13 +372,14 @@ monorepo `ad34036` — `structurizr-import` + `structurizr-dsl` +
   what the reference does.
 - `!docs`/`!adrs` (P4-D13-1, retiring OXZ-5003): `DocsParser` grammar
   `!docs <path> [fqn]` + `exclude <filename|regex>…`; paths resolve
-  RELATIVE TO THE DSL FILE; the JVM picks importers by FQN — the Rust
-  port picks by statement (`!docs` = `DefaultDocumentationImporter` +
-  `FormatFinder` md/adoc; `!adrs` = the decision-importer family with
-  per-directory format detection: adr-tools, MADR, log4brains,
-  structurizr-native). P4-V7 (status/date parsing corners) and P4-V8
-  (exclude matching: read the Java matcher before trusting `globset`)
-  CLOSE with N-6's first commit.
+  RELATIVE TO THE DSL FILE; the JVM picks importers by FQN — the Rust port
+  keeps the same dispatch (registry of the six built-in FQNs + the
+  `adrtools`/`madr`/`log4brains` aliases, unknown ⇒ reference-shaped "was not
+  found"; NO per-directory auto-detection, `!adrs` DEFAULTS to adrtools; NO
+  structurizr-native decision importer exists @ `ad34036`). P4-V7
+  (status/date parsing) and P4-V8 (exclude matching: FULL-MATCH REGEX ⇒ no
+  `globset`, std-only `regexlite`) CLOSED 2026-11-21 — full port contract in
+  `IMPORT-DOCS-ADRS.md`.
 
 Items (each ends green; commits M2a…M2f):
 
@@ -389,8 +390,8 @@ Items (each ends green; commits M2a…M2f):
 | **N-3** | **Mermaid C4 model importer** (F12): `C4Context|C4Container|C4Component|C4Deployment` bodies — `Person/Person_Ext/System/System_Ext/Container/Container_Ext/Component/Component_Ext(alias, "name", "desc" [, "tags"])`, `System_Boundary/Container_Boundary/Container_Boundary_Ext(alias, "name") { … }`, `Rel(_[A-Za-z]+)?(alias|src, alias|dst, "label" [, "tech" [, "tags"]])`, `BiRel`, `UpdateElementTag/UpdateLayoutConfig/UpdateRelStyle/SetLayoutTag/Enter_Boundary/Leave_Boundary/SHOW_*/`title tolerated; `-->` plain-flowchart edges NOT promised; same warning-and-skip + fixture bar — **DONE 2026-11-21** (the C4 machinery is dialect-parameterized instead of duplicated: `Dialect{PlantUml,Mermaid}` selects the positional slots — `Mermaid` spells `Person/System(alias,label,descr,?tags)`/`Container(Component)?(alias,label,techn,descr,?tags)`/`Rel(from,to,label,techn,?tags)` with NO positional `$descr` (keyword-only via `usize::MAX`); `%%` comments via `strip_comments_mermaid`; `Container_Boundary_Ext` = container scope + `External`; `TOLERATED` + `Enter_Boundary`/`Leave_Boundary`/`Set*`/`Show*`/`Hide*`/`CLEAR_*`; the skip-warning noun comes from `dialect.name()`; the golden digest moved to `src/testutil.rs` and is shared; `src/mermaid.rs` = thin wrapper + 7 tests incl. a blessed digest golden over a `C4Context` with `%%` chrome, positional + `$tags=`/`$descr=` kwargs, `SystemQueue`/`ContainerDb` shape tags, `Rel_Back`/`BiRel`) | M2c |
 | **N-4** | CLI arc: `Request::Import { input, format, view_key, view_name, output }` + `import_cmd` (fresh workspace per diagram; format by `--format` else extension sniff `.puml/.iuml/.c4p`→c4plantuml, `.mmd/.mermaid`→mermaid, image extensions→image; warnings ride `Outcome::log`, workspace bytes via the standard writer — format by output extension, like `dsl2json`); `oxidizr import <FILE> [--format …] [--view-key K --view-name N] [-o OUT]` ships COMPLETE with all three formats (no half-shipped surface); CLI goldens per format + the read-check (imported JSON re-opens clean through `api::open`) — **DONE 2026-11-21** (`ImportFormat` lives in `pipeline.rs` + re-exported from `oxidizr-api`; `import_cmd`: explicit `--format` wins, else `sniff_format` on the file name (`.puml/.iuml/.c4p`→c4plantuml, `.mmd/.mermaid`→mermaid, the `ImageUtils` extensions→image), nameless input or image-from-stdin ⇒ `ExitClass::Usage` + OXZ-5006; skip notes ride `LogItem::NoteLine`; bytes via `oxidizr_json::to_vec` + `emit_bytes` like `dsl2json`; CLI clap enum `ImportCmdFormat` spells `c4plantuml`; 9 goldens in `tests/cli.rs` §P4-M2 incl. the re-open read-check asserting `createDefaultViews` fires) | M2d |
 | **N-5** | **WSD exporter** (reference port: `websequencediagrams/WebSequenceDiagramsExporter`, 171 LOC, dynamic views only) → `oxidizr export --format websequencediagrams`; P2 exporter-family ritual (Diagram value, goldens, semantic comparator where the oracle speaks WSD) — **DONE 2026-11-21** (`oxidizr-export/src/wsd.rs` = `WsdDialect` on the shared `Engine` (all boundary hooks empty; `render_as_sequence_diagram`/`owns_sequence_document` true ⇒ the dialect owns the dynamic walk via `sequence_document`) + `find_terminology` (the `Terminology.findTerminology` port: instance unwrap, per-kind override-or-default, `CustomElement` ⇒ metadata-else-`"Element"`, config ignored) + `export_all` (exports ONLY `View::Custom` + `View::Dynamic` — the static/deployment overloads return `null`; custom views ride the engine base-body walk: view-order elements, id-sorted rels, guarded blank; dynamic: header `title <name>` (+ real-newline description), participants from the relationship endpoints source-then-destination first-seen (`actor` for a `Person`, else `participant`, literal `\\n` before `<name> as <name>`), UNCONDITIONAL blank after participants, stored-order relationships (`->`/`->>`, response swaps + `-->`/`-->>`; view override trims-empty to the model description, both absent ⇒ EMPTY after `": "` — oracle witness), no frames/legend, ext `wsd`, key = view key; 8 unit tests incl. the `custom-view-animation` byte witness; oracle 9/9 fixtures byte-parity (scratch sweep) + `golden/websequencediagrams/` 11 files/9 fixtures via `cargo xtask oracle gen --wsd` (new gen mode + verify leg) + `export_wsd_goldens.rs` Category A; format dispatch arm + arm test, the unlanded test now `static`-only; OXZ-5007 allow-listed PERMANENT in the coverage gate (only `static` raises it, the export matrix runs the four diagram formats); 161 e2e sidecars re-blessed: the wsd slots flip from the 5007 probe to observed values) | M2e |
-| **N-6** | **`!docs`/`!adrs` importers** (P4-D13-1): ports of `DefaultDocumentationImporter`/`FormatFinder` (+ recursive walk) and the decision family (`AbstractDecisionImporter` id/status/date parsing, `AdrTools`/`Madr`/`Log4brains`, structurizr-native `.md`+`.json`? — inventory per P4-V7 FIRST); the DSL statements already parse (P1) — wire real import at the OXZ-5003 site, retire the diagnostic + the deferred-corpus exclusion in `testdata/README.md`; P4-V8 decides exclude matching (Java regex vs glob ⇒ `globset` returns only if globs); vendored ADR corpora + goldens | M2f |
-| **Close** | oracle read gate green (Category B, `$OXIDZR_STRUCTURIZR_BIN`), fixtures vendored with attribution (`testdata/import/*` + README contract row), bless 307×unchanged, full e2e tier, PROGRESS/RESUME stamps | M2f |
+| **N-6** | **`!docs`/`!adrs` importers** (P4-D13-1): ports of `DefaultDocumentationImporter`/`FormatFinder` (+ recursive walk) and the decision family (`AbstractDecisionImporter` id/status/date parsing, `AdrTools`/`Madr`/`Log4brains`, structurizr-native `.md`+`.json`? — inventory per P4-V7 FIRST); the DSL statements already parse (P1) — wire real import at the OXZ-5003 site, retire the diagnostic + the deferred-corpus exclusion in `testdata/README.md`; P4-V8 decides exclude matching (Java regex vs glob ⇒ `globset` returns only if globs); vendored ADR corpora + goldens — **DONE 2026-11-21** (ports `docs.rs`/`decisions.rs` + std-only `regexlite` for the P4-V8 full-match exclude; engine `run_import` per the pinned `end()` order — skip on string parses, `loadClass` first, empty-exclude guard, reluctant image pass; OXZ-5003 retired to a tombstone, m4 register 69 clean / 35 registered, e2e bless diff = exactly the two intended sidecars; oracle A/B green — documentation byte-parity on both positive fixtures, negative legs match the JVM error text verbatim; A/B caught + fixed the Java empty-input `split` special case ⇒ `"Element,Deployment Node,"`; contract `IMPORT-DOCS-ADRS.md`, deviations D15/D16) | M2f |
+| **Close** | oracle read gate green (Category B, `$OXIDZR_STRUCTURIZR_BIN`), fixtures vendored with attribution (`testdata/import/*` + README contract row), bless 307×unchanged, full e2e tier, PROGRESS/RESUME stamps — **CLOSED 2026-11-21** (commit M2f): A/B positive legs byte-parity on `documentation` + masked-workspace parity, negative legs verbatim; the corpora were already vendored byte-exact under `testdata/dsl/{docs,decisions}/` (README rows) so no `testdata/import/*` tree was needed; bless = 305×unchanged + the 2 reviewed OXZ-5003-retirement sidecars; full e2e tier + `cargo xtask ci` green | M2f |
 
 ## P4-D12 Verification list
 
@@ -414,9 +415,15 @@ Items (each ends green; commits M2a…M2f):
 - P4-V6 cargo-dist musl/aarch64 feasibility with the pinned nightly; signing deferred
   (unsigned v1 — documented, not deviating from anything).
 - P4-V7 (ex-P1-V9) ADR status/date parsing corners per tool format (MADR v2/v3,
-  log4brains front matter) — before the importer code (P4-D13).
+  log4brains front matter) — before the importer code (P4-D13). — **CLOSED
+  2026-11-21** (pinned monorepo read; per-tool parsing contract + machine-TZ
+  date deviation (D15) in `IMPORT-DOCS-ADRS.md`; no structurizr-native decision
+  importer exists — the "4th format" is a non-goal).
 - P4-V8 (ex-P1-V6) `!docs`/`!adrs` exclude-pattern semantics (glob vs path prefix) —
-  verify with reference before trusting globset config (P4-D13).
+  verify with reference before trusting globset config (P4-D13). — **CLOSED
+  2026-11-21** (pinned: `name.equals(x) || name.matches(x)` = Java regex FULL
+  MATCH, NOT glob ⇒ `globset` does NOT return; std-only `regexlite` matcher,
+  subset + ported patterns in `IMPORT-DOCS-ADRS.md`).
 
 ## P4-D13 Scope carried in from the 2026-11-14 rebalance
 

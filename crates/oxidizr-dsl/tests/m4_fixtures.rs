@@ -10,8 +10,10 @@
 //! so retired deferrals must be pruned here, in lockstep with the milestone
 //! that retires them.
 //!
-//! Milestone tags: `D7/P4` = `!docs`/`!adrs` importers (OXZ-5003);
-//! `D11/P4` = plantuml/mermaid/kroki image imports (OXZ-5005). `D2`
+//! Milestone tags: `D11/P4` = plantuml/mermaid/kroki image imports
+//! (OXZ-5005); `D7` (`!docs`/`!adrs`, OXZ-5003) RETIRED at P4-M2 — the two
+//! `workspace.dsl` fixtures here stay registered for the reference's unknown
+//! importer-FQN errors (OXZ-2002). `D2`
 //! (JVM-only directives), `D5` (no network — includes, extends and image
 //! URLs) and `D10` (no JVM image codecs) are permanent by design. The
 //! `component:` tag marks `!include`/`extends` children — they are
@@ -71,26 +73,20 @@ fn corpus() -> Vec<PathBuf> {
 
 /// (relative path, expected first-error code, expected message prefix).
 const KNOWN_ERRORS: &[(&str, u16, &str)] = &[
-    // -- D7/P4: `!docs`/`!adrs` importers deferred (OXZ-5003) --------------
-    (
-        "big-bank-plc/internet-banking-system.dsl",
-        codes::DOCS_DEFERRED.get(),
-        "!docs documentation import arrives in Phase 4",
-    ),
+    // -- P4-M2: unknown importer FQNs — `loadClass` at `end()` (D7) --------
+    // The `!docs`/`!adrs` importers SHIP now; these two fixtures name
+    // `com.structurizr.example.*` classes the reference loads from plugin
+    // jars — oxidizr's registry is the six built-ins, everything else is
+    // "was not found" BEFORE any path check.
     (
         "decisions/workspace.dsl",
-        codes::DOCS_DEFERRED.get(),
-        "!adrs decisions import arrives in Phase 4",
+        codes::STATEMENT.get(),
+        "Error importing decisions: com.structurizr.example.ExampleDecisionImporter was not found",
     ),
     (
         "docs/workspace.dsl",
-        codes::DOCS_DEFERRED.get(),
-        "!docs documentation import arrives in Phase 4",
-    ),
-    (
-        "include-directory.dsl",
-        codes::DOCS_DEFERRED.get(),
-        "!docs documentation import arrives in Phase 4",
+        codes::STATEMENT.get(),
+        "Error importing documentation: com.structurizr.example.ExampleDocumentationImporter was not found",
     ),
     // -- D11/P4: plantuml/mermaid/kroki image imports deferred (OXZ-5005) --
     (

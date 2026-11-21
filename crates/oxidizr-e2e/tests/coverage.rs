@@ -10,7 +10,7 @@
 use oxidizr_e2e::corpus;
 
 /// The full registry (`oxidizr_diag::codes`, mirrors docs/diagnostics.md;
-/// 5004 is a tombstone and must never appear).
+/// 5003 and 5004 are tombstones and must never appear).
 const REGISTRY: &[(u16, &str)] = &[
     (1001, "LEXER_UNTERMINATED_QUOTED"),
     (2001, "UNEXPECTED_TOKEN"),
@@ -22,7 +22,6 @@ const REGISTRY: &[(u16, &str)] = &[
     (4002, "JSON_WRITE"),
     (5001, "NET_DISABLED"),
     (5002, "JVM_ONLY"),
-    (5003, "DOCS_DEFERRED"),
     (5005, "IMPORT_DEFERRED"),
     (5006, "CLI_IO"),
     (5007, "EXPORT_NOT_IMPLEMENTED"),

@@ -23,3 +23,15 @@ pretty-print + scope-order quirks — see `xtask::normalize_reference_output`).
 Last useful: 2026-11-20 — `oracle verify` green: 4 json + **4 sidecar** (M5-1
 saved-sidecar A/B legs: identity re-export byte-equal; edited layered
 geometry round-trips the loader) + 90 diagram + 6 theme golden sets.
+
+Manual A/B legs (§P4-M2 close, 2026-11-21, `TZ=UTC`): DSL→JSON vs
+`export --workspace X.dsl`, compare via `jq -S` after masking TWO
+classes — `structurizr.dsl.identifier` UUIDs are RANDOM per-parse on
+BOTH sides (mask to a constant), and the CLI injects
+`structurizr.inspection.*` counters into TOP-LEVEL `properties` at
+export (strip; delete the key when it empties — oxidizr never writes
+it). Read gate: the reference re-exports our JSON with trailing-EMPTY
+tags dropped (its `setTags` = `split(",")` on import — the reference's
+own asymmetry, mask it). These legs caught the Java empty-input `split`
+special case (`"".split(",")` → `[""]`, JVM-proven `java T.java`): an
+empty tags token stores an EMPTY tag ⇒ `"Element,Deployment Node,"`.

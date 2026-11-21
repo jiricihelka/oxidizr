@@ -7,9 +7,11 @@
 //! `NameValueParser` — substitution itself lives in the parse loop), and
 //! `!identifiers <flat|hierarchical>`.
 //!
-//! D7: `!docs`/`!adrs` importers land in Phase 4 — the statement form parses
-//! (grammar + spans) and the deferred OXZ-5003 error fires when the pushed
-//! context ends ([`Parser::end_context`]). The `DOCUMENTATION`/`DECISIONS`
+//! P4-M2: `!docs`/`!adrs` ship — the arms capture the path token, the
+//! importer FQN (alias-mapped for `!adrs`) and the `exclude` tokens into
+//! the pushed context; `DocumentationDslContext.end()` /
+//! `DecisionsDslContext.end()` run the import when the context ends
+//! ([`Parser::end_context`] → `run_import`). The `DOCUMENTATION`/`DECISIONS`
 //! features are always enabled (V-3), so the reference's
 //! `FeatureNotEnabledException` branches are unreachable here.
 
@@ -67,7 +69,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         }
     }
     if eqi(&first, tok::DOCS_EXCLUDE) && is_docs {
-        return parse_exclude(raw).into();
+        return parse_exclude(p, raw).into();
     }
 
     // 1259–1330: !adrs / !decisions <path> [type|importer].
@@ -75,7 +77,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         return decisions_arm(p, &t, open, docs_holder_expect(p)).into();
     }
     if eqi(&first, tok::DECISIONS_EXCLUDE) && is_decisions {
-        return parse_exclude(raw).into();
+        return parse_exclude(p, raw).into();
     }
 
     // 1331: !constant — removed keyword, context-independent throw.
@@ -241,7 +243,7 @@ fn docs_holder_expect(p: &Parser) -> Holder {
 /// The four `!docs` arms: `DocsParser.parse` validates
 /// `!docs <path> [importer-fqn]`, the context is pushed (non-portable —
 /// `setDslPortable(false)`), and the reference ends it right away for the
-/// single-line form — which is exactly where the D7 deferred error fires.
+/// single-line form — which is exactly where the P4-M2 import runs.
 fn docs_arm(p: &mut Parser, tokens: &Tokens, open: bool, holder: Holder) -> Result<(), DslError> {
     if tokens.has_more_than(2) {
         return Err(DslError::stmt(
@@ -251,8 +253,20 @@ fn docs_arm(p: &mut Parser, tokens: &Tokens, open: bool, holder: Holder) -> Resu
     if !tokens.includes(1) {
         return Err(DslError::stmt("Expected: !docs <path> <fqn>"));
     }
-    // The path and importer FQN are consumed by the Phase 4 importer (D7).
-    p.start_context(Ctx::Documentation { holder });
+    // `DocsParser`: path = token 1, FQN = token 2, else the default
+    // `DefaultDocumentationImporter`.
+    let path = tokens.get(1).into_owned();
+    let fqn = if tokens.includes(2) {
+        tokens.get(2).into_owned()
+    } else {
+        oxidizr_import::DEFAULT_DOCUMENTATION_IMPORTER.to_owned()
+    };
+    p.start_context(Ctx::Documentation {
+        holder,
+        path,
+        fqn,
+        excludes: Vec::new(),
+    });
     if let Some(frame) = p.frame_portable.last_mut() {
         *frame = false;
     }
@@ -276,21 +290,45 @@ fn decisions_arm(
     if !tokens.includes(1) {
         return Err(DslError::stmt("Expected: !decisions <path> <type|fqn>"));
     }
-    p.start_context(Ctx::Decisions { holder });
+    // `DecisionsParser`: `DECISION_IMPORTERS.getOrDefault(token, token)`
+    // (case-SENSITIVE aliases), default = the `adrtools` entry.
+    let path = tokens.get(1).into_owned();
+    let fqn = if tokens.includes(2) {
+        oxidizr_import::decision_importer_fqn(&tokens.get(2))
+    } else {
+        oxidizr_import::ADRTOLS_DECISION_IMPORTER.to_owned()
+    };
+    p.start_context(Ctx::Decisions {
+        holder,
+        path,
+        fqn,
+        excludes: Vec::new(),
+    });
     if let Some(frame) = p.frame_portable.last_mut() {
         *frame = false;
     }
     if open { Ok(()) } else { p.end_context() }
 }
 
-/// `DocsParser.parseExclude` / `DecisionsParser.parseExclude` — the filter
-/// list only feeds the Phase 4 importer (D7), so the tokens validate here
-/// and are otherwise discarded.
-fn parse_exclude(tokens: &Tokens) -> Result<(), DslError> {
+/// `DocsParser.parseExclude` / `DecisionsParser.parseExclude` — EVERY
+/// token after the keyword joins the context's exclude set (the empty
+/// check — `"A regex must be provided."` — is an `exclude()` behavior,
+/// surfaced at `end()` alongside the import).
+fn parse_exclude(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if !tokens.includes(1) {
         return Err(DslError::stmt(
             "Expected: exclude <filename|regex> [filename|regex]",
         ));
+    }
+    if let Some(excludes) = match p.stack.last_mut() {
+        Some(Ctx::Documentation { excludes, .. } | Ctx::Decisions { excludes, .. }) => {
+            Some(excludes)
+        }
+        _ => None,
+    } {
+        for i in 1..tokens.size() {
+            excludes.push(tokens.get(i).into_owned());
+        }
     }
     Ok(())
 }

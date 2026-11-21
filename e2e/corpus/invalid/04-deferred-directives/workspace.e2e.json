@@ -2,16 +2,16 @@
   "dsl2json": {
     "exit": "error",
     "codes": [
-      5002,
-      5003
+      2002,
+      5002
     ],
     "counts": null
   },
   "validate": {
     "exit": "error",
     "codes": [
-      5002,
-      5003
+      2002,
+      5002
     ],
     "counts": null
   },
