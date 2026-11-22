@@ -146,3 +146,5 @@ on the bench target), so CI's `cargo bench --workspace` lists-but-skips them —
 are local-dev numbers (user decision: no new CI load). `cargo xtask bench` always
 opts in (`--features oxidizr-e2e/e2e-bench`); the `1T` baseline under
 `bench-baseline/` includes them and `cargo xtask bench cmp 1T` compares.
+The `4T` baseline (saved at the P4T close, `build/PHASE_4R.md` §P4R-V1) is
+the §P4R refactor waves' comparison point: `cargo xtask bench cmp 4T`.

@@ -6,7 +6,7 @@
 //! `parse(fmt(x)) == parse(x)`. Canonical style: [`INDENT`]-per-brace-depth,
 //! one statement per line, blank-line runs compacted to at most one, whole-line
 //! comments re-indented, conservative unquoting (quote only when the tokenizer
-//! needs it — see [`unquote_value`]).
+//! needs it — see `unquote_value`).
 //!
 //! Byte-verbatim zones (semantics live in their exact bytes, so they are never
 //! re-printed): `/* … */` block-comment regions after the opener line, `"""`

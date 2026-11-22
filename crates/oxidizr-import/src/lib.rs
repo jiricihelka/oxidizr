@@ -2,7 +2,7 @@
 //! reference image port).
 //!
 //! Each importer turns ONE diagram file into a fresh
-//! [`Workspace`](oxidizr_core::Workspace): the `image` leg is the port of
+//! [`oxidizr_core::Workspace`]: the `image` leg is the port of
 //! `structurizr-import` `diagrams/image/ImageImporter` + `ImageUtils`
 //! (file → `ImageView` data-URI / content-type / title); the
 //! C4-PlantUML and Mermaid model importers are the agreed additional

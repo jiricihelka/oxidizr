@@ -30,7 +30,7 @@ use crate::preprocess;
 #[derive(Debug, Clone)]
 pub struct CursorScope {
     /// Tokens a statement may START with here — the top context's
-    /// [`super::Ctx::permitted_tokens`] verbatim (empty where the engine
+    /// `super::Ctx::permitted_tokens` verbatim (empty where the engine
     /// lists nothing: a closed root, a `Comment` scope, …). With no open
     /// context and no `workspace` keyword yet, exactly `[workspace]` —
     /// the catch-all's own expectation.

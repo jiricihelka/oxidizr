@@ -7,7 +7,7 @@
 //! model (`Diagram`, `Legend`, the `WorkspaceExporter`/`DiagramExporter`
 //! shapes), the shared property cascade ([`property::export_property`],
 //! P2-D8) and the `export` command's dispatch + file-naming rules
-//! ([`format`], [`naming`]) per `ExportCommand` (oracle-verified 2026-11-17,
+//! ([mod@format], [`naming`]) per `ExportCommand` (oracle-verified 2026-11-17,
 //! P2-V1):
 //!
 //! * format strings are lowercased, the registry is `json`, `theme`,

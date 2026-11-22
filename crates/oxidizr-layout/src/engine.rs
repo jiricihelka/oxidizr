@@ -110,7 +110,7 @@ impl std::error::Error for LayoutError {}
 /// A layout implementation over the neutral graph (P3-D5). The
 /// **determinism contract is hard**: same input ⇒ identical output — no
 /// randomness, stable sorts only, fixed iteration bounds. Implementations
-/// must run [`LayoutGraph::validate`] first and reject invalid input.
+/// must run [`crate::LayoutGraph::validate`] first and reject invalid input.
 pub trait LayoutEngine {
     /// Compute placements for `graph`.
     ///

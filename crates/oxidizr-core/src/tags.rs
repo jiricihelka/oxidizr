@@ -4,7 +4,7 @@
 //! Reference model (`model/ModelItem.java`, verified @ `ad34036`):
 //!
 //! * The `tags` FIELD stores only what was explicitly set/added ("custom" tags);
-//!   each kind contributes [`default_tags`] which are PREPENDED (deduped) at
+//!   each kind contributes [`TagKind::default_tags`] which are PREPENDED (deduped) at
 //!   read time — `getTags() = LinkedHashSet(defaults ++ stored)`.
 //! * `setTags(csv)` (JSON read path): CLEARS the stored set, then `csv.split(",")`
 //!   WITHOUT trimming — `"a, b"` stores `["a", " b"]` (bug-compatible). The

@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T **CLOSED** 2026-11-22 (T-1…T-6 all DONE, matrix frozen, no tag) — next §P4R refactoring waves (`agents/plan/build/PHASE_4R.md`) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0 DONE** (inventory + doc-zero + `4T` baseline) — next R1 wave → R2…R5 → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -58,10 +58,25 @@
   `testdata/` clean · `oracle verify` 4 json + 4 sidecar + 99 diagram +
   6 theme · `export-verify` 31/31 × 3 · `oracle landscape` 10 facts (all
   `TZ=UTC`) · PROGRESS board row + milestone log · matrix FROZEN (zero
-  `T-n` cells) · **no tag** (interlude precedent). **Next: §P4R** —
-  refactoring waves per `agents/plan/build/PHASE_4R.md` (API churn allowed
-  with bytes/CLI frozen + CHANGELOG line), then P4D, then the release
-  tail E-4/E-5.
+  `T-n` cells) · **no tag** (interlude precedent).
+- **§P4R R0 DONE 2026-11-22** (inventory wave, `build/PHASE_4R.md` D2–D4):
+  allow audit 157 `allow(clippy::…)` sites / 88 files — non-test ~106,
+  EVERY site justified (ratchet honest; real items left = three
+  `struct_excessive_bools`: `ApiOptions` R3, cli flags R4, viewer shell
+  R4); `cargo doc --workspace --no-deps` baseline **43 warnings → 0**
+  (18 files, doc-comment-only: private links → code spans, fn/mod
+  ambiguities → `fn@`/`mod@`, cross-module → `crate::` — ZERO is the
+  drift detector for every later wave); bench baseline **`4T`** saved +
+  committed (104 files, `cargo xtask bench cmp 4T` for hot-path waves);
+  D2 catalog re-measured with 3 seed CORRECTIONS (generate.rs has NO
+  HashMap ladders — `Vec` scans; `command_name` is `#[cfg(test)]`-only;
+  `oxidizr-inspect` is 5 modules not ~35); wave table R1…R5 FILLED with
+  real items; churn list skeleton `agents/notes/
+  process/api-churn-v0.4.0.md` created (V3: E-5 folds it into
+  CHANGELOG.md; first churn commit adds the first line). **Next: R1** —
+  `viewops.rs` default-view legs → named helpers; dsl `engine/mod.rs`
+  `needless_pass_by_value` ×2 re-audit; then R2 (typed `ImportFormat`),
+  R3 (`Request` rework flagship), R4, R5.
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

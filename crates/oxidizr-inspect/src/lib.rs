@@ -13,7 +13,7 @@
 //! the reference sequences them), then views per kind, then element
 //! styles. Violations keep that order (no sort).
 //!
-//! Severity is 100% property-driven (P4-V2, [`strategy`]): EVERY
+//! Severity is 100% property-driven (P4-V2, `strategy`): EVERY
 //! inspection defaults to [`Severity::Error`]; the workspace (or any
 //! holder from an element up) may re-rank or silence one via
 //! `structurizr.inspection.<dotted type path>` keys, and

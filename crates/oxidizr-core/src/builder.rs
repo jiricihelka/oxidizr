@@ -1,7 +1,7 @@
 //! The checked workspace accumulator (`P1-D4`): `WorkspaceBuilder` mirrors the
 //! reference `Model.add*` / `ViewSet.add*` API surface with Rust `Result`s —
 //! the DSL builder (M4) drives this, the JSON reader (M3) constructs the model
-//! directly and only shares [`crate::validate`].
+//! directly and only shares [`mod@crate::validate`].
 //!
 //! Ids: one shared sequential counter (Locked), allocated at creation time
 //! exactly like `Model.addRelationship`/`addElementToInternalStructures`;
@@ -1349,7 +1349,7 @@ impl WorkspaceBuilder {
 
     /// `Model.getRelationships()` iteration order: the reference stores
     /// relationships in a `TreeSet` ordered by `ModelItem.compareTo` —
-    /// ascending numeric id (see [`id_sort_key`]).
+    /// ascending numeric id (see `id_sort_key`).
     #[must_use]
     pub fn all_relationship_ids(&self) -> Vec<Id> {
         let mut ids: Vec<Id> = self
@@ -2157,7 +2157,7 @@ impl WorkspaceBuilder {
     }
 
     /// Create a filtered view over `base_key` (existence checked by
-    /// [`crate::validate`], as in the reference hydrate step).
+    /// [`mod@crate::validate`], as in the reference hydrate step).
     pub fn create_filtered_view(
         &mut self,
         base_key: &str,

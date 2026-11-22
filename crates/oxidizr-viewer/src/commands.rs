@@ -51,9 +51,9 @@ pub fn snapped(value: f64) -> f64 {
 }
 
 /// The session geometry of ONE view (P3-D4): deltas over the stored
-/// [`Workspace`](oxidizr_core::Workspace), keyed by model ids — exactly
+/// [`Workspace`], keyed by model ids — exactly
 /// the payload [`Overrides`] carries, plus the view-level canvas
-/// `dimensions` (the `SetCanvasSize` target; [`scene::build`] ignores
+/// `dimensions` (the `SetCanvasSize` target; [`crate::scene::build`] ignores
 /// it until M4's export sizing). NEVER persisted directly: SAVE maps it
 /// onto a cloned workspace (M3-5).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -90,7 +90,7 @@ impl LayoutOverlay {
         self.elements.is_empty() && self.relationships.is_empty() && self.dimensions.is_none()
     }
 
-    /// The [`scene::build`] overlay parameter for this session state.
+    /// The [`crate::scene::build`] overlay parameter for this session state.
     #[must_use]
     pub fn as_overrides(&self) -> Overrides {
         Overrides {
@@ -710,7 +710,7 @@ pub fn drag_waypoint(
 /// Land one auto-layout run as a single undoable [`Command`] (P3-M3:
 /// the dialog Apply and the adopt-time pass are COMMANDS, not silent
 /// state — one Ctrl+Z reverts positions and routes together). `overrides`
-/// are the engine's absolute placements/routes ([`layout::apply`]'s
+/// are the engine's absolute placements/routes ([`crate::layout::apply`]'s
 /// output, but headless here); ids already rendering at their placement
 /// are skipped, scene iteration order keeps the command deterministic
 /// (the [`Overrides`] maps are hash maps). `None` when the run changes

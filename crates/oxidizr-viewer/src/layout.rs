@@ -1,6 +1,6 @@
 //! The auto-layout seam (P3-M2-5): scene → neutral [`LayoutGraph`] →
 //! the §P3-D5 MVP engine (`oxidizr_layout::Layered`) → [`Overrides`]
-//! that [`scene::build`] overlays on the stored geometry. The GUI shell
+//! that [`crate::scene::build`] overlays on the stored geometry. The GUI shell
 //! (feature `gui`) only wires button + dialog + the ONE pass — every
 //! decision lives here, tested headlessly (boundary guard, P3-D1).
 //!
@@ -9,7 +9,7 @@
 //! - [`graph_for`] reads **ids and sizes only** from the scene — never
 //!   positions — so a run with the same config is IDEMPOTENT: re-running
 //!   on an already-overridden scene reproduces identical [`Overrides`].
-//! - Boundaries need no override entries: [`scene::build`] recomputes
+//! - Boundaries need no override entries: [`crate::scene::build`] recomputes
 //!   them from member unions, so they follow moved items (V1). The
 //!   boundary pad stays [`crate::scene::BOUNDARY_PADDING`] (the M1
 //!   chrome constant, not dagre's internal 50 px — the deviation
@@ -268,8 +268,8 @@ pub fn apply(scene: &Scene, layout: &AutomaticLayout) -> Result<Overrides, Layou
 /// # Errors
 ///
 /// Any [`LayoutError`] from graph validation or the engine run;
-/// [`Engine::Dot`] with `$OXIDZR_DOT_BIN` unset reports
-/// [`LayoutError::DotBackend`] rather than spawning nothing silently.
+/// `Engine::Dot` with `$OXIDZR_DOT_BIN` unset reports
+/// `LayoutError::DotBackend` rather than spawning nothing silently.
 pub fn apply_with(
     engine: Engine,
     scene: &Scene,

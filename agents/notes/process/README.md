@@ -8,5 +8,6 @@
 | [faithful-port.md](faithful-port.md) | engine = port of pinned Java, lint allows need rationale |
 | [notes-policy.md](notes-policy.md) | when and how to write notes |
 | [parallelism.md](parallelism.md) | one-LLM box: background jobs, no subagents |
+| [api-churn-v0.4.0.md](api-churn-v0.4.0.md) | P4R staged API-churn list → folded into CHANGELOG.md at E-5 |
 
 Current session state: [`../RESUME.md`](../RESUME.md) (mutable checkpoint, not a note).

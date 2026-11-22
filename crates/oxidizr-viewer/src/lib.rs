@@ -4,10 +4,10 @@
 //! non-trivial logic lives in the library modules below — [`scene`],
 //! [`hit`], [`paint`], [`key`], [`icons`], [`commands`], [`reload`],
 //! [`layout`] — which import NOTHING from the eframe shell. The shell
-//! itself is [`shell`], compiled only with `feature = "gui"` (§P3-M8):
+//! itself is `shell`, compiled only with `feature = "gui"` (§P3-M8):
 //! the `oxidizr-viewer` binary is its argv shim and `oxidizr view`
 //! (the `gui` feature of `oxidizr-cli`) drives the same
-//! [`shell::run`] in-process, so both entries share one window.
+//! `shell::run` in-process, so both entries share one window.
 //! Category A tests build and exercise the whole core headlessly: zero
 //! GPU, zero windowing (`cargo test --workspace` never enables `gui`).
 //! [`paint`] emits `epaint::Shape` data (software raster + text layout,

@@ -12,7 +12,7 @@
 //! Modules: [`diagnostic`] — the pure [`Issue`] data type (T0-b);
 //! [`suggest`] — the `did you mean …?` decoration (T0-c); [`reconcile`] —
 //! the F1 geometry re-attach (T0-d); [`pipeline`] — the command bodies
-//! behind [`execute`] (T0-d); [`open`] — the viewer-facing load entry
+//! behind [`execute`] (T0-d); [`fn@open`] — the viewer-facing load entry
 //! (P3-M1-1, not a byte-contract path).
 
 pub mod diagnostic;

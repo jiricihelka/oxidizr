@@ -6,7 +6,7 @@
 //!
 //! Load tail mirror (reference `AbstractCommand.loadWorkspace`, same as
 //! `load_export_workspace`): read → parse by extension (`.dsl` / `.json`)
-//! → [`apply_default_views`]. Viewer twist (the M1-1 row): a DSL with
+//! → `apply_default_views`. Viewer twist (the M1-1 row): a DSL with
 //! recoverable statement errors OPENS PARTIALLY — the decorated D1 issues
 //! ride [`Opened::log`] and the repaired workspace renders what parsed
 //! (the reference web tool has no DSL leg at all, so no parity constraint

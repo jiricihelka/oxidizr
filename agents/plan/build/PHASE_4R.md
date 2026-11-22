@@ -60,41 +60,69 @@ included).
 - Phase close: quartet + full tier + bless no-op + `cargo xtask oracle
   verify` + extended `export-verify` legs (Category B, once).
 
-## P4R-D2 Catalog seeds (found by the R0 inventory, not guessed)
+## P4R-D2 Catalog — seeds measured against the tree (R0 inventory 2026-11-22)
 
-- `Request` in `oxidizr-api/pipeline.rs` carries every command's argv
-  shape — review variant payloads / group per-domain request enums.
-- `generate.rs` merge engine: `HashMap<String, …>` ladders for the
-  person/system merge; `pathfilter` public API shape.
-- `inspect` severity strategy + ~35 modules: naming pass for the
-  `<Type>Inspection` types vs `oxidizr_inspect::` export graph.
-- importers: sniffer/dispatch stringly formats → `ImportFormat` coverage;
-  `regexlite`/`pathfilter` share a regex-subset core? (dedupe candidate).
-- cli: the `to_request` giant match + `command_name` map — derive or
-  table; `report` renderer plumbing.
-- 2R leftovers still carrying `#[allow(clippy::…)]` without a
-  re-examination (audit every allow; keeps the ratchet honest).
+Seeds were hypotheses; R0 measured each (files, not memory). Verdict per
+seed; `keep` = re-audited, the allow/comment is the answer, no churn.
+
+- `Request` (`oxidizr-api/pipeline.rs:155`, **10 variants**) — payloads DO
+  mirror argv shapes 1:1. R3 flagship: per-domain group per the churn
+  depth decision; `execute` semantics + CLI mapping stay byte-identical.
+- `generate.rs` merge engine — **seed CORRECTED: no `HashMap<String, …>`
+  ladders exist** (0 matches); name lookups are `Vec` scans
+  (`find_element` linear per merge input). Item shrinks to: index-by-name
+  ONLY if a typed, behavior-identical reader reads better — otherwise a
+  `keep` row. `pathfilter` public API shape: `compile`/`is_match` + the
+  `Node` tree is already the surface; leave.
+- `inspect` — **seed CORRECTED: 5 modules, not ~35**; `Inspection` names
+  live in `lib.rs` (30 hits) + `run.rs` (24). Naming pass = the
+  `<Type>Inspection` ↔ export-graph review only.
+- importers — the `ImportTarget` enum + `resolve_importer(fqn)` registry is
+  already typed; the stringly leg is the **cli-side extension sniffer**
+  (`ImportCmdFormat` + extension match in `oxidizr-cli`). Item: move the
+  sniff table into `oxidizr-import` as a typed constructor (API churn).
+  `regexlite`/`pathfilter` share a regex-subset core? **Decision item, R2**
+  (grammar shapes differ — full-match literal-ish vs Java subset; default
+  answer is KEEP SPLIT + record).
+- cli — `to_request` (`lib.rs:572`, 155 lines) carries a justified
+  `too_many_lines` allow ("the argv matrix IS the content"); **`command_name`
+  seed CORRECTED: it lives in `#[cfg(test)]`** (test helper, not product).
+  Item: derive/table experiment is DECLINED — keep row, documented.
+  `report` renderer plumbing: small review.
+- allow audit (R0 ran it): 157 `allow(clippy::…)` lines / 88 files;
+  non-test ~106, **every site carries a justification comment** (the ratchet
+  is honest — spot list: engine arm-order `too_many_lines` ×7 "arm order IS
+  the contract", `javahash`/`styles`/`structurizr.rs` casts = Java contract,
+  `float_cmp` layout = exact-value-by-design). Wave-level task reduces to
+  the 2026-22-era additions only: `struct_excessive_bools` ×3
+  (`ApiOptions`, cli flags struct, viewer shell) — parameter-struct
+  candidates, R3/R4.
 
 ## P4R-D3 Waves (each: quartet + full tier + bless no-op + commit)
 
-| Wave | Scope | Commit |
+| Wave | Scope (items from the D2 inventory) | Commit |
 |---|---|---|
-| **R0** | Inventory: allow-audit, `cargo doc` baseline, bench baseline `4T`, wave table filled with real items | R0 |
-| **R1** | `oxidizr-core` / `ast` / `diag` / `dsl` / `json` | R1 |
-| **R2** | `oxidizr-export` / `oxidizr-import` (incl. regex-subset dedupe decision) | R2 |
-| **R3** | `oxidizr-api` / `oxidizr-inspect` / `oxidizr-layout` | R3 |
-| **R4** | `oxidizr-lsp` / `oxidizr-cli` / `oxidizr-viewer` / `xtask` / `e2e` | R4 |
-| **R5** | Public-API consolidation pass: `pub use` graphs, renames land, CHANGELOG lines accumulate, doc links green | R5 |
+| **R0** | Inventory DONE 2026-11-22: allow audit (157 sites / 88 files, non-test ~106, EVERY site justified — ratchet honest, wave task reduced to the three `struct_excessive_bools`); `cargo doc --workspace --no-deps` baseline 43 warnings → **0** (private links → code spans, fn/mod ambiguities → `fn@`/`mod@`, cross-module paths → `crate::`); bench baseline `4T` saved + committed (104 files); D2 re-measured with three seed CORRECTIONS (generate has no HashMap ladders — `Vec` scans; `command_name` is test-only; inspect is 5 modules) | R0 |
+| **R1** | core/ast/diag/dsl/json: `viewops.rs` default-view legs → named helper decomposition (arm order stays the contract); dsl `engine/mod.rs` `needless_pass_by_value` ×2 re-audit; the rest re-audited = `keep` rows (arm-order `too_many_lines` ×7, Java-contract casts) | R1 |
+| **R2** | export/import: typed `ImportFormat` constructor absorbing the cli's extension-sniff table (`ImportCmdFormat` consumption — API churn + churn-list line); `regexlite`/`pathfilter` dedupe DECISION (default: keep split, record the grammar reason) | R2 |
+| **R3** | api/inspect/layout: `Request` per-domain rework (flagship; one commit per domain group; `execute`+CLI mapping byte-identical); inspect `<Type>Inspection` naming/export-graph review; `ApiOptions` `struct_excessive_bools` → grouped flags struct (API churn) | R3 |
+| **R4** | lsp/cli/viewer/xtask/e2e: cli `report` renderer-plumbing review; viewer shell `struct_excessive_bools` split; `to_request` KEEP row documented (argv matrix IS the content) | R4 |
+| **R5** | Public-API consolidation pass: `pub use` graphs, renames land, churn list → CHANGELOG lines, doc links green | R5 |
 
 ## P4R-D4 Verification list
 
-- P4R-V1 — bench baseline id after P4T (`bench cmp 4T`) — re-pin once at R0.
-- P4R-V2 — does `cargo doc --no-deps` currently stay warning-free per
-  crate (baseline before the churn — pre-existing broken links get fixed
-  in R0 or allowlisted with a note).
-- P4R-V3 — CHANGELOG skeleton (created in the release tail E-5): R-waves
-  keep a staged `agents/notes/` running list if the file does not exist
-  yet — decide at R0.
+- P4R-V1 — bench baseline id after P4T — **CLOSED at R0: `4T`**
+  (`cargo xtask bench save 4T`, 104 files committed; hot-path waves
+  compare with `cargo xtask bench cmp 4T`).
+- P4R-V2 — `cargo doc --no-deps` warning-free per crate — **CLOSED at R0:
+  the pre-existing 43 warnings were FIXED (no allow-list needed); every
+  wave re-checks `cargo doc --workspace --no-deps` at zero (the drift
+  detector).**
+- P4R-V3 — CHANGELOG skeleton — **DECIDED at R0: E-5 creates
+  `CHANGELOG.md`; until then R waves accumulate breaking-ish lines in the
+  staged running list `agents/notes/process/api-churn-v0.4.0.md`** (the
+  skeleton landed at R0; the first churn commit adds its entry; E-5 folds
+  the list into the changelog verbatim).
 
 ## Risks
 

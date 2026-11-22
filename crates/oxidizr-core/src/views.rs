@@ -774,7 +774,7 @@ impl ViewSet {
     /// Every view (key, kind label) in the reference `getViews()` traversal
     /// order used for key-uniqueness validation: the union `TreeSet` ordered by
     /// `(order, key lowercased)` is what `checkViewKeysAreUnique` iterates —
-    /// [`crate::validate`] reproduces that ordering.
+    /// [`mod@crate::validate`] reproduces that ordering.
     #[must_use]
     pub fn all_views(&self) -> Vec<View<'_>> {
         let mut out = Vec::new();

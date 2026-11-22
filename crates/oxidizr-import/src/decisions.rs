@@ -11,7 +11,7 @@
 //! - content is UTF-8 (lossy), then `replace("\r", "")` before ANY
 //!   parsing, and `Decision.setContent` newline-normalizes;
 //! - Java `String.split("\\n")` drops TRAILING empty segments —
-//!   [`java_split_newlines`] replicates it (leading empties stay);
+//!   `java_split_newlines` replicates it (leading empties stay);
 //! - dates parse via lenient `SimpleDateFormat` in `TimeZone.getDefault()`
 //!   — the port parses UTC (deviation D15), rolling out-of-range values
 //!   over like a lenient `Calendar`, and ignores trailing text after the

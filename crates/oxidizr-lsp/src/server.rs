@@ -12,7 +12,7 @@
 //! publish, clearing the editor's squiggles); L-4 added
 //! `textDocument/completion` over the stored buffer; L-5 added
 //! `textDocument/hover` — keyword cards from the raw text, model cards
-//! from the LAST SUCCESSFUL parse ([`Server::last_good`], kept across a
+//! from the LAST SUCCESSFUL parse (`Server::last_good`, kept across a
 //! failing reparse); L-6 added the two formatting requests (canonical
 //! print via `oxidizr_dsl::fmt`). Requests with no implemented feature
 //! answer `MethodNotFound` — replying is mandatory, an unanswered
@@ -41,7 +41,7 @@ use oxidizr_core::Workspace;
 pub struct Document {
     /// Latest full text.
     pub text: String,
-    /// Client version stamp of [`text`] (both `didOpen` and
+    /// Client version stamp of `text` (both `didOpen` and
     /// `didChange` params carry it mandatorily — lsp-types 0.97).
     pub version: i32,
 }

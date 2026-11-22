@@ -6,10 +6,10 @@
 //! `if-else` statement dispatch chain over the same context stack (context
 //! guards are TOP-OF-STACK `instanceof` checks — `inContext` is
 //! `clazz.isAssignableFrom(stack.peek().getClass())`, NOT a stack search).
-//! The chain is split into the section modules [`stmt_line`] (arms at Java
-//! lines 281–347), [`stmt_model`] (350–611), [`stmt_props`] (612–741),
-//! [`stmt_style`] (742–948), [`stmt_deployment`] (949–1028), [`stmt_views`]
-//! (1029–1196) and [`stmt_config`] (1197–1339) — each section runs in that
+//! The chain is split into the section modules `stmt_line` (arms at Java
+//! lines 281–347), `stmt_model` (350–611), `stmt_props` (612–741),
+//! `stmt_style` (742–948), `stmt_deployment` (949–1028), `stmt_views`
+//! (1029–1196) and `stmt_config` (1197–1339) — each section runs in that
 //! order, so the chain order in the reference (which IS the compatibility
 //! contract) is preserved exactly; every arm is annotated with its Java line
 //! number.

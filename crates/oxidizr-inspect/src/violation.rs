@@ -16,7 +16,7 @@ pub struct Violation {
     /// `model.container.technology` (the property-key stem and the
     /// `--only` / `--except` filter value).
     pub inspection: &'static str,
-    /// Resolved severity (property strategy, see [`crate::strategy`]).
+    /// Resolved severity (property strategy, see `crate::strategy`).
     pub severity: Severity,
     /// The reference message, verbatim.
     pub message: String,
