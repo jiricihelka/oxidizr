@@ -42,6 +42,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [ast-grep-search.md](testing/ast-grep-search.md) | `ast-grep` structural search recipes, vs grep counts |
 | [oracle-app-harness.md](testing/oracle-app-harness.md) | export injects inspection props + default views; goldening limits |
 | [cli-e2e-pitfalls.md](testing/cli-e2e-pitfalls.md) | subprocess tests: pipe stdio, random UUIDs, known-vs-legacy JSON fields |
+| [fuzz-p4t-finds.md](testing/fuzz-p4t-finds.md) | fuzz battery finds (fmt BOM, zero-width matcher doubling) + bounded-surface rule |
 
 ## perf/ — measured timings ([index](perf/README.md))
 

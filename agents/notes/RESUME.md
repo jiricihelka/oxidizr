@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1…T-4 DONE, next T-5 (fuzz targets + seed corpora); then T-6 close → P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1…T-5 DONE (fuzz battery found+fixed TWO engine bugs), next T-6 close (CLI audit row + Cat B extension + ritual) → P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -36,9 +36,20 @@
   converge check is wall-clock-FREE (FIFO single-threaded loop; full
   exchange scripted before the drain; zero sleeps). Summarizer per-shape
   lines: completion `n [first 3 labels]`, `edits=n`, hover first markdown
-  line. **Next: T-5** — fuzz targets `import_sniff`/`query_parse`/
-  `pathfilter`/`diff_pair` + seed corpora (P4T-V2 probe on `pathfilter`
-  value; `cargo xtask fuzz` is the budget).
+  line. **T-5 DONE** — 4 fuzz targets (`import_sniff`/`query_parse`/
+  `pathfilter`/`diff_pair`) + 28 seeds, `FUZZ_TARGETS` staged to 7; the
+  battery found TWO REAL engine bugs, both fixed code-side: fmt BOM
+  idempotence (`48aa18b`, protective line-START space — the BOM-after-indent
+  is a TOKEN char the reference strips only at byte 0) and pathfilter
+  zero-width doubling (`0e8d7f3`, `$+$+…` was 2^n — each continuation
+  position tried exactly once, JDK-witnessed table; P4T-V2 VERIFIED: YES,
+  real finds). Slow-unit backtracking = PARITY with `java.util.regex` →
+  fixed ≤4-char fuzz subjects bound the surface, NEVER a matcher cap.
+  Finds note: `testing/fuzz-p4t-finds.md`. **Next: T-6** — CLI audit row
+  (gap 6: ≥1 stdout golden + ≥1 error-path exit test per `Command`),
+  Category B extension (export-verify c4|plantuml|mermaid over the fixture
+  set), close ritual (full tier + bless no-op + PROGRESS `P4T` log +
+  matrix frozen; interlude precedent = NO tag).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

@@ -88,7 +88,7 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
 | **T-2** | `oxidizr-import` golden file suite (gap 1) | **DONE** — `crates/oxidizr-import/tests/golden_files.rs` (9 tests): 11 authored fixtures under `tests/fixtures/` (LF-pinned, inventory-pinned by `every_fixture_is_consumed`), digests blessed via UPDATE_EXPECT; MADR 0001 carries a front-matter `date:` because the importer's fallback is file **mtime** (an mtime-derived golden would be nondeterministic — proven mtime-proof by re-run after `touch`) |
 | **T-3** | e2e corpus Phase-4 axes + invariants (gap 4) | **DONE** — manifest schema v3: `inspect`/`query`/`diff` axes over the entry's own input + `generate` over the entry directory (P4T-V1 settled); 307 sidecars re-blessed; OXZ-5010 entered the corpus, allow-list shrank (the stale-entry tripwire fired as designed); full tier adds `generate_pair_merge_is_view_free_and_id_unique` (view-free · unique ids · one edge per pair under `First`) |
 | **T-4** | LSP capability transcripts + fast-edit stress (gap 5) | **DONE** — `tests/transcript.rs` +4 scripted exchanges over the real `run` loop: completion / hover (identifier-card · keyword-card · null) / formatting-**idempotence** (messy → ONE edit → apply → 0 edits) / `fast_edit_burst_converges` (open + 8 queued didChanges, LAST publish = LAST version = LAST buffer's truth). Summarizer grew per-shape lines (completion `n [first 3]`, `edits=n`, hover first markdown line) |
-| **T-5** | New fuzz targets + seed corpora (gap 3) | T5 |
+| **T-5** | New fuzz targets + seed corpora (gap 3) | **DONE** — 4 targets (`import_sniff`/`query_parse`/`pathfilter`/`diff_pair`), 28 committed seeds, `FUZZ_TARGETS` staged to 7; the battery found TWO REAL engine bugs, both fixed code-side: `48aa18b` fmt BOM idempotence (line-START protective space) and `0e8d7f3` pathfilter zero-width doubling (`$+$+…` was 2^n — each continuation position now tried exactly once, JDK-witnessed table). Slow-unit backtracking = PARITY with `java.util.regex` → surface bounded (fixed ≤4-char subjects), never a matcher cap. Finds note: `testing/fuzz-p4t-finds.md` |
 | **T-6** | CLI audit row (gap 6), Category B extension (gap 7), close ritual (full tier + bless + PROGRESS `P4T` log + matrix frozen) | T6 |
 
 ## P4T-D5 Verification list (empirical, before dependent code)
@@ -104,6 +104,14 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
   their count-asserts).**
 - P4T-V2 — fuzz target cost/benefit on the P4 parsers (does `pathfilter`
   fuzz find anything real given it rejects non-supported regex up front?).
+  **VERIFIED at T-5 (2026-11-22): YES — the rejection gate is compile-side
+  only, so `is_match` over accepted patterns was live and found a REAL
+  engine bug (zero-width quantifier iteration doubled the continuation →
+  `$+$+…` 2^n timeout, fixed in `0e8d7f3` with a JDK-probed semantics
+  table); `dsl_fmt` independently found the BOM idempotence bug (`48aa18b`).
+  The remaining slow-units are ambiguous-quantifier backtracking — parity
+  with the reference engine (unbounded there too), answered by bounding the
+  fuzz surface (fixed short subjects), NOT by capping the matcher.**
 - P4T-V3 — LSP stress: determinism of the converge check under
   `tower-... ` test harness timing (keep it wall-clock-free; use the
   existing transcript harness). **VERIFIED at T-4 (2026-11-22): no

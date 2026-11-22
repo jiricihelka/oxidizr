@@ -9,3 +9,4 @@
 | [oracle-app-harness.md](oracle-app-harness.md) | export injects inspection props + default views; goldening limits |
 | [cli-e2e-pitfalls.md](cli-e2e-pitfalls.md) | subprocess CLI tests: piped stdio, random UUID identifiers, known-vs-legacy fields |
 | [e2e-suite-operations.md](e2e-suite-operations.md) | e2e corpus tiers, bless/mutate workflow + the bless-REVIEW rule (exit-class/counts smell), bench feature |
+| [fuzz-p4t-finds.md](fuzz-p4t-finds.md) | P4T fuzz battery: two real engine finds (BOM fmt, zero-width matcher), bounded-surface rule, fuzz-workspace drift gate |
