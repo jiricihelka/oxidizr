@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0–R3 DONE** (R4 next → R5) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0–R4 DONE** (R5 next — last wave) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -104,7 +104,17 @@
   307×unchanged · doc-zero · `bench cmp 4T` ALL 26 groups at 1.00.
   **Next: R4** — cli `report` renderer-plumbing review; viewer shell
   `struct_excessive_bools` split; `to_request` KEEP row documented.
-  Then R5 (pub-use consolidation, churn list complete) → P4D → E-4/E-5.
+- **§P4R R4 DONE 2026-11-22** (lsp/cli/viewer/xtask/e2e wave): viewer
+  shell `struct_excessive_bools` allow GONE — `Toggles` (diagnostics/
+  layout/snap) + `Latches` (needs_fit/visuals_ready/icons_dirty)
+  grouping, private structs = zero churn (`ea4feda`); KEEP rows:
+  `report` plumbing (one Renderer, one replay), `to_request` flat argv
+  table (note expanded in place), cli `Cli` flags struct (clap idiom).
+  Wave end green: full tier · bless 307×unchanged · doc-zero · bench
+  skipped (no bench path). **Next: R5** — public-API consolidation:
+  `pub use` graphs reviewed, churn list → CHANGELOG-ready, doc links
+  green → P4D docs reset → E-4 (cargo-dist) → E-5 (0.4.0 + changelog +
+  local `v0.4.0` tag).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
