@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1…T-3 DONE, next T-4 (LSP capability transcripts + fast-edit stress); then T-5/T-6 → P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1…T-4 DONE, next T-5 (fuzz targets + seed corpora); then T-6 close → P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -28,9 +28,17 @@
   `generate_pair_merge_is_view_free_and_id_unique`; coverage gate reads
   the v3 sections; matrix cells + sidecar prose stamped to v3. Axes run in
   the QUICK tier (measured cost kept the quartet light).
-  **Next: T-4** — LSP per-capability transcripts (completion/hover/
-  formatting/workspace-edit idempotence) + fast-edit stress (P4T-V3:
-  wall-clock-free converge check).
+  **T-4 DONE** — `tests/transcript.rs` grew per-capability transcripts
+  over the real `run` loop (`completion_transcript`, `hover_transcript`,
+  `formatting_edit_idempotence_transcript` — messy→1 edit→apply→0 edits —
+  and `fast_edit_burst_converges`: open + 8 queued didChanges, LAST
+  publish = LAST version = LAST buffer's truth). P4T-V3 VERIFIED: the
+  converge check is wall-clock-FREE (FIFO single-threaded loop; full
+  exchange scripted before the drain; zero sleeps). Summarizer per-shape
+  lines: completion `n [first 3 labels]`, `edits=n`, hover first markdown
+  line. **Next: T-5** — fuzz targets `import_sniff`/`query_parse`/
+  `pathfilter`/`diff_pair` + seed corpora (P4T-V2 probe on `pathfilter`
+  value; `cargo xtask fuzz` is the budget).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

@@ -87,7 +87,7 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
 | **T-1** | The matrix section + gate re-sync (gap 2) + harvest script notes | **DONE** — T1a: `TESTING.md` §Feature × suite matrix (names harvested from `cargo test --workspace -- --list`, gap legend T-2…T-6); T1b: gate re-sync (`codes::ALL` + docs↔catalog machine check + 5010 registered debt) |
 | **T-2** | `oxidizr-import` golden file suite (gap 1) | **DONE** — `crates/oxidizr-import/tests/golden_files.rs` (9 tests): 11 authored fixtures under `tests/fixtures/` (LF-pinned, inventory-pinned by `every_fixture_is_consumed`), digests blessed via UPDATE_EXPECT; MADR 0001 carries a front-matter `date:` because the importer's fallback is file **mtime** (an mtime-derived golden would be nondeterministic — proven mtime-proof by re-run after `touch`) |
 | **T-3** | e2e corpus Phase-4 axes + invariants (gap 4) | **DONE** — manifest schema v3: `inspect`/`query`/`diff` axes over the entry's own input + `generate` over the entry directory (P4T-V1 settled); 307 sidecars re-blessed; OXZ-5010 entered the corpus, allow-list shrank (the stale-entry tripwire fired as designed); full tier adds `generate_pair_merge_is_view_free_and_id_unique` (view-free · unique ids · one edge per pair under `First`) |
-| **T-4** | LSP capability transcripts + fast-edit stress (gap 5) | T4 |
+| **T-4** | LSP capability transcripts + fast-edit stress (gap 5) | **DONE** — `tests/transcript.rs` +4 scripted exchanges over the real `run` loop: completion / hover (identifier-card · keyword-card · null) / formatting-**idempotence** (messy → ONE edit → apply → 0 edits) / `fast_edit_burst_converges` (open + 8 queued didChanges, LAST publish = LAST version = LAST buffer's truth). Summarizer grew per-shape lines (completion `n [first 3]`, `edits=n`, hover first markdown line) |
 | **T-5** | New fuzz targets + seed corpora (gap 3) | T5 |
 | **T-6** | CLI audit row (gap 6), Category B extension (gap 7), close ritual (full tier + bless + PROGRESS `P4T` log + matrix frozen) | T6 |
 
@@ -106,7 +106,12 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
   fuzz find anything real given it rejects non-supported regex up front?).
 - P4T-V3 — LSP stress: determinism of the converge check under
   `tower-... ` test harness timing (keep it wall-clock-free; use the
-  existing transcript harness).
+  existing transcript harness). **VERIFIED at T-4 (2026-11-22): no
+  `tower-test` involved — `server::run` is a single-threaded FIFO loop
+  over the receiver, so the T-4 client scripts its FULL exchange before
+  draining and message order is structural. `fast_edit_burst_converges`
+  pins exactly that: 9 publishes in send order, LAST publish = LAST
+  version = LAST buffer's truth; zero sleeps, zero clock reads.**
 
 ## Risks
 
