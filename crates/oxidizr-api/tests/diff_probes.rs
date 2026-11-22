@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use expect_test::expect;
-use oxidizr_api::pipeline::{ApiOptions, ExitClass, Input, Request, execute};
+use oxidizr_api::pipeline::{ApiOptions, DiffFormat, ExitClass, Input, Request, execute};
 use oxidizr_api::{diff, open};
 
 fn testdata() -> PathBuf {
@@ -60,12 +60,12 @@ fn walk(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
 }
 
 /// One `diff` run through the pipeline; `(exit class, stdout text)`.
-fn diff_run(a: &Path, b: &Path, json: bool, ignore_layout: bool) -> (ExitClass, String) {
+fn diff_run(a: &Path, b: &Path, format: DiffFormat, ignore_layout: bool) -> (ExitClass, String) {
     let out = execute(
         Request::Diff {
             a: a.to_path_buf(),
             b: b.to_path_buf(),
-            json,
+            format,
             ignore_layout,
             quiet: false,
         },
@@ -164,7 +164,7 @@ fn a_dsl_and_its_json_twin_diff_empty() {
             is_empty_diff(&probe(d), &probe(j)),
             "{d} vs {j} must diff EMPTY"
         );
-        let (exit, text) = diff_run(&probe(d), &probe(j), true, false);
+        let (exit, text) = diff_run(&probe(d), &probe(j), DiffFormat::Json, false);
         assert_eq!(exit, ExitClass::Ok, "{d} vs {j}: {text}");
     }
 }
@@ -175,7 +175,12 @@ fn edited_pair_json_snapshot() {
     // The frozen schema-1 document over the hand-curated edit story: add,
     // remove, the rename pair via the relationship DESCRIPTION, field and
     // style changes, the membership shift and the F1 id drift.
-    let (exit, text) = diff_run(&probe("base.dsl"), &probe("edited.dsl"), true, false);
+    let (exit, text) = diff_run(
+        &probe("base.dsl"),
+        &probe("edited.dsl"),
+        DiffFormat::Json,
+        false,
+    );
     assert_eq!(exit, ExitClass::Differences);
     expect![[r##"
         {
@@ -336,7 +341,12 @@ fn edited_pair_json_snapshot() {
 fn edited_pair_ignore_layout_snapshot() {
     // `--ignore-layout` drops ONLY the geometry fields (the position legs
     // and `automaticLayout`); membership stays — it is not layout.
-    let (exit, text) = diff_run(&probe("base.dsl"), &probe("edited.dsl"), true, true);
+    let (exit, text) = diff_run(
+        &probe("base.dsl"),
+        &probe("edited.dsl"),
+        DiffFormat::Json,
+        true,
+    );
     assert_eq!(exit, ExitClass::Differences);
     assert!(!text.contains("position["), "{text}");
     assert!(!text.contains("automaticLayout"), "{text}");
@@ -347,7 +357,12 @@ fn edited_pair_ignore_layout_snapshot() {
 fn edited_pair_human_snapshot() {
     // PLAIN (hermetic `ApiOptions::color = false`), one line per entry,
     // grouped by category in schema order.
-    let (exit, text) = diff_run(&probe("base.dsl"), &probe("edited.dsl"), false, false);
+    let (exit, text) = diff_run(
+        &probe("base.dsl"),
+        &probe("edited.dsl"),
+        DiffFormat::Human,
+        false,
+    );
     assert_eq!(exit, ExitClass::Differences);
     expect![[r##"
         added (3):

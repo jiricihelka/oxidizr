@@ -36,7 +36,8 @@ pub use open::{Opened, open};
 pub use oxidizr_import::ImportFormat;
 pub use oxidizr_inspect::Severity;
 pub use pipeline::{
-    ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request, StdinReader, execute,
+    ApiOptions, DiffFormat, ExitClass, FmtMode, Input, InspectFormat, LogItem, Outcome, Request,
+    StdinReader, execute,
 };
 // §P4-M3 O-1: the `Request::Query` enums travel on the API surface (the
 // CLI maps its clap enums onto these).

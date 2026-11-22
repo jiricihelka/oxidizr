@@ -39,8 +39,8 @@ use std::path::PathBuf;
 use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
 use clap::{CommandFactory as _, Parser, Subcommand, ValueEnum};
 use oxidizr_api::{
-    ApiOptions, ExitClass, FmtMode, ImportFormat, InitTemplate, Input, LogItem, Outcome,
-    QueryFormat, QueryKind, RelationshipsStrategy, Request, Severity,
+    ApiOptions, DiffFormat, ExitClass, FmtMode, ImportFormat, InitTemplate, Input, InspectFormat,
+    LogItem, Outcome, QueryFormat, QueryKind, RelationshipsStrategy, Request, Severity,
 };
 
 use report::{Issue, Renderer};
@@ -161,8 +161,8 @@ pub enum Command {
         b: PathBuf,
         /// `json` prints the schema-1 document (`docs/diff-schema.md`);
         /// the default `human` prints the grouped ± report.
-        #[arg(long, value_enum, default_value_t = DiffFormat::Human)]
-        format: DiffFormat,
+        #[arg(long, value_enum, default_value_t = DiffCmdFormat::Human)]
+        format: DiffCmdFormat,
         /// Ignore view geometry (positions, routing, layout, animations).
         // Explicit spelling: the `Command` rename is `lowercase`, which
         // would otherwise flatten the field name to `--ignorelayout`.
@@ -192,8 +192,8 @@ pub enum Command {
         /// `json` prints the schema-1 violations document
         /// (`docs/inspect-schema.md`); the default `human` prints the
         /// `type | SEVERITY | message` lines.
-        #[arg(long, value_enum, default_value_t = InspectFormat::Human)]
-        format: InspectFormat,
+        #[arg(long, value_enum, default_value_t = InspectCmdFormat::Human)]
+        format: InspectCmdFormat,
     },
     /// Import one diagram into a fresh workspace (`import`, F12,
     /// §P4-M2 N-4): the C4-`PlantUML`/`Mermaid` macro legs produce the
@@ -378,9 +378,11 @@ pub enum RelationshipsArg {
 }
 
 /// `oxidizr diff --format` values (§P4-M0 D-3): the human ± report (the
-/// default) or the schema-1 JSON document (`docs/diff-schema.md`).
+/// default) or the schema-1 JSON document (`docs/diff-schema.md`). The
+/// `Cmd` infix (§P4-R3, like `ImportCmdFormat`) keeps the clap type apart
+/// from the API-side [`oxidizr_api::DiffFormat`] it maps onto 1:1.
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
-pub enum DiffFormat {
+pub enum DiffCmdFormat {
     /// Grouped ± report on stdout.
     #[default]
     Human,
@@ -390,9 +392,11 @@ pub enum DiffFormat {
 
 /// `oxidizr inspect --format` values (§P4-M1 I-4): the reference
 /// `type | SEVERITY | message` lines (the default) or the schema-1
-/// violations document (`docs/inspect-schema.md`).
+/// violations document (`docs/inspect-schema.md`). The `Cmd` infix
+/// (§P4-R3, like `ImportCmdFormat`) keeps the clap type apart from the
+/// API-side [`oxidizr_api::InspectFormat`] it maps onto 1:1.
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
-pub enum InspectFormat {
+pub enum InspectCmdFormat {
     /// `type | SEVERITY | message` lines on stdout.
     #[default]
     Human,
@@ -625,7 +629,10 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
         } => Request::Diff {
             a,
             b,
-            json: format == DiffFormat::Json,
+            format: match format {
+                DiffCmdFormat::Human => DiffFormat::Human,
+                DiffCmdFormat::Json => DiffFormat::Json,
+            },
             ignore_layout,
             quiet,
         },
@@ -644,7 +651,10 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             },
             only,
             except,
-            json: format == InspectFormat::Json,
+            format: match format {
+                InspectCmdFormat::Human => InspectFormat::Human,
+                InspectCmdFormat::Json => InspectFormat::Json,
+            },
             quiet,
         },
         Command::Import {

@@ -14,3 +14,9 @@ _(created at R0 2026-11-22; entries start with R2)_
   now LIVE HERE (moved out of `oxidizr-api`'s private `sniff_format`);
   `oxidizr_api::ImportFormat` stays valid as a re-export,
   `oxidizr_api::pipeline::ImportFormat` is GONE (R2, item 1)
+- oxidizr-api: `Request::Diff`/`Request::Inspect` payload `json: bool` →
+  typed `format: DiffFormat` / `format: InspectFormat` (new api enums,
+  re-exported like the `Query` ones); `oxidizr_api::DiffFormat`/
+  `InspectFormat` were the CLI's clap enums — those are renamed
+  `DiffCmdFormat`/`InspectCmdFormat` in `oxidizr-cli` (grammar frozen:
+  the `--format human|json` values are unchanged) (R3, item 1)

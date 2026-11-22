@@ -163,7 +163,7 @@ fn observe_axes(
                 threshold: oxidizr_api::Severity::Info,
                 only: Vec::new(),
                 except: Vec::new(),
-                json: true,
+                format: oxidizr_api::InspectFormat::Json,
                 quiet: false,
             },
             opts,
@@ -199,7 +199,7 @@ fn observe_axes(
             Request::Diff {
                 a: file.clone(),
                 b: file.clone(),
-                json: true,
+                format: oxidizr_api::DiffFormat::Json,
                 ignore_layout: false,
                 quiet: false,
             },

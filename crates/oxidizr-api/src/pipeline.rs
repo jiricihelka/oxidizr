@@ -126,6 +126,32 @@ pub struct ApiOptions {
     pub color: bool,
 }
 
+/// `oxidizr diff` report shape (§P4-M0 D-3, typed at the API edge §P4-R3
+/// like the `Query` enums): the human ± report (default) or the schema-1
+/// JSON document (`docs/diff-schema.md`). The CLI `DiffCmdFormat` clap
+/// enum maps onto it 1:1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiffFormat {
+    /// Grouped ± report on stdout.
+    #[default]
+    Human,
+    /// Schema-1 document on stdout.
+    Json,
+}
+
+/// `oxidizr inspect` report shape (§P4-M1 I-4, typed at the API edge
+/// §P4-R3): the reference `type | SEVERITY | message` lines (default) or
+/// the schema-1 violations document (`docs/inspect-schema.md`). The CLI
+/// `InspectCmdFormat` clap enum maps onto it 1:1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InspectFormat {
+    /// `type | SEVERITY | message` lines on stdout.
+    #[default]
+    Human,
+    /// Schema-1 document on stdout.
+    Json,
+}
+
 /// `fmt` modes (P1-D8): default prints to stdout (→ [`Outcome::bytes`]),
 /// `Write` rewrites files in place (the only side-effecting mode), `Check`
 /// lists unformatted inputs and exits 1.
@@ -197,9 +223,9 @@ pub enum Request {
         a: PathBuf,
         /// Right side (`B`).
         b: PathBuf,
-        /// `--format json` (schema-1 document on [`Outcome::bytes`]);
-        /// `false` = the human ± report on `bytes`.
-        json: bool,
+        /// Report shape (`--format`): schema-1 document on
+        /// [`Outcome::bytes`] or the human ± report.
+        format: DiffFormat,
         /// `--ignore-layout`: skip view geometry fields.
         ignore_layout: bool,
         /// `--quiet`: exit code only (no bytes, no log chatter).
@@ -221,9 +247,9 @@ pub enum Request {
         only: Vec<String>,
         /// `--except`: never report these inspection types.
         except: Vec<String>,
-        /// `--format json` (schema-1 document on [`Outcome::bytes`]);
-        /// `false` = the human `type | SEVERITY | message` lines.
-        json: bool,
+        /// Report shape (`--format`): schema-1 document on
+        /// [`Outcome::bytes`] or the human `type | SEVERITY | message` lines.
+        format: InspectFormat,
         /// `--quiet`: exit code only (no bytes, no log chatter).
         quiet: bool,
     },
@@ -391,18 +417,18 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
         Request::Diff {
             a,
             b,
-            json,
+            format,
             ignore_layout,
             quiet,
-        } => diff_cmd(&a, &b, json, ignore_layout, quiet, opts),
+        } => diff_cmd(&a, &b, format, ignore_layout, quiet, opts),
         Request::Inspect {
             workspace,
             threshold,
             only,
             except,
-            json,
+            format,
             quiet,
-        } => inspect_cmd(&workspace, threshold, &only, &except, json, quiet, opts),
+        } => inspect_cmd(&workspace, threshold, &only, &except, format, quiet, opts),
         Request::Import {
             input,
             format,
@@ -1115,15 +1141,16 @@ fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Result<Outco
 /// its diagnostics ride the log INFORMATIONALLY, the reference has no `diff`
 /// so no parity rule binds them), run the pure engine, and carry the result:
 /// `Differences` (exit 1, the documented P4-D1 extension) when any category
-/// is non-empty, `Ok` otherwise. `json` rides [`Outcome::bytes`] as the
-/// schema-1 document (`docs/diff-schema.md`); the human format is the ±
-/// report, painted per [`ApiOptions::color`]. `--quiet` = exit code only:
+/// is non-empty, `Ok` otherwise. [`DiffFormat::Json`] rides
+/// [`Outcome::bytes`] as the schema-1 document (`docs/diff-schema.md`);
+/// [`DiffFormat::Human`] is the ± report, painted per
+/// [`ApiOptions::color`]. `--quiet` = exit code only:
 /// no bytes, no chatter (load failures still abort with their own class —
 /// an unreadable side is not "no differences").
 fn diff_cmd(
     a: &Path,
     b: &Path,
-    json: bool,
+    format: DiffFormat,
     ignore_layout: bool,
     quiet: bool,
     opts: &ApiOptions,
@@ -1150,7 +1177,7 @@ fn diff_cmd(
     }
     // Informational open diagnostics (partial DSL opens, validation): they
     // join AFTER the payload decision so `--quiet` keeps them out too.
-    if json {
+    if format == DiffFormat::Json {
         let doc = serde_json::to_string_pretty(&d.to_json())
             .map_err(|e| Fail::new(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
         out.bytes = Some(format!("{doc}\n").into_bytes());
@@ -1181,7 +1208,7 @@ fn inspect_cmd(
     threshold: oxidizr_inspect::Severity,
     only: &[String],
     except: &[String],
-    json: bool,
+    format: InspectFormat,
     quiet: bool,
     opts: &ApiOptions,
 ) -> Result<Outcome, Fail> {
@@ -1207,7 +1234,7 @@ fn inspect_cmd(
         // The exit code IS the result (the `diff --quiet` pattern).
         return Ok(out);
     }
-    if json {
+    if format == InspectFormat::Json {
         // Schema 1 (`docs/inspect-schema.md`): frozen key order, run
         // order preserved, lowercase severities. Provenance stamps never
         // appear (the `diff` schema rule).
