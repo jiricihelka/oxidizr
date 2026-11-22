@@ -11,6 +11,10 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 oxidizr-dsl = { path = "../crates/oxidizr-dsl" }
 oxidizr-json = { path = "../crates/oxidizr-json" }
+# §P4T T-5 (gap 3): the Phase-4 parsers join the fuzz surface.
+oxidizr-api = { path = "../crates/oxidizr-api" }
+oxidizr-import = { path = "../crates/oxidizr-import" }
+oxidizr-core = { path = "../crates/oxidizr-core" }
 
 # M6-d targets (agents/plan/build/PHASE_1.md §P1-D11): the hand-rolled
 # lex/parse/fmt paths and the JSON reader. Seed corpus = the vendored fixture
@@ -33,6 +37,38 @@ bench = false
 [[bin]]
 name = "json_read"
 path = "fuzz_targets/json_read.rs"
+test = false
+doc = false
+bench = false
+
+# §P4T T-5 (gap 3): the P4 parsers — text importers, the query grammar, the
+# generate regex subset, and the diff identity axis. Seeds: the importer
+# fixture set (import_sniff), fuzz/seeds/ (query_parse, pathfilter) and the
+# vendored .dsl corpus (diff_pair).
+[[bin]]
+name = "import_sniff"
+path = "fuzz_targets/import_sniff.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "query_parse"
+path = "fuzz_targets/query_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pathfilter"
+path = "fuzz_targets/pathfilter.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "diff_pair"
+path = "fuzz_targets/diff_pair.rs"
 test = false
 doc = false
 bench = false

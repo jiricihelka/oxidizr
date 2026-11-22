@@ -20,6 +20,8 @@ fuzz_target!(|data: &[u8]| {
             base_dir: None,
             json_loader: None,
             env_lookup: None,
+            // M1-d field: `None` = empty registry, the fuzz-safe default.
+            installed_themes: None,
         },
     );
 });

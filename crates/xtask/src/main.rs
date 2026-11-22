@@ -623,6 +623,20 @@ const FUZZ_TARGETS: &[(&str, &[(&str, &str)])] = &[
             ("testdata/probes", "json"),
         ],
     ),
+    // §P4T T-5 (gap 3): the Phase-4 parsers. Importer seeds are the
+    // authored fixture corpus; the query/pathfilter grammars ride their
+    // committed seed tables under fuzz/seeds/ (the corpus dir stays
+    // gitignored scratch); diff_pair opens the vendored `.dsl` set.
+    (
+        "import_sniff",
+        &[
+            ("crates/oxidizr-import/tests/fixtures/c4", "puml"),
+            ("crates/oxidizr-import/tests/fixtures/mermaid", "mmd"),
+        ],
+    ),
+    ("query_parse", &[("fuzz/seeds/query_parse", "txt")]),
+    ("pathfilter", &[("fuzz/seeds/pathfilter", "txt")]),
+    ("diff_pair", &[("testdata/dsl", "dsl")]),
 ];
 
 /// Fuzz job mirror (nightly in CI): build all targets once, stage the fixture
