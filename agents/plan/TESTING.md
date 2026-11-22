@@ -105,6 +105,8 @@ does not duplicate coverage. Gap legend: **T-2** importer golden file
 suite · **T-3** e2e corpus Phase-4 axes · **T-4** LSP capability
 transcripts + stress · **T-5** fuzz targets `import_sniff`/`query_parse`/
 `pathfilter`/`diff_pair` · **T-6** CLI audit row + Category B extension.
+**FROZEN at P4T close (2026-11-22): every gap resolved, zero `T-n` cells
+remain** — the D0 maintenance rule stays in force for future feature rows.
 
 | Feature | unit | golden (Cat A) | CLI | e2e quick | e2e full | Cat B oracle | fuzz |
 |---|---|---|---|---|---|---|---|
@@ -112,7 +114,7 @@ transcripts + stress · **T-5** fuzz targets `import_sniff`/`query_parse`/
 | `inspect` (M1) | `severity::tests::ranking_orders_error_above_ignore` | `inspect_model::element_ladder_run_order_snapshot` | `cli::inspect_human_report_exit_one_golden` | `quick::corpus_matches_manifests` (violations axis) | — | — (advisory, P4-D7) | — |
 | diagram importers C4/Mermaid/image (M2) | `c4plantuml::tests::context_diagram_end_to_end`, `mermaid::tests::sequence_document_is_a_standalone_diagram`, `image::tests::png_imports_as_data_uri_image_view` | `golden_files::c4plantuml_context_file_golden` (+8 more, `tests/golden_files.rs`) | `cli::import_c4plantuml_sniffed_extension_stdout` | — | — | — (semantic bar F12; witness legs at M2) | `fuzz/import_sniff` (c4puml+mermaid lossy) |
 | `!docs`/`!adrs` (M2 N-6) | `docs::tests::default_import_walks_top_level_sorted_with_order_and_trim`, `decisions::tests::adrtools_parses_id_title_date_status` | `p4m2_docs_adrs::docs_import_success_with_holders_exclude_and_images` | — | — | — | witness legs §P4-M2 (`TZ=UTC`) | — |
-| WSD export (M2 N-5) | `wsd::tests::async_and_response_legs_pick_the_arrow_and_swap` | `export_wsd_goldens::wsd_goldens_byte_parity` | T-6 | `quick::corpus_matches_manifests` (wsd export section) | `full_export::export_is_deterministic_json_parity_and_fmt_parity` | oracle 9/9 byte-parity (M2) | — |
+| WSD export (M2 N-5) | `wsd::tests::async_and_response_legs_pick_the_arrow_and_swap` | `export_wsd_goldens::wsd_goldens_byte_parity` | `cli::export_websequencediagrams_writes_the_dynamic_view_file` | `quick::corpus_matches_manifests` (wsd export section) | `full_export::export_is_deterministic_json_parity_and_fmt_parity` | oracle 9/9 byte-parity (M2) | — |
 | `query` (M3 O-1) | `query::tests::view_subset_combinators_drop_extra_arms_like_the_reference` | `query_probes::element_ids_only_are_reproducible_from_the_json_twin` | `cli::query_table_rows_golden` | `quick::corpus_matches_manifests` (smoke-filter axis) | — | — | `fuzz/query_parse` (fixture ws + fuzzed filter) |
 | `init` (M3 O-2) | `init::tests::workspace_templates_parse_clean` | `init_probes::scaffolded_workspaces_validate_and_match_the_json_golden` | `cli::init_creates_then_skips_then_forces` | — | — | — | — |
 | `completions` (M3 O-3) | — | — | `cli::completions_bash_and_zsh_scripts_are_valid` | — | — | — | — |
@@ -122,7 +124,7 @@ transcripts + stress · **T-5** fuzz targets `import_sniff`/`query_parse`/
 | `Layered` channel lanes (M5c E-3) | `layered::tests::channel_lanes_split_an_overlapping_bundle`, `layered::tests::star_concentration_gets_distinct_lanes`, `layered::tests::thousand_nodes_are_deterministic` | — (engine coords in no golden — E-3 stamp) | — | — | — | — | — |
 | export-dialect comparators (M5b E-2) | `exportcmp::tests::mermaid_reordering_is_equal`, `exportcmp::tests::plain_plantuml_reordering_is_equal_labels_are_pinned` | `plantuml_goldens_byte_parity`, `mermaid_goldens_byte_parity` | — | — | — | `cargo xtask export-verify --format c4\|plantuml\|mermaid` | — |
 | OXZ-code coverage gate (T1b) | `coverage::registry_matches_docs_table`, `coverage::allowlist_has_no_stale_entries` | — | — | — | — | — | — |
-| CLI audit (all subcommands) | — | — | T-6 (≥1 stdout golden + ≥1 error-path exit test per `Command`) | — | — | — | — |
+| CLI audit (all subcommands) | — | — | DELIVERED T-6 — `export` was the last uncovered `Command`: `cli::export_plantuml_writes_view_and_legend_files` + `export_notes_are_golden_and_exit_zero` + `export_exit_family_static_png_missing_usage` + `export_websequencediagrams_writes_the_dynamic_view_file`; audit of the other 15 found ≥1 stdout golden + ≥1 error-path exit test each already | — | — | — | — |
 | core pipeline (P1–P3, reference row) | `run` of `oxidizr-dsl` statement engine (`engine::stmt_model::tests::element_grammar_errors`) | `m1_lossless::corpus_cst_is_lossless`, `golden_m3::m3_probe_workspace_writes_golden_bytes` | `cli::parse_errors_exit_1_with_reference_text_and_code` | `quick::corpus_matches_manifests` | `full::json_round_trip_is_byte_stable` | `cargo xtask oracle verify` | `dsl_parse`, `dsl_fmt`, `json_read` |
 
 ## Benchmarks

@@ -34,6 +34,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P4 | §P4-M1 `inspect` (I-1…I-4) | **COMPLETE 2026-11-21** — `structurizr-inspection` port: new crate `oxidizr-inspect` (pure model logic over core — advisory only, the JSON byte contract untouched), `DefaultInspector` run order verbatim (workspace+model+view phases, messages VERBATIM, quirks included: `Model.isEmpty()` counts only people/systems/nodes, noview alone uses `getName()`, filtered/image are generated-key-only), severity-strategy port (P4-V2: `structurizr.inspection.<dotted type>` keys, `*` fallbacks, inner-first holder chains, relationship `[srcType->dstType]` specificity), `oxidizr inspect <WS> [--severity-threshold info\|warning\|error] [--only T]… [--except T]… [--format human\|json] [--quiet]` — schema-1 document (`docs/inspect-schema.md`), exit 1 iff REPORTED (P4-D1 family). 15 lib + 19 inspect tests + 8 CLI goldens; corpus sweep (`testdata/dsl` never panics); complete-workspace proptest `inspect == []`; bless 307×unchanged. Commits M1a `cad75b9` → M1d (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-M2 importers (N-1…N-6) | **COMPLETE 2026-11-21** — `oxidizr-import`: image + C4-PlantUML + Mermaid importer ports (`oxidizr import`, F12 semantic bar, MODEL ONLY), WSD exporter (`export -f websequencediagrams`, oracle 9/9 byte-parity), `!docs`/`!adrs` engine wiring (core-compat bar): `DefaultDocumentationImporter`/`FormatFinder` + the decision family (AdrTools/Madr/Log4brains + structurizr-native) behind a six-FQN registry, std-only `regexlite` for the Java-regex `exclude` full-match (P4-V8), UTC date parsing (P4-V7/D15), raw-bytes `Image.content` (D14/D16); OXZ-5003 retired to a tombstone (both fixtures now surface the real `end()`-stage OXZ-2002, sidecars re-blessed); oracle A/B green on the big-bank + include-directory fixtures (documentation byte-parity) — which caught the **Java empty-input `split` special case** (`"".split(",")` → `[""]`, JVM-proven): the empty tags token now stores an empty tag ⇒ reference `"Element,Deployment Node,"`. Permanent contract `build/IMPORT-DOCS-ADRS.md`; deviations D15/D16. Commits M2a `b7f66e5` → M2f (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-M3 extras (`query`/`init`/`completions`/`generate`, O-1…O-4) | **COMPLETE 2026-11-21** — four new commands, oxidizr-added surfaces specced P4-D3/D4/D9/D10: `oxidizr query <WS> --filter EXPR [--kind …] [--format table\|ids\|json]` (the DSL item-expression grammar IS the query language — P4-V4 closed, public `oxidizr_dsl::query::run`, schema `docs/query-schema.md`); `oxidizr init [DIR] [--template minimal\|c4] [--force]` (`include_str!` scaffold, templates stored CANONICAL, idempotent, exit 0 even all-skipped); `oxidizr completions <shell>` (`clap_complete` — the ONE new dep, dispatched before the pipeline); `oxidizr generate system-landscape <1..N> [--include R] [--exclude R] [--relationships first\|all] [-o]` (reference `SystemLandscapeGenerator` port — oracle witness: adds NO views, description/url LAST-wins, `{workspace:<id>}/diagrams` hyperlink, std-only full-match `pathfilter` engine with OXZ-5010 for unsupported constructs, "Two or more workspaces must be provided" verbatim on zero workspaces — ONE legal). Category A goldens + CLI exit-family tests + new Category B leg `cargo xtask oracle landscape` (10 facts match `TZ=UTC`). bless 307×unchanged, full e2e tier green. Commits M3a `da0ff38` → M3d `579d2aa` (this). Log below (`build/PHASE_4.md`) |
+| P4T | hardening interlude (T-1…T-6) | **COMPLETE 2026-11-22** — the §P4T-D2 gap inventory closed: T1a the Feature × suite accountability matrix, T1b OXZ gate re-sync (`codes::ALL` machine check); T-2 importer golden file suite (9 digest tests, 11 fixtures); T-3 e2e manifest schema v3 — inspect/query/diff axes + generate-over-entry-dir (P4T-V1 settled, 307 sidecars re-blessed); T-4 LSP capability transcripts over the real run loop (P4T-V3 settled: wall-clock-free FIFO convergence); T-5 four fuzz targets + 28 seeds — the battery found and we fixed TWO real engine bugs: fmt BOM idempotence (`48aa18b`) and pathfilter zero-width doubling — `$+$+…` was 2^n, JDK-witnessed fix (`0e8d7f3`, P4T-V2 VERIFIED); T-6 the export CLI audit row (the last `Command` without subprocess tests — 4 legs incl. exact stderr note goldens) + Category B extension recorded as M5b-delivered (`export-verify` 31/31 × 3). Close: bless 307×unchanged, full e2e tier, `oracle verify` 4+4+99+6 green, `oracle landscape` 10 facts, matrix FROZEN. **No tag** (interlude precedent). Commits T1a `da984e8` → T6 (this). Log below (`build/PHASE_4T.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -155,6 +156,48 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P4T — hardening interlude ✅ (2026-11-22, COMPLETE)
+
+The §P4T-D2 gap inventory (six gaps inventoried 2026-11-22, closed by
+items T-1…T-6, `build/PHASE_4T.md`). Coverage, not features: the JSON
+byte contract was untouched — bless stayed 307×unchanged at every close.
+
+- **T-1** `da984e8` `ecf92e1` — the Feature × suite accountability matrix
+  (`TESTING.md`, names harvested from `cargo test -- --list`) + OXZ gate
+  re-sync (`codes::ALL`, machine docs↔catalog check, 5010 registered).
+- **T-2** `2fa2efd` — `oxidizr-import` golden file suite: 9 digest tests
+  over 11 authored fixtures (c4 ×2, mermaid, image, docs, adrs); MADR
+  dates pinned via front-matter (the importer's fallback is file mtime —
+  an mtime golden would be nondeterministic).
+- **T-3** `a114a70` — e2e manifest schema v3: `inspect`/`query`/`diff`
+  axes over the entry input + `generate` over the entry directory
+  (P4T-V1 settled); 307 sidecars re-blessed; OXZ-5010 corpus-covered.
+- **T-4** `3455b3e` — LSP capability transcripts over the real run loop
+  (completion/hover/formatting-idempotence + `fast_edit_burst_converges`;
+  P4T-V3 settled: the converge check is wall-clock-free, FIFO).
+- **T-5** `afa48a9` — four fuzz targets + 28 seeds, battery staged to 7
+  (`cargo xtask fuzz`). TWO REAL engine finds, fixed code-side:
+  fmt BOM idempotence `48aa18b` (BOM-after-indent is a TOKEN char — the
+  protective line-START space, mirror of the `\`/`"""` end guards) and
+  pathfilter zero-width doubling `0e8d7f3` (`star()`/`?` called the
+  continuation twice per empty iteration → `$+$+…` was 2^n; the JDK
+  counts one and stops — JDK-witnessed table, P4T-V2 VERIFIED). Slow-
+  unit backtracking = PARITY with `java.util.regex` → fuzz surface
+  bounded, never a matcher cap. Note: `testing/fuzz-p4t-finds.md`.
+- **T-6** `71609ad` (this close) — the CLI audit row: `export` was the
+  only `Command` without subprocess tests; four legs added (view+legend
+  write loop, the two reference INFO notes as exact stderr goldens —
+  both exit 0 —, the OXZ-5007/3/2 exit family, the WSD dynamic leg);
+  the `Command::Export` doc comment caught stale (png/svg are KNOWN
+  OXZ-5007 formats). Gap 7 (Category B extension) was already delivered
+  by §P4-M5 E-2 — recorded, then RUN at close: `oracle verify` 4 json +
+  4 sidecar + 99 diagram + 6 theme, `export-verify` 31/31 × c4/plantuml/
+  mermaid, `oracle landscape` 10 facts (all `TZ=UTC`).
+
+Close: full e2e tier green, bless 307×unchanged + `testdata/` clean,
+`cargo xtask ci` green, matrix FROZEN (zero `T-n` cells). **No tag**
+(interlude precedent P1T/P2T/P2R). Next: §P4R refactoring waves.
 
 ### P4-M3 — `query` / `init` / `completions` / `generate` ✅ (2026-11-21, COMPLETE)
 

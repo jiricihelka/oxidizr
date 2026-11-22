@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1…T-5 DONE (fuzz battery found+fixed TWO engine bugs), next T-6 close (CLI audit row + Cat B extension + ritual) → P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T **CLOSED** 2026-11-22 (T-1…T-6 all DONE, matrix frozen, no tag) — next §P4R refactoring waves (`agents/plan/build/PHASE_4R.md`) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -45,11 +45,23 @@
   position tried exactly once, JDK-witnessed table; P4T-V2 VERIFIED: YES,
   real finds). Slow-unit backtracking = PARITY with `java.util.regex` →
   fixed ≤4-char fuzz subjects bound the surface, NEVER a matcher cap.
-  Finds note: `testing/fuzz-p4t-finds.md`. **Next: T-6** — CLI audit row
-  (gap 6: ≥1 stdout golden + ≥1 error-path exit test per `Command`),
-  Category B extension (export-verify c4|plantuml|mermaid over the fixture
-  set), close ritual (full tier + bless no-op + PROGRESS `P4T` log +
-  matrix frozen; interlude precedent = NO tag).
+  Finds note: `testing/fuzz-p4t-finds.md`. **T-6 DONE** — CLI audit row:
+  `export` was the ONLY `Command` without subprocess tests; 4 legs in
+  `crates/oxidizr-cli/tests/cli.rs` (view+legend write loop, the two
+  reference INFO notes byte-exact on stderr both exit 0, the OXZ-5007/3/2
+  exit family — `static`/`png` exit 1, the reference AGREES for PNG/SVG —
+  and the WSD dynamic-view leg); `Command::Export` doc comment refreshed
+  (png/svg are KNOWN OXZ-5007 formats, not unknown exit-0) — `71609ad`.
+  Gap 7 recorded as M5b-E-2-delivered (`export-verify --format
+  c4\|plantuml\|mermaid` over the full golden dirs) and RUN at close.
+  **P4T CLOSED 2026-11-22**: full e2e tier green · bless 307×unchanged +
+  `testdata/` clean · `oracle verify` 4 json + 4 sidecar + 99 diagram +
+  6 theme · `export-verify` 31/31 × 3 · `oracle landscape` 10 facts (all
+  `TZ=UTC`) · PROGRESS board row + milestone log · matrix FROZEN (zero
+  `T-n` cells) · **no tag** (interlude precedent). **Next: §P4R** —
+  refactoring waves per `agents/plan/build/PHASE_4R.md` (API churn allowed
+  with bytes/CLI frozen + CHANGELOG line), then P4D, then the release
+  tail E-4/E-5.
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

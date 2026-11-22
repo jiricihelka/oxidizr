@@ -1,6 +1,8 @@
 # PHASE_4T.md — detailed plan: Phase 4 feature test coverage (interlude)
 
-**Status: SCAFFOLDED 2026-11-22 (user directive) — not started.**
+**Status: CLOSED 2026-11-22 — T-1…T-6 all DONE, close ritual green (full e2e
+tier · bless 307×unchanged · oracle verify 4+4+99+6 · export-verify 31/31 × 3 ·
+landscape 10 facts · matrix FROZEN); no tag (interlude precedent).**
 Position: after §P4-M5 items E-1…E-3 (the `oracle` command, the two P2-era
 comparators, the `Layered` polish — tooling/quality pieces), **before** P4R
 (which rides the net this phase weaves) and P4D. The release tail (§P4-M5
@@ -89,7 +91,7 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
 | **T-3** | e2e corpus Phase-4 axes + invariants (gap 4) | **DONE** — manifest schema v3: `inspect`/`query`/`diff` axes over the entry's own input + `generate` over the entry directory (P4T-V1 settled); 307 sidecars re-blessed; OXZ-5010 entered the corpus, allow-list shrank (the stale-entry tripwire fired as designed); full tier adds `generate_pair_merge_is_view_free_and_id_unique` (view-free · unique ids · one edge per pair under `First`) |
 | **T-4** | LSP capability transcripts + fast-edit stress (gap 5) | **DONE** — `tests/transcript.rs` +4 scripted exchanges over the real `run` loop: completion / hover (identifier-card · keyword-card · null) / formatting-**idempotence** (messy → ONE edit → apply → 0 edits) / `fast_edit_burst_converges` (open + 8 queued didChanges, LAST publish = LAST version = LAST buffer's truth). Summarizer grew per-shape lines (completion `n [first 3]`, `edits=n`, hover first markdown line) |
 | **T-5** | New fuzz targets + seed corpora (gap 3) | **DONE** — 4 targets (`import_sniff`/`query_parse`/`pathfilter`/`diff_pair`), 28 committed seeds, `FUZZ_TARGETS` staged to 7; the battery found TWO REAL engine bugs, both fixed code-side: `48aa18b` fmt BOM idempotence (line-START protective space) and `0e8d7f3` pathfilter zero-width doubling (`$+$+…` was 2^n — each continuation position now tried exactly once, JDK-witnessed table). Slow-unit backtracking = PARITY with `java.util.regex` → surface bounded (fixed ≤4-char subjects), never a matcher cap. Finds note: `testing/fuzz-p4t-finds.md` |
-| **T-6** | CLI audit row (gap 6), Category B extension (gap 7), close ritual (full tier + bless + PROGRESS `P4T` log + matrix frozen) | T6 |
+| **T-6** | CLI audit row (gap 6), Category B extension (gap 7), close ritual (full tier + bless + PROGRESS `P4T` log + matrix frozen) | **DONE** — gap 6: the audit found `export` the ONLY `Command` without CLI subprocess tests; 4 legs in `tests/cli.rs` (`export_plantuml_writes_view_and_legend_files`, `export_notes_are_golden_and_exit_zero` — the two reference INFO notes byte-exact, both exit 0 —, `export_exit_family_static_png_missing_usage` — `static`/`png` OXZ-5007 exit 1, the reference AGREES for PNG/SVG (exit 1, witnessed `TZ=UTC`); `static` stays a registered known-but-unlanded exporter —, `export_websequencediagrams_writes_the_dynamic_view_file`), `Command::Export` doc comment refreshed (png/svg are KNOWN OXZ-5007 formats, not unknown exit-0). Gap 7: already DELIVERED at §P4-M5 E-2 — `cmd_export_verify --format c4\|plantuml\|mermaid` runs the semantic comparators over the full per-dialect golden dirs (31 fixtures + bulk-operations); recorded here, RUN at close. Close ritual: full e2e tier green · bless 307×unchanged + `testdata/` clean · `oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme · `export-verify` 31/31 × 3 · `oracle landscape` 10 facts (all `TZ=UTC`) · PROGRESS `P4T` board row + milestone log · matrix FROZEN (zero `T-n` cells). **P4T CLOSED — no tag** (interlude precedent) |
 
 ## P4T-D5 Verification list (empirical, before dependent code)
 
