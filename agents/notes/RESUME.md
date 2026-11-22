@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0–R4 DONE** (R5 next — last wave) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22; §P4R **CLOSED** 2026-11-22 (R0–R5 all DONE, no tag) — next **§P4D docs reset** (`agents/plan/build/PHASE_4D.md`, D-1…D-8) → release tail E-4/E-5 (cargo-dist + `v0.4.0` tag + changelog, LOCAL)**)
 
 ## Active now (2026-11-22)
 
@@ -111,10 +111,27 @@
   `report` plumbing (one Renderer, one replay), `to_request` flat argv
   table (note expanded in place), cli `Cli` flags struct (clap idiom).
   Wave end green: full tier · bless 307×unchanged · doc-zero · bench
-  skipped (no bench path). **Next: R5** — public-API consolidation:
-  `pub use` graphs reviewed, churn list → CHANGELOG-ready, doc links
-  green → P4D docs reset → E-4 (cargo-dist) → E-5 (0.4.0 + changelog +
-  local `v0.4.0` tag).
+  skipped (no bench path).
+- **§P4R R5 DONE + §P4R CLOSED 2026-11-22** (`3f0b384` + close commit):
+  pub-use graph audited crate-by-crate (each cross-crate api re-export
+  now carries its own stamp), allow ratchet 106→101 (5 GONE), churn
+  list COMPLETE + frozen — 3 CHANGELOG-ready lines (`4cc628c`
+  `2520cd8` `0837317`) for E-5 to fold into `CHANGELOG.md`. Close
+  ritual: full e2e tier 8/8 · bless 307×unchanged · doc-zero · bench
+  n/a (docs-only wave) · **Category B** `oracle verify` 4 json + 4
+  sidecar + 99 diagram + 6 theme + `export-verify` 31/31 × 3
+  (`TZ=UTC`; `oracle landscape` skipped with proof — no
+  generate/oracle-path diff since P4T) · PROGRESS board row + log
+  section · wave table all-DONE. **No tag** (1T/2T/2R precedent).
+  **Next: §P4D docs reset** — D-1 root README + `docs/README.md`;
+  D-2 14 crate READMEs; D-3/D-4/D-5 rustdoc strip waves (P4R
+  groupings; ~74 files carry `§P` refs, 73 mention the reference
+  impl); D-6 help/diagnostics/docs pass (sidecars carry NO human text
+  — V2 settled: bless must NOT move; CLI-test message assertions move
+  in place); D-7 hygiene leg in `xtask refs` (V1 settled: extend the
+  existing walker) + agent-doc trim; D-8 close → E-4 (cargo-dist
+  `check`) → E-5 (0.4.0 bump, CHANGELOG from the frozen churn list,
+  local `v0.4.0` tag — never push/publish).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

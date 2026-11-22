@@ -35,6 +35,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P4 | §P4-M2 importers (N-1…N-6) | **COMPLETE 2026-11-21** — `oxidizr-import`: image + C4-PlantUML + Mermaid importer ports (`oxidizr import`, F12 semantic bar, MODEL ONLY), WSD exporter (`export -f websequencediagrams`, oracle 9/9 byte-parity), `!docs`/`!adrs` engine wiring (core-compat bar): `DefaultDocumentationImporter`/`FormatFinder` + the decision family (AdrTools/Madr/Log4brains + structurizr-native) behind a six-FQN registry, std-only `regexlite` for the Java-regex `exclude` full-match (P4-V8), UTC date parsing (P4-V7/D15), raw-bytes `Image.content` (D14/D16); OXZ-5003 retired to a tombstone (both fixtures now surface the real `end()`-stage OXZ-2002, sidecars re-blessed); oracle A/B green on the big-bank + include-directory fixtures (documentation byte-parity) — which caught the **Java empty-input `split` special case** (`"".split(",")` → `[""]`, JVM-proven): the empty tags token now stores an empty tag ⇒ reference `"Element,Deployment Node,"`. Permanent contract `build/IMPORT-DOCS-ADRS.md`; deviations D15/D16. Commits M2a `b7f66e5` → M2f (this). Log below (`build/PHASE_4.md`) |
 | P4 | §P4-M3 extras (`query`/`init`/`completions`/`generate`, O-1…O-4) | **COMPLETE 2026-11-21** — four new commands, oxidizr-added surfaces specced P4-D3/D4/D9/D10: `oxidizr query <WS> --filter EXPR [--kind …] [--format table\|ids\|json]` (the DSL item-expression grammar IS the query language — P4-V4 closed, public `oxidizr_dsl::query::run`, schema `docs/query-schema.md`); `oxidizr init [DIR] [--template minimal\|c4] [--force]` (`include_str!` scaffold, templates stored CANONICAL, idempotent, exit 0 even all-skipped); `oxidizr completions <shell>` (`clap_complete` — the ONE new dep, dispatched before the pipeline); `oxidizr generate system-landscape <1..N> [--include R] [--exclude R] [--relationships first\|all] [-o]` (reference `SystemLandscapeGenerator` port — oracle witness: adds NO views, description/url LAST-wins, `{workspace:<id>}/diagrams` hyperlink, std-only full-match `pathfilter` engine with OXZ-5010 for unsupported constructs, "Two or more workspaces must be provided" verbatim on zero workspaces — ONE legal). Category A goldens + CLI exit-family tests + new Category B leg `cargo xtask oracle landscape` (10 facts match `TZ=UTC`). bless 307×unchanged, full e2e tier green. Commits M3a `da0ff38` → M3d `579d2aa` (this). Log below (`build/PHASE_4.md`) |
 | P4T | hardening interlude (T-1…T-6) | **COMPLETE 2026-11-22** — the §P4T-D2 gap inventory closed: T1a the Feature × suite accountability matrix, T1b OXZ gate re-sync (`codes::ALL` machine check); T-2 importer golden file suite (9 digest tests, 11 fixtures); T-3 e2e manifest schema v3 — inspect/query/diff axes + generate-over-entry-dir (P4T-V1 settled, 307 sidecars re-blessed); T-4 LSP capability transcripts over the real run loop (P4T-V3 settled: wall-clock-free FIFO convergence); T-5 four fuzz targets + 28 seeds — the battery found and we fixed TWO real engine bugs: fmt BOM idempotence (`48aa18b`) and pathfilter zero-width doubling — `$+$+…` was 2^n, JDK-witnessed fix (`0e8d7f3`, P4T-V2 VERIFIED); T-6 the export CLI audit row (the last `Command` without subprocess tests — 4 legs incl. exact stderr note goldens) + Category B extension recorded as M5b-delivered (`export-verify` 31/31 × 3). Close: bless 307×unchanged, full e2e tier, `oracle verify` 4+4+99+6 green, `oracle landscape` 10 facts, matrix FROZEN. **No tag** (interlude precedent). Commits T1a `da984e8` → T6 (this). Log below (`build/PHASE_4T.md`) |
+| P4R | idiomatic-Rust refactor pass (R0–R5, interlude) | **COMPLETE 2026-11-22** — API churn allowed (bytes/CLI/OXZ frozen): R0 inventory (allow audit 157 sites ALL justified; `cargo doc` 43 warnings → **0** = per-wave drift detector; bench baseline `4T`); R1 viewops default-view leg split + dsl `needless_pass_by_value` ×2 (allows GONE); R2 typed `ImportFormat` + `sniff` into `oxidizr-import` + `regexlite`/`pathfilter` KEEP-SPLIT (§P4R-D5); R3 flagship: report domain typed `format: DiffFormat`/`InspectFormat` + `ApiOptions` → nested `parse: ParseFlags` (`struct_excessive_bools` allow GONE) + KEEP rows (export open-set `String`-format, inspect `<Type>` consts = Java provenance); R4 viewer shell 8 bools → `Toggles`+`Latches` (allow GONE) + `to_request`/report-plumbing/cli-flags KEEP rows; R5 pub-use graph audit + churn list FROZEN (3 CHANGELOG-ready lines, E-5 folds). Net: 5 allows GONE (106→101), 3 public-API churn lines staged. Every wave: quartet + full tier 8/8 + bless 307×unchanged + doc-zero; hot-path waves `bench cmp 4T` ALL 1.00. Close: `oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme + `export-verify` 31/31 × 3 (`TZ=UTC`); `oracle landscape` skipped with reason (generate/oracle paths untouched since P4T, proven by diff). **No tag** (1T/2T/2R precedent). Commits R0 `9b31f97` → R5 (this). Log below (`build/PHASE_4R.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -156,6 +157,55 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P4R — idiomatic-Rust refactor pass ✅ (2026-11-22, COMPLETE)
+
+The interlude where the Rust API may churn (user decision 2026-11-22:
+renames, typed replacements of stringly APIs, parameter structs — even
+structural `Request` reworks; the PRODUCT stays frozen: bytes, CLI
+grammar, exit classes, OXZ codes). Six waves, `build/PHASE_4R.md`:
+
+- **R0** inventory: every `allow(clippy::…)` site (157 / 88 files)
+  re-justified — the wave list reduced to the real items (three
+  `struct_excessive_bools`); `cargo doc --workspace --no-deps` 43
+  warnings → 0, ZERO adopted as the per-wave drift detector (V2);
+  bench baseline `4T` committed (V1); D2 catalog re-measured with three
+  seed corrections.
+- **R1** core/dsl: `create_default_views` → three named leg helpers
+  (`too_many_lines` allow GONE); `register_identifier_element` truly
+  consumes its `RegItem`, `add_perspective_to_holders` takes
+  `&Perspective` (both `needless_pass_by_value` allows GONE).
+- **R2** export/import: `ImportFormat` + typed `ImportFormat::sniff`
+  moved into `oxidizr-import` (api re-export, sniff table pinned by a
+  new unit test) — FIRST staged churn line; `regexlite` vs `pathfilter`
+  **KEEP SPLIT** decided (§P4R-D5: different contracts/semantics/scale).
+- **R3** api flagship: `Request::Diff`/`Inspect` `json: bool` → typed
+  `format: DiffFormat`/`InspectFormat` (CLI clap enums renamed
+  `*CmdFormat`, churn 2); `ApiOptions` `strict`/`keep_unknown` →
+  nested `parse: ParseFlags` (`struct_excessive_bools` allow GONE,
+  churn 3); KEEP rows: `Request::Export.format` stays `String`
+  (`ExportFormat::parse` is the typed edge of the reference's
+  open-set contract), inspect `<Type>` consts stay (Java class names
+  = provenance; values = the `getType()` byte contract).
+- **R4** viewer/cli: `Viewer`'s 8 loose bools → `Toggles`
+  (diagnostics/layout/snap) + `Latches` (needs_fit/visuals_ready/
+  icons_dirty) (allow GONE, private — zero churn); KEEP rows: one
+  `Renderer`/one `replay` plumbing, the flat `to_request` argv table,
+  the clap-idiom `Cli` flags struct.
+- **R5** consolidation: crate-by-crate `pub use` graph audit (orphaned
+  re-export comment fixed), churn list COMPLETE and FROZEN — exactly
+  3 CHANGELOG-ready lines for the 3 churn commits (E-5 folds
+  `agents/notes/process/api-churn-v0.4.0.md` into `CHANGELOG.md`).
+
+Safety net honored everywhere: every commit quartet-green; every wave
+full e2e tier + bless 307×unchanged + doc-zero; `bench cmp 4T` ALL
+1.00 at R1 and R3 (the hot-path waves; R2/R4/R5 skipped with recorded
+reasons — no bench code path). Phase close (2026-11-22): Category B
+`oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme and
+`export-verify` c4/plantuml/mermaid 31/31 each (`TZ=UTC`);
+`oracle landscape` skipped with proof (no `generate.rs`/`oracle.rs`
+diff since P4T). Allow ratchet: 106 non-test src sites at R0 → 101.
+**No tag** (interlude precedent P1T/P2T/P2R). Next: §P4D docs reset.
 
 ### P4T — hardening interlude ✅ (2026-11-22, COMPLETE)
 
