@@ -43,5 +43,29 @@
   "fmt": {
     "exit": "ok",
     "idempotent": true
+  },
+  "inspect": {
+    "exit": "error",
+    "codes": [],
+    "violations": 11
+  },
+  "query": {
+    "exit": "ok",
+    "codes": [],
+    "matches": 2
+  },
+  "diff": {
+    "exit": "ok",
+    "codes": [],
+    "findings": 0
+  },
+  "generate": {
+    "exit": "ok",
+    "codes": [],
+    "counts": {
+      "elements": 2,
+      "relationships": 1,
+      "views": 0
+    }
   }
 }

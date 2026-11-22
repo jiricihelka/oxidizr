@@ -16,5 +16,33 @@
   "fmt": {
     "exit": "io",
     "idempotent": true
+  },
+  "inspect": {
+    "exit": "io",
+    "codes": [
+      5006
+    ],
+    "violations": 0
+  },
+  "query": {
+    "exit": "io",
+    "codes": [
+      5006
+    ],
+    "matches": 0
+  },
+  "diff": {
+    "exit": "io",
+    "codes": [
+      5006
+    ],
+    "findings": 0
+  },
+  "generate": {
+    "exit": "error",
+    "codes": [
+      5010
+    ],
+    "counts": null
   }
 }

@@ -9,7 +9,7 @@ use oxidizr_core::validate::flattened;
 
 use crate::corpus::Entry;
 use crate::manifest::{
-    CommandReport, Counts, Exit, ExportReport, ExportReports, FmtReport, Manifest,
+    AxisReport, CommandReport, Counts, Exit, ExportReport, ExportReports, FmtReport, Manifest,
 };
 
 /// Run the entry's commands; returns the observed manifest form. Applicable
@@ -124,6 +124,12 @@ pub fn observe(entry: &Entry) -> Manifest {
         }
     });
 
+    // §P4T T-3: the three Phase-4 axes over the entry's own input and the
+    // `generate` leg over the entry directory (helpers keep `observe`
+    // within the line budget).
+    let (inspect, query, diff) = observe_axes(entry, &opts);
+    let generate = Some(observe_generate(entry, &opts));
+
     Manifest {
         dsl2json,
         json2json,
@@ -131,7 +137,127 @@ pub fn observe(entry: &Entry) -> Manifest {
         reconcile,
         export,
         fmt,
+        inspect,
+        query,
+        diff,
+        generate,
     }
+}
+
+/// The v3 axes over the entry's OWN input (validate's DSL-first rule):
+/// `inspect` violations at the CLI default threshold (`info`), `query`
+/// matches of the fixed smoke filter (every model element carries
+/// `Element`, so it is the grammar's identity probe), and `diff` of the
+/// file against ITSELF — the identity axis, 0 findings for every input the
+/// loader accepts. All three apply whenever the entry has an input at all;
+/// load failures surface as exit + codes (§P4T T-3).
+fn observe_axes(
+    entry: &Entry,
+    opts: &oxidizr_api::ApiOptions,
+) -> (Option<AxisReport>, Option<AxisReport>, Option<AxisReport>) {
+    let axis_input = entry.dsl.as_ref().or(entry.json.as_ref());
+    let inspect = axis_input.map(|file| {
+        let out = execute(
+            Request::Inspect {
+                workspace: file.clone(),
+                threshold: oxidizr_api::Severity::Info,
+                only: Vec::new(),
+                except: Vec::new(),
+                json: true,
+                quiet: false,
+            },
+            opts,
+        );
+        AxisReport {
+            exit: Exit::from_class(out.exit),
+            codes: codes_of(&out),
+            count: report_count(out.bytes.as_deref(), &["violations"]),
+        }
+    });
+    let query = axis_input.map(|file| {
+        let out = execute(
+            Request::Query {
+                workspace: file.clone(),
+                filter: "element.tag==Element".into(),
+                kind: oxidizr_api::QueryKind::All,
+                format: oxidizr_api::QueryFormat::Json,
+                output: None,
+            },
+            opts,
+        );
+        AxisReport {
+            exit: Exit::from_class(out.exit),
+            codes: codes_of(&out),
+            count: report_count(
+                out.bytes.as_deref(),
+                &["elements", "relationships", "views"],
+            ),
+        }
+    });
+    let diff = axis_input.map(|file| {
+        let out = execute(
+            Request::Diff {
+                a: file.clone(),
+                b: file.clone(),
+                json: true,
+                ignore_layout: false,
+                quiet: false,
+            },
+            opts,
+        );
+        AxisReport {
+            exit: Exit::from_class(out.exit),
+            codes: codes_of(&out),
+            count: report_count(
+                out.bytes.as_deref(),
+                &["added", "removed", "changed", "idChanged"],
+            ),
+        }
+    });
+    (inspect, query, diff)
+}
+
+/// `generate system-landscape` (P4T-V1): the command fans over
+/// DIRECTORIES, so its observation unit is the ENTRY DIRECTORY itself —
+/// `scan_dir` picks `workspace.dsl`/`workspace.json` through the reference
+/// default include, the sidecar never matches. Zero loadable workspaces is
+/// the OXZ-5010 landscape failure — how the mutated corpus feeds 5010 into
+/// the coverage gate; the merged landscape carries NO views (witnessed),
+/// which `views: 0` pins in every blessed sidecar (§P4T T-3).
+fn observe_generate(entry: &Entry, opts: &oxidizr_api::ApiOptions) -> CommandReport {
+    let out = execute(
+        Request::Generate {
+            inputs: vec![entry.dir.clone()],
+            include: None,
+            exclude: None,
+            strategy: oxidizr_api::RelationshipsStrategy::default(),
+            output: None,
+        },
+        opts,
+    );
+    CommandReport {
+        exit: Exit::from_class(out.exit),
+        codes: codes_of(&out),
+        counts: out.bytes.as_deref().map(counts_of_json),
+    }
+}
+
+/// Total length of the named JSON arrays of a schema-1 report (§P4T T-3
+/// axes). Bytes that fail to parse or miss a key count 0 — the exit class
+/// and code set already carry the failure (`counts_of_json` rule).
+fn report_count(bytes: Option<&[u8]>, keys: &[&str]) -> usize {
+    let Some(text) = bytes else { return 0 };
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(text) else {
+        return 0;
+    };
+    keys.iter()
+        .map(|key| {
+            value
+                .get(*key)
+                .and_then(serde_json::Value::as_array)
+                .map_or(0, Vec::len)
+        })
+        .sum()
 }
 
 /// `validate` over whichever input the entry offers (DSL first).

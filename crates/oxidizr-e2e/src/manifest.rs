@@ -6,6 +6,12 @@
 //! structural counts**. NEVER bytes, NEVER message text. A section absent
 //! from the manifest means the command does not apply to the entry (the
 //! runner checks BOTH ways: unregistered drift fails, stale sections fail).
+//!
+//! Schema v3 (§P4T T-3) adds the Phase-4 axes: `inspect` / `query` / `diff`
+//! ([`AxisReport`] — exit + codes + one structural count) on the entry's own
+//! input file, and `generate` ([`CommandReport`]) observed over the entry
+//! directory, since the command fans over directories, not single inputs
+//! (P4T-V1: this is what v2 could not carry).
 
 use std::fs;
 use std::path::Path;
@@ -144,6 +150,21 @@ impl ExportReports {
     }
 }
 
+/// §P4T T-3 (schema v3): one Phase-4 axis block — exit + codes + ONE
+/// structural count. `inspect` counts reported violations, `query` counts
+/// the smoke filter's matches, `diff` counts self-diff findings (always 0
+/// — the identity axis). The sidecar key of the count is per section
+/// (`violations` / `matches` / `findings`), never a generic `count`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AxisReport {
+    /// Expected exit class.
+    pub exit: Exit,
+    /// Sorted, deduplicated OXZ codes of every diagnostic (empty = none).
+    pub codes: Vec<u16>,
+    /// The section's structural count (the blessed truth of the axis).
+    pub count: usize,
+}
+
 /// The whole sidecar. `Option` sections = command not applicable to the entry.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Manifest {
@@ -161,6 +182,21 @@ pub struct Manifest {
     pub export: Option<ExportReports>,
     /// `fmt` block.
     pub fmt: Option<FmtReport>,
+    /// `inspect` axis (§P4T T-3): violations at the CLI's default threshold.
+    pub inspect: Option<AxisReport>,
+    /// `query` axis (§P4T T-3): matches of the fixed smoke filter
+    /// `element.tag==Element` (every model element carries `Element`).
+    pub query: Option<AxisReport>,
+    /// `diff` axis (§P4T T-3): findings of `diff` of the entry against
+    /// ITSELF — the identity axis, blessed at 0 for loading inputs.
+    pub diff: Option<AxisReport>,
+    /// `generate system-landscape` block (§P4T T-3): observed over the
+    /// ENTRY DIRECTORY (the command fans over directories — the
+    /// `workspace.e2e.json` sidecar never matches `DEFAULT_INCLUDE`),
+    /// counts of the merged landscape (`views` is always 0 — the witnessed
+    /// reference behavior). Failure codes (OXZ-5010) enter the coverage
+    /// gate through this section.
+    pub generate: Option<CommandReport>,
 }
 
 impl Manifest {
@@ -193,6 +229,18 @@ impl Manifest {
             m.insert("exit".into(), Value::String(r.exit.as_str().into()));
             m.insert("idempotent".into(), Value::Bool(r.idempotent));
             map.insert("fmt".into(), Value::Object(m));
+        }
+        if let Some(r) = &self.inspect {
+            map.insert("inspect".into(), axis_to_value(r, "violations"));
+        }
+        if let Some(r) = &self.query {
+            map.insert("query".into(), axis_to_value(r, "matches"));
+        }
+        if let Some(r) = &self.diff {
+            map.insert("diff".into(), axis_to_value(r, "findings"));
+        }
+        if let Some(r) = &self.generate {
+            map.insert("generate".into(), command_to_value(r));
         }
         Value::Object(map)
     }
@@ -240,6 +288,22 @@ impl Manifest {
                         .ok_or_else(|| format!("{at}.fmt.idempotent: missing bool"))?;
                     out.fmt = Some(FmtReport { exit, idempotent });
                 }
+                "inspect" => {
+                    out.inspect = Some(axis_from_value(
+                        val,
+                        &format!("{at}.inspect"),
+                        "violations",
+                    )?);
+                }
+                "query" => {
+                    out.query = Some(axis_from_value(val, &format!("{at}.query"), "matches")?);
+                }
+                "diff" => {
+                    out.diff = Some(axis_from_value(val, &format!("{at}.diff"), "findings")?);
+                }
+                "generate" => {
+                    out.generate = Some(command_from_value(val, &format!("{at}.generate"))?);
+                }
                 other => return Err(format!("{at}: unknown section `{other}`")),
             }
         }
@@ -276,45 +340,24 @@ impl Manifest {
     #[must_use]
     pub fn diff(&self, observed: &Self) -> Vec<String> {
         let mut fails = Vec::new();
-        for (name, exp, obs) in [
-            ("dsl2json", &self.dsl2json, &observed.dsl2json),
-            ("json2json", &self.json2json, &observed.json2json),
-            ("validate", &self.validate, &observed.validate),
-            ("reconcile", &self.reconcile, &observed.reconcile),
-        ] {
-            match (exp, obs) {
-                (None, None) => {}
-                (None, Some(o)) => fails.push(format!(
-                    "{name}: command became applicable (unregistered drift); expected no section, got exit {} codes {:?}",
-                    o.exit.as_str(),
-                    o.codes
-                )),
-                (Some(_), None) => {
-                    fails.push(format!("{name}: stale section — command no longer applies"));
-                }
-                (Some(e), Some(o)) => {
-                    if e.exit != o.exit {
-                        fails.push(format!(
-                            "{name}: exit {} != observed {}",
-                            e.exit.as_str(),
-                            o.exit.as_str()
-                        ));
-                    }
-                    if e.codes != o.codes {
-                        fails.push(format!(
-                            "{name}: codes {:?} != observed {:?}",
-                            e.codes, o.codes
-                        ));
-                    }
-                    if e.counts != o.counts {
-                        fails.push(format!(
-                            "{name}: counts {:?} != observed {:?}",
-                            e.counts, o.counts
-                        ));
-                    }
-                }
-            }
-        }
+        diff_commands(
+            &mut fails,
+            &[
+                ("dsl2json", &self.dsl2json, &observed.dsl2json),
+                ("json2json", &self.json2json, &observed.json2json),
+                ("validate", &self.validate, &observed.validate),
+                ("reconcile", &self.reconcile, &observed.reconcile),
+                ("generate", &self.generate, &observed.generate),
+            ],
+        );
+        diff_axes(
+            &mut fails,
+            &[
+                ("inspect", "violations", &self.inspect, &observed.inspect),
+                ("query", "matches", &self.query, &observed.query),
+                ("diff", "findings", &self.diff, &observed.diff),
+            ],
+        );
         match (&self.export, &observed.export) {
             (None, None) => {}
             (None, Some(o)) => fails.push(format!(
@@ -451,6 +494,110 @@ fn exit_str<'a>(value: Option<&'a Value>, at: &str) -> Result<&'a str, String> {
         .ok_or_else(|| format!("{at}.exit: missing string"))
 }
 
+/// Shared drift text for the [`CommandReport`] sections (exit / codes /
+/// counts) — factored out of `Manifest::diff` (§P4T T-3, the `generate`
+/// row joins the list).
+fn diff_commands(
+    fails: &mut Vec<String>,
+    sections: &[(&str, &Option<CommandReport>, &Option<CommandReport>)],
+) {
+    for (name, exp, obs) in sections {
+        match (exp, obs) {
+            (None, None) => {}
+            (None, Some(o)) => fails.push(format!(
+                "{name}: command became applicable (unregistered drift); expected no section, got exit {} codes {:?}",
+                o.exit.as_str(),
+                o.codes
+            )),
+            (Some(_), None) => {
+                fails.push(format!("{name}: stale section — command no longer applies"));
+            }
+            (Some(e), Some(o)) => {
+                if e.exit != o.exit {
+                    fails.push(format!(
+                        "{name}: exit {} != observed {}",
+                        e.exit.as_str(),
+                        o.exit.as_str()
+                    ));
+                }
+                if e.codes != o.codes {
+                    fails.push(format!("{name}: codes {:?} != observed {:?}", e.codes, o.codes));
+                }
+                if e.counts != o.counts {
+                    fails.push(format!("{name}: counts {:?} != observed {:?}", e.counts, o.counts));
+                }
+            }
+        }
+    }
+}
+
+/// Shared drift text for the [`AxisReport`] sections (§P4T T-3);
+/// `count_key` names the count member in the failure text.
+fn diff_axes(
+    fails: &mut Vec<String>,
+    sections: &[(&str, &str, &Option<AxisReport>, &Option<AxisReport>)],
+) {
+    for (name, count_key, exp, obs) in sections {
+        match (exp, obs) {
+            (None, None) => {}
+            (None, Some(o)) => fails.push(format!(
+                "{name}: command became applicable (unregistered drift); expected no section, got exit {} codes {:?}",
+                o.exit.as_str(),
+                o.codes
+            )),
+            (Some(_), None) => {
+                fails.push(format!("{name}: stale section — command no longer applies"));
+            }
+            (Some(e), Some(o)) => {
+                if e.exit != o.exit {
+                    fails.push(format!(
+                        "{name}: exit {} != observed {}",
+                        e.exit.as_str(),
+                        o.exit.as_str()
+                    ));
+                }
+                if e.codes != o.codes {
+                    fails.push(format!("{name}: codes {:?} != observed {:?}", e.codes, o.codes));
+                }
+                if e.count != o.count {
+                    fails.push(format!(
+                        "{name}: {count_key} {} != observed {}",
+                        e.count, o.count
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// One axis block → `{ exit, codes, <countKey> }` (§P4T T-3).
+fn axis_to_value(r: &AxisReport, count_key: &str) -> Value {
+    let mut m = Map::new();
+    m.insert("exit".into(), Value::String(r.exit.as_str().into()));
+    m.insert(
+        "codes".into(),
+        Value::Array(r.codes.iter().map(|c| Value::from(*c)).collect()),
+    );
+    m.insert(count_key.into(), Value::from(r.count));
+    Value::Object(m)
+}
+
+/// Parse one axis block; `count_key` names the count member
+/// (`violations` / `matches` / `findings`).
+fn axis_from_value(value: &Value, at: &str, count_key: &str) -> Result<AxisReport, String> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| format!("{at}: must be an object"))?;
+    let exit = Exit::parse(exit_str(obj.get("exit"), at)?, at)?;
+    let codes = codes_from_value(obj, at)?;
+    let count = obj
+        .get(count_key)
+        .and_then(Value::as_u64)
+        .and_then(|n| usize::try_from(n).ok())
+        .ok_or_else(|| format!("{at}.{count_key}: missing count"))?;
+    Ok(AxisReport { exit, codes, count })
+}
+
 fn export_to_value(r: &ExportReport) -> Value {
     let mut m = Map::new();
     m.insert("exit".into(), Value::String(r.exit.as_str().into()));
@@ -535,12 +682,86 @@ mod tests {
             json2json: None,
             reconcile: None,
             export: None,
+            inspect: None,
+            query: None,
+            diff: None,
+            generate: None,
         };
         let v = m.to_value();
         assert_eq!(Manifest::from_value(&v, "t").unwrap(), m);
         // Key order is deterministic (dsl2json, validate, fmt):
         let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
         assert_eq!(keys, ["dsl2json", "validate", "fmt"]);
+    }
+
+    #[test]
+    fn v3_axes_and_generate_round_trip() {
+        let axis = |exit: Exit, codes: Vec<u16>, count: usize| AxisReport { exit, codes, count };
+        let m = Manifest {
+            inspect: Some(axis(Exit::Error, vec![], 3)),
+            query: Some(axis(Exit::Ok, vec![], 12)),
+            diff: Some(axis(Exit::Ok, vec![], 0)),
+            generate: Some(CommandReport {
+                exit: Exit::Error,
+                codes: vec![5010],
+                counts: None,
+            }),
+            ..Manifest::default()
+        };
+        let v = m.to_value();
+        assert_eq!(Manifest::from_value(&v, "t").unwrap(), m);
+        let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["inspect", "query", "diff", "generate"]);
+        // The count keys are the semantic names, never a generic `count`.
+        assert!(v["inspect"].get("violations").is_some());
+        assert!(v["query"].get("matches").is_some());
+        assert!(v["diff"].get("findings").is_some());
+        // A missing count fails, and locates the semantic key.
+        let bad: Value =
+            serde_json::from_str(r#"{ "inspect": { "exit": "ok", "codes": [] } }"#).unwrap();
+        assert!(
+            Manifest::from_value(&bad, "t")
+                .unwrap_err()
+                .contains("inspect.violations")
+        );
+    }
+
+    #[test]
+    fn v3_diff_detects_drift() {
+        let expected = Manifest {
+            inspect: Some(AxisReport {
+                exit: Exit::Error,
+                codes: vec![],
+                count: 3,
+            }),
+            generate: Some(CommandReport {
+                exit: Exit::Error,
+                codes: vec![5010],
+                counts: None,
+            }),
+            ..Manifest::default()
+        };
+        let observed = Manifest {
+            inspect: Some(AxisReport {
+                exit: Exit::Error,
+                codes: vec![],
+                count: 4,
+            }),
+            query: Some(AxisReport {
+                exit: Exit::Ok,
+                codes: vec![],
+                count: 0,
+            }),
+            ..Manifest::default()
+        };
+        assert_eq!(
+            expected.diff(&observed),
+            [
+                "generate: stale section — command no longer applies",
+                "inspect: violations 3 != observed 4",
+                "query: command became applicable (unregistered drift); expected no section, got exit ok codes []",
+            ]
+        );
     }
 
     #[test]
@@ -689,6 +910,10 @@ mod tests {
             reconcile: None,
             export: None,
             fmt: None,
+            inspect: None,
+            query: None,
+            diff: None,
+            generate: None,
         };
         let observed = Manifest {
             dsl2json: Some(CommandReport {
@@ -705,6 +930,10 @@ mod tests {
             reconcile: None,
             export: None,
             fmt: None,
+            inspect: None,
+            query: None,
+            diff: None,
+            generate: None,
         };
         let d = expected.diff(&observed);
         assert_eq!(d.len(), 4, "{d:?}"); // exit, codes, stale json2json, unregistered validate

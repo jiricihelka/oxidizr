@@ -12,5 +12,33 @@
       4001
     ],
     "counts": null
+  },
+  "inspect": {
+    "exit": "error",
+    "codes": [
+      4001
+    ],
+    "violations": 0
+  },
+  "query": {
+    "exit": "error",
+    "codes": [
+      4001
+    ],
+    "matches": 0
+  },
+  "diff": {
+    "exit": "error",
+    "codes": [
+      4001
+    ],
+    "findings": 0
+  },
+  "generate": {
+    "exit": "error",
+    "codes": [
+      5010
+    ],
+    "counts": null
   }
 }

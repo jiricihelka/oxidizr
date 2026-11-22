@@ -30,5 +30,29 @@
       "codes": [],
       "files": 0
     }
+  },
+  "inspect": {
+    "exit": "error",
+    "codes": [],
+    "violations": 2
+  },
+  "query": {
+    "exit": "ok",
+    "codes": [],
+    "matches": 2
+  },
+  "diff": {
+    "exit": "ok",
+    "codes": [],
+    "findings": 0
+  },
+  "generate": {
+    "exit": "ok",
+    "codes": [],
+    "counts": {
+      "elements": 2,
+      "relationships": 1,
+      "views": 0
+    }
   }
 }

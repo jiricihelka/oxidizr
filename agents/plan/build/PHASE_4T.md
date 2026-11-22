@@ -86,7 +86,7 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
 |---|---|---|
 | **T-1** | The matrix section + gate re-sync (gap 2) + harvest script notes | **DONE** — T1a: `TESTING.md` §Feature × suite matrix (names harvested from `cargo test --workspace -- --list`, gap legend T-2…T-6); T1b: gate re-sync (`codes::ALL` + docs↔catalog machine check + 5010 registered debt) |
 | **T-2** | `oxidizr-import` golden file suite (gap 1) | **DONE** — `crates/oxidizr-import/tests/golden_files.rs` (9 tests): 11 authored fixtures under `tests/fixtures/` (LF-pinned, inventory-pinned by `every_fixture_is_consumed`), digests blessed via UPDATE_EXPECT; MADR 0001 carries a front-matter `date:` because the importer's fallback is file **mtime** (an mtime-derived golden would be nondeterministic — proven mtime-proof by re-run after `touch`) |
-| **T-3** | e2e corpus Phase-4 axes + invariants (gap 4) | T3 |
+| **T-3** | e2e corpus Phase-4 axes + invariants (gap 4) | **DONE** — manifest schema v3: `inspect`/`query`/`diff` axes over the entry's own input + `generate` over the entry directory (P4T-V1 settled); 307 sidecars re-blessed; OXZ-5010 entered the corpus, allow-list shrank (the stale-entry tripwire fired as designed); full tier adds `generate_pair_merge_is_view_free_and_id_unique` (view-free · unique ids · one edge per pair under `First`) |
 | **T-4** | LSP capability transcripts + fast-edit stress (gap 5) | T4 |
 | **T-5** | New fuzz targets + seed corpora (gap 3) | T5 |
 | **T-6** | CLI audit row (gap 6), Category B extension (gap 7), close ritual (full tier + bless + PROGRESS `P4T` log + matrix frozen) | T6 |

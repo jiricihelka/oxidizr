@@ -18,5 +18,36 @@
   "fmt": {
     "exit": "ok",
     "idempotent": true
+  },
+  "inspect": {
+    "exit": "error",
+    "codes": [
+      2001,
+      2002
+    ],
+    "violations": 17
+  },
+  "query": {
+    "exit": "ok",
+    "codes": [
+      2001,
+      2002
+    ],
+    "matches": 7
+  },
+  "diff": {
+    "exit": "ok",
+    "codes": [
+      2001,
+      2002
+    ],
+    "findings": 0
+  },
+  "generate": {
+    "exit": "error",
+    "codes": [
+      5010
+    ],
+    "counts": null
   }
 }

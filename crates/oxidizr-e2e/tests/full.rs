@@ -300,7 +300,119 @@ fn copy_children(src: &std::path::Path, dst: &std::path::Path) -> std::io::Resul
     Ok(())
 }
 
-/// Invariant 4 — self-`reconcile`: a workspace reconciled against its own
+/// Invariant 4 — `generate system-landscape` merge (§P4T T-3 gap 4): every
+/// consecutive PAIR of loading valid entries merges into a landscape that
+/// (a) carries NO views (the witnessed reference behavior — P4-D9), (b) has
+/// unique element ids across the merged set, and (c) keeps at most ONE
+/// relationship per source→destination pair (the `First` duplicate-edge
+/// policy). Pair inputs are the entries' own `dsl2json` exports written as
+/// `a/workspace.json` / `b/workspace.json` — what the default include
+/// pattern selects.
+#[test]
+fn generate_pair_merge_is_view_free_and_id_unique() {
+    if !full_tier() {
+        return;
+    }
+    let mut entries = dsl_entries();
+    entries.sort_by_key(Entry::full_name);
+    let pairs: Vec<(Entry, Entry)> = entries
+        .chunks(2)
+        .filter_map(|chunk| Some((chunk.first()?.clone(), chunk.get(1)?.clone())))
+        .collect();
+    let problems = fan_out(&pairs, |(a, b)| {
+        let name = format!("{} + {}", a.full_name(), b.full_name());
+        let Some(a_json) = dsl2json(a).bytes else {
+            return Ok(()); // non-loading entries: the quick-tier axes cover them
+        };
+        let Some(b_json) = dsl2json(b).bytes else {
+            return Ok(());
+        };
+        let scratch = oxidizr_e2e::runner::scratch_dir(&format!("gen-{}", a.name));
+        let result = (|| -> Result<(), String> {
+            for (side, bytes) in [("a", a_json), ("b", b_json)] {
+                let dir = scratch.join(side);
+                std::fs::create_dir_all(&dir).map_err(|e| format!("{name}: scratch: {e}"))?;
+                std::fs::write(dir.join("workspace.json"), bytes)
+                    .map_err(|e| format!("{name}: scratch write: {e}"))?;
+            }
+            let out = execute(
+                Request::Generate {
+                    inputs: vec![scratch.clone()],
+                    include: None,
+                    exclude: None,
+                    strategy: oxidizr_api::RelationshipsStrategy::default(),
+                    output: None,
+                },
+                &oxidizr_e2e::hermetic_options(),
+            );
+            if out.exit != ExitClass::Ok {
+                return Err(format!("{name}: generate exited {:?}", out.exit));
+            }
+            let Some(bytes) = out.bytes else {
+                return Err(format!("{name}: generate produced no output"));
+            };
+            let value: serde_json::Value = serde_json::from_slice(&bytes)
+                .map_err(|e| format!("{name}: landscape is not JSON: {e}"))?;
+            // (a) no views: absent, or every present section empty.
+            if let Some(views) = value.get("views") {
+                let non_empty = views.as_object().is_some_and(|m| {
+                    m.values()
+                        .any(|v| v.as_array().is_some_and(|a| !a.is_empty()))
+                });
+                if non_empty || views.is_array() {
+                    return Err(format!("{name}: landscape carries views"));
+                }
+            }
+            let Some(model) = value.get("model").and_then(|m| m.as_object()) else {
+                return Err(format!("{name}: model is not an object"));
+            };
+            // (b) unique ids across the merged people + systems.
+            let mut ids: Vec<&str> = Vec::new();
+            for key in ["people", "softwareSystems"] {
+                if let Some(items) = model.get(key).and_then(|v| v.as_array()) {
+                    for item in items {
+                        let id = item.get("id").and_then(|v| v.as_str());
+                        match id {
+                            Some(id) => ids.push(id),
+                            None => return Err(format!("{name}: merged item without id")),
+                        }
+                    }
+                }
+            }
+            let unique = ids.iter().collect::<std::collections::BTreeSet<_>>().len();
+            if unique != ids.len() {
+                return Err(format!(
+                    "{name}: merged ids not unique ({unique} of {})",
+                    ids.len()
+                ));
+            }
+            // (c) `First` policy: one edge per source→destination pair.
+            let mut pairs_seen: std::collections::BTreeSet<(&str, &str)> =
+                std::collections::BTreeSet::new();
+            if let Some(rels) = model.get("relationships").and_then(|v| v.as_array()) {
+                for rel in rels {
+                    let src = rel.get("source").and_then(|v| v.as_str());
+                    let dst = rel.get("destination").and_then(|v| v.as_str());
+                    if let (Some(s), Some(d)) = (src, dst) {
+                        if !pairs_seen.insert((s, d)) {
+                            return Err(format!("{name}: duplicate edge {s} -> {d} under First"));
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })();
+        let _ = std::fs::remove_dir_all(&scratch);
+        result
+    });
+    assert!(
+        problems.is_empty(),
+        "generate pair-merge invariants:\n{}",
+        problems.join("\n")
+    );
+}
+
+/// Invariant 5 — self-`reconcile`: a workspace reconciled against its own
 /// JSON export is the identity — exit ok, zero ambiguity notes, zero graft
 /// (output ≡ layout, masked).
 #[test]

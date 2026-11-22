@@ -55,15 +55,11 @@ const ALLOWLIST: &[(u16, &str)] = &[
          note) is not wired into the pipeline — 120 broken lines emit 120 errors, no note \
          (T3 probed); register the wiring decision before any fixture can cover it",
     ),
-    (
-        5010,
-        "generate failure (§P4-M3 O-4, P4-D9): the corpus runner has no `generate` leg — \
-         the command takes a directory of workspaces plus `--include`/`--exclude` filters, \
-         while the manifest schema fans out per single-workspace command (P4T-V1: verified \
-         2026-11-22, the v2 sidecar has no section that can carry it) — T-3 \
-         (PHASE_4T.md gap 4) adds the generate axes; until then this is registered debt, \
-         and `allowlist_has_no_stale_entries` fails once a manifest covers the code",
-    ),
+    // 5010 left the list at §P4T T-3: the schema-v3 `generate` section observes
+    // `generate system-landscape` over the entry directory, so every entry whose
+    // inputs fail to load reports the landscape failure (OXZ-5010) in its
+    // sidecar — the allow-list shrank exactly as `allowlist_has_no_stale_entries`
+    // demanded.
 ];
 
 fn manifest_codes() -> Vec<u16> {
@@ -78,11 +74,18 @@ fn manifest_codes() -> Vec<u16> {
             manifest.json2json,
             manifest.validate,
             manifest.reconcile,
+            manifest.generate,
         ]
         .into_iter()
         .flatten()
         {
             codes.extend(report.codes);
+        }
+        for axis in [manifest.inspect, manifest.query, manifest.diff]
+            .into_iter()
+            .flatten()
+        {
+            codes.extend(axis.codes);
         }
         if let Some(exports) = &manifest.export {
             for (_, report) in exports.formats() {

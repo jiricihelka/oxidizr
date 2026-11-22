@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1 + T-2 DONE, next T-3 (e2e manifest v3 axes); then P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1…T-3 DONE, next T-4 (LSP capability transcripts + fast-edit stress); then T-5/T-6 → P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -15,18 +15,22 @@
   11 authored fixtures under `tests/fixtures/` (README + inventory test),
   `expect!` digests blessed; MADR fixtures carry front-matter `date:` (the
   importer's date fallback is file mtime — nondeterministic goldens
-  otherwise; matrix T-2 cell now names `golden_files`). Coverage-gate
-  re-sync from T1b (`codes::ALL`, `registry_matches_docs_table`, 5010
-  allow-listed). P4T-V1 VERIFIED: manifest v2 cannot carry
-  inspect/query/diff/generate — T-3 extends the section set (the v3).
-  **Next: T-3** — e2e corpus Phase-4 axes (manifest v3 sections: inspect
-  violation-count, query smoke, diff identity, generate merge invariants;
-  OXZ-5010 coverage shrinks the allow-list).
-- **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
-  in the three D0s: harden-before-release; 4R may churn the public API
-  INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
-  line per API commit); provenance of the Java reference lives ONLY in
-  `agents/plan/` after P4D.
+  otherwise; matrix T-2 cell now names `golden_files`). **T-3 DONE** —
+  manifest schema v3 (`AxisReport` {exit, codes, one count}): `inspect`
+  (violations @ threshold `info`), `query` (smoke filter
+  `element.tag==Element`, kind All, JSON), `diff` (self-diff → findings 0)
+  over the entry's OWN input + `generate` over the ENTRY DIRECTORY
+  (P4T-V1 settled; sidecar never matches `DEFAULT_INCLUDE`, blessed
+  `views: 0` pins the view-free merge); 307 sidecars re-blessed, re-bless
+  all-`unchanged`; OXZ-5010 entered the corpus via load-failing entries —
+  the 5010 allow-list entry REMOVED (stale-entry tripwire fired as
+  designed); full tier adds Invariant 4
+  `generate_pair_merge_is_view_free_and_id_unique`; coverage gate reads
+  the v3 sections; matrix cells + sidecar prose stamped to v3. Axes run in
+  the QUICK tier (measured cost kept the quartet light).
+  **Next: T-4** — LSP per-capability transcripts (completion/hover/
+  formatting/workspace-edit idempotence) + fast-edit stress (P4T-V3:
+  wall-clock-free converge check).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
