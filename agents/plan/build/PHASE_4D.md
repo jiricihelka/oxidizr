@@ -64,7 +64,7 @@ the behavior came from.
 | `/README.md` (root) | what oxidizr is + compat promise; install (dist binaries, cargo build + nightly note); quickstart (validate → dsl2json → export → diff); command list one line each; exit-code family; links to `docs/` | ≤ 120 lines |
 | `crates/*/README.md` (ALL 14 crates — none exist today) | purpose, key modules, who consumes it, one pointer into `agents/plan/` if deep context exists | ≤ 20 lines each |
 | `docs/README.md` (missing today) | index of the user docs pages | ≤ 10 lines |
-| `crates/xtask/README.md` (inside the crate row above) may stay a stub pointing at WORKFLOW.md | | |
+| the `xtask` crate row (within the 14 above) may stay a stub pointing at `agents/plan/WORKFLOW.md` | | |
 | `testdata/`, `e2e/`, `bench-baseline/`, `agents/` | already have READMEs — brevity review only | — |
 
 ## P4D-D3 rustdoc pass + the hygiene gate

@@ -2,15 +2,16 @@
 
 ## Active now (2026-11-22)
 
-- **M5a (`oxidizr oracle` user command) is UNCOMMITTED work-in-progress**:
-  new `crates/oxidizr-cli/src/oracle.rs` (engine: discovery/gen/verify/
-  normalize moved from xtask + report), `Command::Oracle`/`OracleAction` +
-  `run` dispatch + `to_request`/name arms in `crates/oxidizr-cli/src/lib.rs`,
-  `oxidizr-cli` added to `[workspace.dependencies]` and to xtask's
-  `[dependencies]`. REMAINING for M5a: xtask's four oracle-primitive
-  functions delegate to the module (bodies deleted there), `surface_parses`
-  line, Category A tests via a fake-oracle shell shim (`#[cfg(unix)]`:
-  gen/match/mismatch/missing/`--json`/`--bin`-missing⇒3), quartet, commit.
+- **§P4-M5 in flight**: **E-1 DONE (M5a)** — `oxidizr oracle` user command
+  shipped (engine `crates/oxidizr-cli/src/oracle.rs`, xtask delegates,
+  Category A fake-oracle suite; contract in the PHASE_4 §P4-M5 item
+  stamps). **Next: E-2 (M5b)** — P4-D13-2 semantic comparators for the
+  reference Structurizr-PlantUML + Mermaid dialects: WITNESS the fact
+  grammars on the pinned binary (`TZ=UTC`) over the golden corpus FIRST,
+  then `xtask/exportcmp` grows `facts_plantuml`/`facts_mermaid` and
+  `cargo xtask export-verify --format plantuml|mermaid` legs. Then E-3
+  (M5c, `Layered` polish, regression-gated) → P4T → P4R → P4D → release
+  tail (M5d/e).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   (bytes/CLI frozen, CHANGELOG line per API commit); provenance of the

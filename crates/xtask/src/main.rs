@@ -694,55 +694,21 @@ fn cmd_fuzz(secs: u64) -> Result<()> {
 
 // ---------------------------------------------------------------- oracle plumbing
 
+/// §P4-M5 E-1: the discovery/export/normalize PRIMITIVES live in
+/// `oxidizr_cli::oracle` (shared with the `oxidizr oracle` user command,
+/// P4-D6 "xtask stays a dev shim"); the legs below drive them over the
+/// VENDORED corpus. Error text moved with the functions.
 fn find_oracle() -> Result<PathBuf> {
-    if let Some(explicit) = env::var_os("OXIDZR_STRUCTURIZR_BIN") {
-        let path = PathBuf::from(&explicit);
-        ensure!(
-            path.is_file(),
-            "$OXIDZR_STRUCTURIZR_BIN={}",
-            explicit.to_string_lossy()
-        );
-        return Ok(path);
-    }
-    for dir in env::split_paths(&env::var_os("PATH").unwrap_or_default()) {
-        // Windows ships .bat/.cmd wrappers; plain name covers unix.
-        for name in ["structurizr", "structurizr.bat", "structurizr.cmd"] {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                return Ok(candidate);
-            }
-        }
-    }
-    bail!(
-        "structurizr reference binary not found ($OXIDZR_STRUCTURIZR_BIN → PATH); \
-         the nix dev flake provides it (agents/plan/TESTING.md)"
-    );
+    Ok(oxidizr_cli::oracle::find_oracle(None)?)
 }
 
 /// The oracle export prologue (2R R-tool-01: the create-dirs + run + exit-
-/// status leg the json/plantuml/theme runners used to triplicate). The
-/// failure message names the format on every leg (the json leg's old
-/// message left it out).
+/// status leg the json/plantuml/theme runners used to triplicate). Delegated
+/// to the shared engine since §P4-M5 E-1.
 fn run_oracle_export(oracle: &Path, workspace: &Path, outdir: &Path, format: &str) -> Result<()> {
-    fs::create_dir_all(outdir)?;
-    let output = Command::new(oracle)
-        .arg("export")
-        .arg("--workspace")
-        .arg(workspace)
-        .arg("--format")
-        .arg(format)
-        .arg("--output")
-        .arg(outdir)
-        .output()
-        .with_context(|| format!("failed to run {}", oracle.display()))?;
-    if !output.status.success() {
-        bail!(
-            "structurizr {format} export failed ({}):\n{}",
-            workspace.display(),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    Ok(())
+    Ok(oxidizr_cli::oracle::run_export(
+        oracle, workspace, outdir, format,
+    )?)
 }
 
 /// Run `structurizr export --format json` and return the produced file path.
@@ -796,82 +762,12 @@ fn reference_export_theme(oracle: &Path, workspace: &Path, outdir: &Path) -> Res
     Ok(produced)
 }
 
-/// Golden normalization: drop the four violation-counter properties the reference
-/// **application harness** injects into `workspace.properties` on every load
-/// (`AbstractCommand.loadWorkspace` → `new DefaultInspector(workspace)`;
-/// `structurizr-inspection/DefaultInspector.java`). They are harness artifacts, not
-/// workspace content — oxidizr models them as ordinary (round-tripped) properties but
-/// never computes counts (that would mean reimplementing `structurizr-inspection`).
-/// Verified against 2026.10.26 (2026-11-14, `agents/plan/PROGRESS.md`).
-///
-/// Line deletion must fix up the preceding comma when a removed entry was the object's
-/// LAST member (the reference pretty-prints one entry per line, so a comma-less removed
-/// line means the previous line's trailing comma must go too); when the removed entries
-/// were the object's ONLY members, the emptied `"properties" : { }` shell goes too — the
-/// `NON_EMPTY` writer can never produce an empty properties object, so its braces are a
-/// deletion artifact (M5: `workspace extends` clears the retained source, leaving the
-/// inspection entries alone). Note the export output has NO volatile members
-/// (`lastModifiedDate*` only round-trips from JSON inputs, deterministically) — nothing
-/// else is stripped.
+/// Golden normalization — §P4-M5 E-1: the function MOVED to
+/// `oxidizr_cli::oracle` (shared with the `oxidizr oracle` user command);
+/// the corpus legs call it through this dev-shim wrapper (P4-D6). The unit
+/// tests moved with it.
 fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
-    let text = String::from_utf8_lossy(raw);
-    // Byte parity includes EOF: the reference pretty-printer emits NO trailing
-    // newline; `lines()` would invent one (M0 goldens carried that artifact).
-    let raw_trailing_newline = text.ends_with('\n');
-    let drop_trailing_comma = |lines: &mut [String]| {
-        // removed entry was the last in its object: drop the previous comma
-        if let Some(last) = lines.last_mut()
-            && let Some(pos) = last.rfind(',')
-            && last[pos + 1..].chars().all(char::is_whitespace)
-        {
-            last.remove(pos);
-        }
-    };
-    // Pass 1: delete the inspection entry lines (comma fix-up included).
-    let mut kept: Vec<String> = Vec::new();
-    for line in text.lines() {
-        let t = line.trim_start();
-        let removed = (t.starts_with("\"structurizr.inspection.error\"")
-            || t.starts_with("\"structurizr.inspection.warning\"")
-            || t.starts_with("\"structurizr.inspection.info\"")
-            || t.starts_with("\"structurizr.inspection.ignore\""))
-            && t.contains("\" :");
-        if removed {
-            if !t.ends_with(',') {
-                drop_trailing_comma(&mut kept);
-            }
-            continue;
-        }
-        kept.push(line.to_string());
-    }
-    // Pass 2: when the inspection entries were the ONLY members of the
-    // workspace-level `properties` object (`workspace extends` clears the
-    // retained source, M5), pass 1 emptied it — but the library writer uses
-    // NON_EMPTY inclusion, so an EMPTY `"properties" : { }` can only be a
-    // deletion artifact: drop the braces too (comma rules as in pass 1).
-    let mut out_lines: Vec<String> = Vec::new();
-    let mut i = 0;
-    while i < kept.len() {
-        let t = kept[i].trim_start();
-        if t.ends_with("\"properties\" : {")
-            && kept
-                .get(i + 1)
-                .is_some_and(|n| matches!(n.trim(), "}," | "}"))
-        {
-            if kept[i + 1].trim() == "}" {
-                drop_trailing_comma(&mut out_lines);
-            }
-            i += 2;
-            continue;
-        }
-        out_lines.push(std::mem::take(&mut kept[i]));
-        i += 1;
-    }
-    let mut out = out_lines.join("\n");
-    if raw_trailing_newline {
-        out.push('\n');
-    }
-    out.into_bytes()
+    oxidizr_cli::oracle::normalize_reference_output(raw)
 }
 
 // ---------------------------------------------------------------- vendor
@@ -1863,7 +1759,7 @@ fn compare_export_dirs(ref_files: &[PathBuf], our_files: &[PathBuf]) -> Result<V
 
 #[cfg(test)]
 mod tests {
-    use super::{Step, normalize_reference_output, resolve_ci_steps};
+    use super::{Step, resolve_ci_steps};
 
     #[test]
     fn ci_steps_default_to_the_commit_gate_quartet() {
@@ -1888,43 +1784,5 @@ mod tests {
     #[test]
     fn ci_steps_reject_unknown_names() {
         assert!(resolve_ci_steps(&["macos".into()]).is_err());
-    }
-
-    fn norm(s: &str) -> String {
-        String::from_utf8(normalize_reference_output(s.as_bytes())).unwrap()
-    }
-
-    #[test]
-    fn removes_middle_entries_untouched() {
-        let src = "{\n  \"properties\" : {\n    \"a\" : \"1\",\n    \"structurizr.inspection.error\" : \"3\",\n    \"structurizr.inspection.info\" : \"0\",\n    \"z\" : \"9\"\n  }\n}\n";
-        assert_eq!(
-            norm(src),
-            "{\n  \"properties\" : {\n    \"a\" : \"1\",\n    \"z\" : \"9\"\n  }\n}\n"
-        );
-    }
-
-    #[test]
-    fn preserves_missing_trailing_newline() {
-        // The reference pretty-printer emits no trailing newline; goldens must
-        // not invent one (byte parity includes EOF).
-        let src = "{\n  \"a\" : \"1\"\n}";
-        assert_eq!(norm(src), "{\n  \"a\" : \"1\"\n}");
-    }
-
-    #[test]
-    fn removes_last_entry_and_fixes_comma() {
-        // inspection entries sorted last (as in workspace-properties.dsl, 2026-11-14):
-        // the surviving `structurizr.dslEditor` line must lose its trailing comma.
-        let src = "{\n  \"properties\" : {\n    \"structurizr.dslEditor\" : \"false\",\n    \"structurizr.inspection.warning\" : \"0\"\n  }\n}\n";
-        assert_eq!(
-            norm(src),
-            "{\n  \"properties\" : {\n    \"structurizr.dslEditor\" : \"false\"\n  }\n}\n"
-        );
-    }
-
-    #[test]
-    fn leaves_other_keys_alone() {
-        let src = "{\n  \"structurizr.inspectionUrl\" : \"x\",\n  \"structurizr.dsl\" : \"y\"\n}\n";
-        assert_eq!(norm(src), src);
     }
 }

@@ -5407,6 +5407,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "oxidizr-api",
+ "oxidizr-cli",
  "oxidizr-core",
  "oxidizr-e2e",
  "oxidizr-viewer",

@@ -39,6 +39,7 @@ oxidizr-inspect = { path = "crates/oxidizr-inspect", version = "0.1.0" }
 oxidizr-import = { path = "crates/oxidizr-import", version = "0.1.0" }
 oxidizr-layout = { path = "crates/oxidizr-layout", version = "0.1.0" }
 oxidizr-api = { path = "crates/oxidizr-api", version = "0.1.0" }
+oxidizr-cli = { path = "crates/oxidizr-cli", version = "0.1.0" }
 oxidizr-e2e = { path = "crates/oxidizr-e2e", version = "0.1.0" }
 oxidizr-viewer = { path = "crates/oxidizr-viewer", version = "0.1.0" }
 

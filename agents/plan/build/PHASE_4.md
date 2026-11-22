@@ -460,6 +460,30 @@ close ritual for "P4" lands at the E-5 commit.
 | **E-4** | cargo-dist wiring per P4-D10 + the P4-V6 closure: `[workspace.metadata.dist]` (artifacts: `oxidizr` [cli, default features = zero GPU] + `oxidizr-lsp`; `oxidizr-viewer` as a per-package `features = ["gui"]` override — if cargo-dist's package-level override cannot carry it, the row records the deviation and the GUI binary stays a documented `cargo build --features gui` release story, R-5), targets x86_64/aarch64 linux (**gnu**, per P4-V6: musl feasibility below), x86_64/aarch64 macOS, x86_64 windows-msvc; checksums + install script defaults; `.github/workflows/release.yml` (tag-push `v*` → `cargo dist build` + GitHub Release + the per-OS smoke: `--version` + `dsl2json` on one fixture — Category A) + a `dist --check` dry-run leg on PRs; `actionlint` clean locally. **P4-V6 (CLOSED at this row, 2026-11-21):** the pinned nightly `rustup`-less dev shell carries NO musl target/std and no musl linker (mingw only) ⇒ `x86_64-unknown-linux-musl` is NOT locally verifiable; decided **gnu** for linux (P4-D10's documented fallback), musl revisit = `💡` only. Signing deferred (unsigned v1, documented — not a deviation) | M5d |
 | **E-5** | Release chore: workspace version `0.1.0` → **`0.4.0`** (+ lockfile + `--version` goldens incl. the lsp `tests/version.rs` pin), `CHANGELOG.md` catch-up in Keep-a-Changelog form (v0.1.0/v0.2.0/v0.3.0 reconstructed from the PROGRESS milestone logs + the v0.4.0 section: LSP, diff, inspect, importers, WSD export, query/init/completions/generate, oracle command), `docs/RELEASING.md` (tag → CI → dist publish → changelog + register sync checklist), docs pass (README command list through `generate`/`oracle`), **P4 milestone close ritual** (full tier + bless + PROGRESS `P4-M5` log + status board + RESUME) and the local `v0.4.0` tag. **Never push** — publish/push stay an explicit user action | M5e |
 
+## §P4-M5 item stamps
+
+- **E-1 DONE (commit M5a, 2026-11-22)** — `oxidizr oracle gen|verify
+  WORKSPACES… [--bin PATH] [--goldens DIR] [--json]` (+ global `--quiet` =
+  exit code only). Engine: new `crates/oxidizr-cli/src/oracle.rs` — the
+  four primitives `find_oracle`/`run_export`/`reference_export_json`/
+  `normalize_reference_output` MOVED from xtask verbatim (unit tests too);
+  xtask keeps the corpus legs and delegates through same-named wrappers
+  (P4-D6 dev shim, behavior byte-identical). Dispatched in `run` before
+  the pipeline like `view`/`completions` — external spawn, never a
+  `Request`. Golden: `<stem>.golden.json` beside the workspace or under
+  `--goldens DIR` (gen creates the DIR). Report on stdout (human lines +
+  `oracle <word>: N/M ok` summary); `--json` = hand-rendered
+  `{"schema":1,"results":[{workspace,golden,status:generated|match|
+  mismatch|missing|error,error?}]}` — zero new deps (std-only). Exit:
+  0 all ok · 1 mismatch/missing/leg-error · 2 clap · 3 discovery/spawn/I-O
+  (OXZ-5006; `--bin` non-file = hard miss). Tests (Category A): oracle.rs
+  unit (normalize×4, `--bin`, esc) + `tests/oracle_cli.rs` ×8 driving a
+  fake-oracle shell shim (`#[cfg(unix)]`: gen-normalization, idempotence,
+  verify match/mismatch/missing, `--json` shape, `--bin`⇒3, missing-ws⇒3,
+  reference-failure⇒1, `--goldens`+`--quiet`+env-discovery). `oxidizr-cli`
+  registered in `[workspace.dependencies]` (xtask's lib dep). Quartet
+  green incl. the new refs-gate wording (PHASE_4D).
+
 ## P4-D12 Verification list
 
 - P4-V1 diff identity rules vs real-world edit sequences (identifier/canonical-name

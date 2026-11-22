@@ -27,6 +27,7 @@
 //! (which drives the API in-process) in lockstep
 //! (`agents/plan/build/PHASE_1T.md` P1T-D1).
 
+pub mod oracle;
 pub mod report;
 pub use oxidizr_api::{reconcile, suggest};
 
@@ -277,6 +278,34 @@ pub enum Command {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Generate or verify reference-oracle goldens over USER fixture
+    /// paths (`oracle`, F4 graduation, §P4-M5 E-1): fixture-author CI
+    /// automation of the `structurizr export --format json` round —
+    /// dispatched in `run` before the pipeline (it spawns the EXTERNAL
+    /// reference binary; oxidizr never downloads anything, D5).
+    /// Discovery: `--bin` → `$OXIDZR_STRUCTURIZR_BIN` → `structurizr`
+    /// on PATH. Goldens: `<stem>.golden.json` next to the workspace (or
+    /// under `--goldens DIR`). Exit: 0 all ok · 1 mismatch/missing ·
+    /// 2 usage · 3 discovery/spawn/I-O.
+    Oracle {
+        /// `gen` writes the normalized reference output to the golden;
+        /// `verify` re-runs the reference and byte-compares against it.
+        #[arg(value_enum)]
+        action: OracleAction,
+        /// Workspace files (`.dsl` or `.json`) to run through the oracle.
+        #[arg(required = true)]
+        workspaces: Vec<PathBuf>,
+        /// Reference binary path (default: `$OXIDZR_STRUCTURIZR_BIN` → PATH).
+        #[arg(long, value_name = "PATH")]
+        bin: Option<PathBuf>,
+        /// Golden directory (default: next to each workspace file).
+        #[arg(long, value_name = "DIR")]
+        goldens: Option<PathBuf>,
+        /// Machine-readable JSON report on stdout (`{"schema":1,…}`,
+        /// for CI pipelines) instead of the human lines.
+        #[arg(long)]
+        json: bool,
+    },
     /// Open the workspace in the native viewer window (F10, §P3-M8) —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
@@ -322,6 +351,16 @@ pub enum GenerateCommand {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
+}
+
+/// `oxidizr oracle` actions (§P4-M5 E-1, F4): the two golden legs of the
+/// user-facing oracle command; maps onto [`oracle::Action`].
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug)]
+pub enum OracleAction {
+    /// Write the normalized reference output to `<stem>.golden.json`.
+    Gen,
+    /// Re-run the reference and byte-compare against the golden.
+    Verify,
 }
 
 /// `oxidizr generate system-landscape --relationships` values: the
@@ -473,6 +512,32 @@ pub fn run() -> anyhow::Result<i32> {
     // it dispatches before anything touches `oxidizr-api`.
     if let Command::View { file, theme } = &cli.command {
         return run_view(file.as_deref(), *theme);
+    }
+    // §P4-M5 E-1 / F4: `oracle` spawns the EXTERNAL reference binary —
+    // no workspace is ever opened here, so it is not a `Request`
+    // (dispatched like `view`/`completions`; the report is the stdout
+    // payload, the exit family 0/1/3 per §P4-M5 E-1).
+    if let Command::Oracle {
+        action,
+        workspaces,
+        bin,
+        goldens,
+        json,
+    } = &cli.command
+    {
+        let action = match action {
+            OracleAction::Gen => oracle::Action::Gen,
+            OracleAction::Verify => oracle::Action::Verify,
+        };
+        let outcome = oracle::run(
+            action,
+            workspaces,
+            bin.as_deref(),
+            goldens.as_deref(),
+            *json,
+            cli.quiet,
+        );
+        return Ok(replay(&renderer, outcome));
     }
     let options = ApiOptions {
         strict: cli.strict,
@@ -650,9 +715,11 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             },
             output,
         },
-        // §P3-M8 + §P4-M3 O-3: dispatched in `run` before the pipeline is
-        // reached (`view` = the GUI shell, `completions` = the argv table).
-        Command::View { .. } | Command::Completions { .. } => return None,
+        // §P3-M8 + §P4-M3 O-3 + §P4-M5 E-1: dispatched in `run` before the
+        // pipeline is reached (`view` = the GUI shell, `completions` = the
+        // argv table, `oracle` = the external reference binary — none of
+        // them is a `Request`).
+        Command::View { .. } | Command::Completions { .. } | Command::Oracle { .. } => return None,
     })
 }
 
@@ -762,6 +829,7 @@ mod tests {
             Command::Init { .. } => "init",
             Command::Generate { .. } => "generate",
             Command::Completions { .. } => "completions",
+            Command::Oracle { .. } => "oracle",
             Command::View { .. } => "view",
         }
     }
@@ -904,6 +972,25 @@ mod tests {
             ])
             .is_err()
         );
+        // §P4-M5 E-1: `oracle` — value-enum action positional, 1..N
+        // workspace positionals; zero workspaces and unknown actions are
+        // clap usage errors (exit 2).
+        Cli::try_parse_from(["oxidizr", "oracle", "gen", "a.dsl"]).unwrap();
+        Cli::try_parse_from([
+            "oxidizr",
+            "oracle",
+            "verify",
+            "a.dsl",
+            "b.json",
+            "--bin",
+            "/opt/structurizr",
+            "--goldens",
+            "goldens",
+            "--json",
+        ])
+        .unwrap();
+        assert!(Cli::try_parse_from(["oxidizr", "oracle", "gen"]).is_err());
+        assert!(Cli::try_parse_from(["oxidizr", "oracle", "check", "a.dsl"]).is_err());
     }
 
     #[test]

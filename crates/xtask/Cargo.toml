@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+oxidizr-cli = { workspace = true }
 oxidizr-e2e = { workspace = true }
 # M5-1 saved-sidecar leg: open through the real api pipeline, save through
 # the viewer's headless save path, compare the reference's re-exports.
