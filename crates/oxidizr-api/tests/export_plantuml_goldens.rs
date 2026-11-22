@@ -23,7 +23,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oxidizr_api::pipeline::{ApiOptions, ExitClass, Request, execute};
+use oxidizr_api::pipeline::{ApiOptions, ExitClass, ParseFlags, Request, execute};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -40,8 +40,10 @@ fn golden_base(subdir: &str) -> PathBuf {
 /// network (theme legs stay resolvable offline — P2-D3).
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         allow_net: false,

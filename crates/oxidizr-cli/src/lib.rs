@@ -40,7 +40,7 @@ use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault a
 use clap::{CommandFactory as _, Parser, Subcommand, ValueEnum};
 use oxidizr_api::{
     ApiOptions, DiffFormat, ExitClass, FmtMode, ImportFormat, InitTemplate, Input, InspectFormat,
-    LogItem, Outcome, QueryFormat, QueryKind, RelationshipsStrategy, Request, Severity,
+    LogItem, Outcome, ParseFlags, QueryFormat, QueryKind, RelationshipsStrategy, Request, Severity,
 };
 
 use report::{Issue, Renderer};
@@ -546,8 +546,10 @@ pub fn run() -> anyhow::Result<i32> {
         return Ok(replay(&renderer, outcome));
     }
     let options = ApiOptions {
-        strict: cli.strict,
-        keep_unknown: cli.keep_unknown,
+        parse: ParseFlags {
+            strict: cli.strict,
+            keep_unknown: cli.keep_unknown,
+        },
         // Production keeps the V-3 process-env behavior (ApiOptions::env=None).
         env: None,
         stdin: Some(read_stdin),

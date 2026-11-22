@@ -20,3 +20,8 @@ _(created at R0 2026-11-22; entries start with R2)_
   `InspectFormat` were the CLI's clap enums — those are renamed
   `DiffCmdFormat`/`InspectCmdFormat` in `oxidizr-cli` (grammar frozen:
   the `--format human|json` values are unchanged) (R3, item 1)
+- oxidizr-api: `ApiOptions` field rework — `strict`/`keep_unknown` moved
+  into a nested `parse: ParseFlags` struct (the `struct_excessive_bools`
+  allow is GONE; `env`/`stdin`/`allow_net`/`themes_dir`/`color` keep
+  their names); CLI/LSP/e2e/tests rewired, no behavior change (R3,
+  item 2)

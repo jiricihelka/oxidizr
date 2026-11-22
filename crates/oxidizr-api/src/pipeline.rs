@@ -93,17 +93,25 @@ pub enum Input {
 /// Reads the process stdin (CLI injects this; total — errors as values).
 pub type StdinReader = fn() -> Result<Vec<u8>, Issue>;
 
-/// Flags the command bodies consume (P1-D8 global flags; extension by
-/// addition only).
-// One bool per CLI flag is the surface itself (same justification as the
-// `Cli` struct in `oxidizr-cli`), not state to model as enums.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, Default)]
-pub struct ApiOptions {
+/// The parse/load flag family (grouped at §P4-R3: both steer how sources
+/// enter the model — `strict` turns load warnings into a block,
+/// `keep_unknown` extends the JSON reader with the D3 superset; the group
+/// keeps [`ApiOptions`] within the `struct_excessive_bools` bound without
+/// modelling flags as enums).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ParseFlags {
     /// `--strict`: warnings block (exit 1).
     pub strict: bool,
     /// `--keep-unknown`: D3 superset round-trip (`json2json`).
     pub keep_unknown: bool,
+}
+
+/// Flags the command bodies consume (P1-D8 global flags; extension by
+/// addition only).
+#[derive(Debug, Clone, Default)]
+pub struct ApiOptions {
+    /// The parse/load family (`--strict` / `--keep-unknown`, §P4-R3).
+    pub parse: ParseFlags,
     /// Hermetic `${VAR}` map (Phase 1T); `None` = the V-3 process-env
     /// default the production CLI keeps.
     pub env: Option<BTreeMap<String, String>>,
@@ -702,7 +710,7 @@ fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<
     let mut out = Outcome::default();
     let source = read_input(input, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
     let bytes = source.text.as_bytes();
-    if opts.keep_unknown {
+    if opts.parse.keep_unknown {
         // D3 superset mode: unknown / legacy / writer-omitted members ride
         // through verbatim (output intentionally non-parity — the reference
         // load tail, default views included, is part of the parity contract
@@ -796,7 +804,7 @@ fn reconcile_cmd(
 /// else `Ok`.
 fn validate(files: &[PathBuf], opts: &ApiOptions) -> Outcome {
     let mut out = Outcome::default();
-    let strict = opts.strict;
+    let strict = opts.parse.strict;
     let mut blocked = false;
     let mut io_error = false;
     for path in files {
@@ -910,7 +918,7 @@ fn load_export_workspace(
             Ok(r) if r.errors.is_empty() => (r.workspace, Vec::new()),
             Ok(r) => {
                 let issues = statement_errors(&r);
-                if blocks(&issues, opts.strict) {
+                if blocks(&issues, opts.parse.strict) {
                     let mut out = Outcome::default();
                     push_issues(&mut out, issues);
                     out.exit = ExitClass::Diagnostics;

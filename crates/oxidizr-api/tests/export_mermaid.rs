@@ -9,13 +9,15 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oxidizr_api::pipeline::{ApiOptions, ExitClass, LogItem, Request, execute};
+use oxidizr_api::pipeline::{ApiOptions, ExitClass, LogItem, ParseFlags, Request, execute};
 
 /// Hermetic options: empty env map, no stdin, no network.
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         allow_net: false,

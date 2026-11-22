@@ -16,7 +16,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use expect_test::expect;
-use oxidizr_api::pipeline::{ApiOptions, DiffFormat, ExitClass, Input, Request, execute};
+use oxidizr_api::pipeline::{
+    ApiOptions, DiffFormat, ExitClass, Input, ParseFlags, Request, execute,
+};
 use oxidizr_api::{diff, open};
 
 fn testdata() -> PathBuf {
@@ -34,8 +36,10 @@ fn probe(name: &str) -> PathBuf {
 /// stdin, no network, PLAIN report.
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         allow_net: false,

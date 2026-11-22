@@ -18,13 +18,15 @@ use std::path::PathBuf;
 
 use expect_test::expect;
 use oxidizr_api::InitTemplate;
-use oxidizr_api::pipeline::{ApiOptions, ExitClass, Input, Request, execute};
+use oxidizr_api::pipeline::{ApiOptions, ExitClass, Input, ParseFlags, Request, execute};
 
 /// Hermetic options (same posture as the `diff_probes` harness).
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(std::collections::BTreeMap::new()),
         stdin: None,
         allow_net: false,

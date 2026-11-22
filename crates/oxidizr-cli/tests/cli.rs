@@ -1210,8 +1210,10 @@ fn import_stdin_with_explicit_format() {
 /// posture: empty env map, no stdin, no network).
 fn import_opts() -> oxidizr_api::ApiOptions {
     oxidizr_api::ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: oxidizr_api::ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(std::collections::BTreeMap::new()),
         stdin: None,
         allow_net: false,

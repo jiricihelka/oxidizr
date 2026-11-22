@@ -10,13 +10,15 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use oxidizr_api::pipeline::{ApiOptions, Input, Request, execute};
+use oxidizr_api::pipeline::{ApiOptions, Input, ParseFlags, Request, execute};
 
 /// Hermetic options (same contract as the M1-d export tests).
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         allow_net: false,
@@ -158,7 +160,10 @@ fn json2json_keep_unknown_stays_verbatim() {
             output: None,
         },
         &ApiOptions {
-            keep_unknown: true,
+            parse: ParseFlags {
+                keep_unknown: true,
+                ..ParseFlags::default()
+            },
             ..opts()
         },
     );

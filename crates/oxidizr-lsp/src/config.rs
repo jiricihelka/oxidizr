@@ -25,7 +25,7 @@
 
 use std::path::PathBuf;
 
-use oxidizr_api::ApiOptions;
+use oxidizr_api::{ApiOptions, ParseFlags};
 use serde_json::Value;
 
 use crate::diagnostics::MAX_DIAGNOSTICS;
@@ -89,7 +89,10 @@ impl Config {
     #[must_use]
     pub fn api_options(&self) -> ApiOptions {
         ApiOptions {
-            strict: self.strict,
+            parse: ParseFlags {
+                strict: self.strict,
+                ..ParseFlags::default()
+            },
             themes_dir: self.themes_dir.clone(),
             allow_net: self.allow_net,
             ..ApiOptions::default()
@@ -153,11 +156,11 @@ mod tests {
             r#"{"strict": true, "themesDir": "/t", "allowNet": true}"#,
         )));
         let opts = config.api_options();
-        assert!(opts.strict);
+        assert!(opts.parse.strict);
         assert!(opts.allow_net);
         assert_eq!(opts.themes_dir, Some(PathBuf::from("/t")));
         // The untouched flags stay the production defaults.
-        assert!(!opts.keep_unknown);
+        assert!(!opts.parse.keep_unknown);
         assert!(opts.env.is_none());
     }
 }

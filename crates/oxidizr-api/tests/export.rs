@@ -11,15 +11,17 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oxidizr_api::pipeline::{ApiOptions, LogItem, Request, execute};
+use oxidizr_api::pipeline::{ApiOptions, LogItem, ParseFlags, Request, execute};
 use oxidizr_diag::codes;
 
 /// Hermetic options: empty env map (no `OXIDZR_THEMES_DIR`/`STRUCTURIZR_THEMES`
 /// leak), no stdin, no network, no explicit themes dir.
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         allow_net: false,

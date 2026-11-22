@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oxidizr_api::pipeline::{ApiOptions, ExitClass, Request, execute};
+use oxidizr_api::pipeline::{ApiOptions, ExitClass, ParseFlags, Request, execute};
 use oxidizr_api::{QueryFormat, QueryKind};
 
 fn testdata() -> PathBuf {
@@ -31,8 +31,10 @@ fn probe(name: &str) -> PathBuf {
 /// Hermetic options (same posture as the `diff_probes` harness).
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         allow_net: false,

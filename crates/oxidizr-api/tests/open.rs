@@ -10,14 +10,16 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use oxidizr_api::open;
-use oxidizr_api::pipeline::{ApiOptions, ExitClass, Input, LogItem};
+use oxidizr_api::pipeline::{ApiOptions, ExitClass, Input, LogItem, ParseFlags};
 
 /// Hermetic options: empty env map (no process-env leak), no stdin, no
 /// network (same posture as the `export` tests).
 fn opts() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         allow_net: false,

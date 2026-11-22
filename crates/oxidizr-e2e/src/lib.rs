@@ -26,7 +26,7 @@ pub mod runner;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oxidizr_api::ApiOptions;
+use oxidizr_api::{ApiOptions, ParseFlags};
 
 /// Repo root (this crate lives at `crates/oxidizr-e2e`).
 #[must_use]
@@ -53,8 +53,10 @@ pub fn corpus_root() -> PathBuf {
 #[must_use]
 pub fn hermetic_options() -> ApiOptions {
     ApiOptions {
-        strict: false,
-        keep_unknown: false,
+        parse: ParseFlags {
+            strict: false,
+            keep_unknown: false,
+        },
         env: Some(BTreeMap::new()),
         stdin: None,
         // No network in-process; theme dir sources come only from the
