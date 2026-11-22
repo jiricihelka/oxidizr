@@ -195,7 +195,9 @@ crates/
   `oxidizr-viewer`, `oxidizr-lsp`.
 - Metadata & publishing: MIT OR Apache-2.0 everywhere (agents/plan/WORKFLOW.md license policy); library
   crates published to crates.io alongside the dist binaries (metadata complete since
-  P1-M0).
+  P1-M0). **crates.io publishing is SKIPPED for v0.4.0** (user decision
+  2026-11-22 — record it in the release log; revisit near 1.0; metadata
+  audit still runs via `cargo publish --dry-run`).
 - Semver from v0.1.0 (P1-M7): compat contract fixes = patch; CLI/JSON-schema additions
   = minor; breaking = major + migration note (all recorded in DEVIATIONS/ADDITIONAL
   registers as usual). Nightly pin travels in `rust-toolchain.toml`; dist binaries
@@ -440,10 +442,11 @@ oxidizr-ADDED surface (F4 — the command shape is OURS, specced in the
 row itself; the PROTOCOL it automates stays the xtask one); E-2/E-3 are
 Category-B quality work (reference decides the fact grammar, our own
 suites gate regressions); E-4/E-5 are release engineering (P4-D10,
-P4-V6). cargo-dist is NOT installed on the dev box — the local bar is
-schema-correct hand-written config + `actionlint`-clean workflows +
-the pinned findings; `dist --check` runs in the CI job itself (R-5
-mitigation stays: plain `cargo build` is always the fallback).
+P4-V6). cargo-dist (0.34.0) rides the **flake dev shell** since 2026-11-22
+(user decision) — the local bar is schema-correct hand-written config +
+`cargo dist check` + `actionlint`-clean workflows; the CI job remains the
+authoring/verification leg (R-5 mitigation stays: plain `cargo build` is
+always the fallback).
 
 **Sequencing update 2026-11-22 (user):** E-1…E-3 run now; the release tail
 (**E-4** cargo-dist + **E-5** version/changelog/tag) executes AFTER the
@@ -451,6 +454,13 @@ hardening interludes `PHASE_4T.md` → `PHASE_4R.md` → `PHASE_4D.md`, so
 `v0.4.0` ships with the test matrix, the refactor pass and the human-first
 docs. P4T-D0/P4R-D0/P4D-D0 charters govern those phases; the milestone
 close ritual for "P4" lands at the E-5 commit.
+
+**Release endgame decisions (user, 2026-11-22):** E-5 ends at everything
+LOCAL + the local `v0.4.0` tag — pushing `main`/the tag and the GitHub
+Release are the user's explicit actions (P4-D10's dist workflow is
+written to fire on the pushed tag). crates.io publishing skipped
+(P4-D10 note). cargo-dist comes from the flake (dev shell), not a
+`cargo install`.
 
 | Item | Scope | Commit |
 |---|---|---|

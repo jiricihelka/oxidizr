@@ -11,6 +11,7 @@ notes — this is the map, don't re-derive here.
 | `wine` + mingw-w64 cross | reproduce Windows-only test failures locally | `cargo xtask ci windows` — env/wine-windows-leg.md |
 | `cargo xtask bench [save <L> \| cmp <L>]`, `cargo xtask cov` | perf regression checks / coverage (report-only) | critcmp takes only in-root baseline names (see bench help) |
 | `cargo-fuzz` | M6-d fuzz job — `cargo xtask fuzz [s]` (targets in `fuzz/`, seeds from testdata; strip note: env/fuzz-host-toolchain.md) | CI nightly mirror; not a commit gate |
+| `cargo-dist` 0.34.0 (flake dev shell, added 2026-11-22; the binary is `dist`, the cargo subcommand `cargo dist`) | §P4-M5 E-4 release-config checks only | `cargo dist --version`; CI remains the release authority |
 | structurizr monorepo clone | the reference DECIDES ambiguous behavior — read the Java, don't guess | `git clone https://github.com/structurizr/structurizr <scratch> && git -C <scratch> checkout ad34036` (COMPAT.md §Source of truth) |
 | `cargo xtask vendor --src <clone>` | (re)vendoring reference fixtures into testdata/ | testdata/README.md contract |
 

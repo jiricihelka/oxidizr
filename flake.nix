@@ -165,6 +165,11 @@
               pkgs.cargo-llvm-cov
               pkgs.cargo-fuzz
 
+              # Release engineering (§P4-M5 E-4, PHASE_4-D10): verifies the dist
+              # config locally (`cargo dist check`) before the CI release leg;
+              # CI and end users never need nix nor cargo-dist.
+              pkgs.cargo-dist
+
               # Triage toolkit (dev convenience, never a build/product dependency):
               # jq + sqlite for golden/DB spelunking, python3 for throwaway scripts,
               # actionlint for `cargo xtask ci lint`, critcmp for TESTING.md's

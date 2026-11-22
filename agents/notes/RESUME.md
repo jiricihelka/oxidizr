@@ -14,8 +14,13 @@
   tail (M5d/e).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
-  (bytes/CLI frozen, CHANGELOG line per API commit); provenance of the
-  Java reference lives ONLY in `agents/plan/` after P4D.
+  INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
+  line per API commit); provenance of the Java reference lives ONLY in
+  `agents/plan/` after P4D.
+- **Release endgame ratified 2026-11-22**: E-5 ends LOCAL + local `v0.4.0`
+  tag (push/publish = user); crates.io publishing SKIPPED for v0.4.0;
+  cargo-dist 0.34.0 added to the flake dev shell (E-4 verifies
+  `cargo dist check` locally; CI authority unchanged).
 
 ## State
 

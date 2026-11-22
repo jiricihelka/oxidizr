@@ -9,9 +9,11 @@ Goal: walk the Phase 3+4 code (and leftovers 2R never touched) doing
 small-scope refactors that make it nicer and more "rusty" — and, unlike
 2R, **the public Rust API may churn**: renames, module splits, typed
 replacements of stringly APIs, parameter structs (user decision
-2026-11-22, overriding the 2R API freeze for this phase only). What stays
-frozen is the PRODUCT: byte outputs, the CLI grammar, exit classes, OXZ
-codes, `testdata/`, blessed sidecars.
+2026-11-22, overriding the 2R API freeze for this phase only). **Churn
+depth (user, same day): structural enum-shape reworks ARE in scope** —
+e.g. reworking the giant `Request` payload per domain — each as its own
+quartet-green commit. What stays frozen is the PRODUCT: byte outputs,
+the CLI grammar, exit classes, OXZ codes, `testdata/`, blessed sidecars.
 
 ## P4R-D0 Charter and freeze scope (ratified 2026-11-22, user Q&A)
 
