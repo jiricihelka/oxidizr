@@ -84,6 +84,40 @@ text; the JSON byte contract stays with the Category-A goldens. In-process via
   validate/reconcile + export × 3 dialects, whole-corpus and biggest-entry),
   feature-gated, local-only — §Benchmarks.
 
+## Feature × suite matrix (P4T-D1 — accountability document)
+
+Every feature through Phase 4 (P4T additions included) carries ≥ 1 NAMED
+test in every suite that fits it; `—` = the suite does not apply, `T-n` =
+a gap resolved by that `build/PHASE_4T.md` item. Cells are test names
+harvested from the tree, never memory — refresh with
+`cargo test --workspace -- --list > LIST 2>&1` and join `Running` lines to
+`…: test` lines (stderr carries the targets — `pitfalls/bench-machine-
+drift-ab.md` style footgun). Maintenance rule (D0): a commit adding a
+feature row adds its matrix row; one representative per cell — the matrix
+does not duplicate coverage. Gap legend: **T-2** importer golden file
+suite · **T-3** e2e corpus Phase-4 axes · **T-4** LSP capability
+transcripts + stress · **T-5** fuzz targets `import_sniff`/`query_parse`/
+`pathfilter`/`diff_pair` · **T-6** CLI audit row + Category B extension.
+
+| Feature | unit | golden (Cat A) | CLI | e2e quick | e2e full | Cat B oracle | fuzz |
+|---|---|---|---|---|---|---|---|
+| `diff` (M0) | `diff::tests::consistent_id_shift_is_id_changed_never_add_remove` | `diff_probes::edited_pair_human_snapshot` | `cli::diff_human_report_exit_one_golden` | — | T-3 | — (no reference `diff`) | T-5 `diff_pair` |
+| `inspect` (M1) | `severity::tests::ranking_orders_error_above_ignore` | `inspect_model::element_ladder_run_order_snapshot` | `cli::inspect_human_report_exit_one_golden` | — | T-3 | — (advisory, P4-D7) | — |
+| diagram importers C4/Mermaid/image (M2) | `c4plantuml::tests::context_diagram_end_to_end`, `mermaid::tests::sequence_document_is_a_standalone_diagram`, `image::tests::png_imports_as_data_uri_image_view` | T-2 | `cli::import_c4plantuml_sniffed_extension_stdout` | — | — | — (semantic bar F12; witness legs at M2) | T-5 `import_sniff` |
+| `!docs`/`!adrs` (M2 N-6) | `docs::tests::default_import_walks_top_level_sorted_with_order_and_trim`, `decisions::tests::adrtools_parses_id_title_date_status` | `p4m2_docs_adrs::docs_import_success_with_holders_exclude_and_images` | — | — | — | witness legs §P4-M2 (`TZ=UTC`) | — |
+| WSD export (M2 N-5) | `wsd::tests::async_and_response_legs_pick_the_arrow_and_swap` | `export_wsd_goldens::wsd_goldens_byte_parity` | T-6 | `quick::corpus_matches_manifests` (wsd export section) | `full_export::export_is_deterministic_json_parity_and_fmt_parity` | oracle 9/9 byte-parity (M2) | — |
+| `query` (M3 O-1) | `query::tests::view_subset_combinators_drop_extra_arms_like_the_reference` | `query_probes::element_ids_only_are_reproducible_from_the_json_twin` | `cli::query_table_rows_golden` | — | T-3 | — | T-5 `query_parse` |
+| `init` (M3 O-2) | `init::tests::workspace_templates_parse_clean` | `init_probes::scaffolded_workspaces_validate_and_match_the_json_golden` | `cli::init_creates_then_skips_then_forces` | — | — | — | — |
+| `completions` (M3 O-3) | — | — | `cli::completions_bash_and_zsh_scripts_are_valid` | — | — | — | — |
+| `generate system-landscape` (M3 O-4) | `generate::tests::landscape_shape_and_merge_semantics`, `generate::pathfilter::tests::unsupported_constructs_are_errors_not_silent_widening` | `generate_probes::landscape_matches_the_witnessed_merge` | `cli::generate_system_landscape_merges_into_the_output_file` | T-3 (covers OXZ-5010, shrinks the allow-list) | T-3 | `cargo xtask oracle landscape` | T-5 `pathfilter` |
+| `oracle` user command (M5a E-1) | `oracle::tests::removes_last_entry_and_fixes_comma` | `oracle_cli::gen_is_idempotent_and_verify_then_matches` (fake oracle) | `oracle_cli::verify_mismatch_and_missing_exit_one` | — | — | `oxidizr oracle verify` (real binary) | — |
+| LSP (§P4-LSP) | `completion::tests::position_maps_back_through_utf16`, `hover::tests::identifier_wins_over_name_and_keyword`, `formatting::tests::range_widens_to_the_whole_statement`, `config::tests::api_options_ride_the_pipeline` | `transcript::handshake_transcript` + T-4 | `version::version_flags_print_name_and_version` | — | — | — | — |
+| `Layered` channel lanes (M5c E-3) | `layered::tests::channel_lanes_split_an_overlapping_bundle`, `layered::tests::star_concentration_gets_distinct_lanes`, `layered::tests::thousand_nodes_are_deterministic` | — (engine coords in no golden — E-3 stamp) | — | — | — | — | — |
+| export-dialect comparators (M5b E-2) | `exportcmp::tests::mermaid_reordering_is_equal`, `exportcmp::tests::plain_plantuml_reordering_is_equal_labels_are_pinned` | `plantuml_goldens_byte_parity`, `mermaid_goldens_byte_parity` | — | — | — | `cargo xtask export-verify --format c4\|plantuml\|mermaid` | — |
+| OXZ-code coverage gate (T1b) | `coverage::registry_matches_docs_table`, `coverage::allowlist_has_no_stale_entries` | — | — | — | — | — | — |
+| CLI audit (all subcommands) | — | — | T-6 (≥1 stdout golden + ≥1 error-path exit test per `Command`) | — | — | — | — |
+| core pipeline (P1–P3, reference row) | `run` of `oxidizr-dsl` statement engine (`engine::stmt_model::tests::element_grammar_errors`) | `m1_lossless::corpus_cst_is_lossless`, `golden_m3::m3_probe_workspace_writes_golden_bytes` | `cli::parse_errors_exit_1_with_reference_text_and_code` | `quick::corpus_matches_manifests` | `full::json_round_trip_is_byte_stable` | `cargo xtask oracle verify` | `dsl_parse`, `dsl_fmt`, `json_read` |
+
 ## Benchmarks
 
 `criterion` benches live in `benches/` per crate; mandated targets: DSL parse (full

@@ -10,13 +10,15 @@
   item stamps, incl. the bench A/B evidence: lane pass ≈ +8% only on the
   1k-node `mixed` shape, chain/star neutral; suite-wide drift vs the
   `P3` baseline proven machine-state, not code).
-- **P4T in flight**: **T1b** coverage-gate re-sync — `codes::ALL`
-  machine-readable catalog in `oxidizr-diag`, the e2e gate reads it,
-  `registry_matches_docs_table` machine-checks catalog ↔
-  `docs/diagnostics.md` (which WAS stale: 1001/9001 rows missing — now
-  added), 5010 allow-listed as registered T-3 debt. **Next: T1a** — the
-  feature × suite matrix section in `agents/plan/TESTING.md` (harvest
-  names via `cargo test --workspace -- --list`), then T-2…T-6.
+- **P4T in flight**: **T-1 DONE (T1a+T1b)** — TESTING.md §Feature × suite
+  matrix (harvested names, gap legend T-2…T-6) + coverage-gate re-sync
+  (`codes::ALL` machine catalog in `oxidizr-diag`, gate reads it,
+  `registry_matches_docs_table` machine-checks catalog ↔ docs — the docs
+  table WAS stale: 1001/9001 rows now added; 5010 allow-listed as
+  registered T-3 debt). P4T-V1 VERIFIED: manifest v2 cannot carry
+  inspect/query/diff/generate — T-3 extends the section set (the v3).
+  **Next: T-2** — `oxidizr-import` golden file suite (no `tests/` dir
+  today; probe files C4/Mermaid/image/`!docs`/`!adrs`).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
