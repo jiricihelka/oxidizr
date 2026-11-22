@@ -89,6 +89,16 @@ pub fn format(source: &str) -> String {
                 } else {
                     let shown = depth.saturating_sub(usize::from(code.dedent));
                     out.push_str(&INDENT.repeat(shown));
+                    if shown == 0 && code.body.starts_with('\u{FEFF}') {
+                        // Line-START guard (mirrors the line-end guards): a
+                        // BOM-led token re-indented to column 0 would sit at
+                        // byte 0 of the rendered line, where the reference
+                        // parse loop strips it (and re-print drops it) —
+                        // `fmt` would not be idempotent. A protective space
+                        // keeps byte 0 a space; the reference `trim` never
+                        // reaches the BOM, so the token survives re-parses.
+                        out.push(' ');
+                    }
                     out.push_str(&code.body);
                     out.push_str(&code.tail_ws);
                     if code.needs_nl {
@@ -369,6 +379,12 @@ fn block_comment(cst: &Cst, line: &Node, logical: &Logical, depth: usize, out: &
         out.push_str(text);
     } else {
         out.push_str(&INDENT.repeat(depth));
+        if depth == 0 && code.body.starts_with('\u{FEFF}') {
+            // The line-START BOM guard (see `format`): the opener re-prints as
+            // a code line, so a BOM-led first token needs the same protective
+            // space at column 0.
+            out.push(' ');
+        }
         out.push_str(&code.body);
         out.push_str(&code.tail_ws);
         if code.needs_nl {
@@ -399,6 +415,25 @@ mod tests {
         let once = format(src);
         assert_eq!(once, want);
         assert_eq!(format(&once), once, "idempotent");
+    }
+
+    #[test]
+    fn bom_led_token_gets_a_protective_space() {
+        // §P4T T-5 fuzz find (dsl_fmt crash): a BOM AFTER the indent survives
+        // `strip_bom` (which fires at the physical line's byte 0) and re-prints
+        // as a token at column 0 — where the NEXT pass's strip eats it, so
+        // `fmt` was not idempotent. The guard: one protective space, the
+        // line-START mirror of the `\`/`"""` end guards.
+        assert_eq!(format("    \u{FEFF}user = p\n"), " \u{FEFF}user = p\n");
+        assert_eq!(
+            format("    \u{FEFF}    user = p\n"),
+            " \u{FEFF} user = p\n",
+            "BOM as its own token keeps the single separator space"
+        );
+        let nested = format("workspace {\n \u{FEFF}user = p\n}\n");
+        assert_eq!(format(&nested), nested, "depth > 0 needs no guard");
+        // The file-leading BOM (byte 0 of line 1) still vanishes (strip_bom).
+        assert_eq!(format("\u{FEFF}workspace {\n}\n"), "workspace {\n}\n");
     }
 
     #[test]
