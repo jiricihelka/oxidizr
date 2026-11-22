@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use oxidizr_core::{Workspace, WorkspaceBuilder};
 use oxidizr_diag::codes;
 use oxidizr_dsl::engine::{EnvLookup, ParseOptions, ParseResult, parse_dsl};
+use oxidizr_import::ImportFormat;
 
 use crate::Issue;
 use crate::diff::DiffOptions;
@@ -136,18 +137,6 @@ pub enum FmtMode {
     Write,
     /// Report unformatted inputs; exit `Diagnostics`.
     Check,
-}
-
-/// `oxidizr import` legs (§P4-M2 N-4, F12): which `oxidizr-import`
-/// engine processes the source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ImportFormat {
-    /// C4-`PlantUML` macro diagram → the model.
-    C4PlantUml,
-    /// `Mermaid` C4 diagram → the model.
-    Mermaid,
-    /// Image file → a workspace with one `ImageView` (reference port).
-    Image,
 }
 
 /// One command invocation — the argv surface of P1-D8 in value form.
@@ -1253,22 +1242,9 @@ fn inspect_cmd(
     Ok(out)
 }
 
-/// `oxidizr import` format sniff (§P4-M2 N-4): `.puml`/`.iuml`/`.c4p` →
-/// C4-`PlantUML`, `.mmd`/`.mermaid` → `Mermaid`, the reference image
-/// extensions (the `ImageUtils` table behind
-/// [`oxidizr_import::image::content_type_of`]) → image.
-/// `None` = not guessable from the name.
-fn sniff_format(name: &str) -> Option<ImportFormat> {
-    let dot = name.rfind('.')?;
-    match name[dot..].to_ascii_lowercase().as_str() {
-        ".puml" | ".iuml" | ".c4p" => Some(ImportFormat::C4PlantUml),
-        ".mmd" | ".mermaid" => Some(ImportFormat::Mermaid),
-        _ => oxidizr_import::image::content_type_of(name).map(|_| ImportFormat::Image),
-    }
-}
-
 /// The `import` body (§P4-M2 N-4, F12): ONE diagram → a fresh workspace
-/// through `oxidizr-import`. Format: `--format` else [`sniff_format`];
+/// through `oxidizr-import`. Format: `--format` else
+/// [`oxidizr_import::ImportFormat::sniff`];
 /// the importers' skip notes ride [`Outcome::log`] (warning-and-skip,
 /// never fail-all — P4-D8 R-1); the workspace bytes go through the
 /// standard writer exactly like `dsl2json`. Macro legs produce the MODEL
@@ -1287,7 +1263,7 @@ fn import_cmd(
         (Some(f), _) => f,
         (None, Input::File(p)) => {
             let name = p.to_string_lossy();
-            match sniff_format(&name) {
+            match ImportFormat::sniff(&name) {
                 Some(f) => f,
                 None => {
                     return Err(out.fail(

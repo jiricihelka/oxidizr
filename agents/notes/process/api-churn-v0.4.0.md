@@ -8,4 +8,9 @@ classes, OXZ codes) never appear here — they are not churn.
 
 Format: `- <crate>: <what changed> (<wave commit>)` — newest last.
 
-_(created at R0 2026-11-22 — no entries yet; the first churn commit adds one)_
+_(created at R0 2026-11-22; entries start with R2)_
+
+- oxidizr-import: `ImportFormat` + typed `ImportFormat::sniff` constructor
+  now LIVE HERE (moved out of `oxidizr-api`'s private `sniff_format`);
+  `oxidizr_api::ImportFormat` stays valid as a re-export,
+  `oxidizr_api::pipeline::ImportFormat` is GONE (R2, item 1)

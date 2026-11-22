@@ -89,6 +89,37 @@ pub enum ImportError {
     Failed(String),
 }
 
+/// `oxidizr import` legs (§P4-M2 N-4, F12): which `oxidizr-import`
+/// engine processes the source. Travels on the `oxidizr-api` pipeline
+/// `Request::Import` (re-exported there unchanged, §P4-R2); the CLI
+/// `--format` clap enum maps onto it 1:1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportFormat {
+    /// C4-`PlantUML` macro diagram → the model.
+    C4PlantUml,
+    /// `Mermaid` C4 diagram → the model.
+    Mermaid,
+    /// Image file → a workspace with one `ImageView` (reference port).
+    Image,
+}
+
+impl ImportFormat {
+    /// Extension sniff (§P4-M2 N-4): `.puml`/`.iuml`/`.c4p` →
+    /// C4-`PlantUML`, `.mmd`/`.mermaid` → `Mermaid`, the reference image
+    /// extensions (the `ImageUtils` table behind
+    /// [`image::content_type_of`]) → image.
+    /// `None` = not guessable from the name.
+    #[must_use]
+    pub fn sniff(name: &str) -> Option<Self> {
+        let dot = name.rfind('.')?;
+        match name[dot..].to_ascii_lowercase().as_str() {
+            ".puml" | ".iuml" | ".c4p" => Some(Self::C4PlantUml),
+            ".mmd" | ".mermaid" => Some(Self::Mermaid),
+            _ => image::content_type_of(name).map(|_| Self::Image),
+        }
+    }
+}
+
 /// `java.io.File.getAbsolutePath()` — lexical only: prepend the CWD and
 /// normalize `.`/`..` segments WITHOUT touching the filesystem (Java never
 /// fails here; symlinks stay unresolved, that is `getCanonicalPath`).
@@ -219,4 +250,53 @@ pub(crate) fn normalize_newlines(s: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ImportFormat;
+
+    /// The sniff table (moved from `oxidizr-api`'s private `sniff_format`
+    /// at §P4-R2 — behavior byte-identical): the three macro families,
+    /// case-insensitive extension match, image fallback via the reference
+    /// `ImageUtils` table, and the two `None` arms the CLI turns into the
+    /// "pass --format" usage error.
+    #[test]
+    fn sniff_format_table() {
+        assert_eq!(
+            ImportFormat::sniff("diagram.puml"),
+            Some(ImportFormat::C4PlantUml)
+        );
+        assert_eq!(
+            ImportFormat::sniff("diagram.iuml"),
+            Some(ImportFormat::C4PlantUml)
+        );
+        assert_eq!(
+            ImportFormat::sniff("diagram.c4p"),
+            Some(ImportFormat::C4PlantUml)
+        );
+        assert_eq!(
+            ImportFormat::sniff("DIAGRAM.PUML"),
+            Some(ImportFormat::C4PlantUml)
+        );
+        assert_eq!(ImportFormat::sniff("seq.mmd"), Some(ImportFormat::Mermaid));
+        assert_eq!(
+            ImportFormat::sniff("seq.Mermaid"),
+            Some(ImportFormat::Mermaid)
+        );
+        assert_eq!(ImportFormat::sniff("pic.PNG"), Some(ImportFormat::Image));
+        assert_eq!(ImportFormat::sniff("pic.jpeg"), Some(ImportFormat::Image));
+        assert_eq!(ImportFormat::sniff("pic.gif"), Some(ImportFormat::Image));
+        assert_eq!(ImportFormat::sniff("pic.svg"), Some(ImportFormat::Image));
+        assert_eq!(
+            ImportFormat::sniff("noext"),
+            None,
+            "no dot is not guessable"
+        );
+        assert_eq!(
+            ImportFormat::sniff("weird.xyz"),
+            None,
+            "unknown ext is not guessable"
+        );
+    }
 }

@@ -33,10 +33,10 @@ pub use init::InitTemplate;
 pub use open::{Opened, open};
 // §P4-M1 I-4: the `Request::Inspect` threshold type travels through the
 // API surface (the CLI maps its clap enum onto it).
+pub use oxidizr_import::ImportFormat;
 pub use oxidizr_inspect::Severity;
 pub use pipeline::{
-    ApiOptions, ExitClass, FmtMode, ImportFormat, Input, LogItem, Outcome, Request, StdinReader,
-    execute,
+    ApiOptions, ExitClass, FmtMode, Input, LogItem, Outcome, Request, StdinReader, execute,
 };
 // §P4-M3 O-1: the `Request::Query` enums travel on the API surface (the
 // CLI maps its clap enums onto these).
