@@ -1046,12 +1046,23 @@ impl WorkspaceBuilder {
     /// throws (duplicate keys / not-permitted adds) — unreachable on the
     /// empty view set this factory is called with, but propagated so a
     /// surprise fails the load like the reference's abort.
-    #[allow(clippy::too_many_lines)] // one leg per reference `createDefaultViews`
     pub fn create_default_views(&mut self) -> Result<(), CoreError> {
-        // a single System Landscape view with all people and software systems
-        let landscape = self.create_landscape_view("")?;
-        self.view_add_default_elements(landscape, true)?;
+        self.create_default_landscape_view()?;
+        self.create_default_system_views()?;
+        self.create_default_deployment_views()?;
+        Ok(())
+    }
 
+    /// `createDefaultViews` landscape leg: a single System Landscape view
+    /// with all people and software systems.
+    fn create_default_landscape_view(&mut self) -> Result<(), CoreError> {
+        let landscape = self.create_landscape_view("")?;
+        self.view_add_default_elements(landscape, true)
+    }
+
+    /// `createDefaultViews` system leg: per software system (Java name
+    /// order) a context view, plus a container view and component views.
+    fn create_default_system_views(&mut self) -> Result<(), CoreError> {
         // per software system (Java name order): a context view, plus a
         // container view and component views
         let mut systems: Vec<SystemPlan> = self
@@ -1104,7 +1115,15 @@ impl WorkspaceBuilder {
                 }
             }
         }
+        Ok(())
+    }
 
+    /// `createDefaultViews` deployment leg: one scoped deployment view per
+    /// environment (deduped first-seen from the top-level nodes, then
+    /// sorted) and software system holding container instances in the
+    /// environment (name-sorted), or one unscoped view when the environment
+    /// holds only infrastructure nodes.
+    fn create_default_deployment_views(&mut self) -> Result<(), CoreError> {
         // deployment views for each environment and software system pair:
         // plan from the (still unmutated) model, then create
         let mut environments: Vec<String> = Vec::new();
