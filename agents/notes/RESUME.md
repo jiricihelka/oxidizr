@@ -2,16 +2,14 @@
 
 ## Active now (2026-11-22)
 
-- **§P4-M5 in flight**: **E-1 DONE (M5a)** — `oxidizr oracle` user command
-  shipped (engine `crates/oxidizr-cli/src/oracle.rs`, xtask delegates,
-  Category A fake-oracle suite; contract in the PHASE_4 §P4-M5 item
-  stamps). **Next: E-2 (M5b)** — P4-D13-2 semantic comparators for the
-  reference Structurizr-PlantUML + Mermaid dialects: WITNESS the fact
-  grammars on the pinned binary (`TZ=UTC`) over the golden corpus FIRST,
-  then `xtask/exportcmp` grows `facts_plantuml`/`facts_mermaid` and
-  `cargo xtask export-verify --format plantuml|mermaid` legs. Then E-3
-  (M5c, `Layered` polish, regression-gated) → P4T → P4R → P4D → release
-  tail (M5d/e).
+- **§P4-M5 in flight**: **E-1 DONE (M5a)** `oxidizr oracle` user command;
+  **E-2 DONE (M5b)** plantuml/mermaid semantic comparators — witnessed
+  grammars + `export-verify --format c4|plantuml|mermaid` legs, Category B
+  runs 31/31 + 31/31 ok (contract in the PHASE_4 §P4-M5 item stamps).
+  **Next: E-3 (M5c)** — `Layered` layout quality polish (rank tightening,
+  boundary median placement, edge-channel lanes; re-bless ONLY on a corpus
+  quality-metric improvement, `bench cmp` green). Then P4T → P4R → P4D →
+  release tail (M5d/e).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

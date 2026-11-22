@@ -465,12 +465,41 @@ written to fire on the pushed tag). crates.io publishing skipped
 | Item | Scope | Commit |
 |---|---|---|
 | **E-1** | `oxidizr oracle` user command (F4, P4-D6): `oxidizr oracle gen\|verify [PATHS…] [--bin PATH] [--goldens DIR] [--json]` — golden generation/verification over USER fixture paths (fixture-author CI). The engine is a lib module `oxidizr-cli/src/oracle/` — binary discovery (`--bin` → `$OXIDZR_STRUCTURIZR_BIN` → PATH), the export prologue (`export --workspace F --format json --output DIR`), `normalize_reference_output` (inspection-counter stripping — MOVED from xtask, which keeps its corpus legs and delegates: dev shim, P4-D6), the byte compare. Golden convention: `<stem>.golden.json` next to the workspace (or in `--goldens DIR`). Dispatched in `run` BEFORE the pipeline like `view`/`completions` (spawns the external binary; never a `Request`; oxidizr never downloads anything — D5). `--json` = report document `{schema:1, results:[{workspace, golden, status: generated\|match\|mismatch\|missing\|error, error?}]}` (hand-rendered, zero new deps — std-only). Exit family: 0 all ok · 1 any mismatch/missing · 2 clap usage · 3 discovery/spawn/I-O. Tests (Category A): moved normalize unit tests + `#[cfg(unix)]` legs through a fake-oracle shell-script shim (gen idempotence, mismatch, missing golden, `--json` shape, `--bin` missing ⇒ 3); xtask oracle gen/verify behavior byte-identical after the delegation | M5a |
-| **E-2** | P4-D13-2 semantic comparators for the two P2-gated dialects: fact grammars for the reference **Structurizr-PlantUML** (`export -f plantuml`) and **Mermaid** (`export -f mermaid`) outputs — inventoried by WITNESS legs on the pinned binary (`TZ=UTC`) over the golden corpus, NOT guessed; `xtask/exportcmp` grows `facts_plantuml`/`facts_mermaid` extractors (same `FactSet` frame: element name+type/stereotype + relationship ends+label facts); `cargo xtask export-verify --format plantuml\|mermaid` legs over the same fixture set as the C4 comparator. Category B — the fidelity window closes with witness evidence in the row stamp | M5b |
+| **E-2** | P4-D13-2 semantic comparators for the two P2-gated dialects: fact grammars for the reference **Structurizr-PlantUML** (`export -f plantuml`) and **Mermaid** (`export -f mermaid`) outputs — inventoried by WITNESS legs on the pinned binary (`TZ=UTC`) over the golden corpus, NOT guessed; `xtask/exportcmp` grows `facts_plantuml`/`facts_mermaid` extractors (same `FactSet` frame: element name+type/stereotype + relationship ends+label facts); `cargo xtask export-verify --format plantuml\|mermaid` legs over the same fixture set as the C4 comparator. Category B — the fidelity window closes with witness evidence in the row stamp | **DONE** M5b |
 | **E-3** | P4-D13-3 `Layered` polish, regression-gated (determinism property + `bench cmp P3` must stay green): (1) rank tightening — pull each node to its tightest feasible rank (max pred + 1) after layering, so single-edge chains stop wasting slack; (2) boundary refinement — place boundary nodes by median of their FIXED neighbours instead of sweeping them blindly; (3) edge-channel pass — nudge parallel orthogonal segments to distinct lanes. Scene-fixture snapshots re-blessed ONLY where the quality metric (crossings + total bend count + edge length) improves on the corpus, per-fixture in the row stamp | M5c |
 | **E-4** | cargo-dist wiring per P4-D10 + the P4-V6 closure: `[workspace.metadata.dist]` (artifacts: `oxidizr` [cli, default features = zero GPU] + `oxidizr-lsp`; `oxidizr-viewer` as a per-package `features = ["gui"]` override — if cargo-dist's package-level override cannot carry it, the row records the deviation and the GUI binary stays a documented `cargo build --features gui` release story, R-5), targets x86_64/aarch64 linux (**gnu**, per P4-V6: musl feasibility below), x86_64/aarch64 macOS, x86_64 windows-msvc; checksums + install script defaults; `.github/workflows/release.yml` (tag-push `v*` → `cargo dist build` + GitHub Release + the per-OS smoke: `--version` + `dsl2json` on one fixture — Category A) + a `dist --check` dry-run leg on PRs; `actionlint` clean locally. **P4-V6 (CLOSED at this row, 2026-11-21):** the pinned nightly `rustup`-less dev shell carries NO musl target/std and no musl linker (mingw only) ⇒ `x86_64-unknown-linux-musl` is NOT locally verifiable; decided **gnu** for linux (P4-D10's documented fallback), musl revisit = `💡` only. Signing deferred (unsigned v1, documented — not a deviation) | M5d |
 | **E-5** | Release chore: workspace version `0.1.0` → **`0.4.0`** (+ lockfile + `--version` goldens incl. the lsp `tests/version.rs` pin), `CHANGELOG.md` catch-up in Keep-a-Changelog form (v0.1.0/v0.2.0/v0.3.0 reconstructed from the PROGRESS milestone logs + the v0.4.0 section: LSP, diff, inspect, importers, WSD export, query/init/completions/generate, oracle command), `docs/RELEASING.md` (tag → CI → dist publish → changelog + register sync checklist), docs pass (README command list through `generate`/`oracle`), **P4 milestone close ritual** (full tier + bless + PROGRESS `P4-M5` log + status board + RESUME) and the local `v0.4.0` tag. **Never push** — publish/push stay an explicit user action | M5e |
 
 ## §P4-M5 item stamps
+
+- **E-2 DONE (commit M5b, 2026-11-22)** — P4-D13-2 comparators for the two
+  P2-gated dialects. WITNESS legs (pinned app 2026.10.26, `TZ=UTC`, vs our
+  build) over bulk-operations / big-bank-plc / custom-view-animation /
+  deployment-groups-flat: outputs byte-identical in BOTH dialects EXCEPT
+  `bulk-operations/structurizr-Component-001` = pure relationship-line
+  reorder (multiset-equal) — the same D13 drift as C4, so the line-multiset
+  frame is the validated comparator. Witnessed grammars (closed over the
+  corpus): plantuml = directives (`set`/`hide`/`skinparam`/`title`/dir), one
+  folded `<style>` block (`.Element-<b64>`/`.Relationship-*`/`.Group-*`
+  classes with `// tag` comments riding inside), boundary opens
+  `rectangle "…" <<Group-…>> as groupN {`, elements
+  `person|rectangle|database "==…" <<Element-…>> as X`, edges
+  `A --> B <<Relationship-…>> : "…"` (only arrow form); mermaid =
+  `graph LR`, `linkStyle default …`, `subgraph <id> ["t"]`/`end`, nodes
+  `N["<div…>"]`, `style N …`, edges `N-. "<div>label</div><div …>[tech]…"
+  .->M` (all labeled, `-. .->` the only shape). Implementation:
+  `exportcmp::facts_plantuml` (the generic line grammar covers the dialect —
+  the `macro` branch never fires without `Name(…)` syntax) + `facts_mermaid`
+  (`classify_mermaid`: dir/subgraph/struct/style/linkstyle/edge/node/raw
+  catch-all, `%%`+blank whitelist); `cmd_export_verify` grows
+  `--format c4|plantuml|mermaid` (dialect table: corpus dir + exporter
+  format + extension + grammar fn; default corpus = the dialect's
+  `testdata/golden/<dir>` fixture dirs + bulk-operations);
+  `run_oxidizr_export`/`compare_export_dirs` parameterized. 4 new exportcmp
+  unit tests (reorder-equal, label/color/title-change caught, style-comment
+  pinned). Category B runs: **plantuml 31/31 ok · mermaid 31/31 ok · c4
+  regression leg ok** — the P4 fidelity window for the P2 exporters closes
+  with zero deviations beyond the byte-corpus-pinned D13 reorder.
 
 - **E-1 DONE (commit M5a, 2026-11-22)** — `oxidizr oracle gen|verify
   WORKSPACES… [--bin PATH] [--goldens DIR] [--json]` (+ global `--quiet` =

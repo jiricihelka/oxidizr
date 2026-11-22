@@ -15,7 +15,8 @@
 //! `testdata/golden/plantuml/<fixture>/` and need NO normalization.
 //! `--format plantuml/c4plantuml` (M3-d) emits the same file naming, no legend
 //! files, and lands goldens under `testdata/golden/plantuml-c4/<fixture>/`.
-//! `cargo xtask export-verify` (M3-d, P2-D9) semantically compares C4 output
+//! `cargo xtask export-verify` (M3-d, P2-D9; §P4-M5 E-2: `--format`)
+//! semantically compares C4 / plain-plantuml / Mermaid output
 //! (fact multisets, order-normalized — `exportcmp`) between oracle and
 //! oxidizr; run it sparingly, like the oracle itself.
 
@@ -1607,12 +1608,13 @@ fn verify_theme_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>)>
     Ok((theme_sets, failed))
 }
 
-/// `cargo xtask export-verify` — P2-D9 semantic comparator (Category B, run
-/// sparingly). Requires `$OXIDZR_STRUCTURIZR_BIN` (or `structurizr` on PATH)
-/// AND a pre-built `oxidizr` binary (`cargo build -p oxidizr-cli`). Runs both
-/// exporters over each fixture, parses both into [`exportcmp`] fact multisets
-/// (order-normalized; whitelist = comment/blank lines only) and diffs.
-/// The C4 macro inventory lives in [`exportcmp::C4_MACROS`].
+/// `cargo xtask export-verify [--format c4|plantuml|mermaid] [--fixture N]…`
+/// — P2-D9 + §P4-M5 E-2 semantic comparator (Category B, run sparingly).
+/// Requires `$OXIDZR_STRUCTURIZR_BIN` (or `structurizr` on PATH) AND a
+/// pre-built `oxidizr` binary (`cargo build -p oxidizr-cli`). Runs both
+/// exporters over each fixture, parses both into [`exportcmp`] fact
+/// multisets (order-normalized; whitelist = comment/blank lines only) and
+/// diffs. The C4 macro inventory lives in [`exportcmp::C4_MACROS`].
 fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
     let oracle = find_oracle()?;
     let root = repo_root()?;
@@ -1623,8 +1625,7 @@ fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
         "oxidizr binary not found at {} (set $OXIDZR_BIN or run `cargo build -p oxidizr-cli`)",
         ours.display()
     );
-    // Default corpus: all C4 goldens (29 fixtures, already byte-pinned) +
-    // `bulk-operations` (D13: byte-order deviation but semantically equal).
+    let mut format = "c4".to_string();
     let mut fixtures: Vec<String> = Vec::new();
     let mut explicit = false;
     while let Some(a) = args.next() {
@@ -1632,12 +1633,31 @@ fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
             explicit = true;
             let name = args.next().context("--fixture needs a name")?;
             fixtures.push(name);
+        } else if a == "--format" {
+            format = args.next().context("--format needs a name")?;
         } else {
             bail!("unexpected argument `{a}`");
         }
     }
+    // Dialect table: (default-corpus dir, exporter format, extension,
+    // fact grammar). The goldens dirs double as the fixture-name inventory.
+    let (corpus, fmt, ext, facts): (&str, &str, &str, fn(&str) -> exportcmp::FactSet) =
+        match format.as_str() {
+            "c4" => (
+                "plantuml-c4",
+                "plantuml/c4plantuml",
+                ".puml",
+                exportcmp::facts,
+            ),
+            "plantuml" => ("plantuml", "plantuml", ".puml", exportcmp::facts_plantuml),
+            "mermaid" => ("mermaid", "mermaid", ".mmd", exportcmp::facts_mermaid),
+            other => bail!("unknown export-verify format `{other}` (c4 | plantuml | mermaid)"),
+        };
+    // Default corpus: all goldens for the dialect (already byte-pinned) +
+    // `bulk-operations` (D13: byte-order deviation but semantically equal —
+    // E-2 witnessed the same line-reorder drift in the other two dialects).
     if !explicit {
-        let base = root.join("testdata").join("golden").join("plantuml-c4");
+        let base = root.join("testdata").join("golden").join(corpus);
         if let Ok(entries) = fs::read_dir(&base) {
             for e in entries.flatten() {
                 if e.path().is_dir() {
@@ -1658,12 +1678,11 @@ fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
         let dsl = find_fixture(&root, name)?;
         let tmp_ref = scratch(&format!("{name}-ev-ref"));
         let tmp_our = scratch(&format!("{name}-ev-our"));
-        let ref_files =
-            reference_export_plantuml(&oracle, &dsl, &tmp_ref, "plantuml/c4plantuml", ".puml")
-                .with_context(|| format!("export-verify `{name}` (oracle)"))?;
-        let our_files = run_oxidizr_export(&ours, &dsl, &tmp_our, "plantuml/c4plantuml")
+        let ref_files = reference_export_plantuml(&oracle, &dsl, &tmp_ref, fmt, ext)
+            .with_context(|| format!("export-verify `{name}` (oracle)"))?;
+        let our_files = run_oxidizr_export(&ours, &dsl, &tmp_our, fmt, ext)
             .with_context(|| format!("export-verify `{name}` (oxidizr)"))?;
-        let diffs = compare_export_dirs(&ref_files, &our_files)?;
+        let diffs = compare_export_dirs(&ref_files, &our_files, facts)?;
         let _ = fs::remove_dir_all(&tmp_ref);
         let _ = fs::remove_dir_all(&tmp_our);
         if diffs.is_empty() {
@@ -1681,19 +1700,20 @@ fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
         "{failures} fixture(s) failed semantic comparison"
     );
     println!(
-        "export-verify: {} fixture(s) semantically match",
+        "export-verify ({fmt}): {} fixture(s) semantically match",
         fixtures.len()
     );
     Ok(())
 }
 
-/// Run `oxidizr export --format plantuml/c4plantuml` over `workspace` and
-/// return the `.puml` files produced (sorted).
+/// Run `oxidizr export --format <fmt>` over `workspace` and return the
+/// diagram files produced with extension `ext` (sorted).
 fn run_oxidizr_export(
     bin: &Path,
     workspace: &Path,
     outdir: &Path,
     format: &str,
+    ext: &str,
 ) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(outdir)?;
     let output = Command::new(bin)
@@ -1714,12 +1734,17 @@ fn run_oxidizr_export(
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    walk_files(outdir, ".puml")
+    walk_files(outdir, ext)
 }
 
-/// Semantic (order-insensitive) diff of two `.puml` file sets.
+/// Semantic (order-insensitive) diff of two diagram file sets, classified
+/// with the dialect's fact grammar.
 /// Reports: files only in one side; shared files with non-empty fact diffs.
-fn compare_export_dirs(ref_files: &[PathBuf], our_files: &[PathBuf]) -> Result<Vec<String>> {
+fn compare_export_dirs(
+    ref_files: &[PathBuf],
+    our_files: &[PathBuf],
+    facts: fn(&str) -> exportcmp::FactSet,
+) -> Result<Vec<String>> {
     let mut diffs = Vec::new();
     let ref_map: BTreeMap<String, PathBuf> = ref_files
         .iter()
@@ -1749,7 +1774,7 @@ fn compare_export_dirs(ref_files: &[PathBuf], our_files: &[PathBuf]) -> Result<V
                 fs::read_to_string(rp).with_context(|| format!("reading {}", rp.display()))?;
             let otext =
                 fs::read_to_string(op).with_context(|| format!("reading {}", op.display()))?;
-            for d in exportcmp::diff_facts(&exportcmp::facts(&rtext), &exportcmp::facts(&otext)) {
+            for d in exportcmp::diff_facts(&facts(&rtext), &facts(&otext)) {
                 diffs.push(format!("{name}: {d}"));
             }
         }

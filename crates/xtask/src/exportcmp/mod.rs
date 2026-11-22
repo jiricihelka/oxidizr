@@ -1,16 +1,17 @@
-//! P2-D9 semantic comparator for `plantuml/c4plantuml` output (Category B,
-//! run sparingly via `cargo xtask export-verify`).
+//! P2-D9 + §P4-M5 E-2 semantic comparator for the three diagram dialects
+//! (`plantuml/c4plantuml`, plain `plantuml`, `mermaid`; Category B, run
+//! sparingly via `cargo xtask export-verify --format c4|plantuml|mermaid`).
 //!
 //! Byte parity pins the exact reference formatting; this comparator proves
 //! the weaker, intended-equal property: the two outputs state the SAME facts,
-//! ignoring line ORDER — the C4 diagram body is order-insensitive except
-//! where `PlantUML` itself binds position (those order-stable fixtures stay
+//! ignoring line ORDER — the diagram bodies are order-insensitive except
+//! where the dialect itself binds position (those order-stable fixtures stay
 //! pinned by the byte corpus). A tolerant line-grammar classifies every line
-//! of a `.puml` file into a fact string; each file becomes a multiset of
+//! of a file into a fact string; each file becomes a multiset of
 //! facts (`BTreeMap<fact, count>`) and the two multisets are diffed. The
-//! whitelist is minimal and explicit: comment lines (leading `'`) and blank
-//! lines are dropped — everything else becomes a fact, so nothing silently
-//! disappears.
+//! whitelist is minimal and explicit: comment lines (puml `'`, mermaid
+//! `%%`) and blank lines are dropped — everything else becomes a fact, so
+//! nothing silently disappears.
 //!
 //! [`C4_MACROS`] doubles as the C4-PlantUML macro inventory the P4 importer
 //! builds on (union of what the pinned reference emits; an unknown
@@ -155,6 +156,67 @@ fn classify(line: &str) -> String {
     }
 }
 
+/// Classify one plain-plantuml (`Structurizr-PlantUML` dialect) file.
+///
+/// §P4-M5 E-2. The E-2 witness legs (pinned reference vs ours over the
+/// `testdata/golden/plantuml` corpus) show this dialect is byte-identical
+/// except for relationship-line ORDER (the `bulk-operations` case), so the
+/// same tolerant line grammar applies: directives, `<style>` blocks (whose
+/// `// tag` comments ride inside the folded fact), element lines
+/// (`person "==…" <<Element-…>> as X`), boundary opens
+/// (`rectangle "…" <<Group-…>> as groupN {`) and `X --> Y <<…>> : "…"`
+/// edges all become facts; the `macro` branch simply never fires because
+/// the dialect uses no `Name(…)` call syntax.
+pub fn facts_plantuml(text: &str) -> FactSet {
+    facts(text)
+}
+
+/// Classify one Mermaid (`MermaidDiagramExporter` dialect) file. §P4-M5
+/// E-2. Witnessed grammar (same corpus, `.mmd`): `graph <dir>`,
+/// `linkStyle default …`, nested `subgraph <id> ["title"]` / `end`, node
+/// declarations `N["<div…>"]`, per-id `style N …` lines and edges
+/// `N-. "<div>label</div><div …>[tech]</div>" .->M` (every edge labeled;
+/// ids are positional and identical on both sides, so they stay in the
+/// fact). Nothing else is emitted; an unknown line still becomes a `raw`
+/// fact, so nothing disappears.
+pub fn facts_mermaid(text: &str) -> FactSet {
+    let mut out = FactSet::new();
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with("%%") {
+            // whitelist: blanks + mermaid comment lines
+            continue;
+        }
+        insert(&mut out, classify_mermaid(line));
+    }
+    out
+}
+
+fn classify_mermaid(line: &str) -> String {
+    if line == "end" {
+        return "struct end".to_owned();
+    }
+    let (kind, payload) = if let Some(rest) = line
+        .strip_prefix("graph ")
+        .or_else(|| line.strip_prefix("flowchart "))
+    {
+        ("dir", rest)
+    } else if let Some(rest) = line.strip_prefix("subgraph ") {
+        ("subgraph", rest)
+    } else if let Some(rest) = line.strip_prefix("style ") {
+        ("style", rest)
+    } else if let Some(rest) = line.strip_prefix("linkStyle ") {
+        ("linkstyle", rest)
+    } else if line.contains(".->") || line.contains("-->") || line.contains("==>") {
+        ("edge", line)
+    } else if line.contains("[\"") {
+        ("node", line)
+    } else {
+        return format!("raw {}", norm(line));
+    };
+    format!("{kind} {}", norm(payload))
+}
+
 /// Split a macro argument list on top-level commas (quotes + nested parens
 /// respected).
 fn split_args(s: &str) -> Vec<String> {
@@ -214,7 +276,7 @@ pub fn diff_facts(reference: &FactSet, ours: &FactSet) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify, diff_facts, facts};
+    use super::{classify, diff_facts, facts, facts_mermaid, facts_plantuml};
 
     #[test]
     fn reordering_is_semantically_equal() {
@@ -251,5 +313,67 @@ mod tests {
                 .any(|k| k.starts_with("style<") && k.contains("#ffffff"))
         );
         assert!(names.contains(&&"struct }".to_string()));
+    }
+
+    // §P4-M5 E-2: the two P4-era dialects, witness-shaped samples.
+
+    const PLAIN_A: &str = "@startuml\nset separator none\n<style>\n  // Element,Person\n  .Element-abc= {\n    BackgroundColor: #08427b;\n  }\n</style>\nperson \"==A\" <<Element-abc=>> as A\nrectangle \"G\" <<Group-Z>> as group1 {\n  person \"==B\" <<Element-abc=>> as B\n}\nA --> B <<Relationship-x>> : \"Uses\"\nB --> A <<Relationship-x>> : \"Back\"\n@enduml\n";
+
+    #[test]
+    fn plain_plantuml_reordering_is_equal_labels_are_pinned() {
+        let e1 = "A --> B <<Relationship-x>> : \"Uses\"";
+        let e2 = "B --> A <<Relationship-x>> : \"Back\"";
+        let swapped = PLAIN_A.replace(e1, "@@").replace(e2, e1).replace("@@", e2);
+        assert_eq!(
+            diff_facts(&facts_plantuml(PLAIN_A), &facts_plantuml(&swapped)),
+            Vec::<String>::new()
+        );
+        let relabeled = PLAIN_A.replace("\"Uses\"", "\"Use\"");
+        assert_eq!(
+            diff_facts(&facts_plantuml(PLAIN_A), &facts_plantuml(&relabeled)).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn plain_plantuml_style_tag_comments_are_facts() {
+        // The `// tag` comment lives INSIDE the folded style fact: retagging
+        // changes the fact (it is never silently dropped like body `'`).
+        let retagged = PLAIN_A.replace("// Element,Person", "// Element,Bot");
+        assert_eq!(
+            diff_facts(&facts_plantuml(PLAIN_A), &facts_plantuml(&retagged)).len(),
+            2
+        );
+    }
+
+    const MERMAID_A: &str = "graph LR\n  linkStyle default fill:#ffffff\n\n  subgraph diagram [\"V\"]\n    style diagram fill:#ffffff\n\n    subgraph group1 [\"G\"]\n      2[\"<div>B</div>\"]\n      style 2 fill:#999999,stroke:#6b6b6b\n      3[\"<div>C</div>\"]\n      style 3 fill:#1168bd\n    end\n\n    1[\"<div>A</div>\"]\n    style 1 fill:#08427b\n    1-. \"<div>Uses</div><div style='font-size: 70%'></div>\" .->2\n    2-. \"<div>Uses</div><div style='font-size: 70%'>[T]</div>\" .->3\n\n  end\n";
+
+    #[test]
+    fn mermaid_reordering_is_equal() {
+        // swap the two edge lines (the witnessed `bulk-operations` drift)
+        let e1 = "1-. \"<div>Uses</div><div style='font-size: 70%'></div>\" .->2";
+        let e2 = "2-. \"<div>Uses</div><div style='font-size: 70%'>[T]</div>\" .->3";
+        let swapped = MERMAID_A
+            .replace(e1, "@@")
+            .replace(e2, e1)
+            .replace("@@", e2);
+        assert_eq!(
+            diff_facts(&facts_mermaid(MERMAID_A), &facts_mermaid(&swapped)),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn mermaid_content_changes_are_caught() {
+        let restyled = MERMAID_A.replace("style 1 fill:#08427b", "style 1 fill:#08427c");
+        assert_eq!(
+            diff_facts(&facts_mermaid(MERMAID_A), &facts_mermaid(&restyled)).len(),
+            2
+        );
+        let retitled = MERMAID_A.replace("subgraph group1 [\"G\"]", "subgraph group1 [\"G2\"]");
+        assert_eq!(
+            diff_facts(&facts_mermaid(MERMAID_A), &facts_mermaid(&retitled)).len(),
+            2
+        );
     }
 }
