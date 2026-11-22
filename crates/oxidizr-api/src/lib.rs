@@ -31,9 +31,12 @@ pub use diagnostic::{Issue, Snippet};
 pub use generate::RelationshipsStrategy;
 pub use init::InitTemplate;
 pub use open::{Opened, open};
+// §P4-R2: `ImportFormat` (+ its `sniff` constructor) lives in
+// `oxidizr-import` and travels on this surface (the CLI maps its clap
+// enum onto it).
+pub use oxidizr_import::ImportFormat;
 // §P4-M1 I-4: the `Request::Inspect` threshold type travels through the
 // API surface (the CLI maps its clap enum onto it).
-pub use oxidizr_import::ImportFormat;
 pub use oxidizr_inspect::Severity;
 pub use pipeline::{
     ApiOptions, DiffFormat, ExitClass, FmtMode, Input, InspectFormat, LogItem, Outcome, ParseFlags,

@@ -8,7 +8,9 @@ classes, OXZ codes) never appear here — they are not churn.
 
 Format: `- <crate>: <what changed> (<wave commit>)` — newest last.
 
-_(created at R0 2026-11-22; entries start with R2)_
+_(created at R0 2026-11-22; entries complete at R5 — the three churn
+commits `4cc628c` `2520cd8` `0837317`; E-5 folds the entries below into
+`CHANGELOG.md` verbatim)_
 
 - oxidizr-import: `ImportFormat` + typed `ImportFormat::sniff` constructor
   now LIVE HERE (moved out of `oxidizr-api`'s private `sniff_format`);
