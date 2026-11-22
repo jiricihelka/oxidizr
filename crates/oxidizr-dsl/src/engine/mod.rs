@@ -634,7 +634,7 @@ impl<'a> Parser<'a> {
                         _ => None,
                     })
                     .unwrap_or_default();
-                self.add_perspective_to_holders(&holders, def.clone())?;
+                self.add_perspective_to_holders(&holders, def)?;
                 Ok(())
             }
             // `DynamicViewParallelSequenceDslContext.end()`:
@@ -686,30 +686,30 @@ impl<'a> Parser<'a> {
     /// `identifier` (or a fresh uuid) and set its
     /// `structurizr.dsl.identifier` property — EXACTLY the reference: even
     /// anonymous elements get the (uuid-valued) property.
-    // Justified: every caller passes a freshly built item it no longer uses;
-    // taking ownership keeps the call sites move-clean (the registry stores
-    // its own copy).
-    #[allow(clippy::needless_pass_by_value)]
+    // The owned `item` is CONSUMED by the registry (its own copy, like the
+    // reference identifiers map); the element id is read out before the move.
     fn register_identifier_element(
         &mut self,
         identifier: Option<&str>,
         item: RegItem,
         canonical_name: &str,
     ) -> Result<(), DslError> {
+        let element_id = match &item {
+            RegItem::Element(id) => Some(id.clone()),
+            // Pseudo objects are throwaway — `addProperty` lands on an
+            // object that never enters the model; relationships carry the
+            // property via `register_identifier_relationship` instead.
+            RegItem::Pseudo { .. } | RegItem::Relationship(_) => None,
+        };
         let prefix = self.hierarchical_prefix(&item);
         let final_id = self
             .ids
-            .register_element(identifier, item.clone(), prefix, canonical_name)
+            .register_element(identifier, item, prefix, canonical_name)
             .map_err(DslError::stmt)?;
-        match &item {
-            RegItem::Element(id) => {
-                let _ = self
-                    .builder
-                    .add_item_property(id, "structurizr.dsl.identifier", final_id);
-            }
-            // Pseudo objects are throwaway — `addProperty` lands on an
-            // object that never enters the model.
-            RegItem::Pseudo { .. } | RegItem::Relationship(_) => {}
+        if let Some(id) = element_id {
+            let _ = self
+                .builder
+                .add_item_property(&id, "structurizr.dsl.identifier", final_id);
         }
         Ok(())
     }
@@ -1241,14 +1241,13 @@ impl<'a> Parser<'a> {
 
     /// `PerspectivesDslContext` statement form / `PerspectiveDslContext.end()`
     /// — add to EVERY holder of the context.
-    // Justified: the perspective is cloned into every holder, so the last
-    // clone could consume the parameter — but the loop shape mirrors the
-    // reference and keeps `?`-early-exit semantics identical.
-    #[allow(clippy::needless_pass_by_value)]
+    // One clone per holder (the reference builds a fresh perspective per
+    // holder too); the loop shape mirrors the reference and keeps the
+    // `?`-early-exit semantics identical.
     fn add_perspective_to_holders(
         &mut self,
         holders: &[Holder],
-        perspective: oxidizr_core::model::Perspective,
+        perspective: &oxidizr_core::model::Perspective,
     ) -> Result<(), DslError> {
         for h in holders {
             self.add_perspective_to_holder(h, perspective.clone())?;

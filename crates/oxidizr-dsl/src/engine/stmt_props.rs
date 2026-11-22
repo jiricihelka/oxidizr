@@ -308,7 +308,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             }
             p.add_perspective_to_holders(
                 &holders,
-                Perspective {
+                &Perspective {
                     name,
                     description: Some(description),
                     value: Some(value),
