@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0+R1 DONE** (R2 next → R3 `Request` rework → R4 → R5) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0–R2 DONE** (R3 next — `Request` rework flagship → R4 → R5) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -82,13 +82,21 @@
   `add_perspective_to_holders` takes `&Perspective` (`55037ae`); rest =
   KEEP rows (arm-order `too_many_lines` ×7, Java-contract casts). Wave
   end: full e2e tier green · bless 307×unchanged · doc-zero held ·
-  `cargo xtask bench cmp 4T` ALL 104 comparisons at 1.00. **Next: R2** —
-  typed `ImportFormat` constructor absorbing the cli extension-sniff
-  table (FIRST churn commit → add a line to `process/api-churn-v0.4.0.md`
-  — API churn), `regexlite`/`pathfilter` keep-split decision. Then R3
-  (`Request` per-domain rework flagship + `ApiOptions` flags struct),
-  R4 (cli report plumbing, viewer shell bools), R5 (pub-use
-  consolidation, churn list complete).
+  `cargo xtask bench cmp 4T` ALL 104 comparisons at 1.00.
+- **§P4R R2 DONE 2026-11-22** (export/import wave): typed `ImportFormat`
+  + `ImportFormat::sniff` moved into `oxidizr-import` (table was
+  API-side, not cli-side — seed corrected; api re-export keeps
+  `oxidizr_api::ImportFormat` valid; FIRST churn-list entry in
+  `process/api-churn-v0.4.0.md` — first churn commit `4cc628c`);
+  `regexlite`/`pathfilter` **KEEP SPLIT** decided with contract/
+  semantics/scale rationale in §P4R-D5 (no code). Wave end green: full
+  tier · bless 307×unchanged · doc-zero · bench skipped (import-command
+  glue, no bench path). **Next: R3** — `Request` per-domain rework
+  (flagship: one commit per domain group, `execute` + CLI mapping
+  byte-identical, churn list grows), inspect naming/export-graph review,
+  `ApiOptions` `struct_excessive_bools` → grouped flags struct. Then R4
+  (cli report plumbing, viewer shell bools), R5 (pub-use consolidation,
+  churn list complete).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

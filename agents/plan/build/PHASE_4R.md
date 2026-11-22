@@ -104,10 +104,34 @@ seed; `keep` = re-audited, the allow/comment is the answer, no churn.
 |---|---|---|
 | **R0** | Inventory DONE 2026-11-22: allow audit (157 sites / 88 files, non-test ~106, EVERY site justified — ratchet honest, wave task reduced to the three `struct_excessive_bools`); `cargo doc --workspace --no-deps` baseline 43 warnings → **0** (private links → code spans, fn/mod ambiguities → `fn@`/`mod@`, cross-module paths → `crate::`); bench baseline `4T` saved + committed (104 files); D2 re-measured with three seed CORRECTIONS (generate has no HashMap ladders — `Vec` scans; `command_name` is test-only; inspect is 5 modules) | R0 |
 | **R1** | core/ast/diag/dsl/json — **DONE 2026-11-22**: `create_default_views` decomposed into three named leg helpers, the `too_many_lines` allow GONE (`2d098f5`); dsl `needless_pass_by_value` ×2 re-audited — both allows GONE, `register_identifier_element` truly consumes its owned `RegItem` (clone saved), `add_perspective_to_holders` takes `&Perspective` (`55037ae`); rest re-audited = KEEP rows (arm-order `too_many_lines` ×7 “arm order IS the contract”, Java-contract casts — R0 allow audit stands). Wave end: full e2e tier green · bless 307×unchanged · doc-zero held · `bench cmp 4T` ALL 1.00 | `2d098f5` `55037ae` |
-| **R2** | export/import: typed `ImportFormat` constructor absorbing the cli's extension-sniff table (`ImportCmdFormat` consumption — API churn + churn-list line); `regexlite`/`pathfilter` dedupe DECISION (default: keep split, record the grammar reason) | R2 |
+| **R2** | export/import — **DONE 2026-11-22**: typed `ImportFormat` + `ImportFormat::sniff` now live in `oxidizr-import` — the sniff table moved OUT of `oxidizr-api::pipeline` (seed CORRECTION: it was api-side, not cli-side; the cli `ImportCmdFormat` clap enum stays, the CLI grammar is frozen) and `oxidizr_api::ImportFormat` remains a stable re-export (`4cc628c`, FIRST churn-list entry); `regexlite`/`pathfilter` — **KEEP SPLIT DECIDED**, contract/semantics/scale rationale in §P4R-D5, no code. Wave end: full e2e tier green · bless 307×unchanged · doc-zero held · bench cmp SKIPPED with reason: import-command glue only, no bench code path touched (`e2e_*`/`m7_*`/`p3_*` never call the sniffer) | `4cc628c` |
 | **R3** | api/inspect/layout: `Request` per-domain rework (flagship; one commit per domain group; `execute`+CLI mapping byte-identical); inspect `<Type>Inspection` naming/export-graph review; `ApiOptions` `struct_excessive_bools` → grouped flags struct (API churn) | R3 |
 | **R4** | lsp/cli/viewer/xtask/e2e: cli `report` renderer-plumbing review; viewer shell `struct_excessive_bools` split; `to_request` KEEP row documented (argv matrix IS the content) | R4 |
 | **R5** | Public-API consolidation pass: `pub use` graphs, renames land, churn list → CHANGELOG lines, doc links green | R5 |
+
+## P4R-D5 DECIDED (R2, 2026-11-22): `regexlite` and `pathfilter` stay SPLIT
+
+The seed asked whether the two std-only backtracking engines share a core
+worth extracting. Re-measured against the tree — **keep split**:
+
+- **Different contracts.** `regexlite` (`oxidizr-import`) mirrors
+  `java.util.regex` down to `find()` + group extraction and `{n}`
+  `{n,}` `{n,m}` (the reference's own ADR/image patterns use `\d{4}`,
+  `.+?`) because `!docs`/`!adrs` `exclude` is a reference
+  `String.matches` leg. `pathfilter` (`oxidizr-api::generate`)
+  deliberately does NOT build counted quantifiers or captures — those
+  constructs are the OXZ-5010 USER diagnostic (a product exit-family
+  contract), not a matcher gap. Unifying would either drag OXZ-5010 into
+  `oxidizr-import` (crate boundary: import knows no CLI codes) or widen
+  pathfilter's accepted grammar silently (an exit-family change — frozen).
+- **Different semantics.** pathfilter NORMALIZES greediness (`*?` ≡ `*`
+  — under a boolean full match greediness never flips existence);
+  regexlite must PRESERVE leftmost-first preference (find results and
+  group text depend on it). One engine matching both = more complex
+  than either.
+- **Scale.** The shared idea is CPS-continuation backtracking — a
+  pattern, ~150 lines in `generate.rs` vs ~800 in `regexlite.rs`; a
+  shared crate for one comment-level idea is churn, not dedupe.
 
 ## P4R-D4 Verification list
 
