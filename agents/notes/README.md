@@ -21,6 +21,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 |---|---|
 | [rust-overlay-target-components.md](pitfalls/rust-overlay-target-components.md) | `rust-mingw` needs `targetExtensions`, else nightly silently drifts |
 | [cargo-bench-args.md](pitfalls/cargo-bench-args.md) | `cargo bench -- --flag` breaks libtest harnesses |
+| [bench-machine-drift-ab.md](pitfalls/bench-machine-drift-ab.md) | bench baselines drift with machine state — same-session stash A/B proves the real delta |
 | [nixpkgs-quirks.md](pitfalls/nixpkgs-quirks.md) | win32-mingw has no winpthreads; `wine` not `wine64`; misc |
 | [expect-test-eol.md](pitfalls/expect-test-eol.md) | snapshots pin bytes incl. EOL; UPDATE_EXPECT pitfalls |
 | [git-mv-deletes-untracked.md](pitfalls/git-mv-deletes-untracked.md) | dir moves eat untracked files; Trash first |

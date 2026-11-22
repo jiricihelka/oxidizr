@@ -27,7 +27,9 @@
 //!    preserved); finally the lowest box returns to the zero line;
 //! 6. **edge routes** — polyline anchor → dummy centres → anchor,
 //!    orthogonalised through rank-gap channels, interior points
-//!    emitted only when `generate_vertices`.
+//!    emitted only when `generate_vertices`; a final **channel-lane
+//!    pass** (§P4-M5 E-3) then pulls parallel bend legs that landed on
+//!    one shared midpoint apart into distinct lanes.
 //!
 //! `rank_direction` decides which world axis is the rank axis and
 //! which way it runs: ranks always advance left→right / top→down in
@@ -613,9 +615,9 @@ impl Skeleton {
             &boxes,
             generate_vertices,
         );
-        let mut edges = Vec::with_capacity(graph.edges.len());
+        let mut routes: Vec<Vec<Point>> = Vec::with_capacity(graph.edges.len());
         for (idx, edge) in graph.edges.iter().enumerate() {
-            let points = route(
+            routes.push(route(
                 edge,
                 &self.chains[idx],
                 &verts,
@@ -624,12 +626,18 @@ impl Skeleton {
                 generate_vertices,
                 horizontal,
                 alongs[idx],
-            );
-            edges.push(EdgePlacement {
+            ));
+        }
+        // §P4-M5 E-3: pull overlapping channel legs onto distinct lanes.
+        spread_channels(&mut routes, horizontal, rank_sep, node_sep);
+        let edges = routes
+            .into_iter()
+            .zip(graph.edges.iter())
+            .map(|(points, edge)| EdgePlacement {
                 id: edge.id.clone(),
                 points,
-            });
-        }
+            })
+            .collect();
         LayoutResult { nodes, edges }
     }
 }
@@ -766,6 +774,150 @@ fn port_spread(
         }
     }
     alongs
+}
+
+/// One interior (channel) leg of an orthogonal route — a segment whose
+/// two neighbours are both perpendicular to it, so both neighbours
+/// STRETCH when the leg moves (§P4-M5 E-3).
+#[derive(Clone, Copy)]
+struct ChannelLeg {
+    /// Fixed coordinate: `x` for a vertical leg, `y` for a horizontal one.
+    fixed: f64,
+    /// Covered range along its own axis.
+    start: f64,
+    end: f64,
+    /// Lane slack: half the distance to the nearer outer point — the
+    /// lane spread never exceeds the SMALLEST such slack in a cluster,
+    /// so a lane stays strictly between the leg's two neighbours' far
+    /// ends: no degenerate zero-length neighbour, never across a box
+    /// side, length-neutral (the outer span is unchanged).
+    clamp: f64,
+    route: usize,
+    seg: usize,
+    /// `true` for a vertical leg (fixed `x`, lanes shift `x`).
+    upright: bool,
+}
+
+/// §P4-M5 E-3 channel-lane pass: [`push_segment`] bends EVERY diagonal
+/// through the exact midpoint of the two legs it connects, so parallel
+/// legs between repeating box sizes land on one coordinate and overlap.
+/// This post-pass groups all channel legs by (orientation, exact fixed
+/// coordinate), clusters collinearly OVERLAPPING legs, and spreads each
+/// cluster of `k` into distinct lanes around the shared coordinate. The
+/// total spread fits both the gap the legs sit in (`rank_separation`
+/// for legs crossing rank gaps, `node_separation` for cross-side ones;
+/// a zero gap is a deterministic no-op) and twice the smallest per-leg
+/// slack (half the distance to the nearer outer point), so every lane
+/// fits every leg: the move never degenerates a neighbour to zero
+/// length, never crosses a box side, and is length-neutral. Lanes
+/// preserve orthogonality by construction
+/// (both leg endpoints shift on the same axis). Deterministic: `to_bits`
+/// group keys, `total_cmp` ordering, fixed member order (range start,
+/// range end, route, segment). Residual touches against a static leg at
+/// a lane coordinate stay — the pass resolves bundles ON a shared bend,
+/// the dominant real-world overlap.
+#[allow(clippy::cast_precision_loss)] // cluster sizes are tiny counts
+#[allow(clippy::float_cmp)] // shared-coordinate runs are exact-value tests
+// by design (§P3-D5 determinism) — same rationale as `push_segment`.
+fn spread_channels(routes: &mut [Vec<Point>], horizontal: bool, rank_sep: f64, node_sep: f64) {
+    let mut legs: Vec<ChannelLeg> = Vec::new();
+    for (ri, pts) in routes.iter().enumerate() {
+        for si in 1..pts.len().saturating_sub(2) {
+            let (p, q) = (pts[si], pts[si + 1]);
+            let (prev, next) = (pts[si - 1], pts[si + 2]);
+            let vertical_leg = p.x == q.x;
+            let perpendicular = if vertical_leg {
+                prev.y == p.y && next.y == q.y
+            } else {
+                prev.x == p.x && next.x == q.x
+            };
+            if !perpendicular {
+                continue; // not a bend leg — a spine stub or a straight run
+            }
+            legs.push(if vertical_leg {
+                ChannelLeg {
+                    fixed: p.x,
+                    start: p.y.min(q.y),
+                    end: p.y.max(q.y),
+                    clamp: (p.x - prev.x).abs().min((next.x - q.x).abs()) / 2.0,
+                    route: ri,
+                    seg: si,
+                    upright: true,
+                }
+            } else {
+                ChannelLeg {
+                    fixed: p.y,
+                    start: p.x.min(q.x),
+                    end: p.x.max(q.x),
+                    clamp: (p.y - prev.y).abs().min((next.y - q.y).abs()) / 2.0,
+                    route: ri,
+                    seg: si,
+                    upright: false,
+                }
+            });
+        }
+    }
+    // One sort does the grouping AND the intra-group cluster ordering:
+    // equal (orientation, fixed coordinate) legs end up adjacent, ordered
+    // by range start — the scan below only walks runs.
+    legs.sort_by(|a, b| {
+        a.upright
+            .cmp(&b.upright)
+            .then(a.fixed.to_bits().cmp(&b.fixed.to_bits()))
+            .then(a.start.total_cmp(&b.start))
+            .then(a.end.total_cmp(&b.end))
+            .then(a.route.cmp(&b.route))
+            .then(a.seg.cmp(&b.seg))
+    });
+    let mut i = 0;
+    while i < legs.len() {
+        let key = (legs[i].upright, legs[i].fixed.to_bits());
+        let mut g = i + 1;
+        while g < legs.len() && (legs[g].upright, legs[g].fixed.to_bits()) == key {
+            g += 1;
+        }
+        let cap = if key.0 == horizontal {
+            rank_sep // vertical legs across horizontal rank gaps (and mirror)
+        } else {
+            node_sep
+        };
+        if cap > 0.0 {
+            // Overlap clusters inside the shared-coordinate group.
+            let mut k = i;
+            while k < g {
+                let mut m = k + 1;
+                let mut run_end = legs[k].end;
+                while m < g && legs[m].start < run_end {
+                    run_end = run_end.max(legs[m].end);
+                    m += 1;
+                }
+                if m - k > 1 {
+                    // Total spread ≤ the gap, and ≤ TWICE the smallest
+                    // leg slack in the cluster — so every lane fits in
+                    // EVERY leg (no clamp pile-ups, all lanes distinct).
+                    let slack = legs[k..m]
+                        .iter()
+                        .map(|leg| leg.clamp)
+                        .fold(f64::INFINITY, f64::min)
+                        .min(cap / 2.0);
+                    let lane = 2.0 * slack / (m - k - 1) as f64;
+                    for (o, leg) in legs[k..m].iter().enumerate() {
+                        let off = (o as f64 - (m - k - 1) as f64 / 2.0) * lane;
+                        let pts = &mut routes[leg.route];
+                        if leg.upright {
+                            pts[leg.seg].x += off;
+                            pts[leg.seg + 1].x += off;
+                        } else {
+                            pts[leg.seg].y += off;
+                            pts[leg.seg + 1].y += off;
+                        }
+                    }
+                }
+                k = m;
+            }
+        }
+        i = g;
+    }
 }
 
 /// Step 6: anchor → dummy centres (only when `generate_vertices`) →
@@ -1436,5 +1588,151 @@ mod tests {
                 .iter()
                 .all(|pt| pt.x.is_finite() && pt.y.is_finite())
         }));
+        // §P4-M5 E-3: the lane pass leaves no colliding channel legs even
+        // at §P3-D5 scale (both maps: rank and cross channels).
+        assert_eq!(
+            overlapping_channel_pairs(&once),
+            0,
+            "dense mixed graph keeps colliding channels"
+        );
+    }
+
+    /// Counts channel legs (bend segments whose two neighbours are both
+    /// perpendicular — exactly what [`spread_channels`] may move) sitting
+    /// on one exact coordinate with strictly overlapping ranges.
+    #[allow(clippy::float_cmp)] // exact shared-coordinate test (§P3-D5)
+    fn overlapping_channel_pairs(result: &LayoutResult) -> usize {
+        let mut pairs = 0_usize;
+        for vertical in [true, false] {
+            let mut groups: BTreeMap<u64, Vec<(f64, f64)>> = BTreeMap::new();
+            for route in &result.edges {
+                let pts = &route.points;
+                for si in 1..pts.len().saturating_sub(2) {
+                    let (p, q) = (pts[si], pts[si + 1]);
+                    let (prev, next) = (pts[si - 1], pts[si + 2]);
+                    let is_vertical = p.x == q.x;
+                    let perpendicular = if is_vertical {
+                        prev.y == p.y && next.y == q.y
+                    } else {
+                        prev.x == p.x && next.x == q.x
+                    };
+                    if is_vertical != vertical || !perpendicular {
+                        continue;
+                    }
+                    let (fixed, start, end) = if is_vertical {
+                        (p.x, p.y.min(q.y), p.y.max(q.y))
+                    } else {
+                        (p.y, p.x.min(q.x), p.x.max(q.x))
+                    };
+                    groups
+                        .entry(fixed.to_bits())
+                        .or_default()
+                        .push((start, end));
+                }
+            }
+            for ranges in groups.values() {
+                let mut sorted = ranges.clone();
+                sorted.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+                for (i, a) in sorted.iter().enumerate() {
+                    for b in &sorted[i + 1..] {
+                        if b.0 >= a.1 {
+                            break;
+                        }
+                        pairs += 1;
+                    }
+                }
+            }
+        }
+        pairs
+    }
+
+    #[test]
+    fn ranks_are_tightest_feasible() {
+        // §P4-M5 E-3(1) reality check: step 2 already relaxation-layers
+        // to `max(preds) + 1`, so a lone edge beside a longer chain sits
+        // tight at rank 1 — there is no slack left to pull.
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "c", "d", "e", "f"] {
+            g.add_node(node(id));
+        }
+        for (id, s, t) in [("ab", "a", "b"), ("bc", "b", "c"), ("de", "d", "e")] {
+            g.add_edge(edge(id, s, t));
+        }
+        let r = layout(&g);
+        assert_eq!(pos(&r, "b").x, 220.0);
+        assert_eq!(pos(&r, "e").x, 220.0, "the lone edge sits at rank 1");
+        assert_eq!(pos(&r, "c").x, 440.0);
+        assert_eq!(pos(&r, "f").x, 0.0, "the isolated node keeps rank 0");
+    }
+
+    #[test]
+    fn channel_lanes_split_an_overlapping_bundle() {
+        let bend = |y0, y1| {
+            vec![
+                Point { x: 120.0, y: y0 },
+                Point { x: 220.0, y: y0 },
+                Point { x: 220.0, y: y1 },
+                Point { x: 320.0, y: y1 },
+            ]
+        };
+        let mut routes = vec![bend(30.0, 90.0), bend(50.0, 70.0)];
+        spread_channels(&mut routes, true, 100.0, 50.0);
+        // One 100-wide rank gap → two lanes at ±50 around the shared bend.
+        assert_eq!(routes[0][1], Point { x: 170.0, y: 30.0 });
+        assert_eq!(routes[0][2], Point { x: 170.0, y: 90.0 });
+        assert_eq!(routes[1][1], Point { x: 270.0, y: 50.0 });
+        assert_eq!(routes[1][2], Point { x: 270.0, y: 70.0 });
+        // Outer anchors untouched: the move is length-neutral, box-safe.
+        assert_eq!(routes[0][0], Point { x: 120.0, y: 30.0 });
+        assert_eq!(routes[1][3], Point { x: 320.0, y: 70.0 });
+    }
+
+    #[test]
+    fn lane_pass_no_ops_on_lone_channels_and_zero_gaps() {
+        let bend = |y0, y1| {
+            vec![
+                Point { x: 120.0, y: y0 },
+                Point { x: 220.0, y: y0 },
+                Point { x: 220.0, y: y1 },
+                Point { x: 320.0, y: y1 },
+            ]
+        };
+        let lone = vec![bend(30.0, 90.0)];
+        let mut single = vec![bend(30.0, 90.0)];
+        spread_channels(&mut single, true, 100.0, 50.0);
+        assert_eq!(single, lone, "one channel stays on its midpoint");
+        let mut starved = vec![bend(30.0, 90.0), bend(50.0, 70.0)];
+        spread_channels(&mut starved, true, 0.0, 50.0);
+        assert_eq!(starved[0], lone[0], "zero rank gap leaves no lane room");
+    }
+
+    #[test]
+    fn star_concentration_gets_distinct_lanes() {
+        // The bench's `star` shape in miniature: 59 edges share the hub's
+        // one attach side and the same bend midpoint — every vertical
+        // channel leg collides until the lane pass spreads them.
+        let mut g = LayoutGraph::new();
+        for i in 0..60_u32 {
+            g.add_node(node(&format!("n{i}")));
+        }
+        for i in 1..60_u32 {
+            g.add_edge(edge(&format!("e{i}"), "n0", &format!("n{i}")));
+        }
+        let r = layout(&g);
+        assert_eq!(overlapping_channel_pairs(&r), 0, "star keeps collisions");
+        // The lanes moved: range-colliding legs LEFT the shared midpoint
+        // (170 = mid of the hub's right side at 120 and the targets' left
+        // edge at 220). Range-disjoint legs may keep it — no overlap.
+        let mids: Vec<u64> = r
+            .edges
+            .iter()
+            .filter(|e| e.points.len() == 4)
+            .map(|e| e.points[1].x.to_bits())
+            .collect();
+        assert!(mids.len() > 40, "the fan routes most edges as Z legs");
+        assert!(
+            mids.iter().any(|b| *b != (170.0_f64).to_bits()),
+            "the colliding fan never left the shared midpoint"
+        );
     }
 }

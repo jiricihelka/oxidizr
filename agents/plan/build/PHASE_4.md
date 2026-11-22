@@ -466,11 +466,52 @@ written to fire on the pushed tag). crates.io publishing skipped
 |---|---|---|
 | **E-1** | `oxidizr oracle` user command (F4, P4-D6): `oxidizr oracle gen\|verify [PATHS…] [--bin PATH] [--goldens DIR] [--json]` — golden generation/verification over USER fixture paths (fixture-author CI). The engine is a lib module `oxidizr-cli/src/oracle/` — binary discovery (`--bin` → `$OXIDZR_STRUCTURIZR_BIN` → PATH), the export prologue (`export --workspace F --format json --output DIR`), `normalize_reference_output` (inspection-counter stripping — MOVED from xtask, which keeps its corpus legs and delegates: dev shim, P4-D6), the byte compare. Golden convention: `<stem>.golden.json` next to the workspace (or in `--goldens DIR`). Dispatched in `run` BEFORE the pipeline like `view`/`completions` (spawns the external binary; never a `Request`; oxidizr never downloads anything — D5). `--json` = report document `{schema:1, results:[{workspace, golden, status: generated\|match\|mismatch\|missing\|error, error?}]}` (hand-rendered, zero new deps — std-only). Exit family: 0 all ok · 1 any mismatch/missing · 2 clap usage · 3 discovery/spawn/I-O. Tests (Category A): moved normalize unit tests + `#[cfg(unix)]` legs through a fake-oracle shell-script shim (gen idempotence, mismatch, missing golden, `--json` shape, `--bin` missing ⇒ 3); xtask oracle gen/verify behavior byte-identical after the delegation | M5a |
 | **E-2** | P4-D13-2 semantic comparators for the two P2-gated dialects: fact grammars for the reference **Structurizr-PlantUML** (`export -f plantuml`) and **Mermaid** (`export -f mermaid`) outputs — inventoried by WITNESS legs on the pinned binary (`TZ=UTC`) over the golden corpus, NOT guessed; `xtask/exportcmp` grows `facts_plantuml`/`facts_mermaid` extractors (same `FactSet` frame: element name+type/stereotype + relationship ends+label facts); `cargo xtask export-verify --format plantuml\|mermaid` legs over the same fixture set as the C4 comparator. Category B — the fidelity window closes with witness evidence in the row stamp | **DONE** M5b |
-| **E-3** | P4-D13-3 `Layered` polish, regression-gated (determinism property + `bench cmp P3` must stay green): (1) rank tightening — pull each node to its tightest feasible rank (max pred + 1) after layering, so single-edge chains stop wasting slack; (2) boundary refinement — place boundary nodes by median of their FIXED neighbours instead of sweeping them blindly; (3) edge-channel pass — nudge parallel orthogonal segments to distinct lanes. Scene-fixture snapshots re-blessed ONLY where the quality metric (crossings + total bend count + edge length) improves on the corpus, per-fixture in the row stamp | M5c |
+| **E-3** | P4-D13-3 `Layered` polish, regression-gated (determinism property + `bench cmp P3` must stay green): (1) rank tightening — pull each node to its tightest feasible rank (max pred + 1) after layering, so single-edge chains stop wasting slack; (2) boundary refinement — place boundary nodes by median of their FIXED neighbours instead of sweeping them blindly; (3) edge-channel pass — nudge parallel orthogonal segments to distinct lanes. Scene-fixture snapshots re-blessed ONLY where the quality metric (crossings + total bend count + edge length) improves on the corpus, per-fixture in the row stamp | **DONE** M5c |
 | **E-4** | cargo-dist wiring per P4-D10 + the P4-V6 closure: `[workspace.metadata.dist]` (artifacts: `oxidizr` [cli, default features = zero GPU] + `oxidizr-lsp`; `oxidizr-viewer` as a per-package `features = ["gui"]` override — if cargo-dist's package-level override cannot carry it, the row records the deviation and the GUI binary stays a documented `cargo build --features gui` release story, R-5), targets x86_64/aarch64 linux (**gnu**, per P4-V6: musl feasibility below), x86_64/aarch64 macOS, x86_64 windows-msvc; checksums + install script defaults; `.github/workflows/release.yml` (tag-push `v*` → `cargo dist build` + GitHub Release + the per-OS smoke: `--version` + `dsl2json` on one fixture — Category A) + a `dist --check` dry-run leg on PRs; `actionlint` clean locally. **P4-V6 (CLOSED at this row, 2026-11-21):** the pinned nightly `rustup`-less dev shell carries NO musl target/std and no musl linker (mingw only) ⇒ `x86_64-unknown-linux-musl` is NOT locally verifiable; decided **gnu** for linux (P4-D10's documented fallback), musl revisit = `💡` only. Signing deferred (unsigned v1, documented — not a deviation) | M5d |
 | **E-5** | Release chore: workspace version `0.1.0` → **`0.4.0`** (+ lockfile + `--version` goldens incl. the lsp `tests/version.rs` pin), `CHANGELOG.md` catch-up in Keep-a-Changelog form (v0.1.0/v0.2.0/v0.3.0 reconstructed from the PROGRESS milestone logs + the v0.4.0 section: LSP, diff, inspect, importers, WSD export, query/init/completions/generate, oracle command), `docs/RELEASING.md` (tag → CI → dist publish → changelog + register sync checklist), docs pass (README command list through `generate`/`oracle`), **P4 milestone close ritual** (full tier + bless + PROGRESS `P4-M5` log + status board + RESUME) and the local `v0.4.0` tag. **Never push** — publish/push stay an explicit user action | M5e |
 
 ## §P4-M5 item stamps
+
+- **E-3 DONE (commit M5c, 2026-11-22)** — P4-D13-3 `Layered` polish. The
+  charter's three items met reality differently (plan-assumption drift,
+  resolved per the working-style rule): (1) RANK TIGHTENING is already the
+  implemented layering — step 2 relaxes ranks to `max(preds)+1` (longest
+  path), which is by construction the tightest feasible rank assignment;
+  proven, not assumed, by the new `ranks_are_tightest_feasible` test (lone
+  edge beside a longer chain sits at rank 1; isolated node keeps rank 0).
+  (2) BOUNDARY REFINEMENT is DEFERRED: the §P3-D5 engine model is
+  boundary-agnostic (`LayoutGraph` carries boxes+edges only — no boundary
+  concept to place), so median-of-FIXED-neighbours would first need a
+  boundary-aware input model — an ADDITIONAL feature (Structurizr has no
+  auto-layout at all) requiring `ADDITIONAL_FEATURES.md` sign-off, not a
+  polish item; recorded here as the candidate it is. (3) EDGE-CHANNEL
+  LANES implemented as `spread_channels`: `push_segment` bends every
+  diagonal through the EXACT midpoint of its two legs, so parallel legs
+  between repeating box sizes collide; the post-pass collects all interior
+  bend legs, ONE sort groups them by (orientation, exact `to_bits`
+  coordinate) in cluster order, overlapping runs are detected linearly,
+  and a cluster of k spreads into distinct lanes around the shared
+  coordinate — total spread ≤ min(gap [rank/node separation by channel
+  axis], 2× smallest leg slack) so every lane fits EVERY leg: length-
+  neutral, box-side-safe, no degenerate neighbours, orthogonal by
+  construction, deterministic (`to_bits` keys, `total_cmp`, fixed member
+  order). Evidence: 29/29 layout tests incl. `channel_lanes_split_an_
+  overlapping_bundle` (lanes at ±slack), `lane_pass_no_ops_on_lone_
+  channels_and_zero_gaps`, `star_concentration_gets_distinct_lanes`
+  (59-edge fan → 0 colliding pairs, legs leave the shared midpoint), and
+  `thousand_nodes_are_deterministic` extended with `overlapping_channel_
+  pairs == 0` at §P3-D5 scale. Bench gate: the full `bench cmp P3` shows
+  every group slower INCLUDING untouched ones — the untouched-code pre-leg
+  of a same-session A/B drifts 1.11–1.28× on the P3-era engine, i.e. the
+  suite-wide drift is machine-state, not code. The A/B isolates the pass:
+  `chain` 865µs = pre 862–887 (no lanes to build → neutral), `star`
+  1054–1118 ≤ pre 1283 (neutral-or-better), `mixed` 4.4±0.13 vs pre
+  3.9–4.1 ms → **+8% at the 1k-node densest shape** (a flat-vec+sort
+  rewrite, measured, cut it from +13%); verdict: acceptable quality cost,
+  real C4 views are ~100× smaller. Bless ritual: engine coordinates
+  appear in NO golden (engine consumed only by the viewer as session
+  geometry) — full tier green + `e2e bless` all-unchanged (tripwire
+  clean), so the re-bless clause is an evidenced no-op.
 
 - **E-2 DONE (commit M5b, 2026-11-22)** — P4-D13-2 comparators for the two
   P2-gated dialects. WITNESS legs (pinned app 2026.10.26, `TZ=UTC`, vs our
