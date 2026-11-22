@@ -31,4 +31,6 @@ required-features = ["e2e-bench"]
 [dev-dependencies]
 # Binary for the subprocess smoke test (CARGO_BIN_EXE_oxidizr).
 oxidizr-cli = { path = "../oxidizr-cli" }
+# Codes registry for the coverage gate's catalog sync check (P4T gap 2).
+oxidizr-diag = { workspace = true }
 criterion = { workspace = true }

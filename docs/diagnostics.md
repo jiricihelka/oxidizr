@@ -18,6 +18,7 @@ after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxi
 
 | Code | Severity | Message shape | Notes |
 |---|---|---|---|
+| `OXZ-1001` | Error | unterminated quoted string at end of line | lexer bug-compat: the reference does NOT error here, so oxidizr never emits this by default — reserved for `--strict`-style linting (allow-listed in the e2e coverage gate) |
 | `OXZ-2001` | Error | `Unexpected tokens (expected: …)` | token rejected by the context's permitted set / unexpected identifier, inside the statement engine |
 | `OXZ-2002` | Error | reference statement message | any statement rejected by the faithful reference port (grammar, unknown identifier, duplicate name, …) — the reference text travels verbatim |
 | `OXZ-2003` | Error | `Unexpected end of DSL content - are one or more closing curly braces missing?` | unclosed context at EOF |
@@ -35,3 +36,4 @@ after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxi
 | `OXZ-5008` | Error | theme loading failed | an installed theme's `theme.json` is unreadable/unparsable, a fetched theme's content-type is neither JSON nor plain text, or the fetch failed — including no system `curl` to perform it with `--allow-net` (P2-D3); a theme URL without `--allow-net` is `OXZ-5001`, not this code |
 | `OXZ-5009` | Error | export aborted | the reference ABORTS the whole export where its JVM throws — the shared diagram engine's cast/NPE paths (`EXPORT-PLANTUML.md` §14): a view-kind cast mismatch, a dangling id dereferenced mid-write, a foreign animation frame; oxidizr reports the abort as this diagnostic instead of panicking (M2) |
 | `OXZ-5010` | Error | `generate` failed | `generate system-landscape` (§P4-M3 O-4, P4-D9): an `--include`/`--exclude` pattern uses a construct outside the std-only full-match filter subset (`{m,n}` quantifiers, lookaround, `\p{…}`, named groups, inline flags — see `oxidizr_api::generate::pathfilter`), or the landscape cannot be derived (no workspace matched); never a silent widening or narrowing of the user's pattern |
+| `OXZ-9001` | Error | too many errors | collection aborted at the `Collector` cap (CAP=100, `oxidizr-diag`); the cap is not wired into the pipeline today, so no corpus path emits it (allow-listed in the e2e coverage gate) |

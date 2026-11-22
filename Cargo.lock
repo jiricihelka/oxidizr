@@ -3064,6 +3064,7 @@ dependencies = [
  "oxidizr-api",
  "oxidizr-cli",
  "oxidizr-core",
+ "oxidizr-diag",
  "oxidizr-json",
  "serde_json",
 ]

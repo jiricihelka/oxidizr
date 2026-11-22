@@ -1,15 +1,27 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 IN FLIGHT: E-1 `oxidizr oracle` = M5a work-in-progress (uncommitted); sequencing decision 2026-11-22: finish M5a–c → hardening interludes P4T → P4R → P4D (scaffolded 2026-11-22: PHASE_4T/4R/4D) → release tail M5d–e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T1b coverage-gate re-sync landed (uncommitted), next T1a matrix harvest; then P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
-- **§P4-M5 in flight**: **E-1 DONE (M5a)** `oxidizr oracle` user command;
-  **E-2 DONE (M5b)** plantuml/mermaid semantic comparators — witnessed
-  grammars + `export-verify --format c4|plantuml|mermaid` legs, Category B
-  runs 31/31 + 31/31 ok (contract in the PHASE_4 §P4-M5 item stamps).
-  **Next: E-3 (M5c)** — `Layered` layout quality polish (rank tightening,
-  boundary median placement, edge-channel lanes; re-bless ONLY on a corpus
-  quality-metric improvement, `bench cmp` green). Then P4T → P4R → P4D →
-  release tail (M5d/e).
+- **§P4-M5 E-1…E-3 DONE**: M5a `oxidizr oracle` user command; M5b
+  plantuml/mermaid semantic comparators (Category B 31/31 + 31/31);
+  M5c `Layered` channel-lane pass `spread_channels` (+ rank-tightening
+  proven already-implemented; boundary refinement DEFERRED as an
+  additional-feature candidate — all three verdicts in the PHASE_4 §P4-M5
+  item stamps, incl. the bench A/B evidence: lane pass ≈ +8% only on the
+  1k-node `mixed` shape, chain/star neutral; suite-wide drift vs the
+  `P3` baseline proven machine-state, not code).
+- **P4T in flight**: **T1b** coverage-gate re-sync — `codes::ALL`
+  machine-readable catalog in `oxidizr-diag`, the e2e gate reads it,
+  `registry_matches_docs_table` machine-checks catalog ↔
+  `docs/diagnostics.md` (which WAS stale: 1001/9001 rows missing — now
+  added), 5010 allow-listed as registered T-3 debt. **Next: T1a** — the
+  feature × suite matrix section in `agents/plan/TESTING.md` (harvest
+  names via `cargo test --workspace -- --list`), then T-2…T-6.
+- **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
+  in the three D0s: harden-before-release; 4R may churn the public API
+  INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
+  line per API commit); provenance of the Java reference lives ONLY in
+  `agents/plan/` after P4D.
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
@@ -688,6 +700,6 @@
   bless diff-0 = `cargo xtask e2e bless | grep -cE ": unchanged$"` ==
   307 + clean `git status testdata/`.
 - `cargo test -p oxidizr-viewer` = 106 lib + 1 auto_display + 3 golden
-  (+2 ignored perf); `cargo test -p oxidizr-layout` = 25 (32 with
-  `dot-backend`).
+  (+2 ignored perf); `cargo test -p oxidizr-layout` = 29 lib (E-3 lane
+  pass +4; +3 ignored-style gated by `dot-backend` keep 32→36 total).
   Viewer usage lives in `crates/oxidizr-viewer/README.md` (M5-3).

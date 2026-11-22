@@ -220,6 +220,32 @@ pub mod codes {
     pub const CLI_IO: Code = Code::new(5006);
     /// Too many errors: collection aborted at the cap (9xxx internal).
     pub const TOO_MANY_ERRORS: Code = Code::new(9001);
+
+    /// Machine-readable registry of every LIVE code (tombstones excluded),
+    /// numeric order: `(value, const name)`. `docs/diagnostics.md` is the
+    /// human table this mirrors — `oxidizr-e2e/tests/coverage.rs` checks the
+    /// two lists agree mechanically (P4T gap 2), so a code that exists here
+    /// but vanishes from the docs (or the reverse) fails that gate.
+    /// Adding a code: row in the docs first, then the const, then a row here.
+    pub const ALL: &[(u16, &str)] = &[
+        (1001, "LEXER_UNTERMINATED_QUOTED"),
+        (2001, "UNEXPECTED_TOKEN"),
+        (2002, "STATEMENT"),
+        (2003, "UNEXPECTED_EOF"),
+        (3001, "VALIDATION"),
+        (3002, "RECONCILE"),
+        (4001, "JSON_READ"),
+        (4002, "JSON_WRITE"),
+        (5001, "NET_DISABLED"),
+        (5002, "JVM_ONLY"),
+        (5005, "IMPORT_DEFERRED"),
+        (5006, "CLI_IO"),
+        (5007, "EXPORT_NOT_IMPLEMENTED"),
+        (5008, "EXPORT_THEME"),
+        (5009, "EXPORT_ABORT"),
+        (5010, "GENERATE"),
+        (9001, "TOO_MANY_ERRORS"),
+    ];
 }
 
 /// One diagnostic: severity, stable code, message, optional primary span and extras.

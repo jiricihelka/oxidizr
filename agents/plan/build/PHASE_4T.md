@@ -84,7 +84,7 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
 
 | Item | Scope | Commit |
 |---|---|---|
-| **T-1** | The matrix section + gate re-sync (gap 2) + harvest script notes | T1a…T1b |
+| **T-1** | The matrix section + gate re-sync (gap 2) + harvest script notes | **T1b DONE** (gate: `codes::ALL` + docs↔catalog machine check + 5010 registered debt); T1a (matrix section) pending |
 | **T-2** | `oxidizr-import` golden file suite (gap 1) | T2 |
 | **T-3** | e2e corpus Phase-4 axes + invariants (gap 4) | T3 |
 | **T-4** | LSP capability transcripts + fast-edit stress (gap 5) | T4 |
@@ -95,7 +95,13 @@ cause, seeds added to the corpus). Category B (`oracle verify`, extended
 
 - P4T-V1 — e2e manifest schema: can v2 sections carry inspect/query/diff
   legs, or does the fan-out need a v3? Read the manifest parser before
-  authoring fixtures.
+  authoring fixtures. **VERIFIED 2026-11-22 (T1b research): v2 cannot —
+  `manifest.rs` has a FIXED section set (dsl2json/json2json/validate/
+  reconcile/export/fmt) and unknown top-level keys FAIL the read (loud by
+  design); there is no schema-version field, so extending the section set
+  IS the v3. T-3 adds optional sections (`generate` needs multi-input +
+  filter config the v2 shape cannot carry; inspect/query/diff legs need
+  their count-asserts).**
 - P4T-V2 — fuzz target cost/benefit on the P4 parsers (does `pathfilter`
   fuzz find anything real given it rejects non-supported regex up front?).
 - P4T-V3 — LSP stress: determinism of the converge check under
