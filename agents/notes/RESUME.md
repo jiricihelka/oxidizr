@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0–R2 DONE** (R3 next — `Request` rework flagship → R4 → R5) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); P4T **CLOSED** 2026-11-22 (matrix frozen, no tag); §P4R **R0–R3 DONE** (R4 next → R5) → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -82,7 +82,7 @@
   `add_perspective_to_holders` takes `&Perspective` (`55037ae`); rest =
   KEEP rows (arm-order `too_many_lines` ×7, Java-contract casts). Wave
   end: full e2e tier green · bless 307×unchanged · doc-zero held ·
-  `cargo xtask bench cmp 4T` ALL 104 comparisons at 1.00.
+  `cargo xtask bench cmp 4T` ALL 26 comparison groups at 1.00.
 - **§P4R R2 DONE 2026-11-22** (export/import wave): typed `ImportFormat`
   + `ImportFormat::sniff` moved into `oxidizr-import` (table was
   API-side, not cli-side — seed corrected; api re-export keeps
@@ -91,12 +91,20 @@
   `regexlite`/`pathfilter` **KEEP SPLIT** decided with contract/
   semantics/scale rationale in §P4R-D5 (no code). Wave end green: full
   tier · bless 307×unchanged · doc-zero · bench skipped (import-command
-  glue, no bench path). **Next: R3** — `Request` per-domain rework
-  (flagship: one commit per domain group, `execute` + CLI mapping
-  byte-identical, churn list grows), inspect naming/export-graph review,
-  `ApiOptions` `struct_excessive_bools` → grouped flags struct. Then R4
-  (cli report plumbing, viewer shell bools), R5 (pub-use consolidation,
-  churn list complete).
+  glue, no bench path).
+- **§P4R R3 DONE 2026-11-22** (api/inspect/layout wave): `Request`
+  per-domain audit — report domain typed `json: bool` →
+  `format: DiffFormat`/`InspectFormat` (`2520cd8`, churn 2; CLI enums
+  now `DiffCmdFormat`/`InspectCmdFormat`); `ApiOptions` → nested
+  `parse: ParseFlags`, `struct_excessive_bools` allow GONE (`0837317`,
+  churn 3). KEEP rows in the wave table (export `format: String` is the
+  open-set contract behind `ExportFormat::parse`; inspect `<Type>…`
+  consts = Java provenance, values are the `getType()` byte contract;
+  honest payload bools stay bools). Wave end green: full tier · bless
+  307×unchanged · doc-zero · `bench cmp 4T` ALL 26 groups at 1.00.
+  **Next: R4** — cli `report` renderer-plumbing review; viewer shell
+  `struct_excessive_bools` split; `to_request` KEEP row documented.
+  Then R5 (pub-use consolidation, churn list complete) → P4D → E-4/E-5.
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG
