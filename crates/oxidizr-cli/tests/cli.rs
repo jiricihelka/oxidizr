@@ -1625,3 +1625,211 @@ fn generate_system_landscape_merges_into_the_output_file() {
         Some(2)
     );
 }
+
+fn export_temp(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("oxidizr-cli-export-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name)
+}
+
+const EXPORT_WS: &str = "workspace \"Bank\" {\n    model {\n        p = person \"Alice\"\n        \
+                         s = softwareSystem \"Big Bank\"\n        p -> s \"Uses\"\n    }\n    \
+                         views {\n        systemLandscape \"sys-landscape\" {\n            \
+                         include *\n            autoLayout\n        }\n    }\n}\n";
+
+/// §P4T T-6 (gap 6): the `export` success leg through the binary — the
+/// reference `ExportCommand` write loop: id-keyed per-view file PLUS the
+/// `-key` legend file for a diagram export, and one `Writing <path>` note
+/// per file on STDERR (the paths are environment-dependent, so the notes
+/// are asserted by SHAPE; the exact note goldens live in the next test).
+#[test]
+fn export_plantuml_writes_view_and_legend_files() {
+    let ws = export_temp("ws.dsl");
+    std::fs::write(&ws, EXPORT_WS).unwrap();
+    let out_dir = export_temp("out");
+    let out = run(
+        &[
+            "export",
+            "-w",
+            ws.to_str().unwrap(),
+            "-f",
+            "plantuml",
+            "-o",
+            out_dir.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        out.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // `structurizr` prefix (workspace id 0) + view key; legend second.
+    let mut names = std::fs::read_dir(&out_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "structurizr-sys-landscape-key.puml",
+            "structurizr-sys-landscape.puml"
+        ]
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let notes: Vec<&str> = stderr
+        .lines()
+        .filter(|l| l.starts_with("Writing "))
+        .collect();
+    assert_eq!(notes.len(), 2, "{stderr}");
+    assert!(
+        notes[0].ends_with("structurizr-sys-landscape.puml"),
+        "{notes:?}"
+    );
+    assert!(
+        notes[1].ends_with("structurizr-sys-landscape-key.puml"),
+        "{notes:?}"
+    );
+}
+
+/// §P4T T-6: the two reference INFO-log lines the export path can emit are
+/// byte goldens (reference `ExportCommand` 233/245) and BOTH still exit 0 —
+/// the viewless leg writes nothing, the unknown-format leg is a reference
+/// no-op too (witnessed against the pinned binary 2026-11-22).
+#[test]
+fn export_notes_are_golden_and_exit_zero() {
+    let empty = export_temp("empty.dsl");
+    std::fs::write(&empty, "workspace {\n  model {\n  }\n  views {\n  }\n}\n").unwrap();
+    let out = run(
+        &[
+            "export",
+            "-w",
+            empty.to_str().unwrap(),
+            "-f",
+            "plantuml",
+            "-o",
+            export_temp("notes-1").to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        out.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.stderr, b"The workspace contains no views\n");
+
+    let ws = export_temp("ws.dsl"); // same bytes as the test above — fine
+    std::fs::write(&ws, EXPORT_WS).unwrap();
+    let out = run(
+        &[
+            "export",
+            "-w",
+            ws.to_str().unwrap(),
+            "-f",
+            "frobnicate",
+            "-o",
+            export_temp("notes-2").to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        out.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.stderr, b"Unknown export format: frobnicate\n");
+}
+
+/// §P4T T-6: the `export` exit family — `static`/`png`/`svg` are
+/// known-but-unlanded exporters (OXZ-5007, exit 1; the reference agrees on
+/// the exit code for PNG/SVG and would for `static` once it fails);
+/// missing workspace file is class 3; a missing `-f` is clap usage 2.
+#[test]
+fn export_exit_family_static_png_missing_usage() {
+    let ws = export_temp("ws.dsl");
+    std::fs::write(&ws, EXPORT_WS).unwrap();
+    for fmt in ["static", "png"] {
+        let out = run(
+            &[
+                "export",
+                "-w",
+                ws.to_str().unwrap(),
+                "-f",
+                fmt,
+                "-o",
+                export_temp(&format!("fail-{fmt}")).to_str().unwrap(),
+            ],
+            None,
+        );
+        assert_eq!(out.status.code(), Some(1), "format `{fmt}`");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("OXZ-5007"), "{stderr}");
+        assert!(
+            stderr.contains(&format!("`{fmt}` is not implemented")),
+            "{stderr}"
+        );
+    }
+    let out = run(
+        &[
+            "export",
+            "-w",
+            export_temp("nope.dsl").to_str().unwrap(),
+            "-f",
+            "json",
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(3));
+    assert!(
+        out.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let out = run(&["export", "-w", ws.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(2));
+}
+
+/// §P4T T-6 (WSD matrix row): `export -f websequencediagrams` through the
+/// binary over the corpus dynamic-view fixture — the sequence-form leg the
+/// dialect claims (`wsd.rs`, the M2 N-5 shape): one `.wsd` file, one
+/// `Writing` note, exit 0 (bytes are goldened in Category A, so the CLI
+/// asserts the argv/file shape only).
+#[test]
+fn export_websequencediagrams_writes_the_dynamic_view_file() {
+    let dsl = testdata().join("dsl/dynamic-view-with-explicit-relationships.dsl");
+    let out_dir = export_temp("wsd-out");
+    let out = run(
+        &[
+            "export",
+            "-w",
+            dsl.to_str().unwrap(),
+            "-f",
+            "websequencediagrams",
+            "-o",
+            out_dir.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        out.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let names = std::fs::read_dir(&out_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["structurizr-Dynamic-001.wsd"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let notes: Vec<&str> = stderr
+        .lines()
+        .filter(|l| l.starts_with("Writing "))
+        .collect();
+    assert_eq!(notes.len(), 1, "{stderr}");
+}

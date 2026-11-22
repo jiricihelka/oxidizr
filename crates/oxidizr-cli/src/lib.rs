@@ -134,8 +134,10 @@ pub enum Command {
         output: Option<PathBuf>,
     },
     /// Export the workspace (Phase 2): `theme`/`json` and the diagram
-    /// formats `plantuml`/`c4plantuml`/`mermaid`; `websequencediagrams` and
-    /// `static` raise OXZ-5007, `png`/`svg` are unknown exit-0 formats.
+    /// formats `plantuml`/`c4plantuml`/`mermaid`/`websequencediagrams`;
+    /// the known-but-unlanded `static`/`png`/`svg` raise OXZ-5007 (exit 1 —
+    /// the reference agrees for PNG/SVG); unknown format strings log the
+    /// reference `Unknown export format:` note and still exit 0.
     Export {
         /// Workspace file (`.dsl` or `.json`) — reference `-w/--workspace`.
         #[arg(long, short = 'w')]
