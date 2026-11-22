@@ -446,8 +446,12 @@ pub mod pathfilter {
                     (0, true) => Self::star(sub, text, i, k),
                     // `+` / `+?`: one sub match, then the star.
                     (1, true) => sub.matches(text, i, &|j| Self::star(sub, text, j, k)),
-                    // `?` / `??`.
-                    (0, false) => sub.matches(text, i, k) || k(i),
+                    // `?` / `??`. An EMPTY sub-match continues at `i` — that
+                    // is the zero-iteration leg itself, so the closure skips
+                    // it and the trailing `k(i)` runs it exactly once (the
+                    // `star()` note below; a doubled leg is 2^n over a chain
+                    // of empty-capable nodes).
+                    (0, false) => sub.matches(text, i, &|j| j != i && k(j)) || k(i),
                     // `(1, false)` = `{1,1}`: not constructible here
                     // (`{m,n}` is OXZ-5010); false keeps the match total.
                     _ => false,
@@ -474,10 +478,16 @@ pub mod pathfilter {
         /// the sub-expression can reach by NON-EMPTY iterations AND at the
         /// zero-iteration position `i` (without that leg `.*x` could never
         /// match text starting at `x`). The `j > i` guard rejects empty
-        /// iterations (the reference engine guards the same way), so a
-        /// sub-expression that can only match empty never loops.
+        /// iterations (the reference engine guards the same way — the JDK
+        /// counts one empty-width iteration, then the repetition stops), so
+        /// a sub-expression that can only match empty never loops; `k(j)`
+        /// stays inside the recursion because `star(sub, text, j, k)` ends
+        /// in `k(j)` itself. Each continuation position is therefore tried
+        /// EXACTLY once — calling it twice doubles the search per zero-width
+        /// match, which made a `$+$+…` chain (a §P4T T-5 fuzz timeout) 2^n
+        /// where the JDK engine walks it linearly.
         fn star(sub: &Node, text: &[char], i: usize, k: &dyn Fn(usize) -> bool) -> bool {
-            sub.matches(text, i, &|j| (j > i && Self::star(sub, text, j, k)) || k(j)) || k(i)
+            sub.matches(text, i, &|j| j > i && Self::star(sub, text, j, k)) || k(i)
         }
     }
 
@@ -745,6 +755,9 @@ pub mod pathfilter {
         fn unsupported_constructs_are_errors_not_silent_widening() {
             for pattern in [
                 r"a{2,3}", r"(?=x)", r"(?<n>x)", r"(?i)ab", r"\p{L}", r"a**", r")x",
+                // `\b` is a JDK construct the documented subset omits (the
+                // §P4T T-5 probe paired with the zero-width test below).
+                r"\b+",
             ] {
                 assert!(
                     PathFilter::compile(pattern).is_err(),
@@ -754,6 +767,38 @@ pub mod pathfilter {
             assert!(PathFilter::compile(r"a\q").is_err());
             assert!(PathFilter::compile("(a").is_err());
             assert!(PathFilter::compile("[a").is_err());
+        }
+
+        /// §P4T T-5 fuzz find: zero-width iterations of anchors and
+        /// empty-capable groups must TERMINATE and agree with the JDK
+        /// engine (every row below witnessed against
+        /// `java.util.regex.Pattern.matches` on JDK 21, 2026-11-22 — the
+        /// reference counts one empty-width iteration, then the repetition
+        /// stops; our CPA matcher previously called the continuation twice
+        /// per zero-width match, so a `$+$+…` chain was 2^n, a libFuzzer
+        /// timeout).
+        #[test]
+        fn zero_width_repetition_terminates_like_the_jdk() {
+            for (pattern, text, want) in [
+                (r"$+", "", true),
+                (r"$+", "a4", false),
+                (r"(a*)+", "", true),
+                (r"(a*)+", "a4", false),
+                (r"(a*)+a", "aa", true),
+                (r"(?:a*)+b", "b", true),
+                (r"(?:a*)+b", "ab", true),
+                (r"(a|)+", "", true),
+                (r"(?:$)+x", "x", false),
+                (r"^+", "a4", false),
+            ] {
+                assert_eq!(ok(pattern, text), want, "`{pattern}` on `{text}`");
+            }
+            // The fuzz timeout's shape itself: a long `$`/`+` chain with an
+            // unmatched tail. Linear now — the old doubling made even 40
+            // quantifiers unbounded.
+            let chain = format!("{}x", "$+".repeat(64));
+            assert!(!ok(&chain, ""));
+            assert!(!ok(&chain, "a4"));
         }
     }
 }
