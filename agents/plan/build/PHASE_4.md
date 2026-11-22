@@ -445,6 +445,13 @@ schema-correct hand-written config + `actionlint`-clean workflows +
 the pinned findings; `dist --check` runs in the CI job itself (R-5
 mitigation stays: plain `cargo build` is always the fallback).
 
+**Sequencing update 2026-11-22 (user):** E-1…E-3 run now; the release tail
+(**E-4** cargo-dist + **E-5** version/changelog/tag) executes AFTER the
+hardening interludes `PHASE_4T.md` → `PHASE_4R.md` → `PHASE_4D.md`, so
+`v0.4.0` ships with the test matrix, the refactor pass and the human-first
+docs. P4T-D0/P4R-D0/P4D-D0 charters govern those phases; the milestone
+close ritual for "P4" lands at the E-5 commit.
+
 | Item | Scope | Commit |
 |---|---|---|
 | **E-1** | `oxidizr oracle` user command (F4, P4-D6): `oxidizr oracle gen\|verify [PATHS…] [--bin PATH] [--goldens DIR] [--json]` — golden generation/verification over USER fixture paths (fixture-author CI). The engine is a lib module `oxidizr-cli/src/oracle/` — binary discovery (`--bin` → `$OXIDZR_STRUCTURIZR_BIN` → PATH), the export prologue (`export --workspace F --format json --output DIR`), `normalize_reference_output` (inspection-counter stripping — MOVED from xtask, which keeps its corpus legs and delegates: dev shim, P4-D6), the byte compare. Golden convention: `<stem>.golden.json` next to the workspace (or in `--goldens DIR`). Dispatched in `run` BEFORE the pipeline like `view`/`completions` (spawns the external binary; never a `Request`; oxidizr never downloads anything — D5). `--json` = report document `{schema:1, results:[{workspace, golden, status: generated\|match\|mismatch\|missing\|error, error?}]}` (hand-rendered, zero new deps — std-only). Exit family: 0 all ok · 1 any mismatch/missing · 2 clap usage · 3 discovery/spawn/I-O. Tests (Category A): moved normalize unit tests + `#[cfg(unix)]` legs through a fake-oracle shell-script shim (gen idempotence, mismatch, missing golden, `--json` shape, `--bin` missing ⇒ 3); xtask oracle gen/verify behavior byte-identical after the delegation | M5a |

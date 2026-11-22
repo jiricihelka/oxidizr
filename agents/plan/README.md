@@ -25,6 +25,9 @@ disagree, the source wins — update the notes.
 | `build/PHASE_2R.md`           | Phase 2R plan: small-scope refactors — Java-isms out, bytes invariant     | Implementing the 2R interlude   |
 | `build/PHASE_3.md`            | Phase 3 plan: egui viewer + layout editing, own layout engine          | Implementing Phase 3               |
 | `build/PHASE_4.md`            | Phase 4 plan: diff/query/init/lsp/inspect/importers, release           | Implementing Phase 4               |
+| `build/PHASE_4T.md`           | Phase 4T plan: feature × suite test matrix, P4 coverage gaps            | Implementing the 4T interlude   |
+| `build/PHASE_4R.md`           | Phase 4R plan: idiomatic refactors, public-API churn allowed            | Implementing the 4R interlude   |
+| `build/PHASE_4D.md`           | Phase 4D plan: docs reset — short human-first text, READMEs everywhere  | Implementing the 4D interlude   |
 | `DEVIATIONS.md`               | Agreed, compat-safe differences from the reference + Locked list       | Before implementing ANY behavior   |
 | `ADDITIONAL_FEATURES.md`      | Registry of features Structurizr doesn't have (✅ agreed / 💡 ideas)    | Adding anything beyond parity      |
 | `research/notes-features.md`  | Raw deep notes behind FEATURES.md (see errata!)                        | Deep dive on a specific feature    |

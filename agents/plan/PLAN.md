@@ -98,6 +98,19 @@ Goal: the ergonomic registry lands as polished commands; roadmap completes.
 - Exit: each command golden/property-tested; `--help` UX reviewed; first cargo-dist
   release. Details: `build/PHASE_4.md`.
 
+## Phase 4T / 4R / 4D — hardening interludes, then the release tail (added 2026-11-22)
+
+Goal: ship v0.4.0 on a hardened base. Ordered interludes between the Phase 4
+feature milestones (§P4-M5 E-1…E-3) and the release tail (E-4/E-5, which move to
+the very end): **P4T** — every Phase 4 feature gets a named test in every suite,
+the feature × suite matrix becomes the checked coverage artifact
+(`build/PHASE_4T.md`); **P4R** — small-scope idiomatic-Rust refactors with the
+public API churn allowed (byte contract/CLI frozen; 2R precedent),
+`build/PHASE_4R.md`; **P4D** — documentation reset: short human-first text,
+no dev-process or Java-reference mentions in human-facing docs, README per
+directory, root README as user documentation (`build/PHASE_4D.md`). The
+`v0.4.0` tag lands after P4D closes; roadmap completion = P4D + release tail.
+
 ## Out of scope for this roadmap
 
 Server/lite/playground/web-UI equivalents, MCP server, static-site/PNG/SVG export,

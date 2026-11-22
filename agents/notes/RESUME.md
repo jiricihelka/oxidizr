@@ -1,4 +1,20 @@
-# RESUME — session checkpoint (updated 2026-11-21, **P3 + M6–M11 complete, tagged v0.3.0; P4 §P4-LSP CLOSED (L0–L5); §P4-M0 `diff` CLOSED (M0a–M0d); §P4-M1 `inspect` CLOSED (M1a–M1d); §P4-M2 importers CLOSED (N-1…N-6, M2a–M2f); §P4-M3 CLOSED (O-1…O-4, M3a–M3d); next: §P4-M5 (release: F4 `oracle` user command, cargo-dist 3-OS + tag `v0.4.0`, changelog, P4-V6)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 IN FLIGHT: E-1 `oxidizr oracle` = M5a work-in-progress (uncommitted); sequencing decision 2026-11-22: finish M5a–c → hardening interludes P4T → P4R → P4D (scaffolded 2026-11-22: PHASE_4T/4R/4D) → release tail M5d–e (cargo-dist + `v0.4.0` tag + changelog)**)
+
+## Active now (2026-11-22)
+
+- **M5a (`oxidizr oracle` user command) is UNCOMMITTED work-in-progress**:
+  new `crates/oxidizr-cli/src/oracle.rs` (engine: discovery/gen/verify/
+  normalize moved from xtask + report), `Command::Oracle`/`OracleAction` +
+  `run` dispatch + `to_request`/name arms in `crates/oxidizr-cli/src/lib.rs`,
+  `oxidizr-cli` added to `[workspace.dependencies]` and to xtask's
+  `[dependencies]`. REMAINING for M5a: xtask's four oracle-primitive
+  functions delegate to the module (bodies deleted there), `surface_parses`
+  line, Category A tests via a fake-oracle shell shim (`#[cfg(unix)]`:
+  gen/match/mismatch/missing/`--json`/`--bin`-missing⇒3), quartet, commit.
+- **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
+  in the three D0s: harden-before-release; 4R may churn the public API
+  (bytes/CLI frozen, CHANGELOG line per API commit); provenance of the
+  Java reference lives ONLY in `agents/plan/` after P4D.
 
 ## State
 
