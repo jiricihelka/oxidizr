@@ -574,7 +574,11 @@ pub fn run() -> anyhow::Result<i32> {
 /// is not a byte-contract command and never becomes a [`Request`]. The
 /// global `--quiet` reaches `diff` (exit code only, §P4-M0 D-3) — the other
 /// commands consume it in the [`Renderer`].
-#[allow(clippy::too_many_lines)] // one arm per `Command` variant: the argv → Request table
+#[allow(clippy::too_many_lines)] // one arm per `Command` variant: the flat argv → Request
+// table IS the content (§P4-R4 KEEP row, R1 arm-order precedent) — every
+// mapping is a 1:1 field move, so any "dedupe" would hide argv semantics
+// behind indirection; the cli `report` plumbing follows the same reading
+// (one `Renderer`, one `replay`, reviewed §P4-R4 = KEEP).
 fn to_request(command: Command, quiet: bool) -> Option<Request> {
     Some(match command {
         Command::Dsl2Json { dsl, output } => Request::Dsl2Json {

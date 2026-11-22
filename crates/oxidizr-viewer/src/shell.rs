@@ -81,12 +81,33 @@ pub fn run(file: Option<&Path>, theme: ThemeArg) -> eframe::Result {
     )
 }
 
+/// The user-facing window/canvas toggles (§P4-R4 grouping — six loose
+/// bools on [`Viewer`] tripped `struct_excessive_bools`; they remain
+/// session flags, not state to model as enums — same reading as the
+/// P1-D8 CLI flags precedent (oxidizr-cli lib.rs)).
+struct Toggles {
+    /// Diagnostics window visibility (session).
+    diagnostics: bool,
+    /// Auto-layout dialog visibility.
+    layout: bool,
+    /// Grid-snap drags to multiples of [`commands::snapped`]'s step.
+    snap: bool,
+}
+
+/// Frame-level latches: signals set at one event and consumed by the
+/// next paint (§P4-R4 grouping).
+struct Latches {
+    /// Re-fit the viewport into the canvas on the next paint.
+    needs_fit: bool,
+    /// Visuals pushed to egui once (the creator closure has no Context).
+    visuals_ready: bool,
+    /// Icons are stale wrt the scene (set on open/rebuild).
+    icons_dirty: bool,
+}
+
 /// The viewer app state: a workspace, one selected view, its rendered
 /// scene, the canvas viewport and the theme toggle. No GUI types outside
 /// presentation fields (the lib core owns the rest).
-// Session flags (fit/theme/diagnostics/icons), not state to model as enums
-// — same reading as the P1-D8 CLI flags precedent (oxidizr-cli lib.rs).
-#[allow(clippy::struct_excessive_bools)]
 struct Viewer {
     /// Loaded workspace (after a successful open).
     workspace: Option<Workspace>,
@@ -116,10 +137,12 @@ struct Viewer {
     selection: Option<paint::Selection>,
     /// Hovered hit (tooltip + cursor).
     hover: Option<hit::Hit>,
+    /// User-facing toggles (diagnostics / layout dialog / grid snap).
+    toggles: Toggles,
+    /// Frame latches (fit request / first-visuals / icon cache invalid).
+    latches: Latches,
     /// World↔screen transform.
     viewport: hit::Viewport,
-    /// Re-fit the viewport into the canvas on the next paint.
-    needs_fit: bool,
     /// Zoom restored from storage, applied on the first painted frame
     /// (the canvas size is unknown before that).
     restore_scale: Option<f64>,
@@ -137,8 +160,6 @@ struct Viewer {
     last_rect: Option<egui::Rect>,
     /// Last window title pushed to the OS (change detection).
     shown_title: String,
-    /// Visuals pushed to egui once (the creator closure has no Context).
-    visuals_ready: bool,
     /// Stored-tag inventory for the filter chips (recomputed on open).
     tag_inventory: Vec<key::TagCount>,
     /// Chip semantics: hide (Exclude) or show only (Include) tagged.
@@ -147,8 +168,6 @@ struct Viewer {
     tag_sel: Vec<String>,
     /// Legend of the current scene (folded by [`key::legend`]).
     legend: key::Key,
-    /// Diagnostics window visibility (session).
-    show_diagnostics: bool,
     /// Workspace file's directory — resolves file-path icon strings.
     base_dir: Option<PathBuf>,
     /// The single icon-atlas texture (uploaded when pixels change, M1-5).
@@ -159,16 +178,12 @@ struct Viewer {
     icon_pixels: Vec<u8>,
     /// `snip(icon)` → reason, one row per failing icon (M1-5, warnings).
     icon_errors: Vec<(String, String)>,
-    /// Icons are stale wrt the scene (set on open/rebuild).
-    icons_dirty: bool,
     /// Session editing overlays, one per view key (P3-M3); NEVER
     /// persisted — M3-5 owns saving (editor rule, P3-D0). Kept across
     /// view switches, cleared when a workspace is adopted.
     overlays: HashMap<String, commands::LayoutOverlay>,
     /// Undo/redo history per view key, parallel to [`Self::overlays`].
     histories: HashMap<String, commands::History>,
-    /// Grid-snap drags to multiples of [`commands::snapped`]'s step.
-    snap: bool,
     /// The in-flight canvas interaction (pan / drag / lasso).
     drag: Drag,
     /// Views edited since the last adopt (dirty marker; M3-5 save).
@@ -193,8 +208,6 @@ struct Viewer {
     repaint_ctx: Option<egui::Context>,
     /// Last auto-layout failure (dialog + status bar).
     layout_error: Option<String>,
-    /// Auto-layout dialog visibility.
-    show_layout: bool,
     /// Dialog parameters — a persisted preference (§P3-D2), mirroring
     /// the reference `auto-layout.jspf` fields.
     layout_params: AutomaticLayout,
@@ -283,28 +296,33 @@ impl Viewer {
             selection: None,
             hover: None,
             viewport: hit::Viewport::new(1.0, (0.0, 0.0)),
-            needs_fit: false,
+            toggles: Toggles {
+                diagnostics: false,
+                layout: false,
+                snap: false,
+            },
+            latches: Latches {
+                needs_fit: false,
+                visuals_ready: false,
+                icons_dirty: false,
+            },
             restore_scale: None,
             sidecar: statefile::ViewerState::default(),
             pending_viewport: None,
             pending_view: None,
             last_rect: None,
             shown_title: String::new(),
-            visuals_ready: false,
             tag_inventory: Vec::new(),
             tag_mode: FilterMode::Exclude,
             tag_sel: Vec::new(),
             legend: key::Key::default(),
-            show_diagnostics: false,
             base_dir: None,
             icon_texture: None,
             icon_uv: BTreeMap::new(),
             icon_pixels: Vec::new(),
             icon_errors: Vec::new(),
-            icons_dirty: false,
             overlays: HashMap::new(),
             histories: HashMap::new(),
-            snap: false,
             drag: Drag::Idle,
             dirty: BTreeSet::new(),
             save_note: None,
@@ -314,7 +332,6 @@ impl Viewer {
             reload_note: None,
             repaint_ctx: None,
             layout_error: None,
-            show_layout: false,
             layout_params: AutomaticLayout::default(),
             layout_engine: layout::Engine::default(),
         }
@@ -410,7 +427,7 @@ impl Viewer {
             .as_ref()
             .and_then(|key| self.sidecar.views.get(key))
             .copied();
-        self.needs_fit = self.pending_viewport.is_none() && self.restore_scale.is_none();
+        self.latches.needs_fit = self.pending_viewport.is_none() && self.restore_scale.is_none();
         self.rebuild_scene();
     }
 
@@ -495,7 +512,7 @@ impl Viewer {
         match built {
             Some(Ok(scene)) => {
                 self.legend = key::legend(&scene);
-                self.icons_dirty = true;
+                self.latches.icons_dirty = true;
                 self.scene = Some(scene);
                 self.scene_error = None;
             }
@@ -608,9 +625,9 @@ impl Viewer {
 impl eframe::App for Viewer {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        if !self.visuals_ready {
+        if !self.latches.visuals_ready {
             self.apply_visuals(&ctx);
-            self.visuals_ready = true;
+            self.latches.visuals_ready = true;
         }
         let title = format!(
             "oxidizr-viewer — {}",
@@ -748,12 +765,12 @@ impl Viewer {
                     self.zoom_center(1.25);
                 }
                 if ui.button("Fit").clicked() {
-                    self.needs_fit = true;
+                    self.latches.needs_fit = true;
                 }
                 if ui.button("Layout").clicked() {
-                    self.show_layout = true;
+                    self.toggles.layout = true;
                 }
-                ui.toggle_value(&mut self.snap, "Snap")
+                ui.toggle_value(&mut self.toggles.snap, "Snap")
                     .on_hover_text("Grid-snap element drags to 10 px steps");
                 let edits = !self.dirty.is_empty();
                 if ui
@@ -925,7 +942,7 @@ impl Viewer {
         self.record_view();
         self.view_key = Some(key);
         self.selection = None;
-        self.needs_fit = true;
+        self.latches.needs_fit = true;
         self.restore_scale = None;
         self.drag = Drag::Idle;
         self.layout_error = None;
@@ -1034,9 +1051,13 @@ impl Viewer {
                     // preview wrote (idempotent re-apply through the
                     // history, so one Ctrl+Z reverts the whole drag —
                     // carried routes included, M11-8).
-                    if let Some(command) =
-                        commands::drag_group(&origins, &carries, world_delta, self.snap, carry)
-                    {
+                    if let Some(command) = commands::drag_group(
+                        &origins,
+                        &carries,
+                        world_delta,
+                        self.toggles.snap,
+                        carry,
+                    ) {
                         self.edit_current_view(command);
                     } else {
                         // Nothing moved (a snap pulled the target back
@@ -1095,7 +1116,7 @@ impl Viewer {
                     // Released: the preview's route IS the commit
                     // (idempotent re-apply through the history).
                     if let Some(command) =
-                        commands::drag_waypoint(&id, &from, index, world_delta, self.snap)
+                        commands::drag_waypoint(&id, &from, index, world_delta, self.toggles.snap)
                     {
                         self.edit_current_view(command);
                     } else {
@@ -1222,10 +1243,10 @@ impl Viewer {
                     ),
                 );
             }
-        } else if self.needs_fit {
+        } else if self.latches.needs_fit {
             if let Some(scene) = &self.scene {
                 self.viewport = hit::Viewport::fit(scene.bounds, screen);
-                self.needs_fit = false;
+                self.latches.needs_fit = false;
             }
         }
 
@@ -1467,7 +1488,7 @@ impl Viewer {
     ) {
         let mut route = from.to_vec();
         if let Some(at) = route.get_mut(index) {
-            *at = commands::drag_target(*at, delta, self.snap);
+            *at = commands::drag_target(*at, delta, self.toggles.snap);
         }
         {
             let overlay = self.overlay_for();
@@ -1568,7 +1589,7 @@ impl Viewer {
         delta: (f64, f64),
     ) {
         {
-            let snap = self.snap;
+            let snap = self.toggles.snap;
             let overlay = self.overlay_for();
             let mut applied = None;
             for (id, origin) in origins {
@@ -1717,7 +1738,7 @@ impl Viewer {
                     let label = egui::RichText::new(format!("⚠ {issues} diagnostics"))
                         .color(egui::Color32::from_rgb(160, 130, 0));
                     if ui.button(label).clicked() {
-                        self.show_diagnostics = !self.show_diagnostics;
+                        self.toggles.diagnostics = !self.toggles.diagnostics;
                     }
                 }
                 if let Some(note) = &self.save_note {
@@ -1927,7 +1948,7 @@ impl Viewer {
     /// Full diagnostics list in a dismissible window (M1-4b); the
     /// status-bar count toggles it (hover preview was M1-4a).
     fn diagnostics_window(&mut self, ctx: &egui::Context) {
-        if !self.show_diagnostics {
+        if !self.toggles.diagnostics {
             return;
         }
         let mut open = true;
@@ -1954,7 +1975,7 @@ impl Viewer {
                         }
                     });
             });
-        self.show_diagnostics = open;
+        self.toggles.diagnostics = open;
     }
 
     /// The editing overlay of the CURRENT view, created on first use
@@ -2315,7 +2336,7 @@ impl Viewer {
                     .and_then(|scene| commands::apply_layout(scene, &overlay, &overrides));
                 if let Some(command) = command {
                     self.edit_current_view(command);
-                    self.needs_fit = true;
+                    self.latches.needs_fit = true;
                 }
             }
             Some(Err(error)) => self.layout_error = Some(error.to_string()),
@@ -2455,7 +2476,7 @@ impl Viewer {
     /// geometry. Only the PARAMETERS persist (§P3-D2); the engine
     /// ignores edge separation at MVP scope (parity field only).
     fn layout_window(&mut self, ctx: &egui::Context) {
-        if !self.show_layout {
+        if !self.toggles.layout {
             return;
         }
         let mut open = true;
@@ -2530,7 +2551,7 @@ impl Viewer {
                 }
                 ui.weak("Session geometry — not saved to the workspace (M3).");
             });
-        self.show_layout = open;
+        self.toggles.layout = open;
     }
 
     /// Rebuild the icon atlas when the scene changed (M1-5): rasterize
@@ -2542,10 +2563,10 @@ impl Viewer {
     #[allow(clippy::cast_precision_loss)]
     // Atlas caps are 1024×2048 px — every u32 here is exactly f32.
     fn sync_icons(&mut self, ctx: &egui::Context) {
-        if !self.icons_dirty {
+        if !self.latches.icons_dirty {
             return;
         }
-        self.icons_dirty = false;
+        self.latches.icons_dirty = false;
         self.icon_uv.clear();
         self.icon_errors.clear();
         let scheme = icons::scheme_code(self.scheme);
