@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T1b coverage-gate re-sync landed (uncommitted), next T1a matrix harvest; then P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
+# RESUME — session checkpoint (updated 2026-11-22, **P4 §P4-M0…M3 CLOSED; §P4-M5 E-1…E-3 DONE (M5a/b/c); HARDENING INTERLUDE P4T IN FLIGHT: T-1 + T-2 DONE, next T-3 (e2e manifest v3 axes); then P4R → P4D → release tail M5d-e (cargo-dist + `v0.4.0` tag + changelog)**)
 
 ## Active now (2026-11-22)
 
@@ -10,15 +10,18 @@
   item stamps, incl. the bench A/B evidence: lane pass ≈ +8% only on the
   1k-node `mixed` shape, chain/star neutral; suite-wide drift vs the
   `P3` baseline proven machine-state, not code).
-- **P4T in flight**: **T-1 DONE (T1a+T1b)** — TESTING.md §Feature × suite
-  matrix (harvested names, gap legend T-2…T-6) + coverage-gate re-sync
-  (`codes::ALL` machine catalog in `oxidizr-diag`, gate reads it,
-  `registry_matches_docs_table` machine-checks catalog ↔ docs — the docs
-  table WAS stale: 1001/9001 rows now added; 5010 allow-listed as
-  registered T-3 debt). P4T-V1 VERIFIED: manifest v2 cannot carry
+- **P4T in flight**: **T-1 DONE (T1a+T1b)**, **T-2 DONE** — importer
+  golden file suite `crates/oxidizr-import/tests/golden_files.rs`: 9 tests,
+  11 authored fixtures under `tests/fixtures/` (README + inventory test),
+  `expect!` digests blessed; MADR fixtures carry front-matter `date:` (the
+  importer's date fallback is file mtime — nondeterministic goldens
+  otherwise; matrix T-2 cell now names `golden_files`). Coverage-gate
+  re-sync from T1b (`codes::ALL`, `registry_matches_docs_table`, 5010
+  allow-listed). P4T-V1 VERIFIED: manifest v2 cannot carry
   inspect/query/diff/generate — T-3 extends the section set (the v3).
-  **Next: T-2** — `oxidizr-import` golden file suite (no `tests/` dir
-  today; probe files C4/Mermaid/image/`!docs`/`!adrs`).
+  **Next: T-3** — e2e corpus Phase-4 axes (manifest v3 sections: inspect
+  violation-count, query smoke, diff identity, generate merge invariants;
+  OXZ-5010 coverage shrinks the allow-list).
 - **P4T/P4R/P4D scaffolded** (plan-only commits) — user decisions recorded
   in the three D0s: harden-before-release; 4R may churn the public API
   INCLUDING structural enum-shape reworks (bytes/CLI frozen, CHANGELOG

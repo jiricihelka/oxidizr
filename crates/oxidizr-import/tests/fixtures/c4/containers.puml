@@ -1,0 +1,12 @@
+title Oxidizr Sample - Containers
+Enterprise_Boundary(bank, "Big Bank plc") {
+    System_Boundary(ibanking, "Internet Banking System")
+    {
+        Container(web, "Web Application", "Rust")
+        Container_Stub(api, "Banking API", "Java")
+    }
+    ContainerDb(ledger, "Ledger", "PostgreSQL")
+}
+BiRel(web, api, "Reads and writes")
+Rel_D(api, ledger, "Writes", "JDBC")
+Rel_Index(api, "3")

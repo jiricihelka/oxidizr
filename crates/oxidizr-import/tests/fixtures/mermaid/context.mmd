@@ -1,0 +1,13 @@
+C4Context
+%% Oxidizr sample - Mermaid flavour. Comments vanish. %%
+title Oxidizr Sample - System Context
+Person(visitor, "Doc Reader", "Reads the rendered docs.")
+Enterprise_Boundary(ox, "oxidizr") {
+    System(website, "Docs Site", $descr="Rendered docs.", $tags="Public")
+    System_Ext(github, "GitHub", "Source hosting.")
+}
+Person(bot, "CI Bot", "", "Automated")
+ContainerDb(store, "Asset Cache", "SQLite")
+Rel(visitor, website, "Reads", "HTTPS")
+Rel_Back(github, bot, "Triggers")
+BiRel(website, github, "Syncs")

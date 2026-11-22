@@ -1,0 +1,19 @@
+title Oxidizr Sample - System Context
+!$iconSize = 640
+skinparam defaultFontSize 14
+Person(customer, "Ops Engineer", "Runs the oxidizr stack.")
+System_Boundary(core, "oxidizr") {
+    System(cli, "oxidizr CLI", $descr="The models-as-code CLI.", $tags="Critical")
+    System_Ext(ref, "Structurizr", "The reference implementation this project is compatible with.")
+    SystemQueue(events, "Change Feed", "File watcher")
+}
+Rel(customer, cli, "Drives", "CLI")
+Rel(
+    cli,
+    ref,
+    "Mirrors bytes",
+    "JSON"
+)
+Mystery_Box(nope, "Unknown macro")
+LAYOUT_WITH_LEGEND()
+@enduml
