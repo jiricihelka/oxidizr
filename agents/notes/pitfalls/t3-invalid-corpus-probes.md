@@ -2,7 +2,7 @@
 
 Why: reaching the last five registry codes and making `xtask e2e mutate`
 honest took empirical probes; the verdicts would otherwise be re-derived at
-the next corpus change. Full text: `plan/build/PHASE_1T.md` §P1T-D4 landed.
+the next corpus change. Full text: `agents/plan/build/PHASE_1T.md` §P1T-D4 landed.
 
 Facts (all probed against `target/debug/oxidizr`, NO_COLOR+ANSI-strip):
 

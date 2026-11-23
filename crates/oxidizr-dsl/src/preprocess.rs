@@ -615,7 +615,7 @@ mod tests {
             got[0].0, 3,
             "EOF tail carries the last physical line number"
         );
-        assert!(got[0].2, "tail marked dropped like the reference");
+        assert!(got[0].2, "tail marked dropped like the official tooling");
         covered(src);
     }
 

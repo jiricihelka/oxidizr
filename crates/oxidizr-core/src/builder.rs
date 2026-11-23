@@ -1996,7 +1996,7 @@ impl WorkspaceBuilder {
         Err(CoreError::ElementNotFound { id: id.clone() })
     }
 
-    /// Mutable access to the model (styles-of-validation escape hatch for M4
+    /// Mutable access to the model (styles-of-validation escape hatch for
     /// loaders, e.g. direct `!identifiers` imports).
     pub fn model_mut(&mut self) -> &mut Model {
         &mut self.workspace.model
@@ -2499,7 +2499,7 @@ impl WorkspaceBuilder {
         find(&mut self.workspace.model.deployment_nodes, id)
     }
 
-    /// Mutable view set (content operations — the M4 view statements).
+    /// Mutable view set (content operations — the view statements).
     pub fn views_mut(&mut self) -> &mut ViewSet {
         &mut self.workspace.views
     }

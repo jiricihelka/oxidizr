@@ -205,7 +205,7 @@ pub type JsonWorkspaceLoader = fn(&str) -> Result<Workspace, String>;
 
 /// `${VAR}` environment lookup override : lets the
 /// headless API run parses hermetically (test-provided map instead of the
-/// process environment). `None` — the production default — keeps the V-3
+/// process environment). `None` — the production default — keeps the
 /// official behavior (`System.getenv` equivalent, `std::env::var`).
 ///
 /// `Arc<dyn Fn>` (not a fn pointer) so a captured map rides along;
@@ -1047,7 +1047,7 @@ impl<'a> Parser<'a> {
                     _ => nv.value.clone(),
                 })
             } else {
-                // V-3: env substitution is ON (official parser ctor default)
+                // env substitution is ON (official parser ctor default)
                 // unless a hermetic lookup is injected.
                 match &self.opts.env_lookup {
                     Some(lookup) => lookup.get(name),

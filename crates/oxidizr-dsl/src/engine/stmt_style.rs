@@ -805,7 +805,7 @@ fn resolve_icon(p: &mut Parser<'_>, path: &str) -> Result<String, DslError> {
         return Err(DslError::coded(
             oxidizr_diag::codes::JVM_ONLY,
             format!(
-                "icon {path} is not supported by oxidizr (JVM image codec, D10): embed the image as a data: URI or use SVG"
+                "icon {path} is not supported by oxidizr (JVM image codec): embed the image as a data: URI or use SVG"
             ),
         ));
     }
@@ -1440,7 +1440,10 @@ workspace {
         let (_, err) = parse("oxz-logo.png");
         let (message, code) = err.expect("png rejected");
         assert_eq!(code, oxidizr_diag::codes::JVM_ONLY);
-        assert!(message.contains("D10"), "message names D10: {message}");
+        assert!(
+            message.contains("JVM image codec"),
+            "message names the codec: {message}"
+        );
 
         // Non-image file: the `guessContentTypeFromName` miss, canonical
         // path, trailing period (the official parser's IAE text).

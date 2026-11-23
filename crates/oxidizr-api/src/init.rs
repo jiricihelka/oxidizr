@@ -1,4 +1,4 @@
-//! `oxidizr init` scaffold templates (F7).
+//! `oxidizr init` scaffold templates.
 //!
 //! Everything the command writes is embedded at build time
 //! (`include_str!`) — zero network, zero new deps. The templates use
@@ -7,7 +7,7 @@
 //! `fmt` printer, and a `dsl2json` golden of each one rides the test
 //! suite — template DRIFT breaks CI, which is the intended teeth.
 //!
-//! The command body is [`crate::pipeline`] (the T0-d invariant); this
+//! The command body is [`crate::pipeline`] (the command-body invariant); this
 //! module is the pure template table only.
 
 /// Starter content (`--template`).

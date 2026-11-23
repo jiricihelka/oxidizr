@@ -20,7 +20,7 @@
 //! explicit `[order:]` overrides them; `InstalledThemes` is empty in
 //! oxidizr so a `theme` name that is neither a URL nor `default` takes the
 //! file branch; URL/file `theme`, `plantuml`, `mermaid`, `kroki` and
-//! raster/`plantuml <file>` content import arrives in later —
+//! raster/`plantuml <file>` content import are not supported yet —
 //! those paths parse and fail with the deferred/import codes; `image
 //! <file>` with an SVG inlines the plain data URI regardless of the color
 //! scheme (the official parser `ImageImporter` ignores the scheme for files).
@@ -1256,7 +1256,7 @@ fn image_content(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), D
             return Err(DslError::coded(
                 oxidizr_diag::codes::JVM_ONLY,
                 format!(
-                    "image {source} is not supported by oxidizr (JVM image codec, D10): use an SVG file"
+                    "image {source} is not supported by oxidizr (JVM image codec): use an SVG file"
                 ),
             ));
         }

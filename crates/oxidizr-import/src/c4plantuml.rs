@@ -34,7 +34,7 @@
 //! system, landscape/context forbid containers/components) — no view
 //! kind may host the declared subset. Imported workspaces are opened
 //! through `api::open`, whose `createDefaultViews` installs the native
-//! views at load; the F12 fidelity bar is the semantic model (element/
+//! views at load; the fidelity bar is the semantic model (element/
 //! relationship sets), which is what import produces.
 //! Standard Structurizr JSON the official tooling loads — the official tooling
 //! read gate checks exactly that at milestone close.
@@ -387,7 +387,7 @@ const TOLERATED: &[&str] = &[
     "Leave_Boundary",
 ];
 
-/// The two macro languages sharing this machinery (N-2/N-3): identical
+/// The two macro languages sharing this machinery: identical
 /// macro names and scope semantics, different positional slots for the
 /// optional `$tags`/`$descr` — Mermaid spells `Person` as
 /// `(alias, label, descr, ?tags)`, `Container`/`Component` as
@@ -448,7 +448,7 @@ enum Scope {
 }
 
 /// Import one C4-PlantUML diagram into a fresh workspace (module docs
-/// for the full contract). File I/O stays upstream (N-4's CLI arc).
+/// for the full contract). File I/O stays upstream (the CLI arc).
 ///
 /// # Errors
 ///
@@ -460,7 +460,7 @@ pub fn import(text: &str) -> Result<Imported, ImportError> {
 }
 
 /// The shared macro-diagram pipeline (comment-stripped text in, model
-/// out) — [`crate::mermaid`] (N-3) reuses it with [`Dialect::Mermaid`].
+/// out) — [`crate::mermaid`] reuses it with [`Dialect::Mermaid`].
 ///
 /// # Errors
 ///

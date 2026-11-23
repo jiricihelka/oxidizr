@@ -3,7 +3,7 @@
 //!
 //! Rationale: the corpus has been re-pathed twice (`plan/` → `agents/plan/`, the
 //! AGENTS.md charter split), and each move needed a hand-audit for stale pointers.
-//! This walks the tree and checks two rules mechanically:
+//! This walks the tree and checks three rules mechanically:
 //!
 //! 1. **Paths** — tokens like `agents/plan/TESTING.md` or `crates/oxidizr-core/`
 //!    (anchored at the known roots) must exist, resolved from the repo root or the
@@ -14,6 +14,10 @@
 //!    (agents/plan/, agents/plan/build/, agents/notes/, root) and a heading in it
 //!    (case-insensitive substring, so `§Source of` matches `## Source of truth`).
 //!    `§6`-style numbered pointers are skipped (criterion/WRITE-CATALOG numbering).
+//! 3. **Human-text hygiene** (`check_hygiene`) — shipped crates' `src/` carries
+//!    no process ids and no implementation-provenance narration in comments or
+//!    string literals. Dev harnesses, `tests/` and the `agents/` corpus are out
+//!    of scope by design: they keep the provenance.
 //!
 //! Vendored `testdata/**` and `reports/**` are never scanned or touched.
 
@@ -274,17 +278,291 @@ pub fn check_tree(root: &Path, skip_extra: &[PathBuf]) -> Result<Vec<Finding>> {
     Ok(findings)
 }
 
+// --- Human-text hygiene leg -------------------------------------------------
+//
+// Shipped sources are user-visible prose (rustdoc, `--help`, UI strings): they
+// state facts, never process ids or implementation-history narration — the
+// provenance lives in the `agents/` corpus and the git history.
+//
+// Scope: `crates/oxidizr-*/src/**/*.rs` except the dev-only `oxidizr-e2e`
+// harness. Out of scope by construction: `tests/` (quotes pinned corpus text
+// on purpose), `agents/` (the provenance register itself) and `xtask` (keeps
+// its checker-grammar examples).
+
+/// True for shipped-crate sources (see the scope note above).
+fn is_hygiene_target(rel: &str) -> bool {
+    let ext_ok = Path::new(rel)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("rs"));
+    rel.starts_with("crates/oxidizr-")
+        && !rel.starts_with("crates/oxidizr-e2e/")
+        && rel.contains("/src/")
+        && ext_ok
+}
+
+/// Split a line at its first out-of-string `//`: (code part, comment part).
+fn split_comment(line: &str) -> (String, String) {
+    let mut in_str = false;
+    let mut escaped = false;
+    for (i, c) in line.char_indices() {
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+        } else if c == '"' {
+            in_str = true;
+        } else if c == '/' && line[i..].starts_with("//") {
+            return (line[..i].to_string(), line[i..].to_string());
+        }
+    }
+    (line.to_string(), String::new())
+}
+
+/// Bodies of the double-quoted literals in the code part (line-local
+/// heuristic: escapes are skipped, raw-string edges are treated loosely).
+fn string_literals(code: &str) -> Vec<String> {
+    let chars: Vec<char> = code.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '"' {
+            let mut lit = String::new();
+            i += 1;
+            while i < chars.len() {
+                match chars[i] {
+                    '\\' => {
+                        i += 1;
+                        if i < chars.len() {
+                            lit.push(chars[i]);
+                        }
+                    }
+                    '"' => break,
+                    c => lit.push(c),
+                }
+                i += 1;
+            }
+            out.push(lit);
+        }
+        i += 1;
+    }
+    out
+}
+
+fn is_word(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Process-id families in one text span: `§P` pointers, `P4-D2`/`P3-M8`
+/// phase-task ids, `M<n>` milestones, `O-/N-/V-<n>` verification ids,
+/// `T<n>-<x>` task ids, `D10`/`D11` deferred items, `Phase <n>` mentions and
+/// the `2R R-`/`R-<area>-<n>` review ids. `f_tags` additionally enables the
+/// bare `F1`..`F19` feature tags — comments only, because a string-literal
+/// `F1` is fixture data (e.g. a view key), not prose.
+fn process_id(text: &str, f_tags: bool) -> Option<&'static str> {
+    if text.contains("§P") {
+        return Some("a section-pointer id");
+    }
+    if text.contains("2R R-") {
+        return Some("a refactor id");
+    }
+    if ["R-mis-", "R-tool-", "R-design-", "R-ui-", "R-fuzz-"]
+        .iter()
+        .any(|w| text.contains(*w))
+    {
+        return Some("a review id");
+    }
+    let cs: Vec<char> = text.chars().collect();
+    let n = cs.len();
+    let at = |i: usize| cs.get(i).copied();
+    let digit = |c: char| c.is_ascii_digit();
+    let mut i = 0;
+    while i < n {
+        if !is_word(cs[i]) || (i > 0 && is_word(cs[i - 1])) {
+            i += 1;
+            continue;
+        }
+        let c = cs[i];
+        // dashed families first (a word run would stop at the `-`):
+        if c == 'P' && at(i + 1).is_some_and(|d| ('1'..='4').contains(&d)) && at(i + 2) == Some('-')
+        {
+            let third = at(i + 3);
+            let after = if matches!(third, Some('D' | 'M' | 'T' | 'R')) {
+                at(i + 4)
+            } else {
+                third
+            };
+            if after.is_some_and(digit) {
+                return Some("a phase-task id");
+            }
+        }
+        if matches!(c, 'O' | 'N' | 'V') && at(i + 1) == Some('-') && at(i + 2).is_some_and(digit) {
+            let mut j = i + 3;
+            if at(j).is_some_and(digit) {
+                j += 1;
+            }
+            if !at(j).is_some_and(is_word) {
+                return Some("a verification id");
+            }
+        }
+        if c == 'T'
+            && at(i + 1).is_some_and(digit)
+            && at(i + 2) == Some('-')
+            && at(i + 3).is_some_and(|c| c.is_ascii_lowercase())
+            && !at(i + 4).is_some_and(is_word)
+        {
+            return Some("a task id");
+        }
+        if c == 'P'
+            && cs[i..].starts_with(&['P', 'h', 'a', 's', 'e', ' '])
+            && at(i + 6).is_some_and(digit)
+        {
+            return Some("a phase mention");
+        }
+        // word-run families:
+        let mut j = i;
+        while j < n && is_word(cs[j]) {
+            j += 1;
+        }
+        let run: String = cs[i..j].iter().collect();
+        if let Some(d) = run.strip_prefix('M')
+            && !d.is_empty()
+            && d.len() <= 2
+            && d.chars().all(digit)
+        {
+            return Some("a milestone id");
+        }
+        if run == "D10" || run == "D11" {
+            return Some("a deferred-item id");
+        }
+        if f_tags
+            && let Some(d) = run.strip_prefix('F')
+            && d.chars().all(digit)
+            && ((d.len() == 1 && d != "0") || (d.len() == 2 && d.starts_with('1')))
+        {
+            return Some("a feature tag");
+        }
+        i = j;
+    }
+    None
+}
+
+/// Reference-implementation narration in one text span (provenance belongs to
+/// the plan corpus, not to shipped prose).
+fn narration(text: &str) -> Option<&'static str> {
+    let low = text.to_lowercase();
+    for (pat, label) in [
+        (
+            "reference implementation",
+            "reference-implementation narration",
+        ),
+        ("structurizr-monolith", "reference-repo narration"),
+        ("ported from", "port provenance"),
+    ] {
+        if low.contains(pat) {
+            return Some(label);
+        }
+    }
+    // `the reference` with a trailing word boundary: bare prose like
+    // "the referenced-image set" is not narration.
+    let mut from = 0;
+    while let Some(p) = low[from..].find("the reference") {
+        let end = from + p + "the reference".len();
+        if !low[end..].chars().next().is_some_and(is_word) {
+            return Some("reference narration");
+        }
+        from = end;
+    }
+    if let Some(p) = low.find(".java") {
+        let end = p + ".java".len();
+        if !low.as_bytes()[end..]
+            .first()
+            .is_some_and(u8::is_ascii_alphanumeric)
+        {
+            return Some("a Java-source citation");
+        }
+    }
+    None
+}
+
+/// What this source line's human text violates (comment + string literals),
+/// honoring the per-line `refs:ignore` escape hatch.
+fn hygiene_line(line: &str) -> Option<&'static str> {
+    if line.contains(IGNORE_DIRECTIVE) {
+        return None;
+    }
+    let (code, comment) = split_comment(line);
+    if !comment.is_empty() {
+        if let Some(w) = process_id(&comment, true).or_else(|| narration(&comment)) {
+            return Some(w);
+        }
+    }
+    for lit in string_literals(&code) {
+        if let Some(w) = process_id(&lit, false).or_else(|| narration(&lit)) {
+            return Some(w);
+        }
+    }
+    None
+}
+
+/// Walk `crates/` and flag process ids / provenance narration in the human
+/// text of shipped crates (scope: [`is_hygiene_target`]).
+pub fn check_hygiene(root: &Path) -> Result<Vec<Finding>> {
+    let mut findings = Vec::new();
+    let crates_dir = root.join("crates");
+    if !crates_dir.is_dir() {
+        return Ok(findings);
+    }
+    let mut stack = vec![crates_dir];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n != "target") {
+                    stack.push(path);
+                }
+                continue;
+            }
+            let rel = path
+                .strip_prefix(root)?
+                .to_string_lossy()
+                .replace('\\', "/");
+            if !is_hygiene_target(&rel) {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(&path) else {
+                continue; // binary/unreadable: skip
+            };
+            for (idx, line) in text.lines().enumerate() {
+                if let Some(what) = hygiene_line(line) {
+                    findings.push(Finding {
+                        file: rel.clone(),
+                        line: idx + 1,
+                        what: format!("human text carries {what}"),
+                    });
+                }
+            }
+        }
+    }
+    Ok(findings)
+}
+
 pub fn cmd_refs() -> Result<()> {
     let root = crate::repo_root()?;
-    let findings = check_tree(&root, &[])?;
+    let mut findings = check_tree(&root, &[])?;
+    findings.extend(check_hygiene(&root)?);
     if findings.is_empty() {
         println!("refs: all doc references resolve");
+        println!("refs: shipped human text is process-id and provenance clean");
         return Ok(());
     }
     for f in &findings {
         println!("{}:{}: {}", f.file, f.line, f.what);
     }
-    anyhow::bail!("refs: {} broken reference(s)", findings.len());
+    anyhow::bail!("refs: {} finding(s)", findings.len());
 }
 
 #[cfg(test)]
@@ -333,6 +611,64 @@ mod tests {
             extract_section_refs("all `AGENTS.md §…` references"),
             Vec::<(String, String)>::new()
         );
+    }
+
+    #[test]
+    fn hygiene_flags_process_ids_in_comments() {
+        for l in [
+            "//! `diff` — workspace-aware model diff (F3).",
+            "/// Pan: the plain-drag behavior of M1, unchanged.",
+            "// The `!docs`/`!adrs` importer registry (P4-M2f)",
+            "//! `oxidizr-api` in T0-c because the command bodies",
+            "/// V-8 (resolved): UTF-8 only at v0.1",
+            "//! the F12 fidelity bar is the semantic model",
+            "// per the P2-M1 decision register",
+            "// see §P3-M4 for the design row",
+            "// 2R R-tool-04 depth scan",
+            "// pinned as R-mis-7",
+            "// deferred to Phase 4",
+            "// deferred item D11 stays deferred",
+        ] {
+            assert!(hygiene_line(l).is_some(), "must flag: {l}");
+        }
+    }
+
+    #[test]
+    fn hygiene_flags_narration_in_comments_and_strings() {
+        for l in [
+            "/// Element style in `ElementStyle.java` declaration order:",
+            "let m = \"image import needs a file (the reference reads the bytes)\";",
+            "ui.weak(\"Hide tagged items (absent mode in the reference)\");",
+            "s.push_str(\"ported from the reference implementation\");",
+            "//! mirrored from Structurizr-Monolith",
+        ] {
+            assert!(hygiene_line(l).is_some(), "must flag: {l}");
+        }
+    }
+
+    #[test]
+    fn hygiene_passes_clean_prose_and_fixture_data() {
+        for l in [
+            "/// Compare two workspaces (`diff`): both sides load via `open`.",
+            "// the official tooling reads the bytes off disk",
+            "base: ViewBase::new(\"F1\", 2),",
+            "assert_eq!(scene.view_key, \"F2\");",
+            "let css = \"#00FF11\";",
+            "let url = \"https://structurizr.com/dsl\";",
+            "let v = Map::<String, String>::new(); // HashMap order is contract",
+            "fn f32_bits() {}",
+            "// planned forward reference refs:ignore",
+        ] {
+            assert_eq!(hygiene_line(l), None, "must pass: {l}");
+        }
+    }
+
+    #[test]
+    fn shipped_tree_is_hygiene_clean() {
+        // self-gating: the strip waves landed, so HEAD must pass its own leg.
+        let root = crate::repo_root().unwrap();
+        let findings = check_hygiene(&root).unwrap();
+        assert_eq!(findings, Vec::new(), "hygiene violations: {findings:?}");
     }
 
     #[test]

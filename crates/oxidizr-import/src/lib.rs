@@ -6,9 +6,8 @@
 //! image importer and image utilities
 //! (file → `ImageView` data-URI / content-type / title); the
 //! C4-PlantUML and Mermaid model importers are the agreed additional
-//! feature **F12** (registered additional feature — verified:
-//! the official tooling has NO model-parser counterpart), scope per
-//! the phase plan.
+//! features (registered: the official tooling has NO model-parser
+//! counterpart), scope per the phase plan.
 //!
 //! Contract invariants:
 //! - the output is a standard Structurizr workspace — features may never
@@ -89,7 +88,7 @@ pub enum ImportError {
     Failed(String),
 }
 
-/// `oxidizr import` legs (, F12): which `oxidizr-import`
+/// `oxidizr import` legs: which `oxidizr-import`
 /// engine processes the source. Travels on the `oxidizr-api` pipeline
 /// `Request::Import` (re-exported there unchanged); the CLI
 /// `--format` clap enum maps onto it 1:1.
@@ -160,7 +159,7 @@ pub(crate) fn java_canonical(path: &std::path::Path) -> std::path::PathBuf {
 }
 
 // ---------------------------------------------------------------------------
-// The `!docs`/`!adrs` importer registry (P4-M2f)
+// The `!docs`/`!adrs` importer registry
 // ---------------------------------------------------------------------------
 
 /// FQN of the default `!docs` documentation importer — the

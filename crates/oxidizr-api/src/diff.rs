@@ -1,4 +1,4 @@
-//! `diff` — workspace-aware model diff (F3).
+//! `diff` — workspace-aware model diff.
 //!
 //! The ENGINE is pure data: two loaded [`Workspace`]s in, a [`Diff`] out —
 //! no I/O, no formatting (the schema-1 JSON and the human report live

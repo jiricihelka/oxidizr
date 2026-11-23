@@ -395,7 +395,7 @@ fn java_color_decode(s: &str) -> Option<u32> {
         let d = u64::from(c.to_digit(radix)?);
         value = value.checked_mul(u64::from(radix))?.checked_add(d)?;
         if value > 0xFFFF_FFFF {
-            return None; // outside the RGB range the reference checks
+            return None; // outside the RGB range the official tooling checks
         }
     }
     if value > 0xFF_FFFF {

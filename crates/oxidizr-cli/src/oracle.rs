@@ -208,7 +208,7 @@ pub fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
     }
     // Pass 2: when the inspection entries were the ONLY members of the
     // workspace-level `properties` object (`workspace extends` clears the
-    // retained source, M5), pass 1 emptied it — but the library writer uses
+    // retained source), pass 1 emptied it — but the library writer uses
     // NON_EMPTY inclusion, so an EMPTY `"properties": { }` can only be a
     // deletion artifact: drop the braces too (comma rules as in pass 1).
     let mut out_lines: Vec<String> = Vec::new();

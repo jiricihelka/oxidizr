@@ -121,9 +121,9 @@ fn theme_json(t: &ThemeView<'_>) -> Json {
     Json::obj(entries)
 }
 
-/// Element style in `ElementStyle.java` declaration order: the parent fields
-/// first (`tag`, `colorScheme`, then `AbstractPropertyContainer.properties` —
-/// witness order 2026-11-17), then width…description.
+/// Element style in the official declaration order: the parent fields
+/// first (`tag`, `colorScheme`, then `AbstractPropertyContainer.properties`),
+/// then width…description.
 fn element_style(s: &ElementStyle) -> Json {
     Json::obj(vec![
         ("tag", Json::text(&s.tag)),

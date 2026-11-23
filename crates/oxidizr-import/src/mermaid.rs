@@ -25,7 +25,7 @@ use crate::macrocall::strip_comments_mermaid;
 use crate::{ImportError, Imported};
 
 /// Import one `Mermaid` C4 diagram into a fresh workspace (module docs
-/// for the full contract). File I/O stays upstream (N-4's CLI arc).
+/// for the full contract). File I/O stays upstream (the CLI arc).
 ///
 /// # Errors
 ///

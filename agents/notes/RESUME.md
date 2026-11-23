@@ -1,43 +1,29 @@
-# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D IN FLIGHT: D-1 `6f8fd6d`, D-2 `f605cbe`, D-3 `bce0ed9`, D-4 `a33fb16`, D-5 wave-C strip committed (HEAD) — next D-6 (message/string-literal pass — docs/*.md pages already rewritten, uncommitted), D-7 (refs hygiene leg + agent-doc trim), D-8 (close) → release tail E-4/E-5 (cargo-dist + `v0.4.0` tag + CHANGELOG, LOCAL)**)
+# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D IN FLIGHT: D-1 `6f8fd6d`, D-2 `f605cbe`, D-3 `bce0ed9`, D-4 `a33fb16`, D-5 `8a3430f`, D-6 `ec3e16f`+`a6caf09`, D-7 committed (HEAD) — next D-8 (close ritual → hand to release tail), E-4 (cargo-dist + release.yml), E-5 (0.4.0 bump + CHANGELOG + LOCAL `v0.4.0` tag, NEVER push)**)
 
 ## Active now (2026-11-23)
 
-- **P4D-D-5 DONE (wave-C strip)** — lsp/viewer/cli/xtask (e2e was 0):
-  batteries at KEEP-only (residuals: `oracle`/`oxidizr oracle` command
-  names, refs.rs checker-grammar examples, `testdata/probes` path tokens,
-  "OS preference"/`f32`/Base64/Java-in-example-strings false positives).
-  Viewer README rewritten 104→45 lines human-first; cli clap `///` help
-  rewritten (only help assertion is `--theme` at tests/cli.rs:576 — a
-  flag, unaffected). Comment-only audit: 0 code-side changes except two
-  INTENTIONAL xtask HELP string-literal pairs (`mirror (M6-d):`→`mirror:`,
-  `(slow, §P4-M3 O-4)`→`(slow)`) — dev-only binary, done early, flagged
-  in the commit note; D-6 skips them. Quartet green, bless 307×unchanged.
-  **Trap re-tripped**: the mid-line whitespace collapse
-  (`(?<=\S)  +(?=\S)`) crushed 108 3-space bullet-continuation indents
-  in viewer module docs + refs.rs → `clippy::doc_lazy_continuation`
-  under `-D warnings`; repair = re-indent continuation lines ONLY
-  (script kept at `/tmp/…/fix_continuations.py`). NEVER run it again on
-  comment lines.
-- **Strip scripts reusable**: `/tmp/nix-shell.BoHvza/opencode/{cli,xt,vw,lsp}_strip*.py`
-  + `{cli,xt}_batch.py` + `battery_dsl.py` (takes file/dir paths) +
-  `fix_continuations.py` (bullet-indent repair); mechanism = approx-line +
-  must-contain fragment + marker-normalizing rewrite, `None` deletes,
-  apply descending.
-- **D-6 NEXT (message pass)** — string literals + docs pages: the five
-  `docs/*.md` pages are ALREADY rewritten human-first (uncommitted; ride an
-  early D-6 commit). Bless prediction + what may/must not move:
-  `agents/notes/process/p4d-d6-bless-prediction.md`. In-test message
-  assertions update in the same commit as the message they assert.
-  Excludes the two xtask HELP lines (done at D-5).
-- **D-7** — hygiene leg in `crates/xtask/src/refs.rs` (FAIL on process ids
-  / official-impl narration in public doc comments + human strings of the
-  shipped crates; allowlist `agents/`, tests; reuse `check_file`/`check_tree`,
-  honor `refs:ignore`) + agent-doc trim.
-- **D-8** — close ritual: quartet + full e2e tier + bless (307×unchanged
-  expected — D-6 stamped any intended moves) + Category B (`TZ=UTC
-  cargo xtask oracle verify` + export-verify ×3, `$OXIDZR_STRUCTURIZR_BIN=/
+- **P4D-D-7 DONE (hygiene leg + agent-doc trim)** — `cargo xtask refs` now
+  carries a third leg (`check_hygiene`): FAILs on process ids (`§P`,
+  `P4-D2`-family, `M<n>`, `[ONV]-<n>`, `T<n>-x`, `D10/D11`, `Phase <n>`,
+  `2R R-`, `R-<area>-<n>`, bare `F1..F19` in COMMENTS only — string-literal
+  `F1` is fixture data) and reference-narration (`reference implementation`,
+  `Structurizr-Monolith`, `.java`, `the reference` with word boundary,
+  `ported from`) in comments + string literals of `crates/oxidizr-*/src`,
+  `oxidizr-e2e` excluded, `refs:ignore` honored. Self-gating test
+  `shipped_tree_is_hygiene_clean`; 4 unit tests; the quartet picks it up
+  with zero workflow change (V1 = extend, settled). V3 closed: `include_str!`
+  embeds init TEMPLATE files only — no doc comment is a string source.
+  Residual strip rode along (~15 files: bare `M<n>`/`V-8`/`F12`/`T0-c`/`N-2`
+  ids, `ElementStyle.java` citation, two `ported from`, the two JVM-codec
+  messages minus `D10` + their assertion, the viewer session-geometry UI
+  string, stmt_views module-doc grammar fix). Agent-doc trim: AGENTS.md
+  status line made durable + refs-leg blurb; t3 note pointer re-pathed.
+- **D-8 NEXT (close ritual)** — quartet + FULL e2e tier + bless (307×
+  unchanged expected) + Category B (`TZ=UTC cargo xtask oracle verify` +
+  export-verify ×3, `$OXIDZR_STRUCTURIZR_BIN=/
   nix/store/5yil7chk3cjg3qmsabq1vzdxv0v4bwm0-structurizr-2026.10.26/bin/
-  structurizr`) + PROGRESS `P4D` log.
+  structurizr`; slow — background chain) + PROGRESS `P4D` milestone log +
+  PHASE_4D D-table stamps (D1..D8 + V1/V2/V3 results).
 - **E-4/E-5** — cargo-dist via `nix develop` (0.34.0, `cargo dist check`),
   `.github/workflows/release.yml`; then 0.4.0 version bump (all path-deps),
   CHANGELOG.md folding the 3 frozen churn lines from

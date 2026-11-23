@@ -1,5 +1,5 @@
 //! "did you mean …?" decoration (the decoration freedom; home moved to
-//! `oxidizr-api` in T0-c because the command bodies that decorate with it
+//! `oxidizr-api` because the command bodies that decorate with it
 //! live in the headless pipeline).
 //!
 //! Computed at the API boundary — the engine's `Issue` message stays the

@@ -225,7 +225,7 @@ enum Drag {
     /// No press, or a press still undecided (a click is still
     /// possible): nothing mutates the scene.
     Idle,
-    /// Pan: the plain-drag behavior of M1, unchanged.
+    /// Pan: the plain-drag behavior, unchanged.
     Pan,
     /// Move the selected boxes: `origins` are their effective top-lefts
     /// captured at press; every frame writes `drag_target(origin,
@@ -972,7 +972,7 @@ impl Viewer {
         } else if response.drag_started_by(egui::PointerButton::Secondary) {
             // The lasso never hit-tests: a right-press always drags a
             // marquee (zero motion clears the selection, exactly as the
-            // left-lasso of ..M10 did).
+            // left-lasso did).
             if let Some(origin) = ui.input(|i| i.pointer.press_origin()) {
                 let shift = ui.input(|i| i.modifiers.shift);
                 self.drag = lasso_drag(self.selection.as_ref(), origin, shift);
@@ -2551,7 +2551,7 @@ impl Viewer {
                 if let Some(error) = &self.layout_error {
                     ui.colored_label(egui::Color32::DARK_RED, error);
                 }
-                ui.weak("Session geometry — not saved to the workspace (M3).");
+                ui.weak("Session geometry — not saved to the workspace.");
             });
         self.toggles.layout = open;
     }

@@ -1,7 +1,7 @@
 //! `textDocument/formatting` + `textDocument/rangeFormatting`
 //! .
 //!
-//! Both requests print through the P1-M6b canonical formatter
+//! Both requests print through the canonical formatter
 //! ([`oxidizr_dsl::fmt::format`]): lossless over the CST and NEVER
 //! validating (the lexer is infallible), so buffers WITH parse errors
 //! format — `parse(fmt(x)) == parse(x)` holds for every source.

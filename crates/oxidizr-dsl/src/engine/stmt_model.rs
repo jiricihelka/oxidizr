@@ -948,7 +948,7 @@ s3 = softwareSystem "S3"
                 "An element identified by \"nope\" could not be found",
                 "Index 1 out of bounds for length 1",
             ],
-            "bare !elements hits tokens.get(1) in the reference (no includes check)"
+            "bare !elements hits tokens.get(1) like the official tooling (no includes check)"
         );
     }
 

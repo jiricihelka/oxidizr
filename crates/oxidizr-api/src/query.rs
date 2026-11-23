@@ -3,15 +3,15 @@
 //! The model-side evaluator is the pinned DSL expression parser —
 //! reached through the public [`oxidizr_dsl::query`] entry (one parser,
 //! one evaluator: filtered views and `query` are its two consumers).
-//! Views have NO the official tooling expression grammar; for them a documented
-//! SUBSET of key/title/description comparisons matches — our own F6
-//! surface, cataloged in `docs/query-schema.md`.
+//! Views have NO expression grammar in the official tooling; for them a
+//! documented SUBSET of key/title/description comparisons matches — our
+//! own surface, cataloged in `docs/query-schema.md`.
 //!
 //! This module is the pure REPORT layer: rows and bytes only. The
-//! command body lives in [`crate::pipeline`] (the T0-d invariant, like
-//! `inspect`); the command is pure READ — the workspace never mutates,
+//! command body lives in [`crate::pipeline`] (as with `inspect`); the
+//! command is pure READ — the workspace never mutates,
 //! no diagnostic codes are invented, and the JSON output is a
-//! schema-versioned report (: no `oxidizr-json` byte contact).
+//! schema-versioned report (no `oxidizr-json` byte contact).
 
 use oxidizr_core::WorkspaceBuilder;
 use oxidizr_core::configuration::Workspace;
@@ -210,7 +210,7 @@ fn element_kind_label(kind: ElementKind) -> &'static str {
 }
 
 // ---------------------------------------------------------------------------
-// the view-subset grammar (our F6 surface — documented per arm)
+// the view-subset grammar (documented per arm)
 // ---------------------------------------------------------------------------
 
 /// Match one view against `filter` with the view-subset grammar:

@@ -35,9 +35,8 @@ use oxidizr_core::model::{ModelItem, Person, Relationship, SoftwareSystem};
 use oxidizr_core::properties::Properties;
 use oxidizr_core::tags::Tags;
 
-/// The default `--include` filter (ported from the official tooling
-/// `GenerateSystemLandscapeSubcommand`: logged as
-/// `- include: .*workspace.(json|dsl)`), a full-path full match.
+/// The default `--include` filter of the official landscape generator
+/// (logged as `- include: .*workspace.(json|dsl)`), a full-path full match.
 pub const DEFAULT_INCLUDE: &str = r".*workspace.(json|dsl)";
 
 /// Which duplicate source→destination edges survive the merge

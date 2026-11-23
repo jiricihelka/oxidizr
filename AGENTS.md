@@ -11,8 +11,8 @@ fix this file.
 "models-as-code" architecture tool, [C4 model](https://c4model.com)). Core
 promise: **full compatibility** with Structurizr DSL (`.dsl`) and JSON (`.json`)
 workspaces — consumable by the official tooling and back, byte-comparable at the
-JSON level where the format defines it. Status: Phase 1 — milestone log in
-`agents/plan/PROGRESS.md`, current scope in `agents/plan/build/PHASE_1.md`.
+JSON level where the format defines it. Milestone log: `agents/plan/PROGRESS.md`;
+current scope: the newest `agents/plan/build/PHASE_N.md`.
 
 ## Where things are
 
@@ -58,6 +58,10 @@ cargo xtask ci windows      # + Wine windows-gnu leg (needs `nix develop`)
 cargo xtask bench | cov     # bench / coverage job mirrors
 cargo xtask oracle verify   # Category B (needs $OXIDZR_STRUCTURIZR_BIN, slow)
 ```
+
+`refs` checks two things: every doc path/§pointer resolves, and shipped
+crates' human text carries no process ids or implementation-provenance
+narration (that provenance lives in `agents/`, never in user-visible prose).
 
 Full command table, dev-shell policy, CLI/config rules: `agents/plan/WORKFLOW.md`.
 Test categories A/B, golden corpus rules, benchmarks: `agents/plan/TESTING.md`.

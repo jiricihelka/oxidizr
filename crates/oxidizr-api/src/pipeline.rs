@@ -222,7 +222,7 @@ pub enum Request {
         /// created as needed — the official tooling `ExportCommand`).
         output: Option<PathBuf>,
     },
-    /// Compare two workspaces (`diff`, F3): both sides load via
+    /// Compare two workspaces (`diff`): both sides load via
     /// [`crate::open::open`] (extension dispatch, partial DSL opens ride
     /// the log), then the pure engine in [`crate::diff`] decides.
     Diff {
@@ -299,7 +299,7 @@ pub enum Request {
         /// Output file (`None` = stdout bytes).
         output: Option<PathBuf>,
     },
-    /// Scaffold a starter project (`init`, F7): the
+    /// Scaffold a starter project (`init`): the
     /// embedded template files (`include_str!` — zero network, zero new
     /// deps) written into `dir` (created when missing). Idempotent:
     /// existing files are SKIPPED with a note unless `force`; the human
@@ -544,7 +544,7 @@ pub(crate) fn read_input(input: &Input, opts: &ApiOptions) -> Result<Source, Iss
     }
 }
 
-/// V-8 (resolved): UTF-8 only at v0.1 — no `--encoding` flag; the official tooling
+/// UTF-8 only at v0.1 — no `--encoding` flag: the official tooling
 /// `parse(File)` reads the platform charset, oxidizr pins UTF-8 and fails
 /// loudly instead of garbling.
 fn decode(bytes: &[u8], name: &str) -> Result<String, Issue> {
@@ -678,7 +678,7 @@ fn emit_bytes(out: &mut Outcome, bytes: Vec<u8>, output: Option<&Path>) -> Resul
 }
 
 // ---------------------------------------------------------------------------
-// Command bodies (ported from oxidizr-cli; flow, order and messages identical)
+// Command bodies (moved from oxidizr-cli; flow, order and messages identical)
 // ---------------------------------------------------------------------------
 
 fn dsl2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<Outcome, Fail> {
@@ -739,7 +739,7 @@ fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<
     Ok(out)
 }
 
-/// `reconcile` (F1): re-parse the edited DSL (the model authority),
+/// `reconcile`: re-parse the edited DSL (the model authority),
 /// load the pre-edit layout JSON (the geometry authority), remap ids
 /// (identifier exact → canonical fallback, ambiguity = OXZ-3002, never
 /// guessed) and graft the layout. The standard JSON is emitted FIRST (the
@@ -797,7 +797,7 @@ fn reconcile_cmd(
 }
 
 /// `validate`: format by extension, DSL parse or JSON read + hydrate,
-/// then the M2 validation catalog on the loaded workspace. Exit: `Diagnostics`
+/// then the validation catalog on the loaded workspace. Exit: `Diagnostics`
 /// when any issue blocks (severity vs `--strict`), else `Io` on I/O trouble,
 /// else `Ok`.
 fn validate(files: &[PathBuf], opts: &ApiOptions) -> Outcome {
@@ -1142,7 +1142,7 @@ fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Result<Outco
     Ok(out)
 }
 
-/// `diff` (F3): load BOTH sides through [`crate::open::open`]
+/// `diff`: load BOTH sides through [`crate::open::open`]
 /// (extension dispatch, `.dsl`/`.json`; a recoverable DSL opens partially —
 /// its diagnostics ride the log INFORMATIONALLY, the official tooling has no `diff`
 /// so no parity rule binds them), run the pure engine, and carry the result:
@@ -1391,7 +1391,7 @@ fn query_cmd(
     Ok(out)
 }
 
-/// `oxidizr init` (F7): write the [`crate::init`]
+/// `oxidizr init`: write the [`crate::init`]
 /// scaffold into `dir` (created when missing). Idempotent — existing
 /// files are skipped with a note unless `force`; every existing-file
 /// note keeps exit `Ok` (nothing failed). The report is RELATIVE paths

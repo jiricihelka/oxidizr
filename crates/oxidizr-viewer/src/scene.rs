@@ -296,8 +296,8 @@ pub struct Scene {
 
 /// Session auto-layout geometry: what the [`layout`] module
 /// produced for the current view, overlaid on the stored values at
-/// [`build`] time. NEVER persisted (the editor rule,: session
-/// geometry only until M3 owns saving) and per-view (the shell clears
+/// [`build`] time. NEVER persisted (the editor rule: session geometry
+/// only until the editor owns saving) and per-view (the shell clears
 /// it on every view change).
 ///
 /// [`layout`]: crate::layout
@@ -2044,7 +2044,7 @@ mod tests {
     #[test]
     fn empty_waypoint_override_straightens_edge() {
         // `relationships[id] == []` (the engine's 2-point route) drops
-        // the stored vertices — the "remove vertices" contract of M3.
+        // the stored vertices — the "remove vertices" contract.
         let ws = with_landscape(
             workspace(),
             ViewContent {
