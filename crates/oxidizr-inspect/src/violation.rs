@@ -1,9 +1,8 @@
-//! `Violation` (`structurizr-inspection/Violation.java`) — one finding:
-//! the inspection TYPE, its resolved [`Severity`], and the message.
+//! `Violation` — one finding: the inspection TYPE, its resolved
+//! [`Severity`], and the message.
 //!
-//! The reference carries the `Inspection` object and rewrites severity in
-//! place (`withSeverity`); here it arrives fully resolved. The human report
-//! line is the reference `toString()`: `type | SEVERITY | message`.
+//! A violation arrives fully resolved (severity is never rewritten in
+//! place). The human report line is `type | SEVERITY | message`.
 
 use std::fmt;
 
@@ -12,18 +11,18 @@ use crate::severity::Severity;
 /// One inspection violation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Violation {
-    /// `Inspection.getType()` — the dotted path, e.g.
+    /// The inspection type — the dotted path, e.g.
     /// `model.container.technology` (the property-key stem and the
     /// `--only` / `--except` filter value).
     pub inspection: &'static str,
     /// Resolved severity (property strategy, see `crate::strategy`).
     pub severity: Severity,
-    /// The reference message, verbatim.
+    /// The official tooling's message, verbatim.
     pub message: String,
 }
 
 impl fmt::Display for Violation {
-    /// `Violation.toString()`.
+    /// The human report line: `type | SEVERITY | message`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

@@ -1,8 +1,8 @@
-//! Shared plumbing for the macro-language importers (F12, §P4-M2 N-2/N-3):
+//! Shared plumbing for the macro-language importers:
 //! PlantUML/Mermaid-flavored comment stripping, a small `!$var`
 //! preprocessor, logical-line joining and quote-aware macro-call parsing.
 //!
-//! The grammar handled here is deliberately a SUBSET (P4-D8, R-1):
+//! The grammar handled here is deliberately a SUBSET:
 //! one macro call per logical line, `"..."` string arguments with `~"`
 //! as the literal-quote escape, positional optional arguments mixed with
 //! `$key = value` keyword arguments (the official C4-PlantUML calling

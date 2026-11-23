@@ -3,9 +3,9 @@
 //! `Renderer` remains the only miette user).
 //!
 //! Engine `DslError`s, `JsonError`s and core validation messages normalize
-//! into [`Issue`]s here. A `DslError` carries the reference message WITHOUT
-//! the ` at line N of <path>` suffix the reference exception text appends —
-//! the CLI re-appends it verbatim (users grep for reference texts), and
+//! into [`Issue`]s here. A `DslError` carries the official tooling message WITHOUT
+//! the ` at line N of <path>` suffix the official tooling exception text appends —
+//! the CLI re-appends it verbatim (users grep for the official tooling texts), and
 //! renders the error's `source_line` as a miette snippet.
 
 use std::fmt::Write as _;
@@ -21,8 +21,8 @@ pub struct Issue {
     pub severity: OxzSeverity,
     /// Stable OXZ code.
     pub code: Code,
-    /// Full one-line message (reference text, location suffix included
-    /// where the reference has one).
+    /// Full one-line message (the official tooling text, location suffix included
+    /// where the official tooling has one).
     pub message: String,
     /// Snippet (named source text + labelled byte range); boxed so the
     /// `Err`-variant stays small (`result_large_err`).
@@ -70,7 +70,7 @@ impl Issue {
         self
     }
 
-    /// Engine statement/parse error: reference exception text re-assembled
+    /// Engine statement/parse error: the official tooling exception text re-assembled
     /// (`<message>` minus trailing `.` + ` at line N of <file>`), snippet =
     /// the offending logical line.
     #[must_use]

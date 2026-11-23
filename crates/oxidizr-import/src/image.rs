@@ -1,24 +1,23 @@
-//! The `image` importer — port of `structurizr-import`
-//! `diagrams/image/ImageImporter` (file variant) + `ImageUtils`
-//! (`structurizr-core`). The reference semantics: the `ImageView` gets
+//! The `image` importer — file variant of the official image importer
+//! plus the official image-utils helpers. The semantics: the `ImageView` gets
 //! `content = data:<type>;base64,<payload>`, `contentType`, and
 //! `title = file name` (`ImageView.name` IS the title in the JSON, see
 //! the writer's `View::Image` rule).
 //!
-//! Pinned reference behaviors:
-//! - the supported-type table follows `ImageUtils`' extension constants
+//! Pinned behaviors:
+//! - the supported-type table follows the official extension constants
 //!   (`.png`/`.jpg`/`.jpeg` → jpeg, `.gif`, `.svg`; anything else is not
-//!   a supported image file — the JVM's `guessContentTypeFromName` never
+//!   a supported image file — the official name-guesser never
 //!   resolves a non-`image/*` type through this table);
 //! - the data URI embeds the RAW file bytes for EVERY type. Deviation
-//!   (registered in `DEVIATIONS.md`): the reference runs non-SVG images
-//!   through an AWT `ImageIO` read+WRITE re-encode, whose bytes depend
-//!   on the JVM version — irreproducible by design; the raw payload is
-//!   deterministic, identical in shape, and exactly what the reference
-//!   does for SVG (`getImageAsBase64` passes SVG bytes through).
-//! - the URL variant of the reference importer is a network fetch
-//!   (`httpClient.get`) — D5-adjacent, deferred like the kroki leg
-//!   (P4-D8); only the local-file variant is ported.
+//!   (documented deviation): the official tooling runs non-SVG images
+//!   through a read+WRITE image re-encode, whose bytes depend
+//!   on the runtime version — irreproducible by design; the raw payload is
+//!   deterministic, identical in shape, and exactly what the official tooling
+//!   does for SVG (SVG bytes pass through untouched).
+//! - the URL variant of the official tooling importer is a network fetch
+//!   (an HTTP fetch) — network work, deferred like the kroki leg;
+//!   only the local-file variant is implemented.
 
 use std::path::Path;
 
@@ -30,18 +29,18 @@ use crate::{ImportError, Imported};
 /// Options for [`import_image`] (the CLI's `--view-key`/`--view-name`).
 #[derive(Debug, Default, Clone)]
 pub struct ImageImport<'a> {
-    /// Explicit view key; `None`/empty ⇒ the reference
+    /// Explicit view key; `None`/empty ⇒ the official tooling
     /// `generateViewKey("Image")` = `Image-001` (+ `generatedKey`).
     pub view_key: Option<&'a str>,
     /// View title override (the JSON `name` of an `ImageView` is the
     /// title verbatim); `None` ⇒ the file name, exactly like the
-    /// reference `view.setTitle(file.getName())`.
+    /// the official tooling `view.setTitle(file.getName())`.
     pub view_name: Option<&'a str>,
 }
 
-/// The reference content-type table (`ImageUtils` extension constants).
+/// The official tooling content-type table (`ImageUtils` extension constants).
 /// `name` is the FILE NAME; the extension match is case-insensitive
-/// (JVM name guessing is suffix-based, `.PNG` resolves).
+/// (name guessing is suffix-based, `.PNG` resolves).
 #[must_use]
 pub fn content_type_of(name: &str) -> Option<&'static str> {
     let dot = name.rfind('.')?;
@@ -56,16 +55,16 @@ pub fn content_type_of(name: &str) -> Option<&'static str> {
 
 /// Import one local image file: build a fresh workspace whose single
 /// `ImageView` carries the data URI, content type and title (module
-/// docs for the pinned semantics).
+/// docs for the verified semantics).
 ///
 /// # Errors
 ///
 /// [`ImportError::Missing`]/[`ImportError::NotFile`]/
-/// [`ImportError::Unsupported`] mirror the reference's
-/// `IllegalArgumentException` checks in its order;
+/// [`ImportError::Unsupported`] mirror the official tooling’s
+/// `invalid-argument crash` checks in its order;
 /// [`ImportError::Io`] for read failures.
 pub fn import_image(path: &Path, opts: &ImageImport<'_>) -> Result<Imported, ImportError> {
-    // The reference checks exist() then isFile() before guessing the
+    // The official tooling checks exist() then isFile() before guessing the
     // type — keep the order (a directory named `x.png` errors, not
     // imports).
     if !path.exists() {
@@ -89,7 +88,7 @@ pub fn import_image(path: &Path, opts: &ImageImport<'_>) -> Result<Imported, Imp
     let payload = base64::engine::general_purpose::STANDARD.encode(&bytes);
     let content = format!("data:{content_type};base64,{payload}");
 
-    // The view is created through the reference `createImageView` rules
+    // The view is created through the official tooling `createImageView` rules
     // (generated key when empty, order = max + 1, uniqueness).
     let mut builder = WorkspaceBuilder::new();
     let view = builder.create_image_view(
@@ -128,7 +127,7 @@ mod tests {
         path
     }
 
-    /// A real 1x1 PNG (the raw-bytes port embeds it BYTE-IDENTICAL).
+    /// A real 1x1 PNG (the raw-bytes oxidizr embeds it BYTE-IDENTICAL).
     const PNG_1X1: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
     fn png_bytes() -> Vec<u8> {
@@ -147,7 +146,7 @@ mod tests {
         assert_eq!(content_type_of("a.svg"), Some("image/svg+xml"));
         assert_eq!(content_type_of("a.txt"), None);
         assert_eq!(content_type_of("noextension"), None);
-        // Suffix-based like the JVM guesser: the LAST dot decides.
+        // Suffix-based like the official guesser: the LAST dot decides.
         assert_eq!(content_type_of("archive.tar.png"), Some("image/png"));
     }
 
@@ -159,11 +158,11 @@ mod tests {
         let views = &imported.workspace.views;
         assert_eq!(views.image_views.len(), 1);
         let view = &views.image_views[0];
-        // Fresh workspace ⇒ the reference generateViewKey + order 1.
+        // Fresh workspace ⇒ the official tooling generateViewKey + order 1.
         assert_eq!(view.base.key, "Image-001");
         assert!(view.base.generated_key);
         assert_eq!(view.base.order, 1);
-        // The reference title = file name (the JSON name of an image
+        // The official tooling title = file name (the JSON name of an image
         // view IS the title).
         assert_eq!(view.base.title.as_deref(), Some("dot.png"));
         assert_eq!(view.content_type.as_deref(), Some("image/png"));

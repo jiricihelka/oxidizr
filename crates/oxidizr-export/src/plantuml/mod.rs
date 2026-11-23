@@ -1,9 +1,7 @@
-//! The shared Structurizr-PlantUML layer (port of
-//! `export/plantuml/AbstractPlantUMLExporter`'s reusable helpers): the
-//! `plantuml.*` property constants, the shape maps, the icon rules (D12
-//! scale pin) and the diagram engine ([`Engine`]/[`Dialect`], the
-//! `AbstractDiagramExporter` port). Dialects implement [`Dialect`]:
-//! `structurizr` (M2-c), `c4plantuml` (M3).
+//! The shared Structurizr-PlantUML layer: the `plantuml.*` property
+//! constants, the shape maps, the icon rules and the diagram engine
+//! ([`Engine`]/[`Dialect`]). Dialects implement [`Dialect`]:
+//! `structurizr` and `c4plantuml`.
 
 pub mod c4;
 pub mod engine;
@@ -17,58 +15,60 @@ pub use structurizr::StructurizrDialect;
 
 use oxidizr_core::views::Shape;
 
-/// `PLANTUML_TITLE_PROPERTY` (title leg gate — case-SENSITIVE `equals`).
+/// `plantuml.title` — title gate; the match is case-SENSITIVE.
 pub const PLANTUML_TITLE_PROPERTY: &str = "plantuml.title";
-/// `PLANTUML_INCLUDES_PROPERTY`.
+/// `plantuml.includes` — comma-separated `!include` lines.
 pub const PLANTUML_INCLUDES_PROPERTY: &str = "plantuml.includes";
-/// `PLANTUML_SKINPARAMS_PROPERTY`.
+/// `plantuml.skinparams` — comma-separated `name=value` pairs written into
+/// a `skinparam { … }` block.
 pub const PLANTUML_SKINPARAMS_PROPERTY: &str = "plantuml.skinparams";
-/// `PLANTUML_ANIMATION_PROPERTY` (`isAnimationSupported`).
+/// `plantuml.animation` — whether animation frames are exported.
 pub const PLANTUML_ANIMATION_PROPERTY: &str = "plantuml.animation";
-/// `PLANTUML_SEQUENCE_DIAGRAM_PROPERTY` (dynamic-view sequence gate).
+/// `plantuml.sequenceDiagram` — sequence-diagram gate for dynamic views.
 pub const PLANTUML_SEQUENCE_DIAGRAM_PROPERTY: &str = "plantuml.sequenceDiagram";
-/// `PLANTUML_BOUNDARIES` (sequence-path boundary boxes).
+/// `plantuml.boundaries` — boundary boxes along sequence paths.
 pub const PLANTUML_BOUNDARIES_PROPERTY: &str = "plantuml.boundaries";
-/// Element-style property `plantuml.shadow` (`StructurizrPlantUMLExporter`).
+/// Element-style property `plantuml.shadow`.
 pub const PLANTUML_SHADOW_PROPERTY: &str = "plantuml.shadow";
-/// `C4PLANTUML_LEGEND_PROPERTY` (`SHOW_LEGEND`, default `true`).
+/// `c4plantuml.legend` — controls `SHOW_LEGEND` (default `true`).
 pub const C4PLANTUML_LEGEND_PROPERTY: &str = "c4plantuml.legend";
-/// `C4PLANTUML_STEREOTYPES_PROPERTY` (`show`/`hide stereotypes`, `false`).
+/// `c4plantuml.stereotypes` — `show`/`hide stereotypes` (default `false`).
 pub const C4PLANTUML_STEREOTYPES_PROPERTY: &str = "c4plantuml.stereotypes";
-/// `C4PLANTUML_TAGS_PROPERTY` (the tags section, `false`).
+/// `c4plantuml.tags` — includes the tags section (default `false`).
 pub const C4PLANTUML_TAGS_PROPERTY: &str = "c4plantuml.tags";
-/// `C4PLANTUML_STANDARD_LIBRARY_PROPERTY` (`<C4/…>` vs raw-URL includes,
-/// `true`).
+/// `c4plantuml.stdlib` — `<C4/…>` standard-library includes vs raw-URL
+/// includes (default `true`).
 pub const C4PLANTUML_STANDARD_LIBRARY_PROPERTY: &str = "c4plantuml.stdlib";
 /// Element-style property `c4plantuml.sprite` (tags section `$sprite`).
 pub const C4PLANTUML_SPRITE: &str = "c4plantuml.sprite";
 /// Element-style property `c4plantuml.shadow` (tags section `$shadowing`).
 pub const C4PLANTUML_SHADOW: &str = "c4plantuml.shadow";
-/// `C4PLANTUML_ELEMENT_PROPERTIES_PROPERTY` (`AddProperty` on elements and
-/// deployment nodes, `false`).
+/// `c4plantuml.elementProperties` — writes `AddProperty` lines on elements
+/// and deployment nodes (default `false`).
 pub const C4PLANTUML_ELEMENT_PROPERTIES_PROPERTY: &str = "c4plantuml.elementProperties";
-/// `C4PLANTUML_RELATIONSHIP_PROPERTIES_PROPERTY` (`AddProperty` on
-/// relationships, `false`).
+/// `c4plantuml.relationshipProperties` — writes `AddProperty` lines on
+/// relationships (default `false`).
 pub const C4PLANTUML_RELATIONSHIP_PROPERTIES_PROPERTY: &str = "c4plantuml.relationshipProperties";
-/// `DIAGRAM_TITLE_TAG` (title font-size style tag).
+/// `Diagram:Title` — element style tag giving the diagram title its style.
 pub const DIAGRAM_TITLE_TAG: &str = "Diagram:Title";
-/// `DIAGRAM_DESCRIPTION_TAG`.
+/// `Diagram:Description` — element style tag giving the diagram description
+/// its style.
 pub const DIAGRAM_DESCRIPTION_TAG: &str = "Diagram:Description";
 
-/// D12: the icon scale is PINNED to the reference's fallback constant
-/// (`calculateIconScale` fetches the image; every failure path lands here
-/// — oxidizr never touches the network during export). Already formatted
-/// as the reference would render it (`Double.toString(0.5)`).
+/// The icon scale is PINNED to the official tooling's fallback constant
+/// (the icon fetch always fails over to it — oxidizr never touches the
+/// network during export, so the fallback always applies). Already
+/// formatted the way the official tooling renders it.
 pub const ICON_SCALE: &str = "0.5";
 
-/// `AbstractPlantUMLExporter.isSupportedIcon`: non-empty (trim) AND the
+/// An icon is supported when its URL is non-empty (after trimming) AND the
 /// raw string starts with `http` (any http prefix — not https-only).
 #[must_use]
 pub fn is_supported_icon(icon: Option<&str>) -> bool {
     icon.is_some_and(|i| !i.trim().is_empty() && i.starts_with("http"))
 }
 
-/// `plantUMLShapeOf(Shape)` (catalog §4).
+/// The `PlantUML` shape name for a model shape.
 #[must_use]
 pub const fn plantuml_shape_of(shape: Option<Shape>) -> &'static str {
     match shape {
@@ -83,7 +83,7 @@ pub const fn plantuml_shape_of(shape: Option<Shape>) -> &'static str {
     }
 }
 
-/// `plantumlSequenceType(Shape)` (catalog §8).
+/// The `PlantUML` sequence-diagram participant type for a model shape.
 #[must_use]
 pub const fn plantuml_sequence_shape_of(shape: Option<Shape>) -> &'static str {
     match shape {
@@ -95,8 +95,8 @@ pub const fn plantuml_sequence_shape_of(shape: Option<Shape>) -> &'static str {
     }
 }
 
-/// Java `String.compareTo` (UTF-16 code units) — the ordering behind every
-/// name/id/group sort in the engine (same precedent as core `viewops`).
+/// The UTF-16 code-unit text order — the ordering behind
+/// every name/id/group sort in the engine (same precedent as core `viewops`).
 pub(crate) fn java_cmp_str(a: &str, b: &str) -> std::cmp::Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
 }

@@ -1,4 +1,4 @@
-//! Cache-path resolution (P2-D3 item 2, `agents/plan/build/PHASE_2.md`):
+//! Cache-path resolution for the theme cache:
 //! hand-rolled XDG/Known-Folders resolution from std + env only (the
 //! portability rule — no crates), plus the SHA-256 used for cache keys
 //! (hand-rolled FIPS 180-4, std-only).
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 /// unixes, `$XDG_CACHE_HOME` else `$HOME/.cache`),
 /// `$HOME/Library/Caches/oxidizr/themes` (macOS),
 /// `%LOCALAPPDATA%\oxidizr\themes` (Windows). `None` when the environment
-/// cannot answer (cache then simply stays off; the reference has no cache at
+/// cannot answer (cache then simply stays off; the official tooling has no cache at
 /// all, so this can only ADD convenience, never behavior).
 #[must_use]
 pub fn themes_cache_dir() -> Option<PathBuf> {
@@ -45,7 +45,7 @@ fn dir_from(root: Option<std::ffi::OsString>, a: &str, b: &str) -> Option<PathBu
     Some(Path::new(&root).join(a).join(b))
 }
 
-/// SHA-256 round constants (`K`, FIPS 180-4 §4.2.2).
+/// SHA-256 round constants (`K`, FIPS 180-4 .2).
 const K: [u32; 64] = [
     0x428a_2f98,
     0x7137_4491,
@@ -113,7 +113,7 @@ const K: [u32; 64] = [
     0xc671_78f2,
 ];
 
-/// Initial hash value `H0` (FIPS 180-4 §5.3.3).
+/// Initial hash value `H0` (FIPS 180-4 .3).
 const H0: [u32; 8] = [
     0x6a09_e667,
     0xbb67_ae85,
@@ -125,7 +125,7 @@ const H0: [u32; 8] = [
     0x5be0_cd19,
 ];
 
-/// One compression step (FIPS 180-4 §6.2.2) over a 64-byte block, folding the
+/// One compression step (FIPS 180-4 .2) over a 64-byte block, folding the
 /// result into `h`. The single-character working variables `a`–`g` are the
 /// spec's A–G notation verbatim — algorithm fidelity, not sloppiness.
 #[allow(clippy::many_single_char_names)]
@@ -169,7 +169,7 @@ fn compress(h: &mut [u32; 8], block: &[u8]) {
 }
 
 /// Lowercase hex SHA-256 (FIPS 180-4) — the theme URL cache-key hash
-/// (`<cache>/<sha256(url)>/theme.json`, P2-D3).
+/// (`<cache>/<sha256(url)>/theme.json`).
 #[must_use]
 pub fn sha256_hex(data: &[u8]) -> String {
     // Pad: 0x80, zeros to a 56 mod 64 offset, 64-bit big-endian bit length.

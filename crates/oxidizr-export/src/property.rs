@@ -1,29 +1,25 @@
 //! The exporters' property cascade — the single typed read of view/view-set
-//! properties (P2-D8; `agents/plan/build/EXPORT-PROPERTIES.md` §2).
+//! properties.
 //!
-//! The reference reads every diagram property through
-//! `AbstractDiagramExporter.getViewOrViewSetProperty` (848-line file,
-//! 762-770, pinned `ad34036`):
+//! One cascade with a default, used for every diagram property:
 //!
-//! ```java
-//! view.getProperties().getOrDefault(name,
-//!     views.getConfiguration().getProperties().getOrDefault(name, defaultValue));
+//! ```text
+//! view.properties[name]  →  views.configuration.properties[name]  →  default
 //! ```
 //!
 //! Two levels plus a default — the VIEW property wins; on absence the
 //! `views.configuration` property; on absence again the call-site default.
-//! Model and workspace properties are NOT consulted (catalog §2). The Java
-//! `getOrDefault` semantics matter: a PRESENT entry is returned even when its
-//! value is the empty string — only absence cascades (so `plantuml.title` set
-//! to `""` on the view suppresses a view-set title rather than falling back
-//! to it). Match case-sensitivity differs per property and lives with each
-//! call site (catalog §4), never here.
+//! Model and workspace properties are NOT consulted. A PRESENT entry is
+//! returned even when its value is the empty string — only absence cascades
+//! (so `plantuml.title` set to `""` on the view suppresses a view-set title
+//! rather than falling back to it). Match case-sensitivity differs per
+//! property and lives with each call site, never here.
 
 use oxidizr_core::views::{ViewBase, ViewSet};
 
-/// `getViewOrViewSetProperty`: the value of `name` on `view`, else on
+/// The value of `name` on `view`, else on
 /// `views.configuration.properties`, else `default`. Present-but-empty
-/// values are returned verbatim — emptyness never cascades.
+/// values are returned verbatim — emptiness never cascades.
 #[must_use]
 pub fn export_property<'a>(
     view: &'a ViewBase,
@@ -84,7 +80,7 @@ mod tests {
 
     #[test]
     fn present_but_empty_value_is_returned_not_cascaded() {
-        // Java `getOrDefault` returns present entries verbatim: an empty
+        // Present entries are returned verbatim: an empty
         // view value suppresses the view-set value (and vice versa: an
         // empty view-set value suppresses the default).
         let v = view("k", "plantuml.title", "");

@@ -1,12 +1,12 @@
 //! The shared diagram engine — the port of `export/AbstractDiagramExporter`
 //! (848 lines) + the `AbstractExporter` helpers (`breakText`, `typeOf`),
-//! pinned `ad34036`. Iteration contracts: `agents/plan/build/EXPORT-PLANTUML.md` §14.
+//! pinned. Iteration contracts: the export catalog.
 //!
-//! The Java base class is abstract over the dialect's writers; the Rust
+//! The official base class is abstract over the dialect’s writers; the Rust
 //! shape is an [`Engine`] struct (workspace + color scheme + the untyped
 //! `frame` state) driving a [`Dialect`] trait of the `write*`/`start*`/
-//! `end*` hooks. Element "identity" (Java never overrides `equals` — every
-//! `contains`/`indexOf`/`Set` is reference-based) becomes id equality: the
+//! `end*` hooks. Element "identity" (the official tooling never overrides `equals` — every
+//! `contains`/`indexOf`/`Set` is identity-based) becomes id equality: the
 //! model keeps one object per id.
 
 use std::cell::{OnceCell, RefCell};
@@ -26,10 +26,10 @@ use crate::plantuml::java_cmp_str;
 use crate::plantuml::model::{ElemRef, element_by_id};
 use crate::property::export_property;
 
-/// The `frame` field — Java's untyped `Object`: `Integer` (static/
-/// deployment animation step, also used for custom views) or `String`
-/// (dynamic relationship-view order). A Java `null` order stays `null`
-/// (the `LinkedHashSet` keeps the null entry; `this.frame = null`
+/// The `frame` field — the official untyped slot: an integer (static/
+/// deployment animation step, also used for custom views) or a string
+/// (dynamic relationship-view order). A null order stays `null`
+/// (the `LinkedHashSet` keeps the null entry; a null frame write stays
 /// re-exports everything visible), so it maps to NO frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Frame {
@@ -43,18 +43,18 @@ pub enum Frame {
 /// `AbstractDiagramExporter` the engine drives, plus the two
 /// `AbstractPlantUMLExporter` boundary-box hooks the sequence path uses
 /// and the two gates (`isAnimationSupported`, `renderAsSequenceDiagram`).
-/// The Structurizr dialect (M2-c) and C4 dialect (M3) implement this.
+/// The Structurizr and C4 dialects implement this.
 /// Every hook ties the engine, view and element to ONE lifetime `'a`, so
 /// implementations can call the engine's element helpers
 /// (`type_of`/`canonical_name`/`property`) with the element they are
 /// handed.
 pub trait Dialect {
     /// `writeHeader`. `Result` because the Structurizr header's title
-    /// fallback (`view.getName()`) NPEs on a dangling view scope.
+    /// fallback (the view name) crashes on a dangling view scope.
     ///
     /// # Errors
     ///
-    /// [`ExportError::ReferenceAbort`] on the Java NPE/cast paths reached
+    /// [`ExportError::ReferenceAbort`] on the official tooling null-pointer/cast paths reached
     /// while writing the header (e.g. a dangling view scope).
     fn write_header<'a>(
         &mut self,
@@ -64,12 +64,12 @@ pub trait Dialect {
     ) -> Result<(), ExportError>;
     /// `writeFooter`.
     fn write_footer<'a>(&mut self, e: &Engine<'a>, view: View<'a>, w: &mut IndentingWriter);
-    /// `writeElement`. `Result` because it consults `isVisible` (the Java
+    /// `writeElement`. `Result` because it consults `isVisible` (the official tooling
     /// untyped-`frame` cast) — the `hide <id>` leg.
     ///
     /// # Errors
     ///
-    /// [`ExportError::ReferenceAbort`] on the Java NPE/cast paths reached
+    /// [`ExportError::ReferenceAbort`] on the official tooling null-pointer/cast paths reached
     /// while writing the element (e.g. the frame-mismatch cast).
     fn write_element<'a>(
         &mut self,
@@ -79,7 +79,7 @@ pub trait Dialect {
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError>;
     /// `writeRelationship`. `Result` because the model relationship behind
-    /// the view must resolve (the reference would NPE).
+    /// the view must resolve (the official tooling would null-pointer crash).
     ///
     /// # Errors
     ///
@@ -93,12 +93,12 @@ pub trait Dialect {
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError>;
     /// `startGroupBoundary`. `Result` because the Structurizr dialect's
-    /// group-separator cut is a Java `substring` abort path.
+    /// group-separator cut is an index-abort path.
     ///
     /// # Errors
     ///
     /// [`ExportError::ReferenceAbort`] when the group-separator cut falls
-    /// outside the group name (the Java `substring` bounds check).
+    /// outside the group name (the bounds check on the cut).
     fn start_group_boundary<'a>(
         &mut self,
         e: &Engine<'a>,
@@ -143,7 +143,7 @@ pub trait Dialect {
     ///
     /// # Errors
     ///
-    /// [`ExportError::ReferenceAbort`] on the Java NPE/cast paths reached
+    /// [`ExportError::ReferenceAbort`] on the official tooling null-pointer/cast paths reached
     /// while opening the node boundary (e.g. the frame-mismatch cast).
     fn start_deployment_node_boundary<'a>(
         &mut self,
@@ -184,10 +184,10 @@ pub trait Dialect {
     /// `export_dynamic_sequence` is the `AbstractPlantUMLExporter` walk
     /// (`plantuml.boundaries` + the `box` stack), but a dialect that
     /// overrides `export(DynamicView)` wholesale — the Mermaid exporter,
-    /// catalog `EXPORT-MERMAID.md` §9 — emits a standalone document with
+    /// catalog `EXPORT-MERMAID.md`  — emits a standalone document with
     /// its own grammar and NO header/footer/legend/frames. When this is
     /// `true`, `render_as_sequence_diagram` routes to
-    /// [`Dialect::sequence_document`] instead (M4).
+    /// [`Dialect::sequence_document`] instead .
     fn owns_sequence_document(&self) -> bool {
         false
     }
@@ -198,7 +198,7 @@ pub trait Dialect {
     ///
     /// # Errors
     ///
-    /// [`ExportError::ReferenceAbort`] on the Java NPE paths of the owned
+    /// [`ExportError::ReferenceAbort`] on the official tooling null-pointer crash paths of the owned
     /// walk (dangling relationship endpoints, a null-null description on
     /// the Mermaid sequence leg).
     fn sequence_document<'a>(
@@ -211,17 +211,17 @@ pub trait Dialect {
             "dialect claims its own sequence document but implements none",
         ))
     }
-    /// Whether the dialect emits `CustomView` diagrams at all: the Java
+    /// Whether the dialect emits `CustomView` diagrams at all: the official tooling
     /// `C4PlantUMLExporter.export(CustomView)` overload returns `null`, and
-    /// the `export(Workspace)` loop then skips the view entirely (M3;
-    /// witness: the `custom-view-animation` C4 sweep writes NO files).
+    /// the workspace export loop then skips the view entirely (verified:
+    /// verified: the `custom-view-animation` C4 sweep writes NO files).
     fn exports_custom_views(&self) -> bool {
         true
     }
     /// `createDiagram`.
     fn create_diagram(&self, e: &Engine, view: View<'_>, definition: String) -> Diagram;
     /// `createLegend` (base returns `null`). Called AFTER the last body
-    /// export, with the frame state of that export (§14 lifecycle).
+    /// export, with the frame state of that export.
     fn create_legend(&mut self, _e: &Engine, _view: View<'_>) -> Option<Legend> {
         None
     }
@@ -232,19 +232,19 @@ pub struct Engine<'a> {
     workspace: &'a Workspace,
     color_scheme: ColorScheme,
     frame: Option<Frame>,
-    /// 2R R-exp-08: lazy id → relationship index. The reference's
-    /// `getRelationshipById` scans `getRelationships()` per call; oxidizr
+    /// lazy id → relationship index: the official tooling’s
+    /// id lookup scans the relationship list per call; oxidizr
     /// builds the map once per export (first id wins — the `find` semantics
     /// of the old scan on a duplicate id).
     rel_index: OnceCell<HashMap<&'a str, &'a Relationship>>,
-    /// 2R R-exp-08: memo for `canonical_name` (id → name; the workspace is
+    /// memo for `canonical_name` (id → name; the workspace is
     /// immutable for `'a`, so the name is a pure function of the id).
     name_index: RefCell<HashMap<&'a str, String>>,
 }
 
 impl<'a> Engine<'a> {
     /// New engine over `workspace` (frame state starts empty).
-    // 2R R-exp-08: no longer `const` — the memo maps need `HashMap::new()`
+    // no longer `const` — the memo maps need `HashMap::new()`
     // (not a `const fn`); engines are built once per export anyway.
     #[must_use]
     pub fn new(workspace: &'a Workspace, color_scheme: ColorScheme) -> Self {
@@ -258,8 +258,8 @@ impl<'a> Engine<'a> {
     }
 
     /// The workspace being exported.
-    // 2R R-exp-09 (R-core-06 shape): pub-in-crate shrink — zero callers
-    // outside this crate; the getter stays as the Java parity surface
+    // pub-in-crate shrink — zero callers
+    // outside this crate; the getter stays as the official parity surface
     // (`AbstractDiagramExporter#getWorkspace`).
     #[allow(dead_code)] // Java parity surface, see above
     #[must_use]
@@ -287,15 +287,15 @@ impl<'a> Engine<'a> {
 
     /// The current animation frame (`hide` legs and `isVisible` consult
     /// it; `None` on every non-animation export).
-    // 2R R-exp-09 (R-core-06 shape): zero callers outside this crate;
-    // stays as the parity surface for the Java `frame` field read.
+    // zero callers outside this crate;
+    // stays as the parity surface for the frame-field read.
     #[allow(dead_code)] // Java parity surface, see above
     #[must_use]
     pub(crate) const fn frame(&self) -> Option<&Frame> {
         self.frame.as_ref()
     }
 
-    /// `getViewOrViewSetProperty` — the two-level cascade (P2-D8).
+    /// The view-or-viewset property lookup — the two-level cascade.
     #[must_use]
     pub fn property(&self, view: &'a ViewBase, name: &str, default: &'a str) -> &'a str {
         export_property(view, &self.workspace.views, name, default)
@@ -303,19 +303,19 @@ impl<'a> Engine<'a> {
 
     /// `export(Workspace)`: custom → landscape → context → container →
     /// component → dynamic → deployment views, each in stored order; image
-    /// and filtered views are NOT exported (the Java loop skips them).
+    /// and filtered views are NOT exported (the official tooling loop skips them).
     ///
     /// # Errors
     ///
     /// [`ExportError::ReferenceAbort`] when a view aborts the export (the
-    /// Java cast/NPE paths of §14); [`ExportError::Json`] never fires here.
+    /// the official tooling cast/null-pointer crash paths; [`ExportError::Json`] never fires here.
     pub fn export_all<D: Dialect>(&mut self, d: &mut D) -> Result<Vec<Diagram>, ExportError> {
         let mut diagrams = Vec::new();
         for view in self.workspace.views.all_views() {
             if matches!(view, View::Filtered(_) | View::Image(_)) {
                 continue;
             }
-            // The Java overload returning `null` (C4 custom views, M3) makes
+            // The official overload returning `null` (C4 custom views) makes
             // this loop skip the view — no diagram, no file.
             if matches!(view, View::Custom(_)) && !d.exports_custom_views() {
                 continue;
@@ -332,7 +332,7 @@ impl<'a> Engine<'a> {
     /// # Errors
     ///
     /// [`ExportError::ReferenceAbort`] when the view aborts the export
-    /// (the Java cast/NPE paths of §14).
+    /// (the official cast/null-pointer crash paths).
     pub fn export_view<D: Dialect>(
         &mut self,
         d: &mut D,
@@ -378,7 +378,7 @@ impl<'a> Engine<'a> {
         };
         let mut diagram = self.body(d, view)?;
         if d.is_animation_supported(self, view) && !animations.is_empty() {
-            // 2R R-exp-18: iterate directly — `animations` borrows the
+            // iterate directly — `animations` borrows the
             // workspace (`'a`), not the engine, so the collect-then-loop
             // bought nothing.
             for step in animations.iter().map(|a| a.order) {
@@ -393,8 +393,8 @@ impl<'a> Engine<'a> {
     }
 
     /// The per-kind private `export(view, animationStep)` bodies —
-    /// dispatch only (2R R-exp-11: one `body_*` fn per reference
-    /// `export(view)` overload, each citing its own; the
+    /// dispatch only (one `body_*` fn per view-kind overload,
+    /// each citing its own; the
     /// `too_many_lines` allow this dispatch shape replaces is gone).
     fn body<D: Dialect>(&mut self, d: &mut D, view: View<'a>) -> Result<Diagram, ExportError> {
         let mut w = IndentingWriter::new();
@@ -524,7 +524,7 @@ impl<'a> Engine<'a> {
                 self.write_flat_leg(d, view, &systems, w)?;
                 self.write_boundary_container_legs(d, view, w)?;
                 for element in self.view_elements(view) {
-                    // Java: `!(parent instanceof Container)` — the
+                    // The official check: parent NOT a container — the
                     // kinds with a Container parent are components.
                     if element.kind() != oxidizr_core::validate::ElementKind::Component {
                         d.write_element(self, view, element, w)?;
@@ -613,10 +613,10 @@ impl<'a> Engine<'a> {
     }
 
     /// `AbstractPlantUMLExporter.export(DynamicView)` sequence-diagram body
-    /// (catalog §8): header, element set + boundary stack (or flat), blank
+    /// (the export catalog): header, element set + boundary stack (or flat), blank
     /// line iff elements, relationships, footer, then the legend LAST.
-    // Mirrors the single Java method; the boundary-stack walk stays inline.
-    /// 2R R-exp-11: the two inner blocks of this walk are the
+    // Mirrors the single official method; the boundary-stack walk stays inline.
+    /// the two inner blocks of this walk are the
     /// `sequence_write_order` / `write_sequence_boundaries` siblings;
     /// `export_dynamic_sequence` itself is cited by catalog name, so the
     /// fn and its name stay.
@@ -649,9 +649,9 @@ impl<'a> Engine<'a> {
             "true",
         ));
         if boundaries {
-            // 2R R-exp-11: the ordering and the box walk of this leg are
+            // the ordering and the box walk of this leg are
             // the `sequence_write_order` + `write_sequence_boundaries`
-            // siblings (the Java `elementsInWriteOrder` map walk, then
+            // siblings (the write-order map walk, then
             // the boundary open/close stack).
             let order = self.sequence_write_order(&elements)?;
             self.write_sequence_boundaries(d, view, &elements, &order, &mut w)?;
@@ -673,12 +673,12 @@ impl<'a> Engine<'a> {
         Ok(diagram)
     }
 
-    /// The Java `elementsInWriteOrder` map walk of the dynamic-sequence
-    /// boundaries leg (2R R-exp-11 split of `export_dynamic_sequence`):
+    /// The write-order map walk of the dynamic-sequence
+    /// boundaries leg (split of `export_dynamic_sequence`):
     /// rootless elements first-seen; else the parent chain (root-last
     /// reversed) appended, then the element inserted after its last
-    /// canonical-name "sibling" (the `contains(parentCanonical.
-    /// substring(indexOf("://")))` test) or after its parent when there
+    /// canonical-name "sibling" (the parent name appears after the element’s
+    /// own `://` cut) or after its parent when there
     /// are none.
     fn sequence_write_order(
         &self,
@@ -732,7 +732,7 @@ impl<'a> Engine<'a> {
     }
 
     /// The boundary open/close stack of the dynamic-sequence boundaries leg
-    /// (2R R-exp-11 split of `export_dynamic_sequence`): walk
+    /// (split of `export_dynamic_sequence`): walk
     /// `sequence_write_order` — a view element inside the current box (or
     /// with no box open) writes directly, anything else unwinds the stack
     /// to the matching parent first; non-view elements open boundary boxes
@@ -792,7 +792,7 @@ impl<'a> Engine<'a> {
             let separator = self.group_separator();
             if is_value(&separator) {
                 // Nested mode — the upstream context-tracking quirks are
-                // mirrored EXACTLY (catalog §14).
+                // mirrored EXACTLY (the export catalog).
                 let mut context = String::new();
                 for group in &groups {
                     let group_count = java_split_len(group, &separator);
@@ -987,7 +987,7 @@ impl<'a> Engine<'a> {
             .unwrap_or_default()
     }
 
-    /// `getRelationshipsInView`: dynamic → `TreeSet` order; else the same
+    /// The relationships-in-view order: dynamic → `TreeSet` order; else the same
     /// set sorted by relationship-id string.
     fn get_relationships_in_view(&self, view: View<'a>) -> Vec<&'a RelationshipView> {
         let mut rels = self.view_relationships(view);
@@ -1006,9 +1006,9 @@ impl<'a> Engine<'a> {
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError> {
         let rels = self.get_relationships_in_view(view);
-        // 2R R-exp-02: the emptiness test is hoisted before the loop, so the
+        // the emptiness test is hoisted before the loop, so the
         // vec moves into the iterator — no `clone()` for a trailing
-        // `is_empty()` (the Java `isEmpty()` runs on the same list).
+        // `is_empty()` (the official check runs on the same list).
         let non_empty = !rels.is_empty();
         for rv in rels {
             d.write_relationship(self, view, rv, w)?;
@@ -1019,8 +1019,8 @@ impl<'a> Engine<'a> {
         Ok(())
     }
 
-    /// `getGroupableElements(view, parent)` — the per-kind matrix
-    /// (`EXPORT-PLANTUML.md` §14). The Java cast-aborts (`ClassCastException`)
+    /// The groupable-elements per-kind matrix, catalog-documented.
+    /// The official cast-aborts
     /// are surfaced as [`ExportError::ReferenceAbort`].
     fn get_groupable_elements(
         &self,
@@ -1098,7 +1098,7 @@ impl<'a> Engine<'a> {
         Ok(elements)
     }
 
-    /// `view.getElements()` — the `TreeSet<ElementView>` order, deduped by
+    /// The view’s element views — `TreeSet` order, deduped by
     /// comparator key (first insertion wins, as in a `TreeSet`).
     #[must_use]
     pub fn view_elements(&self, view: View<'a>) -> Vec<ElemRef<'a>> {
@@ -1109,7 +1109,7 @@ impl<'a> Engine<'a> {
     }
 
     /// The raw sorted element views (dangling ids kept — resolution
-    /// happens per call site so a dangling id can abort where Java would).
+    /// happens per call site so a dangling id can abort where the official tooling would).
     fn view_element_views(view: View<'a>) -> Vec<&'a ElementView> {
         let Some(content) = content_of(view) else {
             return Vec::new();
@@ -1120,13 +1120,13 @@ impl<'a> Engine<'a> {
         evs
     }
 
-    /// `view.getRelationships()` — the `TreeSet<RelationshipView>` order
+    /// The view’s relationship views — `TreeSet` order
     /// (`id + "/" + order`, a null order joining as the literal `null`),
     /// deduped by key (first insertion wins). Dynamic views apply the
     /// `DynamicView.getRelationships()` override: a stable re-sort by numeric
     /// `order` when EVERY order parses as a double, else by `order` text —
-    /// stability preserves the `10/3, 11/3` tie (`parallel1` witness
-    /// 2026-11-17) because Java's `List.sort` (`TimSort`) and Rust's
+    /// stability preserves the `10/3, 11/3` tie (verified on `parallel1`),
+    /// because the official `List.sort` (`TimSort`) and Rust's
     /// `sort_by` are both stable.
     #[must_use]
     pub fn view_relationships(&self, view: View<'a>) -> Vec<&'a RelationshipView> {
@@ -1138,7 +1138,7 @@ impl<'a> Engine<'a> {
         dedup_by_key(&mut rvs, |r| relationship_view_key(r));
         if matches!(view, View::Dynamic(_)) {
             // `Double.parseDouble(null)` throws, so a missing order forces
-            // the text branch — where the reference NPEs comparing nulls;
+            // the text branch — where the official tooling crashes comparing nulls;
             // oxidizr sorts a missing order first as the empty string
             // (never-crash policy, same as the JSON writer).
             let numeric = rvs.iter().all(|rv| {
@@ -1245,15 +1245,15 @@ impl<'a> Engine<'a> {
     }
 
     /// The model relationship behind a relationship view (abort on a
-    /// dangling id, where the reference would NPE).
+    /// dangling id, where the official tooling would null-pointer crash).
     ///
     /// # Errors
     ///
     /// [`ExportError::ReferenceAbort`] when the id references a missing
     /// relationship.
     pub fn relationship(&self, rv: &RelationshipView) -> Result<&'a Relationship, ExportError> {
-        // 2R R-exp-08: lazy `HashMap` — the old linear scan ran per
-        // relationship view AND per `is_visible` leg (the reference reads
+        // lazy `HashMap` — the old linear scan ran per
+        // relationship view AND per `is_visible` leg (the official tooling reads
         // its object graph instead of re-scanning). First id wins, matching
         // the `find` semantics on a duplicate id.
         let index = self.rel_index.get_or_init(|| {
@@ -1272,15 +1272,15 @@ impl<'a> Engine<'a> {
     }
 
     /// `isVisible(view, element)` — animation-frame visibility ONLY (the
-    /// JSON `ElementView.visible` flag is never consulted; catalog §4).
+    /// JSON `ElementView.visible` flag is never consulted.
     ///
     /// # Errors
     ///
     /// [`ExportError::ReferenceAbort`] on a frame/view kind mismatch (the
-    /// Java untyped-`frame` cast failing).
+    /// the untyped-`frame` cast failing).
     pub fn is_visible(&self, view: View<'_>, element: ElemRef<'_>) -> Result<bool, ExportError> {
-        // 2R R-exp-01: borrow the frame — the old shape cloned the whole
-        // Frame per element×frame call (the Java field read is a reference).
+        // borrow the frame — the old shape cloned the whole
+        // Frame per element×frame call (the official tooling field read is a the official tooling).
         let Some(frame) = self.frame.as_ref() else {
             return Ok(true);
         };
@@ -1355,7 +1355,7 @@ impl<'a> Engine<'a> {
     /// string: custom elements report their raw `metadata` (terminology
     /// never applies); instances get no branch and render empty; the
     /// `: <technology>` suffix is container/component/DN/IN only
-    /// (catalog §14).
+    /// (the export catalog).
     #[must_use]
     pub fn type_of(&self, element: ElemRef<'a>, include_metadata_symbols: bool) -> String {
         use oxidizr_core::validate::ElementKind as K;
@@ -1394,7 +1394,7 @@ impl<'a> Engine<'a> {
         }
         if include_metadata_symbols {
             // A NULL metadataSymbols setting is MUTATED to SquareBrackets
-            // in the reference; here the default read is equivalent.
+            // in the official tooling; here the default read is equivalent.
             match config
                 .metadata_symbols
                 .unwrap_or(MetadataSymbols::SquareBrackets)
@@ -1414,7 +1414,7 @@ impl<'a> Engine<'a> {
     /// `AbstractExporter.breakText`: `maxCharacters = (int)(maxWidth /
     /// (fontSize x 0.6))`, unchanged when `length < maxCharacters` (UTF-16),
     /// word-wrap with `<br />` joins; null/trim-empty → `""`.
-    // The f64→i64 conversion below mirrors Java's `(int)` truncation.
+    // The f64→i64 conversion below mirrors the official integer truncation.
     #[allow(clippy::cast_possible_truncation)]
     #[must_use]
     pub fn break_text(&self, max_width: i32, font_size: i32, text: &str) -> String {
@@ -1426,7 +1426,7 @@ impl<'a> Engine<'a> {
         if utf16_len(text) < max_characters {
             return text.to_string();
         }
-        // Java `split(" ")`: single-space regex, trailing empties dropped.
+        // The official space split: single-space separator, trailing empties dropped.
         let mut words: Vec<&str> = text.split(' ').collect();
         while words.last() == Some(&"") {
             words.pop();
@@ -1456,11 +1456,11 @@ impl<'a> Engine<'a> {
     /// `Element.getCanonicalName` (`model/CanonicalNameGenerator`):
     /// `<Kind>://<name path>` with `.` and `/` stripped from every name;
     /// deployment chains are `/`-joined, static chains `.`-joined
-    /// (catalog §8 sibling matching).
+    /// (the sibling matching).
     ///
-    /// 2R R-exp-08: memoized per engine (id → name). The workspace is
+    /// memoized per engine (id → name). The workspace is
     /// immutable for `'a`, so the name is a pure function of the id; the
-    /// sequence legs and the §8 sibling matching re-probe the same elements
+    /// sequence legs and the sibling matching re-probe the same elements
     /// and the deployment leg recursed per ancestor without sharing work.
     #[must_use]
     pub fn canonical_name(&self, element: ElemRef<'a>) -> String {
@@ -1521,7 +1521,7 @@ impl<'a> Engine<'a> {
                 }
                 chain.reverse();
                 let env = element.environment().unwrap_or("");
-                // 2R R-exp-13: one `join` instead of the per-name push loop.
+                // one `join` instead of the per-name push loop.
                 // The trailing slash belongs to the chain, so an EMPTY chain
                 // yields `env/<name>` (no `env//<name>`) — the byte shape of
                 // the old prefix-then-append loop, kept exactly.
@@ -1587,25 +1587,25 @@ fn content_of(view: View<'_>) -> Option<&ViewContent> {
     }
 }
 
-/// `StringUtils.isNullOrEmpty`: null or TRIM-empty.
+/// The official blank check: null or TRIM-empty.
 #[must_use]
 pub(crate) fn is_null_or_empty(s: Option<&str>) -> bool {
     s.is_none_or(|s| s.trim().is_empty())
 }
 
-/// The truthy form: `!isNullOrEmpty` (every non-empty gate in the engine).
+/// The truthy form (every non-empty gate in the engine).
 #[must_use]
 pub(crate) fn is_value(s: &str) -> bool {
     !s.trim().is_empty()
 }
 
-/// `"true".equalsIgnoreCase(s)`.
+/// `"true"`, compared case-insensitively.
 #[must_use]
 pub(crate) fn is_true_ci(s: &str) -> bool {
     s.eq_ignore_ascii_case("true")
 }
 
-/// Java `String.split(Pattern.quote(sep)).length`: no match → 1 (empty
+/// The official separator count: no match → 1 (empty
 /// input included); trailing empties dropped (all-empty → 0).
 #[must_use]
 fn java_split_len(s: &str, sep: &str) -> usize {
@@ -1640,7 +1640,7 @@ fn element_view_cmp(a: &ElementView, b: &ElementView) -> std::cmp::Ordering {
 /// `RelationshipView.compareTo` key: `getId() + "/" + getOrder()` — a
 /// `None` order joins as the literal `null`.
 fn relationship_view_key(rv: &RelationshipView) -> String {
-    // 2R R-exp-04: `as_deref()` feeds `format!` directly — no `order` clone
+    // `as_deref()` feeds `format!` directly — no `order` clone
     // per comparator call; the key stays a `String` (the TreeSet key shape).
     format!("{}/{}", rv.id, rv.order.as_deref().unwrap_or("null"))
 }
@@ -1648,7 +1648,7 @@ fn relationship_view_key(rv: &RelationshipView) -> String {
 /// `TreeSet`-style dedup on a sorted vec (keeps the first of each
 /// equal-key run — the first ADDITION is what a `TreeSet` keeps).
 fn dedup_by_key<T, K: PartialEq, F: Fn(&T) -> K>(items: &mut Vec<T>, key: F) {
-    // 2R R-exp-03: `Vec::dedup_by` — same keep-first-of-run semantics as the
+    // `Vec::dedup_by` — same keep-first-of-run semantics as the
     // old index-`remove` walk (which was O(n²) on a run of duplicates).
     items.dedup_by(|a, b| key(a) == key(b));
 }
@@ -1949,7 +1949,7 @@ mod tests {
         // TreeSet key `id + "/" + order` gives "5/2" < "5/null" < "6/null",
         // but the `DynamicView.getRelationships()` override then re-sorts:
         // orders are NOT all numeric (two are null), so the TEXT branch runs
-        // — where the reference NPEs on null orders; oxidizr sorts a missing
+        // — where the official tooling crashes on null orders; oxidizr sorts a missing
         // order first as the empty string (never-crash). Stable ties keep
         // TreeSet order: 5/null, 6/null, then 5/"2".
         view.content.relationships = vec![rv("5", None), rv("6", None), rv("5", Some("2"))];
@@ -1976,7 +1976,7 @@ mod tests {
         // frames; a null order re-exports with frame = null.
         assert_eq!(diagram.frames().len(), 2);
         assert_eq!(diagram.legend().map(Legend::definition), Some("LEGEND"));
-        // Frame null (Java null order): identical to the main export.
+        // Frame null (missing order): identical to the main export.
         assert_eq!(diagram.frames()[0].definition(), diagram.definition());
         // Frame "2": only endpoints of the order-2 relationship are
         // visible; element 3 hides. ALL relationships are still written.
@@ -2134,7 +2134,7 @@ mod tests {
             rel("r3", "11", "12"),
         ];
         // dyn1: the PARENT system is itself in the element set -> no box
-        // is ever opened (the reference only boxes absent parents).
+        // is ever opened (the official tooling only boxes absent parents).
         let mut dyn1 = DynamicView {
             base: ViewBase::new("dyn1", 1),
             content: ViewContent::default(),
@@ -2168,7 +2168,7 @@ mod tests {
             let mut engine = Engine::new(&workspace, ColorScheme::Light);
             engine.export_all(&mut d).expect("export")
         };
-        // Sequence renders get NO frames (the Java override returns before
+        // Sequence renders get NO frames (the official tooling override returns before
         // the frame loop) but DO get the legend (created after the body).
         assert_eq!(diagrams[0].frames(), []);
         assert_eq!(diagrams[0].legend().map(Legend::definition), Some("LEGEND"));

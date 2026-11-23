@@ -1,26 +1,29 @@
-# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D IN FLIGHT: D-1 `6f8fd6d`, D-2 `f605cbe`, D-3 DONE (wave-A strip) — next D-4 (wave-B strip: export/import/api/inspect/layout), D-5 (wave-C: lsp/viewer/cli/xtask/e2e + viewer README rewrite), D-6 (message/string-literal pass — docs/*.md pages already rewritten, uncommitted), D-7 (refs hygiene leg + agent-doc trim), D-8 (close) → release tail E-4/E-5 (cargo-dist + `v0.4.0` tag + CHANGELOG, LOCAL)**)
+# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D IN FLIGHT: D-1 `6f8fd6d`, D-2 `f605cbe`, D-3 wave-A strip committed, D-4 wave-B strip DONE (commit pending at HEAD+1) — next D-5 (wave-C: lsp/viewer/cli/xtask/e2e + viewer README rewrite), D-6 (message/string-literal pass — docs/*.md pages already rewritten, uncommitted), D-7 (refs hygiene leg + agent-doc trim), D-8 (close) → release tail E-4/E-5 (cargo-dist + `v0.4.0` tag + CHANGELOG, LOCAL)**)
 
 ## Active now (2026-11-23)
 
-- **P4D-D-3 DONE** — rustdoc strip wave A (`oxidizr-core`/`-ast`/`-diag`/
-  `-dsl`/`-json`): comment-only pass (code-side audit 0 mismatches), the
-  strip contract lives in `agents/notes/process/p4d-strip-rules.md`
-  (incl. the wave-A traps: whitespace-collapse crushes doc-list indents →
-  `doc_markdown` storm; bullet continuations take 3 spaces exactly;
-  CamelCase doc words need backticks; re-check backtick pairs after a
-  phrase-regex pass). Clippy + doc + tests green, `cargo xtask ci` green.
-- **D-4 NEXT (wave-B crates)** — partial strip edits from cancelled
-  subagents ride in the worktree UNCOMMITTED: `export` (8 files, partial),
-  `import` (full, mine), `api` (2 files, densest ~45 `§P` hits),
-  `inspect` (5), `layout` (5). Per crate: residual grep battery → anchored
-  fix pass → `cargo fmt -p` + `cargo test -p` (check ALL `test result:`
-  lines) + touch lib.rs + `cargo doc -p --no-deps` 0 warnings → commit.
-- **D-5 (wave-C)** — `lsp` (3 files partial), `viewer` (11 src partial +
-  README 104→≤45 human-first rewrite), `cli` (full strip mine; clap `///`
-  help = USER help — rewrite it, update help-assertions in the same commit),
-  `xtask` (main.rs mid-strip, residuals itemized in git blame of
-  `crates/xtask/src/main.rs` + `refs.rs:48` + `exportcmp/mod.rs`), `e2e`
-  check. Viewer/cli help string literals are D-6, not D-5 — comments only.
+- **P4D-D-4 DONE (wave-B strip)** — export/import/api/inspect/layout:
+  batteries at KEEP-only (residual false positives: our `ReferenceAbort`
+  type, Java `TreeSet`/`HashSet`/`LinkedHashSet`/`HashMap` order-contract
+  facts, plain-English "referenced"/"probe"/"preference"/"backreferences",
+  Base64/U+2028/OXZ codes, pinned `IllegalArgumentException` message text,
+  our own probe-corpus citations). Comment-only audit 0 code-side changes;
+  quartet green (fixes on the way: `mod@format` doc-link disambiguation,
+  `AdrTools` backticks, 24 `\x01` control chars repaired — a cancelled
+  wave-B helper wrote chr(1) where a regex `\\1` backreference belonged;
+  always double-escape backrefs in rewrite strings).
+- **D-5 NEXT (wave-C)** — residual batteries: lsp 33, viewer 199, cli 127,
+  xtask 66, e2e 0. Same mechanism: global phrase regex (reuse
+  ap_strip.py/ap_strip2.py rule lists) → anchored batch → artifact scan
+  (dangling `(`/` :`/`the the` after id removal) → per-crate
+  fmt/test-ALL-lines/doc-zero → comment-only audit → ci → commit.
+  `viewer` also = README 104→≤45 human-first rewrite; `cli` clap `///`
+  help IS user help (rewrite it; update help-assertions same commit);
+  string literals in viewer/cli are D-6.
+- **Strip scripts reusable**: `/tmp/nix-shell.BoHvza/opencode/{exp,imp,ap}_strip*.py`
+  + `{exp,imp,ap}_batch.py` + `waveb_artifacts.py` + `battery_dsl.py`
+  (takes file/dir paths); mechanism = approx-line + must-contain fragment +
+  marker-normalizing rewrite, `None` deletes, apply descending.
 - **D-6 (message pass)** — string literals + docs pages: the five
   `docs/*.md` pages are ALREADY rewritten human-first (uncommitted; ride an
   early D-6 commit). Bless prediction + what may/must not move:

@@ -1,16 +1,16 @@
-//! "did you mean …?" decoration (P1-D2, D1 freedom; home moved to
+//! "did you mean …?" decoration (the decoration freedom; home moved to
 //! `oxidizr-api` in T0-c because the command bodies that decorate with it
 //! live in the headless pipeline).
 //!
 //! Computed at the API boundary — the engine's `Issue` message stays the
-//! reference text byte-for-byte; only [`Issue::help`] gains the suggestion.
+//! the official tooling text byte-for-byte; only [`Issue::help`] gains the suggestion.
 //! Both candidate sets come from what is already on hand here:
 //!
-//! * **scope-permitted keywords** — the reference prints them verbatim in
+//! * **scope-permitted keywords** — the official tooling prints them verbatim in
 //!   `Unexpected tokens (expected: a, b, c)`, so parsing the message recovers
 //!   the set the engine checked (no engine-side plumbing needed);
 //! * **known identifiers** — the `structurizr.dsl.identifier` properties of
-//!   the parsed workspace (plus space-free element names, which the reference
+//!   the parsed workspace (plus space-free element names, which the official tooling
 //!   also accepts as references for anonymous elements).
 
 use oxidizr_core::Workspace;
@@ -19,7 +19,7 @@ use oxidizr_core::validate::flattened;
 
 use crate::Issue;
 
-/// The DSL-stamped identity property (Locked, `agents/plan/COMPAT.md`).
+/// The DSL-stamped identity property (a locked compat decision).
 const DSL_IDENTIFIER: &str = "structurizr.dsl.identifier";
 
 /// Case-insensitive Levenshtein distance (two-row DP, chars).
@@ -102,7 +102,7 @@ fn statement_tokens(issue: &Issue) -> Vec<String> {
     };
     let line = &snip.text;
     let mut tokens: Vec<String> = line.split_whitespace().map(str::to_string).collect();
-    // Reference `tokens.sublist(2)` on the `id =` prefix: the keyword is the
+    // Skip the `id =` prefix: the keyword is the
     // third token, the catch-all rejected the list starting AT the keyword.
     if tokens.len() >= 3 && tokens[1] == "=" {
         tokens.drain(0..2);
@@ -110,14 +110,14 @@ fn statement_tokens(issue: &Issue) -> Vec<String> {
     tokens
 }
 
-/// Decorate one issue with a `did you mean …?` help line (P1-D2). `ws` is
+/// Decorate one issue with a `did you mean …?` help line . `ws` is
 /// the parsed workspace when the command has one (identifier candidates);
 /// the keyword family works without it.
 pub fn decorate(issue: Issue, ws: Option<&Workspace>) -> Issue {
     if issue.help.is_some() {
         return issue;
     }
-    // 2R R-mis-04: plain `&&` let-chain — the old `(bool, Option)` tuple
+    // plain `&&` let-chain — the old `(bool, Option)` tuple
     // pattern smuggled this exact guard (message contains the prefix AND
     // the `(expected: ` list is extractable); both legs are pure string
     // ops, so the short-circuit changes nothing observable.

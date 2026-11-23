@@ -1,14 +1,13 @@
-//! `Severity` (`structurizr-inspection/Severity.java`) — four levels,
-//! ranked `ERROR > WARNING > INFO > IGNORE` for the CLI threshold filter.
+//! `Severity` — four levels, ranked `ERROR > WARNING > INFO > IGNORE`
+//! for the CLI threshold filter.
 //!
-//! The reference has no per-inspection default severities: EVERY
-//! inspection starts as [`Severity::Error`] and is only re-ranked through
-//! `structurizr.inspection.*` properties (P4-V2, verified @ `ad34036`,
-//! `PropertyBasedSeverityStrategy.getSeverity*` fallback).
+//! There are no per-inspection defaults: EVERY inspection starts as
+//! [`Severity::Error`] and is only re-ranked through
+//! `structurizr.inspection.*` properties.
 
 use std::fmt;
 
-/// One inspection severity level (Java `Severity`).
+/// One inspection severity level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
     /// Report and (CLI) fail the gate.
@@ -17,17 +16,17 @@ pub enum Severity {
     Warning,
     /// Report; informational.
     Info,
-    /// Suppressed (`structurizr.inspection.ignore` counter in the
-    /// reference; never reported by `oxidizr inspect`).
+    /// Suppressed — never reported by `oxidizr inspect` (the
+    /// official tooling only counts these in
+    /// `structurizr.inspection.ignore`).
     Ignore,
 }
 
 impl Severity {
-    /// `Severity.valueOf(value.toUpperCase())` — the property-value
-    /// grammar. Faithful deviation: the reference THROWS
-    /// (`IllegalArgumentException`) on an unparseable value; errors-as-
-    /// values (AGENTS.md) maps it to `Error` — the fail-loud direction a
-    /// CI gate wants anyway (`agents/notes/process/faithful-port.md`).
+    /// The property-value grammar: `WARNING` / `INFO` / `IGNORE` /
+    /// `ERROR`, case-insensitive. Documented deviation: the official
+    /// tooling THROWS on an unparseable value; errors-as-values maps it
+    /// to `Error` — the fail-loud direction a CI gate wants anyway.
     #[must_use]
     pub fn parse(value: &str) -> Severity {
         match value.to_ascii_uppercase().as_str() {
@@ -50,8 +49,8 @@ impl Severity {
         }
     }
 
-    /// The Java enum NAME (the human format's spelling —
-    /// `Violation.toString` prints `severity` via `Enum.toString`).
+    /// The uppercase name (the human report line's spelling —
+    /// `type | SEVERITY | message` prints the severity this way).
     #[must_use]
     pub fn java_name(self) -> &'static str {
         match self {
@@ -63,7 +62,7 @@ impl Severity {
     }
 
     /// Gate rank: a violation is REPORTED iff its rank is >= the
-    /// threshold's (`error` fails the CI gate at every threshold — P4-D7).
+    /// threshold's (`error` fails the CI gate at every threshold).
     #[must_use]
     pub const fn rank(self) -> u8 {
         match self {
@@ -114,7 +113,7 @@ mod tests {
         assert_eq!(Severity::parse("INFO"), Severity::Info);
         assert_eq!(Severity::parse("Ignore"), Severity::Ignore);
         assert_eq!(Severity::parse("error"), Severity::Error);
-        // The reference throws on these; we fail loud (module docs).
+        // The official tooling throws on these; we fail loud (module docs).
         assert_eq!(Severity::parse("critical"), Severity::Error);
         assert_eq!(Severity::parse(""), Severity::Error);
     }

@@ -1,11 +1,11 @@
-//! The unified element reference the diagram engine iterates over (the Java
-//! engine walks live `Element` object graphs; the Rust model stores typed
+//! The unified element view the diagram engine iterates over (the official
+//! engine walks live element graphs; the Rust model stores typed
 //! vectors, so every view iteration resolves ids through this adapter).
 //!
-//! Each variant borrows the element AND — where the Java engine uses
-//! `getParent()` reference equality — its parent, so parent checks need no
+//! Each variant borrows the element AND — where the official tooling engine uses
+//! parent identity — its parent, so parent checks need no
 //! model lookup. [`ElemRef::target`] resolves `StaticStructureElementInstance`
-//! legs (the Java `getElement()` of instances).
+//! legs (the official target lookup of instances).
 
 use oxidizr_core::Id;
 use oxidizr_core::model::{
@@ -15,8 +15,8 @@ use oxidizr_core::model::{
 use oxidizr_core::tags::Tags;
 use oxidizr_core::validate::ElementKind;
 
-/// One model element of any kind, with its structural parent (the reference
-/// `Element.getParent()`).
+/// One model element of any kind, with its structural parent (the official tooling
+/// parent link).
 #[derive(Debug, Clone, Copy)]
 pub enum ElemRef<'a> {
     /// `model.CustomElement` (top level — no parent).
@@ -25,7 +25,7 @@ pub enum ElemRef<'a> {
     Person(&'a Person),
     /// `model.SoftwareSystem` (top level).
     System(&'a SoftwareSystem),
-    /// `model.Container` with its owning system (the `getParent()`).
+    /// A container with its owning system (the parent link).
     Container {
         /// The container.
         elem: &'a Container,
@@ -133,7 +133,7 @@ impl<'a> ElemRef<'a> {
     }
 
     /// The FULL tag CSV (defaults + stored) used for style resolution —
-    /// `ModelItem.getTags()` in the reference.
+    /// The tags as the official model exposes them.
     #[must_use]
     pub fn tags_csv(self) -> String {
         self.tags()
@@ -141,7 +141,7 @@ impl<'a> ElemRef<'a> {
     }
 
     /// The group (`GroupableElement.group`; every kind is groupable at the
-    /// reference, so every variant answers).
+    /// identity-based, so every variant answers).
     #[must_use]
     pub fn group(self) -> Option<&'a str> {
         match self {
@@ -191,7 +191,7 @@ impl<'a> ElemRef<'a> {
         }
     }
 
-    /// The deployment node's instance-count string (Java `getInstances()`,
+    /// The deployment node’s instance-count string (the instance count,
     /// always non-null; `"1"` default).
     #[must_use]
     pub fn instances(self) -> Option<&'a str> {
@@ -211,7 +211,7 @@ impl<'a> ElemRef<'a> {
         }
     }
 
-    /// `Element.getParent()` as an id (reference equality in the engine
+    /// The parent as an id (identity in the engine
     /// becomes id equality — ids are unique workspace-wide).
     #[must_use]
     pub fn parent_id(self) -> Option<&'a Id> {
@@ -246,8 +246,8 @@ impl<'a> ElemRef<'a> {
         }
     }
 
-    /// The owning system's id for a container (the reference's
-    /// `container.getSoftwareSystem()` identity test); for every other
+    /// The owning system’s id for a container (the official
+    /// parent-identity test); for every other
     /// kind, the element's own id (the comparison never matches a system
     /// id for those anyway — ids are unique workspace-wide).
     #[must_use]
@@ -258,9 +258,8 @@ impl<'a> ElemRef<'a> {
         }
     }
 
-    /// The referenced element for instances, the element itself otherwise
-    /// (`name`/`description`/`type`/`url` resolution in the element writer —
-    /// catalog §4).
+    /// The target element for instances, the element itself otherwise
+    /// (`name`/`description`/`type`/`url` resolution in the element writer).
     #[must_use]
     pub fn referent(self, model: &'a Model) -> ElemRef<'a> {
         self.target(model).unwrap_or(self)

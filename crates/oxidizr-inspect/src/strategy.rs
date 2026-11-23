@@ -1,9 +1,6 @@
-//! `PropertyBasedSeverityStrategy` port (P4-V2, verified @ `ad34036`).
-//!
-//! Reference shape (`structurizr-inspection/PropertyBasedSeverityStrategy.java`):
-//! every `run` site resolves one violation's severity from the inspection
-//! TYPE and a chain of property HOLDERS, searched inner→outer, first key
-//! hit wins:
+//! The property-based severity strategy: every run site resolves one
+//! violation's severity from the inspection TYPE and a chain of property
+//! HOLDERS, searched inner→outer, first key hit wins:
 //!
 //! * element     ⇒ element → parent → grandparent → model → workspace
 //! * relationship⇒ relationship → linked → source → source.parent → model
@@ -15,18 +12,17 @@
 //! * views / workspace ⇒ views-config → workspace / workspace
 //!
 //! No hit anywhere ⇒ [`Severity::Error`] — so ALL inspections default to
-//! error (there are no per-inspection Java defaults).
+//! error.
 
 use oxidizr_core::properties::Properties;
 
 use crate::severity::Severity;
 
-/// The Java prefix constant — note the SINGULAR `inspection` (the P4-D7
-/// draft guessed `structurizr.inspections.<Name>`; P4-V2 closed it).
+/// The property prefix — note the SINGULAR `inspection`.
 pub const PREFIX: &str = "structurizr.inspection.";
 
-/// The kill switch (`DefaultInspector` ctor): `structurizr.inspection`
-/// equal to `"false"` under ANY case skips the whole run.
+/// The kill switch: `structurizr.inspection` equal to `"false"` under
+/// ANY case skips the whole run.
 #[must_use]
 pub fn enabled(workspace_properties: &Properties) -> bool {
     workspace_properties
@@ -34,8 +30,8 @@ pub fn enabled(workspace_properties: &Properties) -> bool {
         .is_none_or(|v| !v.eq_ignore_ascii_case("false"))
 }
 
-/// `generatePropertyNames(type)` — the wildcard candidate chain,
-/// longest-first. Example for `model.component.description`:
+/// The wildcard candidate chain for a type, longest-first. Example for
+/// `model.component.description`:
 ///
 /// ```text
 /// structurizr.inspection.model.component.description
@@ -45,8 +41,8 @@ pub fn enabled(workspace_properties: &Properties) -> bool {
 /// ```
 ///
 /// For `.relationship[…].`-scoped types the last two (generic) fallbacks
-/// are DROPPED — the Java `subList(0, n-2)` quirk (a relationship key can
-/// only be set per source→destination pair or with its own exact key).
+/// are DROPPED: a relationship key can only be set per
+/// source→destination pair or with its own exact key.
 #[must_use]
 pub fn property_names(type_path: &str) -> Vec<String> {
     let lowered = type_path.to_lowercase();
@@ -61,8 +57,8 @@ pub fn property_names(type_path: &str) -> Vec<String> {
     names.push(format!("{PREFIX}{lowered}"));
     names.reverse();
     if lowered.contains(".relationship[") {
-        // Java `subList(0, types.size() - 2)`; catalog types always have
-        // >= 4 candidates, saturating guards hand-written inputs.
+        // Catalog types always have >= 4 candidates; the saturating
+        // guard covers hand-written inputs.
         names.truncate(names.len().saturating_sub(2));
     }
     names
@@ -70,7 +66,7 @@ pub fn property_names(type_path: &str) -> Vec<String> {
 
 /// The first holder (INNERMOST first) containing one candidate key decides;
 /// its value parses via [`Severity::parse`]. `None` = no candidate key in
-/// any holder (the Java `null` return).
+/// any holder.
 #[must_use]
 pub fn severity_lookup(type_path: &str, holders: &[Option<&Properties>]) -> Option<Severity> {
     let names = property_names(type_path);
@@ -84,29 +80,26 @@ pub fn severity_lookup(type_path: &str, holders: &[Option<&Properties>]) -> Opti
     None
 }
 
-/// The non-relationship entry point: lookup, else the ERROR default
-/// (`getSeverity` — "severity != null ? severity : Severity.ERROR").
+/// The non-relationship entry point: lookup, else the ERROR default.
 #[must_use]
 pub fn severity_from(type_path: &str, holders: &[Option<&Properties>]) -> Severity {
     severity_lookup(type_path, holders).unwrap_or(Severity::Error)
 }
 
-/// `toLowerCase()` of the Java runtime class simple name — the
-/// `[srcType->dstType]` rewrite operand
-/// (`relationship.getSource().getClass().getSimpleName().toLowerCase()`).
+/// The lowercase element-kind token used in the `[srcType->dstType]`
+/// key rewrite.
 #[must_use]
 pub fn java_element_type(element_kind: &str) -> String {
-    // `element_kind` is the oxidizr canonical lowercase kind token
-    // ("softwaresystem", "deploymentnode", …) — identical spellings, so
-    // this is the identity map kept explicit for the port trail.
+    // `element_kind` is already the canonical lowercase kind token
+    // ("softwaresystem", "deploymentnode", …), so this is the identity
+    // map.
     element_kind.to_owned()
 }
 
 /// The relationship severity resolution: the `.relationship.` segment
-/// rewritten to `.relationship[<src>-><dst>].` is tried FIRST, the generic
-/// type SECOND (reference: `getSeverityFromProperties` called with the
-/// specific type, falling through on `null` to the generic one; the
-/// holders are searched inner→outer in both passes).
+/// rewritten to `.relationship[<src>-><dst>].` is tried FIRST, the
+/// generic type SECOND; the holders are searched inner→outer in both
+/// passes.
 #[must_use]
 pub fn relationship_severity(
     type_path: &str,
@@ -114,7 +107,7 @@ pub fn relationship_severity(
     destination_kind: &str,
     holders: &[Option<&Properties>],
 ) -> Severity {
-    // `replaceFirst("\\.relationship\\.", …)` — first occurrence only.
+    // Only the FIRST `.relationship.` occurrence is rewritten.
     if let Some(at) = type_path.find(".relationship.") {
         let specific = format!(
             "{}.relationship[{}->{}].{}",
@@ -162,7 +155,8 @@ mod tests {
 
     #[test]
     fn chain_generation_relationship_drops_generic_fallbacks() {
-        // The Java `subList(0, n-2)`: no `…model.*` / `…inspection.*` leg.
+        // Relationship-scoped chains keep no `…model.*` /
+        // `…inspection.*` leg.
         assert_eq!(
             property_names("model.relationship[person->softwaresystem].description"),
             [

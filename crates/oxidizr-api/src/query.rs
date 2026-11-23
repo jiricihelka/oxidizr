@@ -1,9 +1,9 @@
-//! `oxidizr query` report layer (§P4-M3 O-1, F6).
+//! `oxidizr query` report layer .
 //!
-//! The model-side evaluator is the pinned `ExpressionParser` port —
+//! The model-side evaluator is the pinned DSL expression parser —
 //! reached through the public [`oxidizr_dsl::query`] entry (one parser,
 //! one evaluator: filtered views and `query` are its two consumers).
-//! Views have NO reference expression grammar; for them a documented
+//! Views have NO the official tooling expression grammar; for them a documented
 //! SUBSET of key/title/description comparisons matches — our own F6
 //! surface, cataloged in `docs/query-schema.md`.
 //!
@@ -11,7 +11,7 @@
 //! command body lives in [`crate::pipeline`] (the T0-d invariant, like
 //! `inspect`); the command is pure READ — the workspace never mutates,
 //! no diagnostic codes are invented, and the JSON output is a
-//! schema-versioned report (P4-D7: no `oxidizr-json` byte contact).
+//! schema-versioned report (: no `oxidizr-json` byte contact).
 
 use oxidizr_core::WorkspaceBuilder;
 use oxidizr_core::configuration::Workspace;
@@ -163,8 +163,8 @@ fn report_rows(
     rows
 }
 
-/// The EFFECTIVE tag list (`getTags()` view — the loader-agnostic rule
-/// first pinned by `diff`, §P4-M0 D-4).
+/// The EFFECTIVE tag list (`getTags` view — the loader-agnostic rule
+/// first pinned by `diff`).
 fn effective(tags: Vec<&str>) -> Vec<String> {
     tags.into_iter().map(str::to_string).collect()
 }
@@ -215,13 +215,13 @@ fn element_kind_label(kind: ElementKind) -> &'static str {
 
 /// Match one view against `filter` with the view-subset grammar:
 /// `key|title|description ==|!= <value>` (case-insensitive arm prefix —
-/// like the reference grammar — but CASE-SENSITIVE value comparison,
-/// Java `equals`). The combinators mirror the reference
-/// `ExpressionParser.parseExpression` EXACTLY: `" && "` is checked
+/// like the official tooling grammar — but CASE-SENSITIVE value comparison,
+/// the official `equals`). The combinators mirror the official tooling
+/// EXACTLY: `" && "` is checked
 /// FIRST (a later `||` never wins), the split halves go straight to the
 /// single-arm evaluator (a half still containing `" || "` matches no
 /// arm — `evaluateExpression` never recurses), and extra arms are
-/// dropped like Java's `split` + `[0]`/`[1]`. An arm outside the subset
+/// dropped like the official tooling’s `split` + `[0]`/`[1]`. An arm outside the subset
 /// matches NOTHING — the fail-soft the base parser's `default:` arm
 /// applies to unmatched model expressions.
 fn view_matches(filter: &str, base: &oxidizr_core::views::ViewBase) -> bool {
@@ -235,7 +235,7 @@ fn view_matches(filter: &str, base: &oxidizr_core::views::ViewBase) -> bool {
 }
 
 /// The single-arm evaluator (the `evaluateExpression` analogue): the
-/// `!=` arms are checked before `==` in the reference chain order, and
+/// `!=` arms are checked before `==` in the official tooling chain order, and
 /// the WHOLE remainder after the arm prefix is the value — so a half
 /// like `title==A || key==B` compares the literal `"A || key==B"`.
 fn view_arm(expr: &str, base: &oxidizr_core::views::ViewBase) -> bool {
@@ -259,14 +259,14 @@ fn view_arm(expr: &str, base: &oxidizr_core::views::ViewBase) -> bool {
         "title" => base.title.as_deref(),
         _ => base.description.as_deref(),
     };
-    // Java `equals` against the raw value; an absent title/description
+    // the official `equals` against the raw value; an absent title/description
     // only compares equal to nothing (`equals(null)` is false).
     let hit = lhs.is_some_and(|l| l == value);
     hit != negate
 }
 
-/// The reference split + `[0]`/`[1]` (`contains`-guarded, so both halves
-/// always exist here; Java's trailing-empty `[]`/OOB case keeps its
+/// The the official tooling split + `[0]`/`[1]` (`contains`-guarded, so both halves
+/// always exist here; the official tooling’s trailing-empty `[]`/OOB case keeps its
 /// message on the MODEL side via `java_index_or_oob` — on this
 /// documented subset the degenerate halves just match no arm).
 fn split_two_arms<'a>(expr: &'a str, sep: &str) -> Option<(&'a str, &'a str)> {
@@ -403,7 +403,7 @@ mod tests {
         ));
         assert!(!view_matches("key==SystemLandscape-001 && title==Nope", &b));
         assert!(view_matches("key==Nope || title==Landscape", &b));
-        // Java `split` indexes `[0]`/`[1]` over ALL parts: `a || b || c`
+        // the official `split` indexes `[0]`/`[1]` over ALL parts: `a || b || c`
         // evaluates the STANDALONE arms `a` and `b` — the third arm is
         // dropped entirely (here `c` is the matching one, so the result
         // is false even though some arm matches).
@@ -416,7 +416,7 @@ mod tests {
             "key==Nope || title==Landscape || description==Nope",
             &b
         ));
-        // ` && ` is checked FIRST (reference chain order); its halves
+        // ` && ` is checked FIRST (the official tooling chain order); its halves
         // are single arms too — `key==Nope` fails, so the conjunction is
         // false no matter what the second half contains.
         assert!(!view_matches(

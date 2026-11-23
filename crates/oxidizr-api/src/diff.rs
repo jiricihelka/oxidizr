@@ -1,17 +1,17 @@
-//! `diff` — workspace-aware model diff (F3, P4-D2, §P4-M0 item D-1).
+//! `diff` — workspace-aware model diff (F3).
 //!
 //! The ENGINE is pure data: two loaded [`Workspace`]s in, a [`Diff`] out —
-//! no I/O, no formatting (the schema-1 JSON and the human report land with
-//! D-2/D-3). The identity model (P4-D2) never matches on ids — those are
-//! unstable across edits (F1): elements are keyed by their canonical name
+//! no I/O, no formatting (the schema-1 JSON and the human report live
+//! in the command bodies). The identity model never matches on ids — those are
+//! unstable across edits: elements are keyed by their canonical name
 //! (the `Person://X` URI prefix IS the type), relationships by
 //! [`WorkspaceBuilder::relationship_canonical_name`]
 //! (`Relationship://A -> B (description)`), views by key, styles by
 //! (kind, tag). SAME identity with a different id is its own category
 //! ([`Diff::id_changed`]), never add+remove.
 //!
-//! Locked-in consequences (decided in `agents/plan/build/PHASE_4.md`
-//! §P4-M0, documented for `docs/diff-schema.md`): a relationship
+//! Locked-in consequences (decided in the phase plan,
+//! documented for `docs/diff-schema.md`): a relationship
 //! DESCRIPTION or an element NAME change IS an identity change (both are
 //! embedded in the canonical-name key ⇒ add+remove pair). A duplicate
 //! canonical name (an invalid workspace — validation flags it) is matched
@@ -22,8 +22,8 @@
 //! View GEOMETRY (`position[…]`, `vertices[…]`, `automaticLayout`,
 //! `dimensions`, `animations`) is gated by [`DiffOptions::ignore_layout`].
 //! Image-view content blobs are never compared (base64 payloads).
-//! Loader-representation rule (D-4): comparison goes through the reference
-//! EFFECTIVE views — tags via `getTags()` (defaults ++ stored, deduped),
+//! Loader-representation rule (D-4): comparison goes through the official tooling
+//! EFFECTIVE views — tags via `getTags` (defaults ++ stored, deduped),
 //! empty text reads as ABSENT, and the loader-regenerated `structurizr.dsl*`
 //! provenance stamps are NEVER compared — so a `.dsl` and its JSON twin
 //! diff EMPTY (pinned by `tests/diff_probes.rs`).
@@ -42,7 +42,7 @@ use oxidizr_core::views::{
 };
 use serde_json::{Value, json};
 
-/// Diff knobs (P4-D2: `--ignore-layout` today; extension by addition).
+/// Diff knobs (: `--ignore-layout` today; extension by addition).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DiffOptions {
     /// Skip view geometry fields (element positions, relationship
@@ -108,7 +108,7 @@ impl Diff {
             && self.id_changed.is_empty()
     }
 
-    /// The human report (§P4-M0 D-3): ± entries grouped by category, in
+    /// The human report: ± entries grouped by category, in
     /// schema order (`added`, `removed`, `changed`, `idChanged`). The
     /// rendering lives here so the CLI stays a replay shim (the bodies-in-API
     /// invariant); ANSI paint rides the `color` flag (the CLI fills it from
@@ -165,7 +165,7 @@ impl Diff {
         out
     }
 
-    /// The frozen SCHEMA 1 document (P4-D2, `docs/diff-schema.md`):
+    /// The frozen SCHEMA 1 document (`docs/diff-schema.md`):
     /// `{schema:1, added:[{path,kind}], removed:[…], changed:[{path,
     /// field, before, after}], idChanged:[{path, before, after}]}`.
     /// All four categories are ALWAYS present (empty arrays included)
@@ -208,7 +208,7 @@ impl Diff {
     }
 }
 
-/// Compare two loaded workspaces (P4-D2; both sides already through the
+/// Compare two loaded workspaces (both sides already through the
 /// standard pipeline — this function never loads or validates).
 #[must_use]
 pub fn diff(a: &Workspace, b: &Workspace, opts: &DiffOptions) -> Diff {
@@ -573,7 +573,7 @@ fn index_views(
     }
 }
 
-/// The per-kind field set (P4-D2): scope ids, boundary flags, membership
+/// The per-kind field set: scope ids, boundary flags, membership
 /// and (gated) geometry. One `match` on the borrowed `View` enum.
 #[allow(clippy::too_many_lines)] // one arm per `View` variant: the P4-D2 field matrix
 fn push_view_fields(
@@ -684,7 +684,7 @@ fn push_view_fields(
             push(fields, "filterTags", json!(&fv.tags));
         }
         View::Image(_) => {
-            // Content is base64 payload — never compared (P4-M0).
+            // Content is base64 payload — never compared (an earlier milestone).
         }
     }
 }
@@ -824,7 +824,7 @@ fn index_styles(ws: &Workspace, index: &mut Index) {
     }
 }
 
-/// Every paint field of an `ElementStyle` (P4-D2: styles by (kind, tag)).
+/// Every paint field of an `ElementStyle` (: styles by (kind, tag)).
 fn element_style_fields(s: &ElementStyle) -> Fields {
     let mut fields = Fields::new();
     push(
@@ -964,7 +964,7 @@ fn relationship_style_fields(s: &RelationshipStyle) -> Fields {
 
 /// The `ModelItem` fields every element shares. `kind` selects the
 /// derived-default tag stack the EFFECTIVE view is computed against (the
-/// loaders represent the same list differently — §P4-M0 D-4).
+/// loaders represent the same list differently).
 fn base_fields(item: &ModelItem, kind: TagKind) -> Fields {
     let mut fields = Fields::new();
     push(&mut fields, "name", json!(&item.name));
@@ -982,8 +982,8 @@ fn push(fields: &mut Fields, name: &str, value: Value) {
 }
 
 /// An empty string is `""` on one loader and absent on the other (the
-/// reference `ModelItem` defaults `description` to `""`, the JSON writer
-/// omits empty text), so both read as ABSENT (§P4-M0 D-4 — the same
+/// the official tooling `ModelItem` defaults `description` to `""`, the JSON writer
+/// omits empty text), so both read as ABSENT — the same
 /// format-agnostic rule as the effective tags view).
 fn opt(o: Option<&String>) -> Value {
     match o {
@@ -993,7 +993,7 @@ fn opt(o: Option<&String>) -> Value {
     }
 }
 
-/// The EFFECTIVE tag list (`getTags()` = defaults ++ stored, deduped):
+/// The EFFECTIVE tag list (`getTags` = defaults ++ stored, deduped):
 /// the DSL path keeps kind defaults DERIVED while a JSON load re-stores
 /// the CSV, so stored-only comparison would flag every cross-format pair.
 fn tags(t: &oxidizr_core::tags::Tags, defaults: &[&str]) -> Value {
@@ -1004,14 +1004,14 @@ fn groups(g: &[String]) -> Value {
     json!(g)
 }
 
-/// One `properties.<key>` field per entry (per-key granularity, P4-M0).
+/// One `properties.<key>` field per entry (per-key granularity, an earlier milestone).
 fn push_props(fields: &mut Fields, props: &Properties) {
     for (k, v) in props.iter() {
         // Provenance stamps are NEVER compared: the DSL loader regenerates
         // them on every parse (`structurizr.dsl.identifier` = a fresh UUID
         // per item, `structurizr.dsl` = the base64 source snapshot), so
         // including them would break the `diff(a, a)` EMPTY property on
-        // every parsed input (§P4-M0 D-1; documented in diff-schema.md).
+        // every parsed input (; documented in diff-schema.md).
         if k.starts_with("structurizr.dsl") {
             continue;
         }
@@ -1120,7 +1120,7 @@ mod tests {
         });
         let d = diff(&a, &b, &DiffOptions::default());
         // The rename is an IDENTITY change: remove + add, never `changed`.
-        // Locked-in consequence (§P4-M0): the relationship key EMBEDS the
+        // Locked-in consequence: the relationship key EMBEDS the
         // endpoint names, so Alice's rename moves the relationship identity
         // too — remove + add pair, and the view fields follow the new name.
         assert_eq!(
@@ -1197,7 +1197,7 @@ mod tests {
     fn consistent_id_shift_is_id_changed_never_add_remove() {
         let a = ws();
         let mut b = ws();
-        // A REAL id shift re-points every reference (the F1 scenario):
+        // A REAL id shift re-points every the official tooling (the id-shift scenario):
         // a half-shifted workspace is dangling, not an id drift.
         b.model.people[0].item.id = Id::from_num(123);
         b.model.relationships[0].source = Id::from_num(123);
@@ -1324,7 +1324,7 @@ mod tests {
         // DERIVED (stored tags empty, `description` defaults to ""), a JSON
         // load re-stores the tag CSV and omits empty text. Comparison goes
         // through the EFFECTIVE views, so the pair must diff EMPTY
-        // (§P4-M0 D-4 — caught by the `testdata/probes/diff` cross pair).
+        // (caught by the `testdata/probes/diff` cross pair).
         let mut a = ws();
         a.model.people[0].item.description = Some(String::new());
         let mut b = ws();

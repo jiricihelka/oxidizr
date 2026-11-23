@@ -1,11 +1,11 @@
-//! The `ExportCommand` format registry and dispatch. The reference parses
-//! `--format` lowercased and looks it up in a static map
-//! (`json`, `theme`, `plantuml`/`plantuml[-light|-dark]`,
+//! The `export` format registry and dispatch. `--format` is parsed
+//! lowercased against a fixed registry (`json`, `theme`,
+//! `plantuml`/`plantuml[-light|-dark]`,
 //! `plantuml/structurizr[±light|-dark]`, `plantuml/c4plantuml[±light|-dark]`,
 //! `mermaid`, `websequencediagrams`), with `static` handled before the map
-//! and `png`/`svg` before that (rejected: the Playwright build is absent);
-//! anything else the JVM cannot class-load logs `Unknown export format: …`
-//! and the command STILL EXITS 0 — mirrored as [`ExportFormat::Unknown`].
+//! and `png`/`svg` before that (the official build rejects them: no browser
+//! toolchain); anything else logs `Unknown export format: …` and the
+//! command STILL EXITS 0 — modeled as [`ExportFormat::Unknown`].
 
 use oxidizr_core::Workspace;
 use oxidizr_core::views::ColorScheme;
@@ -15,8 +15,8 @@ use crate::error::ExportError;
 use crate::naming::{ExportedFile, diagram_files, diagram_prefix, workspace_export_files};
 use crate::plantuml::{C4PlantUmlDialect, Engine, StructurizrDialect};
 
-/// `-light` / `-dark` format suffix (the reference constructs the exporter
-/// with that `ColorScheme`; unmarked formats keep the workspace theme).
+/// `-light` / `-dark` format suffix (selects a `ColorScheme`; unmarked
+/// formats keep the workspace theme).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorMode {
     /// No suffix.
@@ -30,9 +30,9 @@ pub enum ColorMode {
 /// A parsed `--format` value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExportFormat {
-    /// `json` — `JsonWorkspaceExporter` (the standard workspace JSON).
+    /// `json` — the standard workspace JSON.
     Json,
-    /// `theme` — `JsonWorkspaceThemeExporter` (`ThemeUtils.toJson`).
+    /// `theme` — the workspace theme as JSON.
     Theme,
     /// `plantuml`, `plantuml-light|dark`, `plantuml/structurizr[±light|dark]`.
     StructurizrPlantUml(ColorMode),
@@ -40,25 +40,24 @@ pub enum ExportFormat {
     C4PlantUml(ColorMode),
     /// `mermaid`.
     Mermaid,
-    /// `websequencediagrams` — the `WebSequenceDiagramsExporter` port
-    /// (P4 §P4-M2 N-5): custom and dynamic views only, `.wsd` files.
+    /// `websequencediagrams` — custom and dynamic views only, `.wsd` files.
     WebSequenceDiagrams,
-    /// `static` — the reference site generator; not an oxidizr goal.
+    /// `static` — the official site generator; not an oxidizr goal.
     Static,
-    /// `png` — the reference build itself rejects this (no Playwright).
+    /// `png` — the official build rejects this too (no browser toolchain).
     Png,
     /// `svg` — as [`ExportFormat::Png`].
     Svg,
-    /// Not in the registry and no JVM class name resolves — the reference
-    /// logs and exits 0; the pipeline notes and succeeds.
+    /// Not in the registry. The official tooling also tries the string as
+    /// a custom exporter class name; when nothing resolves it logs and
+    /// exits 0, so the pipeline notes and succeeds.
     Unknown(String),
 }
 
 impl ExportFormat {
-    /// Parse like `cmd.getOptionValue("format").toLowerCase()` + the
-    /// `EXPORTERS` map keys. Only the `PlantUML` family carries a `-light` /
-    /// `-dark` suffix there — `theme-light` etc. fall through to the
-    /// class-load attempt (unknown here).
+    /// Parse `--format` lowercased against the registry keys. Only the
+    /// `plantuml` family carries a `-light` / `-dark` suffix — `theme-light`
+    /// etc. fall through to the unknown path.
     #[must_use]
     pub fn parse(raw: &str) -> Self {
         let f = raw.to_ascii_lowercase();
@@ -78,17 +77,16 @@ impl ExportFormat {
         }
     }
 
-    /// Whether the format is known to the reference CLI (unknown strings are
-    /// the exit-0 "Unknown export format" note, not an error).
+    /// Whether the official CLI knows this format (unknown strings are the
+    /// exit-0 "Unknown export format" note, not an error).
     #[must_use]
     pub fn is_known(&self) -> bool {
         !matches!(self, Self::Unknown(_))
     }
 
-    /// Whether the reference dispatches this format through a
-    /// `DiagramExporter` — the branch that runs `ThemeUtils.loadThemes`
-    /// BEFORE the export (`ExportCommand` 222-227). `static` is handled
-    /// before the registry map, `png`/`svg` are rejected at build time, so
+    /// Whether this format exports through [`crate::diagram::DiagramExporter`]
+    /// — the branch that loads themes BEFORE the export. `static` is handled
+    /// before the registry map and `png`/`svg` are rejected outright, so
     /// none of them load themes.
     #[must_use]
     pub const fn is_diagram(&self) -> bool {
@@ -118,35 +116,32 @@ impl ExportFormat {
         }
     }
 
-    /// `ExportCommand` dispatch. `plantuml` / `plantuml/structurizr` (M2-d)
-    /// run the `DiagramExporter` branch — the engine + `StructurizrDialect`,
-    /// one file per diagram plus `-key` legend and numbered frame files, the
-    /// id-keyed names of the reference write loop. `json` and `theme` are the
-    /// implemented `WorkspaceExporter` pair (M0); `plantuml`/`structurizr`,
-    /// `plantuml/c4plantuml`, `mermaid` (M2–M4) and `websequencediagrams`
-    /// (P4 §P4-M2 N-5) are the implemented `DiagramExporter` quartet. The
+    /// The dispatch. `json` and `theme` are the [`crate::diagram::WorkspaceExporter`]
+    /// pair; `plantuml`/`plantuml/structurizr`, `plantuml/c4plantuml`,
+    /// `mermaid` and `websequencediagrams` are the
+    /// [`crate::diagram::DiagramExporter`] formats — the
+    /// engine plus a dialect, one file per diagram, a `-key` legend file and
+    /// numbered animation-frame files, all named from the workspace id. The
     /// remaining registry formats report [`ExportError::NotImplemented`];
     /// [`ExportFormat::Unknown`] is the CALLER's exit-0 note path (the
-    /// reference never gets here).
+    /// official tooling never errors here).
     ///
     /// # Errors
     ///
-    /// [`ExportError::NotImplemented`] for known-but-unlanded formats,
+    /// [`ExportError::NotImplemented`] for known-but-unimplemented formats,
     /// [`ExportError::NoExtension`] when the workspace file name has no `.`
-    /// (the `WorkspaceExporter` branch only), [`ExportError::Json`] when
+    /// (the [`crate::diagram::WorkspaceExporter`] branch only),
+    /// [`ExportError::Json`] when
     /// serialization fails, [`ExportError::ReferenceAbort`] when the
-    /// diagram engine hits a Java abort path (§14).
+    /// diagram engine hits a case where the official tooling aborts.
     pub fn export(
         &self,
         workspace: &Workspace,
         workspace_file_name: &str,
     ) -> Result<Vec<ExportedFile>, ExportError> {
-        // 2R R-exp-18: ONE dispatch — the old shape matched `self` twice
-        // for the plantuml pair and used a separate `matches!` for mermaid.
         let diagrams = match self {
-            // The `DiagramExporter` branch of `ExportCommand.run`: the
-            // workspace file name plays no role (names key on the workspace
-            // ID — `prefix(workspaceId)`).
+            // The diagram branch: the workspace file name plays no role
+            // (names key on the workspace ID via `diagram_prefix`).
             Self::StructurizrPlantUml(mode) => {
                 let mut engine = Engine::new(workspace, mode.color_scheme());
                 engine.export_all(&mut StructurizrDialect::new())?
@@ -155,17 +150,16 @@ impl ExportFormat {
                 let mut engine = Engine::new(workspace, mode.color_scheme());
                 engine.export_all(&mut C4PlantUmlDialect::new())?
             }
-            // `MermaidDiagramExporter` has no color-scheme constructor: the
-            // no-arg export is `this(ColorScheme.Light)`. The `.mmd`
-            // extension rides each `Diagram` (`diagram_files` threads
-            // `file_extension`).
+            // Mermaid has no color-scheme option: the export always uses
+            // the light scheme. The `.mmd` extension rides each `Diagram`
+            // (`diagram_files` threads `file_extension`).
             Self::Mermaid => {
                 let mut engine = Engine::new(workspace, ColorScheme::Light);
                 engine.export_all(&mut crate::mermaid::MermaidDialect::new())?
             }
-            // `WebSequenceDiagramsExporter` carries no color scheme and its
-            // static-structure/deployment overloads return `null`, so the
-            // view loop (Custom + Dynamic only) lives in `wsd::export_all`
+            // WebSequenceDiagrams carries no color scheme and supports
+            // neither static-structure nor deployment views, so the view
+            // loop (Custom + Dynamic only) lives in `wsd::export_all`
             // rather than on the engine.
             Self::WebSequenceDiagrams => crate::wsd::export_all(workspace)?,
             Self::Json => {
@@ -187,8 +181,8 @@ impl ExportFormat {
     }
 }
 
-/// Peel a `-light`/`-dark` suffix off a `PlantUML` family format string
-/// (`EXPORTERS` puts the suffix on the `plantuml*` keys only).
+/// Peel a `-light`/`-dark` suffix off a `plantuml`-family format string
+/// (only the `plantuml*` registry keys carry one).
 fn split_color_suffix(f: &str) -> (&str, ColorMode) {
     match f.rsplit_once('-') {
         Some((base, "light")) => (base, ColorMode::Light),
@@ -206,8 +200,8 @@ impl ColorMode {
         }
     }
 
-    /// The exporter's `ColorScheme`: the suffixless key builds the no-arg
-    /// exporter, which is `this(ColorScheme.Light)` (`StructurizrPlantUMLExporter`).
+    /// The `ColorScheme` this suffix selects: suffixless means the default,
+    /// which is light.
     pub(crate) const fn color_scheme(self) -> ColorScheme {
         match self {
             Self::Dark => ColorScheme::Dark,
@@ -256,8 +250,8 @@ mod tests {
 
     #[test]
     fn anything_else_is_the_exit_zero_unknown_path() {
-        // The reference tries to CLASS-LOAD these; without a JVM match it
-        // logs "Unknown export format" and returns true (exit 0).
+        // The official tooling also tries these as custom exporter class
+        // names; with no match it logs "Unknown export format" and exits 0.
         for raw in [
             "foo",
             "com.example.MyExporter",
@@ -273,8 +267,8 @@ mod tests {
         }
     }
 
-    /// A one-person landscape workspace, id 7 (the `prefix(workspaceId)`
-    /// key of the reference write loop).
+    /// A one-person landscape workspace, id 7 (diagram file names key on
+    /// this id).
     fn workspace() -> Workspace {
         use oxidizr_core::Id;
         use oxidizr_core::model::{ModelItem, Person};
@@ -343,9 +337,8 @@ mod tests {
 
     #[test]
     fn other_registry_formats_stay_not_implemented() {
-        // `mermaid` landed at M4-b and `websequencediagrams` at P4 §P4-M2
-        // N-5 (see the arm tests below + the `export_*` API suites);
-        // `static` is the registry's last unlanded entry.
+        // `static` is the only registry format still reported as not
+        // implemented (see the arm tests below + the `export_*` API suites).
         let err = ExportFormat::parse("static")
             .export(&workspace(), "ws.dsl")
             .expect_err("unlanded format");
@@ -356,10 +349,9 @@ mod tests {
         );
     }
 
-    /// P4 §P4-M2 N-5: `websequencediagrams` dispatches into
-    /// `wsd::export_all` — a landscape-only workspace writes NO files (the
-    /// reference's static-structure/deployment overloads return `null`) but
-    /// the export SUCCEEDS.
+    /// `websequencediagrams` dispatches into `wsd::export_all` — a
+    /// landscape-only workspace writes NO files (static-structure views are
+    /// not supported there) but the export SUCCEEDS.
     #[test]
     fn websequencediagrams_lands_the_wsd_dialect() {
         let files = ExportFormat::parse("websequencediagrams")
@@ -368,7 +360,7 @@ mod tests {
         assert!(files.is_empty(), "{files:?}");
     }
 
-    /// M4-b: `mermaid` exports through `MermaidDialect` — `.mmd` files
+    /// `mermaid` exports through `MermaidDialect` — `.mmd` files
     /// with the `graph TB` header (no `automaticLayout` on this view), the
     /// `subgraph diagram` wrapper and the div-label element legs.
     #[test]
@@ -386,10 +378,10 @@ mod tests {
         );
     }
 
-    /// M3-b: `plantuml/c4plantuml` exports through `C4PlantUmlDialect` —
+    /// `plantuml/c4plantuml` exports through `C4PlantUmlDialect` —
     /// the C4 header (`set separator none`, the ALWAYS `<style>` root
-    /// block, the `<C4/…>` includes) and NO legend file (the Java
-    /// `createLegend` returns `null`).
+    /// block, the `<C4/…>` includes) and NO legend file (C4 `PlantUML`
+    /// exports carry no legend).
     #[test]
     fn c4plantuml_lands_the_c4_dialect() {
         let files = ExportFormat::parse("plantuml/c4plantuml")
@@ -420,7 +412,7 @@ mod tests {
         );
     }
 
-    /// M3-b: the `-dark` suffix renders the DARK exporter defaults.
+    /// The `-dark` suffix renders the DARK exporter defaults.
     #[test]
     fn c4plantuml_dark_suffix_renders_dark_defaults() {
         let files = ExportFormat::parse("plantuml/c4plantuml-dark")

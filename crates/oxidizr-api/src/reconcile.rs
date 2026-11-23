@@ -1,12 +1,12 @@
 //! `reconcile` — re-attach saved layout geometry to a re-parsed DSL workspace
-//! (F1, `agents/plan/build/PHASE_1.md` §P1-D8).
+//! (an additional feature).
 //!
-//! Problem (F1): the shared sequential id counter regenerates ids on every
+//! Problem: the shared sequential id counter regenerates ids on every
 //! parse, so reordering or inserting DSL statements shifts ids and silently
 //! detaches the saved `{id,x,y}` layout geometry in a layout JSON produced
 //! from the pre-edit workspace.
 //!
-//! Algorithm (P1-D8, in order):
+//! Algorithm (in order):
 //! 1. old→new id maps for elements and relationships, built from the LAYOUT
 //!    workspace (old ids) against the re-parsed DSL workspace (new ids):
 //!    exact `structurizr.dsl.identifier` match first, then the canonical-name
@@ -38,7 +38,7 @@ use oxidizr_diag::codes;
 
 use crate::Issue;
 
-/// The DSL-stamped identity property (Locked, `agents/plan/COMPAT.md`).
+/// The DSL-stamped identity property (a locked compat decision).
 const DSL_IDENTIFIER: &str = "structurizr.dsl.identifier";
 
 /// One workspace's lookup tables: identifier value → ids, canonical → ids.
@@ -49,7 +49,7 @@ struct Index {
 }
 
 impl Index {
-    /// Build both tables for the RELATIONSHIPS of `ws` (2R R-mis-11: the
+    /// Build both tables for the RELATIONSHIPS of `ws` (the
     /// `rels: bool` switch split into the two named builders it dispatches
     /// on — call sites pick the id space by name, never by flag).
     fn build_relationships(ws: &Workspace, b: &WorkspaceBuilder) -> Index {
@@ -69,7 +69,7 @@ impl Index {
     }
 
     /// [`Self::build_relationships`] for the flattened-model ELEMENTS of
-    /// `ws` (2R R-mis-11 split).
+    /// `ws` (split).
     fn build_elements(ws: &Workspace, b: &WorkspaceBuilder) -> Index {
         let mut idx = Index::default();
         for (id, _, _) in flattened(&ws.model) {
@@ -145,7 +145,7 @@ impl Maps {
 type OldIds = Vec<(Id, Option<String>, Option<String>)>;
 
 /// The old-side relationship rows: id + identifier value + canonical name
-/// (2R R-mis-11: the `rels: bool` branch of `map_ids` became these two
+/// (the `rels: bool` branch of `map_ids` became these two
 /// named collectors — the id space is chosen by name at the call site).
 fn old_relationship_ids(old_ws: &Workspace, old_b: &WorkspaceBuilder) -> OldIds {
     old_ws
@@ -162,7 +162,7 @@ fn old_relationship_ids(old_ws: &Workspace, old_b: &WorkspaceBuilder) -> OldIds 
         .collect()
 }
 
-/// [`old_relationship_ids`] for the flattened-model elements (2R R-mis-11).
+/// [`old_relationship_ids`] for the flattened-model elements .
 fn old_element_ids(old_ws: &Workspace, old_b: &WorkspaceBuilder) -> OldIds {
     flattened(&old_ws.model)
         .into_iter()
@@ -241,7 +241,7 @@ pub struct Report {
     /// EVERY uncontested old→new ELEMENT id pair the remap established
     /// (sorted by old id for a deterministic order). The CLI report
     /// never prints these; the viewer's reload path uses them to re-key
-    /// its session overlays (§P3-M4). Ambiguous ids appear in NEITHER
+    /// its session overlays (§). Ambiguous ids appear in NEITHER
     /// this list NOR `ambiguous`-carried guesses — never guessed means
     /// never here. Elements and relationships keep SEPARATE lists:
     /// both id spaces mint `"1"`, `"2"`, … independently, so a merged
@@ -272,7 +272,7 @@ impl Report {
 pub fn reconcile(layout: &Workspace, updated: &Workspace) -> (Workspace, Report) {
     let mut report = Report::default();
 
-    // Canonical-name machinery over adopted clones (P1-D1: reconcile is pure
+    // Canonical-name machinery over adopted clones (: reconcile is pure
     // composition — no core changes).
     let mut new_b = WorkspaceBuilder::new();
     new_b.adopt(updated.clone());
@@ -292,7 +292,7 @@ pub fn reconcile(layout: &Workspace, updated: &Workspace) -> (Workspace, Report)
     report.ambiguous.append(&mut elems.ambiguous);
     report.ambiguous.append(&mut rels.ambiguous);
     // The full uncontested mappings, deterministic order (the viewer's
-    // overlay re-key; §P3-M4). Collected BEFORE grafting, sorted per
+    // overlay re-key; §). Collected BEFORE grafting, sorted per
     // kind so runs agree and the overlapping id spaces never mix.
     let sorted = |maps: &Maps| {
         let mut pairs: Vec<(Id, Id)> = maps
@@ -373,7 +373,7 @@ fn graft_set(
     anim_kind!(views.deployment_views);
 
     // Layout views with no counterpart in the re-parsed workspace
-    // (2R R-mis-11: `HashSet` membership replaces the per-key `Vec::contains`
+    // (`HashSet` membership replaces the per-key `Vec::contains`
     // scan — same answer, no quadratic re-scan).
     let new_keys: HashSet<&str> = views.all_views().into_iter().map(View::key).collect();
     for key in old_by_key.keys() {
@@ -393,7 +393,7 @@ fn remap_animations(
     rels: &Maps,
     report: &mut Report,
 ) -> Vec<Animation> {
-    // 2R R-mis-11: the closure shadows the module-level `map_ids` fn — `remap_ids`.
+    // the closure shadows the module-level `map_ids` fn — `remap_ids`.
     let mut remap_ids = |ids: &[String], map: &Maps, what: &str, order: i32| -> Vec<String> {
         ids.iter()
             .filter_map(|id| {
@@ -429,8 +429,8 @@ fn graft_content(
     rels: &Maps,
     report: &mut Report,
 ) {
-    // 2R R-mis-11: id-keyed lookups replace the per-entry `find`/`any`
-    // scans. `entry().or_insert()` keeps the FIRST entry per id — exactly
+    // id-keyed lookups replace the per-entry `find`/`any`
+    // scans. `entry.or_insert` keeps the FIRST entry per id — exactly
     // what the old `find` answered (duplicate view entries are a validation
     // violation, but reconcile runs BEFORE validation, so the first-wins
     // pick must stay).
@@ -552,7 +552,7 @@ mod tests {
         // Same id-shift fixture: identifiers carry the match, so BOTH
         // elements remap (api 1→2, web 2→3) and the relationship
         // follows (3→4) — the viewer's overlay re-key consumes exactly
-        // these lists (§P3-M4).
+        // these lists (§).
         let layout = parse(
             "workspace \"W\" {\n    model {\n        api = softwareSystem \"API\"\n        web = softwareSystem \"Web\"\n        api -> web \"Uses\"\n    }\n}\n",
         );

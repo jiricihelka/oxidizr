@@ -1,5 +1,5 @@
-//! The `Mermaid` C4 model importer (F12 — `PHASE_4` §P4-M2 N-3; the
-//! pinned reference has no model-parser counterpart, P4-V3). The macro
+//! The `Mermaid` C4 model importer (agreed additional feature; it is
+//! verified the official tooling has no model-parser counterpart). The
 //! machinery is shared with [`crate::c4plantuml`]; this module pins the
 //! `Mermaid` dialect differences:
 //!
@@ -15,7 +15,7 @@
 //! - layout chrome (`Enter_Boundary`/`Leave_Boundary`/`Update*`/`Set*`/
 //!   `Show*`/`Hide*`/`CLEAR_*`/`SHOW_LEGEND`) is tolerated silently;
 //!   raw flowchart edges (`-->`) warn and are skipped — the macro
-//!   calls are the promised surface (P4-D8, R-1);
+//!   calls are the promised surface;
 //! - the output is the MODEL ONLY, no view: no view kind may host a
 //!   mixed C4 element set, the default views install at open (see the
 //!   `c4plantuml` module docs).

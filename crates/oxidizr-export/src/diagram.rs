@@ -1,15 +1,14 @@
-//! The export bean model (`com.structurizr.export`): one [`Diagram`] per
-//! view (`Diagram.java` — key, definition, file extension, animation
-//! frames, optional legend), the [`Legend`] side-car, and the
-//! [`WorkspaceExport`] whole-workspace payload. `Exporter` is a marker
-//! interface; the two real shapes become traits: [`WorkspaceExporter`] and
-//! [`DiagramExporter`].
+//! The export bean model: one [`Diagram`] per view (key, definition, file
+//! extension, animation frames, optional legend), the [`Legend`] side-car,
+//! and the [`WorkspaceExport`] whole-workspace payload. The two exporter
+//! shapes become traits: [`WorkspaceExporter`] (whole workspace, one
+//! document) and [`DiagramExporter`] (one diagram per view).
 
 use oxidizr_core::Workspace;
 
 use crate::error::ExportError;
 
-/// `Legend` — a single definition string written next to its diagram as
+/// A single definition string written next to its diagram as
 /// `<prefix>-<key>-key.<ext>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Legend {
@@ -28,9 +27,9 @@ impl Legend {
     }
 }
 
-/// `Diagram` — the export of one view. `getKey()` is the view key, already
-/// lowered onto the struct at construction (the exporters own key naming:
-/// frame diagrams reuse the PARENT key for file names — `ExportCommand`).
+/// The export of one view. The view key is stored at construction because
+/// the exporters own key naming: frame diagrams reuse the PARENT key for
+/// file names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagram {
     key: String,
@@ -86,8 +85,8 @@ impl Diagram {
     }
 }
 
-/// `WorkspaceExport` — one whole-workspace document plus its file extension
-/// (`json` for the `JsonWorkspaceExporter`/`JsonWorkspaceThemeExporter`).
+/// One whole-workspace document plus its file extension (`json` for the
+/// workspace JSON and the theme export).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceExport {
     definition: Vec<u8>,
@@ -114,7 +113,7 @@ impl WorkspaceExport {
     }
 }
 
-/// `WorkspaceExporter` — the whole workspace as one document.
+/// The whole workspace as one document.
 pub trait WorkspaceExporter {
     /// Exports the workspace as a single document.
     ///
@@ -124,7 +123,7 @@ pub trait WorkspaceExporter {
     fn export(&self, workspace: &Workspace) -> Result<WorkspaceExport, ExportError>;
 }
 
-/// `DiagramExporter` — one diagram per view.
+/// One diagram per view.
 pub trait DiagramExporter {
     /// Exports every view of the workspace as a diagram.
     ///

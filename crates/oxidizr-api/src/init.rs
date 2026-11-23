@@ -1,4 +1,4 @@
-//! `oxidizr init` scaffold templates (§P4-M3 O-2, F7, P4-D4).
+//! `oxidizr init` scaffold templates (F7).
 //!
 //! Everything the command writes is embedded at build time
 //! (`include_str!`) — zero network, zero new deps. The templates use
@@ -61,7 +61,7 @@ mod tests {
     use super::*;
     use oxidizr_dsl::engine::ParseOptions;
 
-    /// The template teeth (P4-D4): every starter `workspace.dsl` parses
+    /// The template teeth: every starter `workspace.dsl` parses
     /// with ZERO recorded errors — grammar drift fails here, in the
     /// unit tier, before the CLI goldens and the `dsl2json` snapshot.
     #[test]

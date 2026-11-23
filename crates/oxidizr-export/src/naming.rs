@@ -1,11 +1,10 @@
-//! The `ExportCommand` file-naming rules (oracle-verified 2026-11-17,
-//! witnesses `/tmp/nix-shell.uni100/p2/v1/out1,out3,out6` + the source):
+//! The `export` file-naming rules:
 //!
 //! * workspace exports (`json`, `theme`): the workspace FILE name up to its
-//!   LAST `.` (`substring(0, lastIndexOf('.'))`), `-theme` for the theme
-//!   format, then `.<export extension>` — written into the output directory;
+//!   LAST `.`, `-theme` for the theme format, then `.<export extension>` —
+//!   written into the output directory;
 //! * diagrams: `structurizr-<id>-<key>.<ext>` (`structurizr-<key>.<ext>`
-//!   when the id is not positive — `prefix(workspaceId)`), legend as
+//!   when the id is not positive), legend as
 //!   `…-<key>-key.<ext>`, animation frames as `…-<key>-<n>.<ext>` starting
 //!   at 1, the frames carrying the PARENT diagram's key and extension.
 
@@ -21,7 +20,7 @@ pub struct ExportedFile {
     pub bytes: Vec<u8>,
 }
 
-/// `ExportCommand.prefix(long)` — `structurizr-<id>` for a positive id,
+/// The diagram file prefix: `structurizr-<id>` for a positive id,
 /// bare `structurizr` otherwise.
 #[must_use]
 pub fn diagram_prefix(workspace_id: i64) -> String {
@@ -32,7 +31,7 @@ pub fn diagram_prefix(workspace_id: i64) -> String {
     }
 }
 
-/// The reference stem: name up to (not including) the LAST `.`.
+/// The workspace-export stem: name up to (not including) the LAST `.`.
 fn stem(file_name: &str) -> Result<&str, ExportError> {
     file_name
         .rfind('.')
@@ -42,14 +41,14 @@ fn stem(file_name: &str) -> Result<&str, ExportError> {
         })
 }
 
-/// The single file of a `WorkspaceExporter` export (the `else` branch of
-/// `ExportCommand.run`): `<stem>[-theme].<extension>`.
+/// The single file of a [`crate::diagram::WorkspaceExporter`] export:
+/// `<stem>[-theme].<extension>`.
 ///
 /// # Errors
 ///
 /// [`ExportError::NoExtension`] when `workspace_file_name` has no `.` —
-/// the reference derives the stem with `substring(0, lastIndexOf('.'))`
-/// and throws there.
+/// the official tooling fails outright there; oxidizr reports an input
+/// error instead.
 pub fn workspace_export_files(
     export: &WorkspaceExport,
     theme: bool,
@@ -63,7 +62,8 @@ pub fn workspace_export_files(
     }])
 }
 
-/// The `DiagramExporter` files: one per diagram, plus `-key` legends and
+/// The [`crate::diagram::DiagramExporter`] files: one per diagram, plus
+/// `-key` legends and
 /// numbered frame files (the parent's key and extension, frames indexed
 /// from 1).
 #[must_use]
@@ -117,11 +117,12 @@ mod tests {
         let files = workspace_export_files(&export, false, "big-bank-plc.json").unwrap();
         assert_eq!(files[0].name, "big-bank-plc.json");
         let files = workspace_export_files(&export, true, "big-bank-plc.dsl").unwrap();
-        assert_eq!(files[0].name, "big-bank-plc-theme.json"); // out1 witness
+        assert_eq!(files[0].name, "big-bank-plc-theme.json");
         // LAST dot splits:
         let files = workspace_export_files(&export, true, "a.b.dsl").unwrap();
         assert_eq!(files[0].name, "a.b-theme.json");
-        // no dot: the reference throws — oxidizr reports the input:
+        // no dot: the official tooling fails outright — oxidizr reports
+        // the input:
         assert!(matches!(
             workspace_export_files(&export, true, "workspace"),
             Err(ExportError::NoExtension { .. })

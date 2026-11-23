@@ -1,17 +1,16 @@
-//! Port of `com.structurizr.export.IndentingWriter` — the accumulating
-//! text buffer every reference exporter builds diagrams on. Semantics
-//! pinned from the source at the pinned revision:
+//! The accumulating text buffer every diagram export builds on.
+//! Semantics:
 //!
 //! * `writeLine()` appends a bare `\n` (NO padding);
 //! * `writeLine(content)` pads, writes, and escapes embedded newlines as
 //!   the literal two characters `\n`;
-//! * `toString()` drops ONE trailing newline;
+//! * the render drops ONE trailing newline;
 //! * padding is `indent * quantity` spaces or tabs — a negative indent
 //!   (unguarded `outdent`) pads nothing.
 
 use std::fmt;
 
-/// `IndentType` — spaces or tabs.
+/// Spaces or tabs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IndentType {
     #[default]
@@ -19,13 +18,12 @@ pub enum IndentType {
     Tabs,
 }
 
-/// The reference buffer: level starts at 0, two spaces per level — the
-/// `indentQuantity = 2` field initializer is not derivable, see the manual
-/// [`Default`] below.
+/// The buffer: level starts at 0, two spaces per level — the default
+/// quantity is not derivable, see the manual [`Default`] below.
 #[derive(Debug)]
 pub struct IndentingWriter {
-    // i32 like the Java `int`: an unbalanced outdent goes negative and
-    // simply pads nothing (a `usize` would underflow).
+    // `i32` like the indent level upstream: an unbalanced outdent goes
+    // negative and simply pads nothing (a `usize` would underflow).
     indent: i32,
     indent_type: IndentType,
     indent_quantity: i32,
@@ -72,7 +70,7 @@ impl IndentingWriter {
         match content {
             None => self.buf.push('\n'),
             Some(text) => {
-                // 2R R-exp-05: the pad is written straight into the buffer
+                // the pad is written straight into the buffer
                 // (the old `padding()` allocated a `String` per line) and
                 // the newline-escape copy runs ONLY when the content
                 // actually contains one. Same bytes either way.
@@ -95,10 +93,10 @@ impl IndentingWriter {
         }
     }
 
-    /// `replace(before, after)` — first occurrence only. The Java original
+    /// `replace(before, after)` — first occurrence only. The official
     /// throws when `before` is absent (its callers only replace anchors they
     /// just wrote); oxidizr silently skips, matching every reachable
-    /// reference path and avoiding a panic on hostile input.
+    /// official path and avoiding a panic on hostile input.
     pub fn replace(&mut self, before: &str, after: &str) {
         if let Some(start) = self.buf.find(before) {
             self.buf.replace_range(start..start + before.len(), after);
@@ -106,7 +104,7 @@ impl IndentingWriter {
     }
 }
 
-/// `toString()` — the buffer without ONE trailing newline.
+/// The render — the buffer without ONE trailing newline.
 impl fmt::Display for IndentingWriter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.buf.strip_suffix('\n').unwrap_or(&self.buf))
@@ -161,7 +159,7 @@ mod tests {
         let mut w = IndentingWriter::new();
         w.indent();
         w.write_line(None);
-        // the bare newline is padded by nothing — and toString drops the
+        // the bare newline is padded by nothing — and the render drops the
         // single trailing newline, leaving nothing:
         assert_eq!(w.to_string(), "");
     }

@@ -1,22 +1,21 @@
-//! The `websequencediagrams` export — the `WebSequenceDiagramsExporter`
-//! port (P4 §P4-M2 N-5).
+//! The `websequencediagrams` export — the official WSD exporter port.
 //!
-//! The reference exports ONLY `CustomView`s (the `AbstractDiagramExporter`
-//! base body — the WSD class does not override that overload) and
+//! The official exporter emits ONLY `CustomView`s (the base
+//! body export is not overridden) and
 //! `DynamicView`s (an override with its own walk); the static-structure and
 //! deployment overloads return `null`, so the [`export_all`] loop here skips
 //! every other view kind. `renderAsSequenceDiagram` has no property gate:
 //! the dynamic override IS the sequence form, so the dialect claims it via
 //! the [`Dialect::sequence_document`] route (the Mermaid precedent).
 //! Frames never (base `isAnimationSupported` is `false`); legend never
-//! (base `createLegend` is null — oracle-confirmed on `custom-view-animation`);
+//! (the base legend is null — verified on `custom-view-animation`);
 //! file extension `wsd` (`WebSequenceDiagramsDiagram.getFileExtension`).
 //!
-//! Byte rules (oracle witnesses 2026-11-21, `WebSequenceDiagramsExporter` +
+//! Byte rules (verified, `WebSequenceDiagramsExporter` +
 //! `AbstractDiagramExporter` + `IndentingWriter`):
 //!
 //! - title and participant lines carry the LITERAL two-character `\n`
-//!   (the Java format strings spell `\\n`); a real newline in a view
+//!   (the official tooling format strings spell `\\n`); a real newline in a view
 //!   description is escaped the same way by `writeLine` — our
 //!   [`IndentingWriter::write_line`] escapes identically.
 //! - `writeHeader` ends with a blank line; the dynamic walk writes a second
@@ -24,10 +23,10 @@
 //!   get it), while the custom-view base body guards it on a non-empty
 //!   element list.
 //! - `writeRelationships` (base) writes a trailing blank line when the view
-//!   has relationships; `toString` strips exactly ONE trailing newline, so
+//!   has relationships; the render strips exactly ONE trailing newline, so
 //!   a relationship-bearing diagram's file ends with a single `\n`.
 //! - a relationship with no view override and no model description prints
-//!   EMPTY (`A->B: ` with the trailing space) — the oracle, not a literal
+//!   EMPTY (`A->B: ` with the trailing space) — the official tooling, not a literal
 //!   `null`.
 
 use oxidizr_core::Workspace;
@@ -56,7 +55,7 @@ impl WsdDialect {
     /// `Terminology.findTerminology` — `views.configuration.terminology`
     /// defaults with overrides; `StaticStructureElementInstance` unwraps to
     /// its element first; a `CustomElement` reports its `metadata`, never a
-    /// configured term (the Java chain has no `customElement` branch).
+    /// configured term (the official chain has no custom-element branch).
     fn find_terminology<'a>(e: &Engine<'a>, element: ElemRef<'a>) -> Result<String, ExportError> {
         let resolved = if matches!(
             element.kind(),
@@ -196,7 +195,7 @@ impl Dialect for WsdDialect {
     /// `writeRelationship` — `src->dst: desc` (`->>` asynchronous;
     /// a response swaps the endpoints and uses `-->`/`-->>`); the view
     /// override falls back to the model description, both absent to the
-    /// EMPTY string (oracle-confirmed, not Java's `%s` `null`).
+    /// EMPTY string (verified — not a literal `null` text).
     fn write_relationship<'a>(
         &mut self,
         e: &Engine<'a>,
@@ -341,8 +340,8 @@ impl Dialect for WsdDialect {
 ///
 /// # Errors
 ///
-/// [`ExportError::ReferenceAbort`] when a view aborts the export (the Java
-/// cast/NPE paths of §14 — dangling endpoints, an unresolved view scope).
+/// [`ExportError::ReferenceAbort`] when a view aborts the export (the official tooling
+/// cast/null-pointer crash paths of  — dangling endpoints, an unresolved view scope).
 pub fn export_all(workspace: &Workspace) -> Result<Vec<Diagram>, ExportError> {
     // The exporter has no color-scheme constructor and never consults the
     // engine for one; the scheme is inert here.
@@ -540,8 +539,8 @@ mod tests {
             diagram.definition()
         );
 
-        // No override, no model description: EMPTY after the space (oracle
-        // `A->B: ` witness — the trailing space is part of the line).
+        // No override, no model description: EMPTY after the space (the official tooling
+        // `A->B: ` verified case — the trailing space is part of the line).
         let mut ws = workspace();
         ws.model.relationships[0].description = None;
         let diagram = exported(&ws).pop().expect("one diagram");
@@ -558,7 +557,7 @@ mod tests {
         ws.views.dynamic_views[0].content.relationships.clear();
         let diagram = exported(&ws).pop().expect("one diagram");
         // title, header blank, the unconditional blank; no trailing blank
-        // (no relationships), `toString` has nothing to strip beyond the
+        // (no relationships), the render has nothing to strip beyond the
         // header blank's newline.
         assert_eq!(diagram.definition(), "title Dynamic View\n\n");
     }
@@ -590,9 +589,9 @@ mod tests {
 
     #[test]
     fn custom_view_exports_via_the_base_body() {
-        // The oracle witness (`custom-view-animation`, 2026-11-21): two
-        // CUSTOM elements (a `Person` here is a Java `ClassCastException`
-        // cast abort), metadata-less participants print `<<Element>>`, and
+        // The verified case (`custom-view-animation`): two
+        // CUSTOM elements (a `Person` here is an official type-cast abort);
+        // metadata-less participants print `<<Element>>`, and
         // a description-less relationship prints `A->B: ` with the trailing
         // space.
         let mut ws = workspace();

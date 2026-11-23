@@ -1,12 +1,10 @@
-//! The Structurizr-PlantUML dialect — port of
-//! `export/plantuml/StructurizrPlantUMLExporter` (catalog
-//! `agents/plan/build/EXPORT-PLANTUML.md` §§3–§10 + the `PlantUML*Style`
-//! renderers, pinned `ad34036`).
+//! The Structurizr-PlantUML dialect — the official exporter port,
+//! including the seven `PlantUML*Style` renderers.
 //!
-//! Every line format, gate and quirk mirrors the Java source: the
+//! Every line format, gate and quirk mirrors the official exporter: the
 //! `<style></style>` placeholder replaced by the seven name-sorted class
 //! passes, the base64 class selectors, the boundary/group/DN rectangles,
-//! the per-kind title fallback (`getName()` — the reference NPE paths
+//! the per-kind title fallback (missing names crash — the official null paths
 //! surface as [`ExportError::ReferenceAbort`]) and the legend built from
 //! the LAST body export's style set.
 
@@ -43,11 +41,11 @@ const DEFAULT_STROKE_WIDTH: i32 = 2;
 const SHADOW_DISTANCE: i32 = 10;
 /// `METADATA_FONT_SIZE_RATIO`.
 const METADATA_FONT_SIZE_RATIO: f64 = 0.7;
-/// The `RelationshipStyle` width fallback (the reference merged style
+/// The relationship-style width fallback (the official merged style
 /// defaults it to 200 — same fallback as the base style builder).
 const DEFAULT_REL_WIDTH: i32 = 200;
 
-/// The dialect: the per-body-export style set (the Java `HashSet` — first
+/// The dialect: the per-body-export style set (`HashSet` semantics — first
 /// add wins by class + selector), the exporter-scoped group counter
 /// (`groupId` — NEVER reset between views/exports) and the style-set
 /// serialization order.
@@ -64,12 +62,12 @@ impl StructurizrDialect {
         Self::default()
     }
 
-    /// `plantUMLStyles.add` — `HashSet` semantics: a style equal to an
+    /// Style-set add — `HashSet` semantics: a style equal to an
     /// existing entry DROPS the new one (first wins). Equality is class +
     /// class selector, except the root (class only) and the legend (its
     /// selector is constant, so effectively class only).
     fn add_style(&mut self, style: PlantUMLStyle) {
-        // 2R R-exp-18: the new style's tag/selector/class-only test are loop
+        // the new style's tag/selector/class-only test are loop
         // invariants — computed once, not per stored-style comparison
         // (`selector()` re-runs the b64 encode on every call).
         let target_tag = style.class_tag();
@@ -86,7 +84,7 @@ impl StructurizrDialect {
 
     /// `writeStyles`: one stable name sort (`Comparator.comparing(getName)`
     /// — `java_cmp_str`; the `HashSet` iteration order is unobservable in
-    /// the reference, so stable insertion order is this port's
+    /// the official tooling, so stable insertion order is this port's
     /// deterministic choice), then the seven class passes, then the
     /// `<style></style>` placeholder replacement.
     fn write_styles(&self, w: &mut IndentingWriter) {
@@ -103,9 +101,9 @@ impl StructurizrDialect {
         w.replace("<style></style>", &format!("<style>\n{all}</style>"));
     }
 
-    /// `writeSkinParams` — `Result` because `parts[1]` is an
-    /// `ArrayIndexOutOfBoundsException` when an entry's value splits
-    /// empty (`"foo="` — Java `split("=")` drops the trailing empty).
+    /// The skin-params write — `Result` because the second split part is
+    /// index-out-of-range crash when an entry's value splits
+    /// empty (`"foo="` — the official split drops the trailing empty).
     pub(crate) fn write_skin_params<'a>(
         e: &Engine<'a>,
         view: View<'a>,
@@ -171,7 +169,7 @@ impl StructurizrDialect {
 
     /// `findGroupStyle` — the synthesized `ElementStyle("")` shape (its
     /// empty property map is why boundary/group shadows are ALWAYS false)
-    /// with the reference's line-711 bug mirrored: the all-groups icon
+    /// with the official line-711 bug mirrored: the all-groups icon
     /// fallback assigns the all-groups COLOR.
     fn find_group_style(e: &Engine, group: &str) -> ElementSpec {
         let styles = &e.configuration().styles;
@@ -232,10 +230,10 @@ impl StructurizrDialect {
         }
     }
 
-    /// The `startGroupBoundary` display name: `group.substring(
-    /// group.lastIndexOf(sep) + sep.length())` — when the separator is
-    /// ABSENT Java still cuts at `separator.length() - 1`
-    /// (`-1 + length`), and an out-of-range cut aborts (`substring`).
+    /// The group-boundary display name: the text after the LAST separator;
+    /// when the separator is absent the official code still cuts at the
+    /// separator length minus one, and an out-of-range cut aborts the
+    /// export (a pinned index-out-of-range).
     pub(crate) fn group_display_name(
         group: &str,
         separator: Option<&str>,
@@ -266,7 +264,7 @@ impl Dialect for StructurizrDialect {
         view: View<'a>,
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError> {
-        // `plantUMLStyles = new HashSet<>()` — one style set per body export.
+        // The style set resets to an empty `HashSet` per body export.
         self.styles.clear();
 
         // `AbstractPlantUMLExporter.writeHeader`.
@@ -278,7 +276,7 @@ impl Dialect for StructurizrDialect {
                 styles.find_element_style(DIAGRAM_DESCRIPTION_TAG, e.color_scheme());
             let title = match view.base().title.as_deref() {
                 Some(title) if is_value(title) => title.to_string(),
-                // The `view.getName()` fallback — the reference NPEs on a
+                // The view-name fallback — the official tooling crashes on a
                 // dangling Context/Container/Component scope.
                 _ => view_name(e, view)?,
             };
@@ -307,12 +305,12 @@ impl Dialect for StructurizrDialect {
             }
         } else if let Some(layout) = automatic_layout(view) {
             // Only `LeftRight` differs from the `top to bottom` default
-            // (the `null` rank direction falls into the Java `default:`).
+            // (the null rank direction falls into the default arm).
             w.write_line(Some(match layout.rank_direction {
                 Some(RankDirection::LeftRight) => "left to right direction",
                 _ => "top to bottom direction",
             }));
-            // Java `getRankSeparation() / (300/60)` and `/ (300/30)` —
+            // The rank separations divide by (300/60) and (300/30) —
             // integer division (truncating in both languages).
             w.write_line(Some(&format!(
                 "skinparam ranksep {}",
@@ -331,7 +329,7 @@ impl Dialect for StructurizrDialect {
         w.write_line(Some("<style></style>"));
         w.write_line(None);
 
-        // The root style (the reference's `fontName` local stays null).
+        // The root style (the official font-name local stays null).
         let (background, color) = match e.color_scheme() {
             ColorScheme::Dark => (DEFAULT_BACKGROUND_DARK, DEFAULT_COLOR_DARK),
             ColorScheme::Light => (DEFAULT_BACKGROUND_LIGHT, DEFAULT_COLOR_LIGHT),
@@ -373,7 +371,7 @@ impl Dialect for StructurizrDialect {
             shadow: false, // the synthesized style carries no properties
         });
         if !self.render_as_sequence_diagram(e, view) {
-            // The group icon gate is NON-EMPTY (`isNullOrEmpty`), NOT
+            // The group icon gate is NON-EMPTY (trimmed check), NOT
             // `isSupportedIcon` — the 711-bug color value renders too.
             let icon = spec
                 .icon
@@ -858,9 +856,9 @@ impl Dialect for StructurizrDialect {
     }
 }
 
-/// One `PlantUMLStyle` subclass instance (the seven reference classes;
+/// One `PlantUMLStyle` subclass instance (the seven official style classes;
 /// each renders through a fresh [`IndentingWriter`] exactly like the
-/// Java `toString` overrides).
+/// official render overrides).
 #[derive(Debug, Clone)]
 pub enum PlantUMLStyle {
     /// `PlantUMLRootStyle` — `fontName` is always `null` at the call site.
@@ -976,7 +974,7 @@ pub enum PlantUMLStyle {
 }
 
 impl PlantUMLStyle {
-    /// The class identity for `HashSet` equality (the Java `getClass()`
+    /// The class identity for `HashSet` equality (the class-kind key).
     /// check).
     const fn class_tag(&self) -> &'static str {
         match self {
@@ -1030,10 +1028,10 @@ impl PlantUMLStyle {
         }
     }
 
-    /// `toString()` — a fresh writer per style: `indent`, the comment,
+    /// The render — a fresh writer per style: `indent`, the comment,
     /// the selector line, indented fields, `outdent`, `}`, `outdent`,
-    /// blank line. 2R R-exp-10: one `render_*` fn per Java
-    /// `PlantUML*Style#toString` — the old shape was a single 174-line
+    /// blank line. One `render_*` fn per official style class; the old shape
+    /// was a single 174-line
     /// match behind a `too_many_lines` allow.
     fn render(&self) -> String {
         let mut w = IndentingWriter::new();
@@ -1053,7 +1051,7 @@ impl PlantUMLStyle {
         w.to_string()
     }
 
-    /// `PlantUMLRootStyle#toString` — the root class selector renders
+    /// Root style — the root class selector renders
     /// WITHOUT a dot.
     fn render_root(&self, w: &mut IndentingWriter) {
         let Self::Root { background, color } = self else {
@@ -1065,7 +1063,7 @@ impl PlantUMLStyle {
         w.write_line(Some(&format!("FontColor: {color};")));
     }
 
-    /// `PlantUMLLegendStyle#toString` — the transparent legend element.
+    /// Legend style — the transparent legend element.
     fn render_legend(w: &mut IndentingWriter) {
         w.write_line(Some("// transparent element for relationships in legend"));
         w.write_line(Some(".Element-Transparent {"));
@@ -1075,7 +1073,7 @@ impl PlantUMLStyle {
         w.write_line(Some("FontColor: transparent;"));
     }
 
-    /// `PlantUMLElementStyle#toString`.
+    /// Element style rendering.
     fn render_element(&self, w: &mut IndentingWriter) {
         let Self::Element {
             name,
@@ -1122,7 +1120,7 @@ impl PlantUMLStyle {
         w.write_line(Some(&format!("MaximumWidth: {width};")));
     }
 
-    /// `PlantUMLRelationshipStyle#toString` — `FontColor` mirrors the line
+    /// Relationship style — the font color mirrors the line
     /// COLOR (one `color` field for both).
     fn render_relationship(&self, w: &mut IndentingWriter) {
         let Self::Relationship {
@@ -1153,7 +1151,7 @@ impl PlantUMLStyle {
         w.write_line(Some(&format!("MaximumWidth: {width};")));
     }
 
-    /// `PlantUMLDeploymentNodeStyle#toString` — `MaximumWidth` ONLY when
+    /// Deployment-node style — the max width ONLY when
     /// the legend path set it (`Some`).
     fn render_deployment_node(&self, w: &mut IndentingWriter) {
         let Self::DeploymentNode {
@@ -1199,8 +1197,8 @@ impl PlantUMLStyle {
         }
     }
 
-    /// `PlantUMLBoundaryStyle#toString` and `PlantUMLGroupStyle#toString` —
-    /// the two Java classes render the same field set (the old single
+    /// Boundary style and group style —
+    /// the two classes render the same field set (the old single
     /// or-pattern arm), only the selector differs.
     fn render_boundary_or_group(&self, w: &mut IndentingWriter) {
         let (Self::Boundary {
@@ -1295,13 +1293,13 @@ pub(crate) fn defaults(scheme: ColorScheme) -> (&'static str, &'static str) {
     }
 }
 
-/// The color/`null` formatter: `%s` on a null Java `String` renders the
+/// The color/`null` formatter: `%s` on a null string renders the
 /// literal `null`.
 pub(crate) fn color_or_null(value: Option<&str>) -> &str {
     value.unwrap_or("null")
 }
 
-/// The first non-empty string across the reference's three-source chain.
+/// The first non-empty string across the official three-source chain.
 fn field_str<'a>(
     first: Option<&'a ElementStyle>,
     second: Option<&'a ElementStyle>,
@@ -1367,8 +1365,8 @@ fn line_style(border: Option<LineStyle>, width: i32) -> String {
     }
 }
 
-/// `"true".equalsIgnoreCase(style.getProperties().getOrDefault(
-/// "plantuml.shadow", "false"))` — the MERGED styles only (the synthesized
+/// The shadow gate: `"true"` (case-insensitive) from the property
+/// `"plantuml.shadow"`, default `"false"` — the MERGED styles only (the synthesized
 /// boundary/group styles are always false).
 fn shadow_of(style: &ElementStyle) -> bool {
     style
@@ -1403,7 +1401,7 @@ fn icon_leg(icon: Option<&str>) -> String {
 }
 
 /// The view's per-kind `getName()` (the header's title fallback). Only
-/// Context/Container/Component scopes NPE when unresolved (→
+/// Context/Container/Component scopes crash when unresolved (→
 /// [`ExportError::ReferenceAbort`]); a dangling Dynamic scope is the null
 /// `element` field ("Dynamic View") and a dangling Deployment scope the
 /// null `softwareSystem` (environment-only name).
@@ -1473,9 +1471,9 @@ pub(crate) fn view_name(e: &Engine, view: View<'_>) -> Result<String, ExportErro
     })
 }
 
-/// `element.getName()` — an instance's name is its target's (the reference
-/// `StaticStructureElementInstance.getName()` delegation; a dangling
-/// target NPEs).
+/// The display name — an instance's name is its target's (the official
+/// delegation; a dangling
+/// target crashes).
 pub(crate) fn display_name(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError> {
     if matches!(
         element.kind(),
@@ -1563,7 +1561,7 @@ fn id_leaf(e: &Engine, element: ElemRef<'_>) -> Result<String, ExportError> {
 }
 
 /// `idOf(getRelationship().getSource()/getDestination())` — a dangling
-/// endpoint is the reference NPE.
+/// endpoint is the official null-pointer crash.
 pub(crate) fn element_ref_of(e: &Engine, id: &Id) -> Result<String, ExportError> {
     let element = element_by_id(e.model(), id).ok_or(ExportError::ReferenceAbort(
         "relationship endpoint does not resolve (Java getSource()/getDestination() NPE)",
@@ -1571,7 +1569,7 @@ pub(crate) fn element_ref_of(e: &Engine, id: &Id) -> Result<String, ExportError>
     id_of(e, element)
 }
 
-/// `filter`: `s.replaceAll("(?U)\\W", "")` — drop every non-word
+/// Filter: drop every non-word
 /// character (Unicode letters/digits/underscore survive).
 pub(crate) fn filter(s: &str) -> String {
     s.chars()
@@ -1579,7 +1577,7 @@ pub(crate) fn filter(s: &str) -> String {
         .collect()
 }
 
-/// Java `String.split(sep)` (limit 0): trailing empty pieces are dropped.
+/// The split with limit 0: trailing empty pieces are dropped.
 pub(crate) fn java_split(s: &str, sep: char) -> Vec<&str> {
     let mut parts: Vec<&str> = s.split(sep).collect();
     while parts.last().is_some_and(|p| p.is_empty()) {
@@ -1588,7 +1586,7 @@ pub(crate) fn java_split(s: &str, sep: char) -> Vec<&str> {
     parts
 }
 
-/// Java `Base64.getEncoder()` (standard alphabet, `=` padding) over the
+/// Standard Base64 (standard alphabet, `=` padding) over the
 /// UTF-8 bytes — the class-selector hash.
 fn b64(input: &str) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -1598,7 +1596,7 @@ fn b64(input: &str) -> String {
         let mut b = [0u8; 3];
         b[..chunk.len()].copy_from_slice(chunk);
         let n = u32::from_be_bytes([0, b[0], b[1], b[2]]);
-        // 2R R-exp-17: one index shape for all four sextets — the old mix
+        // one index shape for all four sextets — the old mix
         // of `usize::try_from(…).unwrap_or(0)` and `as usize` was
         // inconsistent; each value is masked to its 6 bits before indexing.
         out.push(char::from(TABLE[((n >> 18) & 63) as usize]));
@@ -1764,7 +1762,7 @@ mod tests {
     }
 
     /// `AutomaticLayout`: only `LeftRight` leaves the default direction;
-    /// separations divide by 5 and 10 with Java integer division.
+    /// separations divide by 5 and 10 with integer division.
     #[test]
     fn automatic_layout_legs() {
         let mut ws = workspace();
@@ -1903,8 +1901,8 @@ mod tests {
         assert!(legend.contains("rectangle \"==Element\" <<DeploymentNode-RWxlbWVudA==>>"));
     }
 
-    /// A `plantuml.skinparams` entry whose value splits empty is the Java
-    /// `split("=")[1]` AIOOBE — surfaced as `ReferenceAbort`.
+    /// A `plantuml.skinparams` entry whose value splits empty is the official tooling
+    /// second-part index-out-of-range — surfaced as `ReferenceAbort`.
     #[test]
     fn skin_param_empty_value_aborts() {
         let mut ws = workspace();
@@ -1949,7 +1947,7 @@ mod tests {
             StructurizrDialect::group_display_name("y", Some("/")).unwrap(),
             "y"
         );
-        // ABSENT separator: Java still cuts at `separator.length() - 1`.
+        // ABSENT separator: the official code still cuts at length minus one.
         assert_eq!(
             StructurizrDialect::group_display_name("ab", Some("//")).unwrap(),
             "b"
@@ -1958,12 +1956,12 @@ mod tests {
             StructurizrDialect::group_display_name("ab", None).unwrap(),
             "ab"
         );
-        // Java `"a".substring(1)` is valid (start == length): empty.
+        // A cut at exactly the length is valid (start == length): empty.
         assert_eq!(
             StructurizrDialect::group_display_name("a", Some("//")).unwrap(),
             ""
         );
-        // start 2 > length 1: the Java `substring` abort.
+        // start 2 > length 1: the official index abort.
         assert!(StructurizrDialect::group_display_name("a", Some("///")).is_err());
     }
 }

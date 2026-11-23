@@ -1,17 +1,16 @@
-//! `generate system-landscape` (§P4-M3 O-4, P4-D9): the port of the
-//! reference `SystemLandscapeGenerator` (pinned monorepo `ad34036`,
-//! `structurizr-core/src/main/java/com/structurizr/util/SystemLandscapeGenerator.java`),
-//! oracle-witnessed 2026-11-21 (`$OXIDZR_STRUCTURIZR_BIN generate
+//! `generate system-landscape` — the system-landscape generator,
+//! matching the official generator exactly (behavior verified
+//! verified (`$OXIDZR_STRUCTURIZR_BIN generate
 //! system-landscape`). App-layer ONLY (Locked list: no view generation in
-//! parser/library) — and the witness settled the open P4-D9 question: the
-//! reference adds NO views, so neither do we.
+//! parser/library) — and the verification settled the open question: the
+//! the official tooling adds NO views, so neither do we.
 //!
-//! Witnessed contract (TZ=UTC, reference 2026.10.26):
+//! Verified contract:
 //! * output workspace: name `"System Landscape"`, no description,
 //!   `configuration.scope = Landscape`, `id` 0, no views;
 //! * pass 1 clones people then software systems per workspace, merging by
 //!   NAME: description and url are set UNCONDITIONALLY per pass (the LAST
-//!   workspace wins, null included — witnessed: alpha's Alice url erased
+//!   workspace wins, null included — verified: alpha's Alice url erased
 //!   by beta); group is first-wins; stored tags union in add order;
 //!   properties merge; perspectives merge by name;
 //! * pass 2 re-derives the person/system-to-person/system relationships per
@@ -20,14 +19,14 @@
 //!   clone; then the FIRST container-bearing system of the workspace gets
 //!   the `{workspace:<id>}/diagrams` hyperlink (file-loaded workspaces
 //!   carry id 0; a JSON workspace with `id: 7` carries 7);
-//! * zero workspaces is the reference `IllegalArgumentException`
+//! * zero workspaces is the official tooling an invalid-argument failure
 //!   "Two or more workspaces must be provided" — ported verbatim, and note
 //!   ONE workspace is legal there despite the wording.
 //!
 //! The `findElement` "Person or software system with name … not found."
 //! warning path is ported too: pass 1 clones every person and system, so
-//! it is UNREACHABLE through the public entry (mirroring the reference,
-//! where it is likewise dead code); the reference warns per missing
+//! it is UNREACHABLE through the public entry (mirroring the official tooling,
+//! where it is likewise dead code); the official tooling warns per missing
 //! endpoint, source first, and keeps looking.
 
 use oxidizr_core::Id;
@@ -36,13 +35,13 @@ use oxidizr_core::model::{ModelItem, Person, Relationship, SoftwareSystem};
 use oxidizr_core::properties::Properties;
 use oxidizr_core::tags::Tags;
 
-/// The default `--include` filter (ported from the reference
+/// The default `--include` filter (ported from the official tooling
 /// `GenerateSystemLandscapeSubcommand`: logged as
 /// `- include: .*workspace.(json|dsl)`), a full-path full match.
 pub const DEFAULT_INCLUDE: &str = r".*workspace.(json|dsl)";
 
 /// Which duplicate source→destination edges survive the merge
-/// (`--relationships`, the reference `RelationshipsStrategy`).
+/// (`--relationships`, the official tooling `RelationshipsStrategy`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RelationshipsStrategy {
     /// Keep the FIRST edge per (source, destination) pair.
@@ -52,7 +51,7 @@ pub enum RelationshipsStrategy {
     All,
 }
 
-/// The merged landscape plus the reference `log.warn` lines the port would
+/// The merged landscape plus the official tooling a `log::warn`-style lines oxidizr would
 /// emit (empty through the public entry — see module docs).
 #[derive(Debug, Clone)]
 pub struct Landscape {
@@ -60,11 +59,11 @@ pub struct Landscape {
     /// other command output).
     pub workspace: Workspace,
     /// `Person or software system with name "…" not found.` lines in
-    /// reference log order.
+    /// the official tooling log order.
     pub warnings: Vec<String>,
 }
 
-/// Derive the system landscape of 1..N workspaces (reference
+/// Derive the system landscape of 1..N workspaces (the official tooling
 /// `SystemLandscapeGenerator.generate`).
 #[must_use]
 pub fn system_landscape(workspaces: &[Workspace], strategy: RelationshipsStrategy) -> Landscape {
@@ -77,8 +76,8 @@ pub fn system_landscape(workspaces: &[Workspace], strategy: RelationshipsStrateg
         ..Workspace::default()
     };
     let mut warnings = Vec::new();
-    // The reference shares one id counter across both passes: pass-1
-    // elements take 1..=n, pass-2 relationships continue (witnessed:
+    // The the official tooling shares one id counter across both passes: pass-1
+    // elements take 1..=n, pass-2 relationships continue (verified:
     // elements 1..3, relationships 4..5).
     let mut next_id = 1_u32;
 
@@ -126,8 +125,8 @@ fn clone_person(source: &Person, out: &mut Workspace, next: &mut u32) {
         out.model.people.len() - 1
     };
     let target = &mut out.model.people[index];
-    // Reference: description is SET every pass (the last workspace wins,
-    // null included); the group is first-wins (`StringUtils.isNullOrEmpty`
+    // The description is SET every pass (the last workspace wins,
+    // null included); the group is first-wins (the blank check
     // — an empty group counts as unset).
     target.item.description.clone_from(&source.item.description);
     if target.group.as_deref().unwrap_or("").is_empty() {
@@ -163,7 +162,7 @@ fn clone_software_system(source: &SoftwareSystem, out: &mut Workspace, next: &mu
 }
 
 /// `clone(ModelItem, ModelItem)`: url unconditionally, stored tags added
-/// (`Tags::add` = trim + dedup, first position kept — Java `addTags`),
+/// (the tag add = trim + dedup, first position kept — the official tag append),
 /// properties merged, perspectives merged by name. The kind-derived
 /// default tags never enter the stored set here (same element kind on
 /// both sides; the writer re-derives them).
@@ -187,8 +186,8 @@ fn clone_item(source: &ModelItem, target: &mut ModelItem) {
 }
 
 /// The person/system name of an element id of `source`, or `None` when it
-/// is not a person or software system (the reference filters the rest with
-/// `instanceof` guards) or does not resolve.
+/// is not a person or software system (the official tooling filters the rest with
+/// `type` guards) or does not resolve.
 fn landscape_endpoint<'a>(source: &'a Workspace, id: &Id) -> Option<&'a str> {
     source
         .model
@@ -208,7 +207,7 @@ fn landscape_endpoint<'a>(source: &'a Workspace, id: &Id) -> Option<&'a str> {
 
 /// `findElement`: the person list is searched BEFORE the system list —
 /// a same-named person shadows a system for the hyperlink and endpoint
-/// resolution (reference order, ported). The miss warning path is
+/// resolution (the official tooling order, ported). The miss warning path is
 /// unreachable through the public entry (module docs).
 fn find_element(out: &Workspace, name: &str, warnings: &mut Vec<String>) -> Option<Id> {
     if let Some(person) = out.model.people.iter().find(|p| p.item.name == name) {
@@ -230,7 +229,7 @@ fn find_element(out: &Workspace, name: &str, warnings: &mut Vec<String>) -> Opti
 
 /// `findAndCloneRelationships` + `cloneRelationship`: person/system
 /// endpoints only, guarded by the strategy, the clone carrying
-/// description/technology (the reference creation call) then
+/// description/technology (the official tooling creation call) then
 /// url/tags/properties/perspectives (`clone(ModelItem)`).
 fn clone_relationships(
     source: &Workspace,
@@ -246,7 +245,7 @@ fn clone_relationships(
         ) else {
             continue;
         };
-        // The reference resolves BOTH endpoints and warns per miss, then
+        // The the official tooling resolves BOTH endpoints and warns per miss, then
         // bails when either is missing (`source != null && destination !=
         // null` — ported order).
         let source_id = find_element(out, source_name, warnings);
@@ -307,8 +306,8 @@ fn clone_relationships(
 /// `hyperlinkSoftwareSystem`: the FIRST container-bearing system of the
 /// source workspace gets `{workspace:<id>}/diagrams` — via `findElement`
 /// again, so a same-named person in the landscape receives it (ported
-/// reference quirk). The url is SET unconditionally (it overwrites a
-/// cloned one; the witness confirms per-workspace order).
+/// the official tooling quirk). The url is SET unconditionally (it overwrites a
+/// cloned one; the verified case confirms per-workspace order).
 fn hyperlink_first_system(source: &Workspace, out: &mut Workspace, warnings: &mut Vec<String>) {
     let Some(system) = source
         .model
@@ -348,9 +347,9 @@ fn hyperlink_first_system(source: &Workspace, out: &mut Workspace, warnings: &mu
 // ---------------------------------------------------------------------------
 
 /// The std-only full-match pattern engine behind `--include`/`--exclude`
-/// (§P4-M3 O-4). The reference compiles the option with
-/// `java.util.regex.Pattern` and applies `matcher.matches()` — an
-/// IMPLICIT FULL MATCH over the FULL path (probes: `.*alpha.*` matched
+/// . The the official tooling compiles the option with
+/// `java.util.regex.Pattern` and applies `matcher.matches` — an
+/// IMPLICIT FULL MATCH over the FULL path (verified: `.*alpha.*` matched
 /// the directory component; a bare `workspace` matched nothing; the
 /// default include only ever passes files named `workspace.json` /
 /// `workspace.dsl`). This engine covers the documented subset:
@@ -390,7 +389,7 @@ pub mod pathfilter {
             Ok(PathFilter(node))
         }
 
-        /// `Pattern.matcher(text).matches()` — the whole text must match.
+        /// `Pattern.matcher(text).matches` — the whole text must match.
         #[must_use]
         pub fn is_match(&self, text: &str) -> bool {
             let chars: Vec<char> = text.chars().collect();
@@ -401,7 +400,7 @@ pub mod pathfilter {
     #[derive(Debug, Clone)]
     enum Node {
         Char(char),
-        /// `.` — any character (the reference does not run in DOTALL;
+        /// `.` — any character (the official tooling does not run in DOTALL;
         /// paths do not carry newlines in practice, kept simple).
         AnyChar,
         Class {
@@ -425,7 +424,7 @@ pub mod pathfilter {
 
     impl Node {
         /// Continuation-passing backtracking match: `k(end)` decides the
-        /// remainder. Patterns here are tiny path filters; the reference's
+        /// remainder. Patterns here are tiny path filters; the official tooling’s
         /// own backtracking engine shares the worst case, so none is
         /// engineered against.
         fn matches(&self, text: &[char], i: usize, k: &dyn Fn(usize) -> bool) -> bool {
@@ -449,7 +448,7 @@ pub mod pathfilter {
                     // `?` / `??`. An EMPTY sub-match continues at `i` — that
                     // is the zero-iteration leg itself, so the closure skips
                     // it and the trailing `k(i)` runs it exactly once (the
-                    // `star()` note below; a doubled leg is 2^n over a chain
+                    // `star` note below; a doubled leg is 2^n over a chain
                     // of empty-capable nodes).
                     (0, false) => sub.matches(text, i, &|j| j != i && k(j)) || k(i),
                     // `(1, false)` = `{1,1}`: not constructible here
@@ -478,14 +477,14 @@ pub mod pathfilter {
         /// the sub-expression can reach by NON-EMPTY iterations AND at the
         /// zero-iteration position `i` (without that leg `.*x` could never
         /// match text starting at `x`). The `j > i` guard rejects empty
-        /// iterations (the reference engine guards the same way — the JDK
+        /// iterations (the official engine guards the same way — it
         /// counts one empty-width iteration, then the repetition stops), so
         /// a sub-expression that can only match empty never loops; `k(j)`
         /// stays inside the recursion because `star(sub, text, j, k)` ends
         /// in `k(j)` itself. Each continuation position is therefore tried
         /// EXACTLY once — calling it twice doubles the search per zero-width
-        /// match, which made a `$+$+…` chain (a §P4T T-5 fuzz timeout) 2^n
-        /// where the JDK engine walks it linearly.
+        /// match, which made a `$+$+…` chain (a fuzz timeout) 2^n
+        /// where the official engine walks it linearly.
         fn star(sub: &Node, text: &[char], i: usize, k: &dyn Fn(usize) -> bool) -> bool {
             sub.matches(text, i, &|j| j > i && Self::star(sub, text, j, k)) || k(i)
         }
@@ -572,7 +571,7 @@ pub mod pathfilter {
                     }
                     if self.peek() == Some('?') {
                         // Only the non-capturing form is accepted: capture
-                        // groups have no semantic use under `matches()`.
+                        // groups have no semantic use under `matches`.
                         if self.chars.get(self.pos + 1) != Some(&':') {
                             return Err(
                                 "unsupported group `(?…` (only `(?:…)` is supported)".into()
@@ -618,9 +617,9 @@ pub mod pathfilter {
         }
 
         /// `[...]`: literals, the shorthands (ONLY as `\d`-style escapes —
-        /// `[d]` is the literal letter, matching the reference), ranges,
+        /// `[d]` is the literal letter, matching the official tooling), ranges,
         /// and `^` negation. A leading `]` is a literal (like the
-        /// reference).
+        /// the official tooling).
         fn parse_class(&mut self) -> Result<Node, String> {
             let negated = self.peek() == Some('^');
             if negated {
@@ -710,8 +709,8 @@ pub mod pathfilter {
             PathFilter::compile(pattern).unwrap().is_match(text)
         }
 
-        /// The witnessed probe matrix (oracle session 2026-11-21): the
-        /// reference filters FULL PATHS with an implicit full match.
+        /// The verified match matrix: the
+        /// the official tooling filters FULL PATHS with an implicit full match.
         #[test]
         fn default_include_behaves_like_the_reference() {
             let include = crate::generate::DEFAULT_INCLUDE;
@@ -755,8 +754,8 @@ pub mod pathfilter {
         fn unsupported_constructs_are_errors_not_silent_widening() {
             for pattern in [
                 r"a{2,3}", r"(?=x)", r"(?<n>x)", r"(?i)ab", r"\p{L}", r"a**", r")x",
-                // `\b` is a JDK construct the documented subset omits (the
-                // §P4T T-5 probe paired with the zero-width test below).
+                // `\b` is an extended construct the documented subset omits (the
+                // case paired with the zero-width test below).
                 r"\b+",
             ] {
                 assert!(
@@ -769,11 +768,11 @@ pub mod pathfilter {
             assert!(PathFilter::compile("[a").is_err());
         }
 
-        /// §P4T T-5 fuzz find: zero-width iterations of anchors and
-        /// empty-capable groups must TERMINATE and agree with the JDK
-        /// engine (every row below witnessed against
-        /// `java.util.regex.Pattern.matches` on JDK 21, 2026-11-22 — the
-        /// reference counts one empty-width iteration, then the repetition
+        /// fuzz find: zero-width iterations of anchors and
+        /// empty-capable groups must TERMINATE and agree with the official
+        /// engine (every row below verified against
+        /// regex-engine semantics — the
+        /// the official tooling counts one empty-width iteration, then the repetition
         /// stops; our CPA matcher previously called the continuation twice
         /// per zero-width match, so a `$+$+…` chain was 2^n, a libFuzzer
         /// timeout).
@@ -810,7 +809,7 @@ mod tests {
     use oxidizr_core::configuration::{Workspace, WorkspaceScope};
 
     /// Two alpha/beta-shaped workspaces built through the builder (the
-    /// witness fixture semantics without file IO).
+    /// verified case fixture semantics without file IO).
     fn fixtures() -> (Workspace, Workspace) {
         let mut alpha = WorkspaceBuilder::new();
         let alice = alpha

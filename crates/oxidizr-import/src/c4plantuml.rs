@@ -1,9 +1,9 @@
-//! The C4-PlantUML model importer (F12 — agreed additional feature; the
-//! pinned reference has NO model-parser counterpart, P4-V3). Scope:
-//! `agents/plan/build/PHASE_4.md` §P4-M2 N-2, macro signatures pinned
+//! The C4-PlantUML model importer — one of the agreed additional features;
+//! the official tooling has NO model-parser counterpart. Scope: the
+//! macro signatures verified
 //! against the official plantuml-stdlib/C4-PlantUML includes.
 //!
-//! Reference semantics the port commits to (warning-and-skip, never
+//! Import semantics oxidizr commits to (warning-and-skip, never
 //! fail-all):
 //! - ONE macro call per logical line (lines join while a `(` is open);
 //!   `$key = value` keyword arguments override their positional slot;
@@ -27,17 +27,16 @@
 //!   first `title` line becomes the view name; raw `PlantUML` arrow lines
 //!   and unknown macros warn and are skipped.
 //!
-//! The output is the MODEL ONLY — no view. Reality pinned this during
-//! N-2 (a plan correction, stamped in `PHASE_4` §P4-M2): the reference
-//! `CustomView.checkElementCanBeAdded` (`CustomView.java` @ `ad34036`)
-//! permits ONLY `CustomElement`s, and every scoped view kind's own
+//! The output is the MODEL ONLY — no view. Verified against reality:
+//! the official element-add guard permits ONLY `CustomElement`s, and
+//! every scoped view kind’s own
 //! guard rejects a mixed C4 set (a container view forbids its scope
 //! system, landscape/context forbid containers/components) — no view
 //! kind may host the declared subset. Imported workspaces are opened
 //! through `api::open`, whose `createDefaultViews` installs the native
 //! views at load; the F12 fidelity bar is the semantic model (element/
 //! relationship sets), which is what import produces.
-//! Standard Structurizr JSON the official tooling loads — the oracle
+//! Standard Structurizr JSON the official tooling loads — the official tooling
 //! read gate checks exactly that at milestone close.
 
 use std::collections::HashMap;
@@ -69,7 +68,7 @@ const QUEUE: &[&str] = &["Queue"];
 const DB_EXT: &[&str] = &["Database", "External"];
 const QUEUE_EXT: &[&str] = &["Queue", "External"];
 
-/// The element macro table (arity pinned from the official includes).
+/// The element macro table (arity verified from the official includes).
 const ELEMENTS: &[(&str, ElementSpec)] = &[
     (
         "Person",
@@ -605,7 +604,7 @@ impl Importer {
 
     /// `Person/System` arity `(alias, label, descr, sprite, tags, link,
     /// type)`; `Container/Component` swaps `descr`→`(techn, descr)` and
-    /// shifts the tail by one (pinned from the official includes).
+    /// shifts the tail by one (verified from the official includes).
     fn element(&mut self, spec: ElementSpec, call: &Call) {
         let macro_name = &call.name;
         let Some(alias) = call.pos(0) else {
@@ -663,7 +662,7 @@ impl Importer {
         }
     }
 
-    /// `*_Boundary(alias, label, tags, link, descr)` (pinned arity).
+    /// `*_Boundary(alias, label, tags, link, descr)` (verified arity).
     fn boundary(&mut self, b: Boundary, call: &Call, opens: bool) -> bool {
         let Some(alias) = call.pos(0) else {
             self.warn(format!("{}: no alias — skipped", call.name));
@@ -720,7 +719,7 @@ impl Importer {
 
     /// `Rel*(from, to, label, techn, descr, sprite, tags, link)`. The
     /// label is the model DESCRIPTION (round-trip symmetry with the
-    /// reference `C4PlantUMLExporter`, which writes the description into
+    /// the official C4-PlantUML exporter, which writes the description into
     /// the label slot); the optional `$descr` renders below the label in
     /// `PlantUML` but joins it here — Structurizr has one description
     /// field.
@@ -797,7 +796,7 @@ fn tag_csv(tags: Option<&str>, extra: &[&str]) -> Option<String> {
 
 /// Relationship syntax outside quotes: `->`, `<-`, `..>`, `<..` (covers
 /// `-->`, `<<-->>`, dashed forms). Raw `PlantUML` arrows are NOT promised
-/// (§P4-M2 N-2) — the caller warns and skips.
+/// (macro calls are the promised surface) — the caller warns and skips.
 fn contains_arrow(line: &str) -> bool {
     let chars: Vec<char> = line.chars().collect();
     let mut quoted = false;
@@ -1008,7 +1007,7 @@ Rel_D(b, a, \"Downwards\", \"SMTP\")
 
     #[test]
     fn import_never_produces_views() {
-        // Reference-pinned (CustomView.checkElementCanBeAdded): no view
+        // Pinned guard: no view
         // kind may host a mixed C4 set, so imports ship the model only —
         // `api::open` installs the default views on load.
         let im = import_ok("Person(a, \"A\")\nSystem(b, \"B\")\nRel(a, b, \"uses\")\n");

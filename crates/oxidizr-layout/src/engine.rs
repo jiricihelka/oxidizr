@@ -1,5 +1,5 @@
 //! The engine seam ([`LayoutEngine`]), the output placements and the error
-//! type — P3-D5.
+//! type.
 
 use std::fmt;
 
@@ -36,7 +36,7 @@ pub struct EdgePlacement {
 }
 
 /// The result of one [`LayoutEngine::layout`] run: every graph node and edge
-/// exactly once, in the graph's input order (determinism contract, P3-D5).
+/// exactly once, in the graph's input order (the determinism contract).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LayoutResult {
     /// Node placements.
@@ -45,7 +45,7 @@ pub struct LayoutResult {
     pub edges: Vec<EdgePlacement>,
 }
 
-/// The one error type — std-only `Display`/`Error` (zero-dep promise, P3-D1;
+/// The one error type — std-only `Display`/`Error` (zero-dep promise,
 /// deliberately not `thiserror`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum LayoutError {
@@ -107,7 +107,7 @@ impl fmt::Display for LayoutError {
 
 impl std::error::Error for LayoutError {}
 
-/// A layout implementation over the neutral graph (P3-D5). The
+/// A layout implementation over the neutral graph. The
 /// **determinism contract is hard**: same input ⇒ identical output — no
 /// randomness, stable sorts only, fixed iteration bounds. Implementations
 /// must run [`crate::LayoutGraph::validate`] first and reject invalid input.

@@ -1,7 +1,6 @@
-//! The Mermaid dialect — port of `export/mermaid/MermaidDiagramExporter`
-//! (catalog `agents/plan/build/EXPORT-MERMAID.md`, pinned `ad34036`).
+//! The Mermaid dialect — the official Mermaid exporter port.
 //!
-//! The base `AbstractDiagramExporter` loops (view iteration, grouped
+//! The shared engine loops (view iteration, grouped
 //! element walk, deployment-node recursion, relationship ordering) are the
 //! shared engine; this dialect owns the per-diagram `groupId` counter and
 //! the line formats: the `graph <D>` header (direction from
@@ -9,7 +8,7 @@
 //! the `group<N>` boundaries with the `Group:`/`Group`/`#cccccc` color
 //! chain, the div-label elements with the 30-column greedy `lines()` wrap,
 //! the DeploymentNode-endpoint relationship skip, and the OWNED sequence
-//! document (§9): a standalone `sequenceDiagram` — NOT the engine's
+//! document: a standalone `sequenceDiagram` — NOT the engine's
 //! `AbstractPlantUMLExporter` sequence walk — reached through the
 //! [`Dialect::sequence_document`] route. Frames never (base
 //! `isAnimationSupported` is `false`); legend never (`createLegend` is
@@ -30,17 +29,17 @@ use crate::plantuml::structurizr::{
 };
 
 /// `MermaidDiagramExporter.MERMAID_TITLE_PROPERTY` (default `true`,
-/// case-SENSITIVE `equals` — catalog §1).
+/// case-SENSITIVE equality check.
 pub const MERMAID_TITLE_PROPERTY: &str = "mermaid.title";
 /// `MERMAID_SEQUENCE_DIAGRAM_PROPERTY` (default `false`,
-/// `equalsIgnoreCase`).
+/// case-insensitive).
 pub const MERMAID_SEQUENCE_DIAGRAM_PROPERTY: &str = "mermaid.sequenceDiagram";
 /// `MERMAID_ICONS_PROPERTY` (default `false`, case-SENSITIVE `equals`).
 pub const MERMAID_ICONS_PROPERTY: &str = "mermaid.icons";
 
-/// The `mermaid.*` gate helpers — per-property case rules (catalog §1):
-/// title and icons are case-SENSITIVE `equals("true")`, the sequence gate
-/// is `equalsIgnoreCase`.
+/// The `mermaid.*` gate helpers — per-property case rules (the export catalog):
+/// The title and icons need exactly `"true"` (case-SENSITIVE), the sequence
+/// gate ignores case.
 fn is_title_on<'a>(e: &Engine<'a>, view: View<'a>) -> bool {
     e.property(view.base(), MERMAID_TITLE_PROPERTY, "true") == "true"
 }
@@ -54,8 +53,8 @@ fn icons_gated<'a>(e: &Engine<'a>, view: View<'a>) -> bool {
     e.property(view.base(), MERMAID_ICONS_PROPERTY, "false") == "true"
 }
 
-/// `elementStyleHasSupportedIcon`: non-empty AND starts with `http` (no
-/// D12 icon-scale check here — that quirk is `PlantUML`-only).
+/// Icon support: non-empty AND starts with `http` (no
+/// icon-scale check here — that quirk is `PlantUML`-only).
 fn has_supported_icon(style: &ElementStyle) -> bool {
     style
         .icon
@@ -65,13 +64,13 @@ fn has_supported_icon(style: &ElementStyle) -> bool {
 
 /// `escapeSemicolon`: semicolons break sequence diagrams
 /// (<https://github.com/mermaid-js/mermaid/issues/1445>). A null `s` is
-/// the Java NPE abort, so the caller unwraps first.
+/// the official tooling null-pointer abort, so the caller unwraps first.
 fn escape_semicolon(s: &str) -> String {
     s.replace(';', "#59;")
 }
 
 /// `lines(text)`: trim, split on whitespace runs, greedy lines while
-/// `line.length() + word.length() + 1 < 30` (UTF-16 units, like Java's
+/// `line.length() + word.length() + 1 < 30` (UTF-16 units, like the official tooling’s
 /// `String.length()`), `<br />` between lines.
 fn lines(text: &str) -> String {
     let mut buf = String::new();
@@ -106,7 +105,7 @@ fn node_symbols(shape: Option<Shape>) -> (&'static str, &'static str) {
 }
 
 /// The Mermaid dialect: the engine drives the iteration, the dialect owns
-/// the Java `groupId` counter (reset in `writeHeader`, one per diagram).
+/// the group-id counter (reset in the header write, one per diagram).
 #[derive(Debug, Default)]
 pub struct MermaidDialect {
     group_id: u32,
@@ -114,7 +113,7 @@ pub struct MermaidDialect {
 
 impl MermaidDialect {
     /// A fresh dialect (the group-id counter starts at 0; the header resets
-    /// it per body export exactly like the Java field).
+    /// it per body export exactly like the official counter.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -157,7 +156,7 @@ impl MermaidDialect {
             .unwrap_or_else(|| "#cccccc".to_string())
     }
 
-    /// The §9 participant leg: `actor` iff the resolved shape is `Person`;
+    /// The participant leg: `actor` iff the resolved shape is `Person`;
     /// the `<br />`-prefixed type part empties when the type is empty OR
     /// metadata is off (unlike the element leg, which wraps empty types).
     fn write_participant<'a>(
@@ -196,8 +195,8 @@ impl Dialect for MermaidDialect {
     ) -> Result<(), ExportError> {
         self.group_id = 0;
         // Direction comes from `automaticLayout.rankDirection` only; a
-        // present layout with a null rank direction is the Java `switch`
-        // NPE (catalog §2).
+        // present layout with a null rank direction is the official
+        // null-pointer crash (verified).
         let direction = match automatic_layout(view) {
             None => "TB",
             Some(layout) => match layout.rank_direction {
@@ -220,7 +219,7 @@ impl Dialect for MermaidDialect {
         let view_title = if is_title_on(e, view) {
             match view.base().title.as_deref() {
                 Some(title) if is_value(title) => title.to_string(),
-                // The `view.getName()` fallback — the reference NPEs on a
+                // The view-name fallback — the official tooling crashes on a
                 // dangling scoped view (engine `view_name`).
                 _ => view_name(e, view)?,
             }
@@ -249,7 +248,7 @@ impl Dialect for MermaidDialect {
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError> {
         // Style resolves on the ORIGINAL element (instances keep their own
-        // tags); name/description/type unwrap from the instance (§6).
+        // tags); name/description/type unwrap from the instance.
         let style = element_style_of(e, element)?;
         let written = match element.kind() {
             ElementKind::SoftwareSystemInstance | ElementKind::ContainerInstance => element
@@ -301,7 +300,7 @@ impl Dialect for MermaidDialect {
         if let Some(url) = element.url().filter(|url| is_value(url)) {
             w.write_line(Some(&format!("click {} {url} \"{url}\"", element.id())));
         }
-        // Both Java branches (instance / not) are identical (§6.6).
+        // Both official branches (instance / not) are identical.
         w.write_line(Some(&format!(
             "style {} fill:{},stroke:{},color:{}",
             element.id(),
@@ -326,7 +325,7 @@ impl Dialect for MermaidDialect {
         let mut destination =
             element_by_id(e.model(), &relationship.destination).ok_or_else(dangling)?;
 
-        // Any DeploymentNode endpoint kills the edge (§7.1).
+        // Any DeploymentNode endpoint kills the edge.
         if source.kind() == ElementKind::DeploymentNode
             || destination.kind() == ElementKind::DeploymentNode
         {
@@ -351,7 +350,7 @@ impl Dialect for MermaidDialect {
             .or(relationship.description.as_deref())
             .map(str::to_owned);
         if let Some(order) = relationship_view.order.as_deref().filter(|o| is_value(o)) {
-            // Java string-concat: a null description renders the literal
+            // The official string concat: a null description renders the literal
             // `null` inside the `{order}. ` prefix.
             description = Some(format!(
                 "{order}. {}",
@@ -382,7 +381,7 @@ impl Dialect for MermaidDialect {
     ) -> Result<(), ExportError> {
         self.group_id += 1;
         // Same `lastIndexOf` cut as the `Structurizr` dialect (the engine
-        // helper models the Java `substring` abort leg).
+        // helper models the official index-cut abort leg).
         let group_name = StructurizrDialect::group_display_name(group, Some(&e.group_separator()))?;
         let color = Self::group_color(e, group);
         w.write_line(Some(&format!(
@@ -459,7 +458,7 @@ impl Dialect for MermaidDialect {
         w: &mut IndentingWriter,
     ) -> Result<(), ExportError> {
         // The deployment-node boundary carries stroke AND color (unlike the
-        // system/container boundary's stroke-as-font quirk, §5).
+        // system/container boundary's stroke-as-font quirk).
         let style = element_style_of(e, node)?;
         w.write_line(Some(&format!(
             "subgraph {} [\"{}\"]",
@@ -489,7 +488,7 @@ impl Dialect for MermaidDialect {
     }
 
     // The `AbstractPlantUMLExporter` box hooks: the base class the Mermaid
-    // exporter extends has none, and the owned sequence document (§9)
+    // exporter extends has none, and the owned sequence document
     // bypasses the engine's sequence walk — so they stay no-ops.
     fn start_boundary<'a>(
         &mut self,
@@ -511,7 +510,7 @@ impl Dialect for MermaidDialect {
     }
 
     /// `MermaidDiagramExporter.export(DynamicView)`'s sequence branch
-    /// (catalog §9): a standalone `sequenceDiagram`, no header/footer, no
+    /// (the export catalog): a standalone `sequenceDiagram`, no header/footer, no
     /// frames, no legend.
     fn sequence_document<'a>(
         &mut self,
@@ -526,8 +525,7 @@ impl Dialect for MermaidDialect {
 
         // LinkedHashSet over the relationship views: source then
         // destination per view, first-seen wins.
-        // 2R R-exp-08: ONE probe of the (deterministic) view list — the old
-        // shape collected the Vec twice, once per leg.
+        // ONE pass over the (deterministic) relationship-view list.
         let rels = e.view_relationships(view);
         let mut elements: Vec<ElemRef<'a>> = Vec::new();
         for rv in &rels {
@@ -556,7 +554,7 @@ impl Dialect for MermaidDialect {
                 (&relationship.source, &relationship.destination)
             };
             let arrow = if response { "-->>" } else { "->>" };
-            // `escapeSemicolon(null)` is the Java NPE: a null-null
+            // Escaping a null description is the official null-pointer crash: a null
             // description aborts (no invented text).
             let description = rv
                 .description
@@ -749,8 +747,8 @@ mod tests {
         assert!(diagram.definition().starts_with("graph RL\n"));
 
         let mut ws = workspace();
-        // A present layout with a null rank direction is the Java `switch`
-        // NPE.
+        // A present layout with a null rank direction is the official
+        // null-pointer crash.
         ws.views.system_landscape_views[0].content.automatic_layout = Some(AutomaticLayout {
             rank_direction: None,
             ..AutomaticLayout::default()
@@ -806,7 +804,7 @@ mod tests {
         let diagram = exported(&ws).pop().expect("export");
         let def = diagram.definition();
         // The engine expands `A/B` into the nested walk (`groups-nested`
-        // SAME witness): each boundary displays the part after ITS last
+        // SAME verified case): each boundary displays the part after ITS last
         // separator, and with no `Group:`/`Group` style declared the color
         // falls back to `#cccccc`.
         assert!(def.contains("subgraph group1 [\"A\"]\n"), "{def}");
@@ -831,7 +829,7 @@ mod tests {
             deployment_environment: None,
             external_boundaries_visible: false,
         };
-        // `mermaid.sequenceDiagram` is `equalsIgnoreCase` — "TRUE" gates.
+        // `mermaid.sequenceDiagram` compares case-insensitively — "TRUE" gates.
         dv.base.properties.insert("mermaid.sequenceDiagram", "TRUE");
         dv.content.elements = vec![ev("1"), ev("2")];
         dv.content.relationships = vec![rv("5")];
@@ -912,7 +910,7 @@ mod tests {
     fn deployment_node_endpoints_kill_the_edge() {
         let mut ws = workspace();
         // Element `2` becomes a DeploymentNode: the 1→2 edge disappears
-        // (either endpoint is enough, §7.1) while the workspace still
+        // (either endpoint is enough) while the workspace still
         // exports.
         let dn = DeploymentNode {
             item: item("2", "Server"),
@@ -932,7 +930,7 @@ mod tests {
         let diagram = exported(&ws).pop().expect("export");
         let def = diagram.definition();
         // The 1→2 edge is skipped; the node itself writes as an element
-        // (the DN boundary leg only runs inside a DeploymentView, §3).
+        // (the DN boundary leg only runs inside a DeploymentView).
         assert!(!def.contains(".-> 2"), "{def}");
         assert!(
             def.contains("2[\"<div style='font-weight: bold'>Server</div>"),

@@ -1,7 +1,7 @@
-//! [`Layered`] — the Sugiyama-family layered engine, **P3 MVP scope**
-//! (§P3-D5; the quality-polish half is P4-D13).
+//! [`Layered`] — the Sugiyama-family layered engine (**MVP scope**: the
+//! core pipeline; quality polish is a later pass).
 //!
-//! Pipeline, in the order §P3-D5 locks it:
+//! Pipeline, in fixed order:
 //!
 //! 1. **cycle removal** — iterative DFS over the graph in node/edge
 //!    insertion order; every back edge is reversed and remembered
@@ -28,14 +28,14 @@
 //! 6. **edge routes** — polyline anchor → dummy centres → anchor,
 //!    orthogonalised through rank-gap channels, interior points
 //!    emitted only when `generate_vertices`; a final **channel-lane
-//!    pass** (§P4-M5 E-3) then pulls parallel bend legs that landed on
+//!    pass** then pulls parallel bend legs that landed on
 //!    one shared midpoint apart into distinct lanes.
 //!
 //! `rank_direction` decides which world axis is the rank axis and
 //! which way it runs: ranks always advance left→right / top→down in
 //! the canonical frame, mirrored for `RightLeft` / `BottomUp`.
 //!
-//! **Determinism (hard contract, §P3-D5):** no randomness, stable
+//! **Determinism (hard contract):** no randomness, stable
 //! sorts only, fixed passes — the same input graph always produces an
 //! identical [`LayoutResult`].
 
@@ -44,15 +44,15 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use crate::engine::{EdgePlacement, LayoutEngine, LayoutError, LayoutResult, NodePlacement, Point};
 use crate::graph::{Anchor, Edge, LayoutGraph, RankDirection};
 
-/// Barycenter rounds (§P3-D5 step 4): each round is one down + one
-/// up sweep. Fixed count — determinism (§P3-D5) needs fixed passes.
+/// Barycenter rounds (pipeline step 4): each round is one down + one
+/// up sweep. Fixed count — determinism needs fixed passes.
 const BARYCENTER_ROUNDS: usize = 4;
 
-/// Priority-method passes (§P3-D5 step 5), alternating the neighbour
+/// Priority-method passes (pipeline step 5), alternating the neighbour
 /// side (rank-1, then rank+1). Fixed count, ditto.
 const PRIORITY_ROUNDS: usize = 4;
 
-/// The layered engine (§P3-D5). Stateless today; kept as a unit struct
+/// The layered engine. Stateless today; kept as a unit struct
 /// so [`LayoutEngine`] stays object-safe for future configuration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Layered;
@@ -120,7 +120,7 @@ impl Oriented {
 }
 
 /// The acyclic, layered, dummy-expanded skeleton of one run
-/// (§P3-D5 steps 1-4; coordinates and routes are [`Self::place`]).
+/// (pipeline steps 1-4; coordinates and routes are [`Self::place`]).
 struct Skeleton {
     verts: Vec<Vertex>,
     /// Vertex ids per rank, in layout order (deterministic).
@@ -137,7 +137,7 @@ struct Skeleton {
 }
 
 /// One edge's vertex chain: endpoints plus dummies across skipped
-/// ranks (§P3-D5 step 3). Length is always ≥ 2.
+/// ranks (pipeline step 3). Length is always ≥ 2.
 struct Chain {
     reversed: bool,
     verts: Vec<usize>,
@@ -226,7 +226,7 @@ impl Skeleton {
             ranks[v.rank].push(vid);
         }
 
-        // Step 4: chain adjacency, then barycenter ordering (M2-3).
+        // Step 4: chain adjacency, then barycenter ordering.
         let mut preds = vec![Vec::new(); verts.len()];
         let mut succs = vec![Vec::new(); verts.len()];
         for chain in &chains {
@@ -316,7 +316,7 @@ impl Skeleton {
             .collect()
     }
 
-    /// Step 4: barycenter sweeps (§P3-M2 M2-3). A fixed number of
+    /// Step 4: barycenter sweeps. A fixed number of
     /// rounds, each a down sweep (every rank re-sorted by the mean
     /// position of its predecessors) and an up sweep (successors);
     /// vertices without such neighbours keep their position as the
@@ -324,8 +324,7 @@ impl Skeleton {
     /// order. After each sweep the crossing count is taken and the
     /// best order kept (ties keep the EARLIER order, so the initial
     /// one beats a tied sweep result). Fixed rounds, `total_cmp` on
-    /// finite means, stable sorts, integer crossings — deterministic
-    /// (§P3-D5).
+    /// finite means, stable sorts, integer crossings — deterministic.
     fn order(ranks: &mut Vec<Vec<usize>>, preds: &[Vec<usize>], succs: &[Vec<usize>]) {
         let mut best = ranks.clone();
         let mut best_crossings = crossings(ranks, preds);
@@ -389,7 +388,7 @@ impl Skeleton {
         }
     }
 
-    /// Step 5 refinement: the simple PRIORITY METHOD (§P3-M2 M2-3).
+    /// Step 5 refinement: the simple PRIORITY METHOD.
     /// Fixed alternating passes; each pass pulls every vertex toward
     /// the mean CENTRE of one rank side's neighbours (current centre
     /// when it has none on that side) and re-places each rank in
@@ -537,7 +536,7 @@ impl Skeleton {
             }
         }
         // Step 5 refinement: straighten chains / shorten edges, then
-        // return the lowest box to the zero line (§P3-M2 M2-3).
+        // return the lowest box to the zero line.
         self.priority(&mut verts, node_sep);
 
         let along = rank_a.last().copied().unwrap_or(0.0) + *rank_max_a.last().unwrap_or(&0.0);
@@ -604,7 +603,7 @@ impl Skeleton {
             .collect();
 
         let generate_vertices = graph.config.generate_vertices;
-        // §P3-M11 M11-6 port spread: edges that land on the SAME
+        // Port spread: edges that land on the SAME
         // (node, side) fan out along it by the far end's cross order,
         // so arrows stop stacking on one midpoint. A lone edge keeps ½.
         let alongs = port_spread(
@@ -628,7 +627,7 @@ impl Skeleton {
                 alongs[idx],
             ));
         }
-        // §P4-M5 E-3: pull overlapping channel legs onto distinct lanes.
+        // Pull overlapping channel legs onto distinct lanes.
         spread_channels(&mut routes, horizontal, rank_sep, node_sep);
         let edges = routes
             .into_iter()
@@ -642,13 +641,13 @@ impl Skeleton {
     }
 }
 
-/// Edge crossings between consecutive ranks (§P3-M2 M2-3 ordering
-/// metric): every pair of edges whose rank-`ri-1` endpoints order
+/// Edge crossings between consecutive ranks (the ordering metric):
+/// every pair of edges whose rank-`ri-1` endpoints order
 /// inverts against their rank-`ri` endpoints counts once; edges
 /// sharing an endpoint never cross. All predecessors sit exactly one
 /// rank up by construction, so the rank-pair split is exact.
-/// O(e²) per rank pair — sparse C4 graphs keep this cheap (§P3-D5
-/// quality bar, not Graphviz-grade crossing minimisation).
+/// O(e²) per rank pair — sparse C4 graphs keep this cheap (a quality
+/// bar, not Graphviz-grade crossing minimisation).
 fn crossings(ranks: &[Vec<usize>], preds: &[Vec<usize>]) -> usize {
     let mut pos = vec![0_usize; preds.len()];
     for ids in ranks {
@@ -687,8 +686,7 @@ enum SideKind {
     Neutral,
 }
 
-/// §P3-M11 M11-6 port spread (user: arrows "should prefer to not land
-/// in each other"): every edge endpoint attaches to one of its box's
+/// Port spread: every edge endpoint attaches to one of its box's
 /// four sides ([`pick_side`] — the exact rule [`endpoint`] applies);
 /// edges sharing a (node, side) then SLIDE apart — ordered by the far
 /// box centre's coordinate PARALLEL to that side (ties → edge input
@@ -778,7 +776,7 @@ fn port_spread(
 
 /// One interior (channel) leg of an orthogonal route — a segment whose
 /// two neighbours are both perpendicular to it, so both neighbours
-/// STRETCH when the leg moves (§P4-M5 E-3).
+/// STRETCH when the leg moves.
 #[derive(Clone, Copy)]
 struct ChannelLeg {
     /// Fixed coordinate: `x` for a vertical leg, `y` for a horizontal one.
@@ -798,7 +796,7 @@ struct ChannelLeg {
     upright: bool,
 }
 
-/// §P4-M5 E-3 channel-lane pass: [`push_segment`] bends EVERY diagonal
+/// Channel-lane pass: [`push_segment`] bends EVERY diagonal
 /// through the exact midpoint of the two legs it connects, so parallel
 /// legs between repeating box sizes land on one coordinate and overlap.
 /// This post-pass groups all channel legs by (orientation, exact fixed
@@ -818,7 +816,7 @@ struct ChannelLeg {
 /// the dominant real-world overlap.
 #[allow(clippy::cast_precision_loss)] // cluster sizes are tiny counts
 #[allow(clippy::float_cmp)] // shared-coordinate runs are exact-value tests
-// by design (§P3-D5 determinism) — same rationale as `push_segment`.
+// by design (determinism) — same rationale as `push_segment`.
 fn spread_channels(routes: &mut [Vec<Point>], horizontal: bool, rank_sep: f64, node_sep: f64) {
     let mut legs: Vec<ChannelLeg> = Vec::new();
     for (ri, pts) in routes.iter().enumerate() {
@@ -925,8 +923,8 @@ fn spread_channels(routes: &mut [Vec<Point>], horizontal: bool, rank_sep: f64, n
 /// acyclic-oriented, so a reversed edge's chain runs backwards here.
 /// Diagonal legs are orthogonalised through channels at the mid rank
 /// coordinate — a rank GAP, never a rank band — or at the mid cross
-/// coordinate when both ends attach to the cross sides (§P3-D5
-/// "orthogonal-ish" MVP; the polish half is P4-D13). Without
+/// coordinate when both ends attach to the cross sides (the
+/// "orthogonal-ish" MVP; polish is a later pass). Without
 /// `generate_vertices` the route is the straight anchor→anchor pair.
 #[allow(clippy::too_many_arguments)] // one structural bundle per argument
 fn route(
@@ -947,7 +945,7 @@ fn route(
     };
     let (si, ti) = (verts[start_vid].real, verts[end_vid].real);
     if si == ti {
-        // Self-loop placeholder route (P4-D13 polish): two stubs on
+        // Self-loop placeholder route: two stubs on
         // the box's right side — deterministic and bounded.
         let (bx, by, bw, bh) = boxes[si];
         return vec![
@@ -1006,7 +1004,7 @@ fn route(
 /// perpendicular to those sides.
 #[allow(clippy::float_cmp)]
 // Comparing exact layout values (integer separations and exact
-// half-sums, §P3-D5 determinism): equality here is the defined test
+// half-sums, determinism): equality here is the defined test
 // for an axis-parallel leg, not a fuzzy comparison.
 fn push_segment(
     points: &mut Vec<Point>,
@@ -1077,7 +1075,7 @@ fn center(box_rect: (f64, f64, f64, f64)) -> Point {
     }
 }
 
-/// The four box sides, as an anchor attaches to one (§P3-M11 M11-6).
+/// The four box sides, as an anchor attaches to one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Side4 {
     Top,
@@ -1097,7 +1095,7 @@ impl Side4 {
 /// The side of `box_rect` an anchor attaches to: the named side when
 /// pinned, otherwise the side facing `toward` (dominant delta wins,
 /// exact ties take the horizontal sides). Shared by [`endpoint`] and
-/// the §P3-M11 port-spread prepass so BOTH agree which side an edge
+/// the port-spread prepass so BOTH agree which side an edge
 /// lands on (the spread order is only meaningful if it matches).
 fn pick_side(box_rect: (f64, f64, f64, f64), anchor: Option<Anchor>, toward: Point) -> Side4 {
     match anchor {
@@ -1122,9 +1120,9 @@ fn pick_side(box_rect: (f64, f64, f64, f64), anchor: Option<Anchor>, toward: Poi
 
 /// The anchor point of `box_rect` with its side kind: the side from
 /// [`pick_side`], positioned `along` it (0 = one end, 1 = the other,
-/// ½ = the midpoint the pinned anchors keep). §P3-M11 M11-6 feeds a
+/// ½ = the midpoint the pinned anchors keep). The port spread feeds a
 /// per-edge `along` so edges sharing a (node, side) fan out instead of
-/// stacking on the midpoint; a lone edge keeps ½ = the old behaviour.
+/// stacking on the midpoint; a lone edge keeps ½ (the midpoint).
 fn endpoint(
     box_rect: (f64, f64, f64, f64),
     anchor: Option<Anchor>,
@@ -1158,8 +1156,8 @@ fn endpoint(
     };
     let side = pick_side(box_rect, anchor, toward);
     // The leg axis keys off the SIDE (horizontal sides ride the rank
-    // axis, vertical sides the cross axis) — matching the pre-M11 rule
-    // where the dominant-delta side chose rank vs cross.
+    // axis, vertical sides the cross axis): the dominant-delta side
+    // chooses rank vs cross.
     let kind = if side.slides_x() {
         cross_side
     } else {
@@ -1320,7 +1318,7 @@ mod tests {
         assert_eq!(pos(&r, "b"), Point { x: 220.0, y: 0.0 });
         assert_eq!(pos(&r, "c"), Point { x: 440.0, y: 40.0 });
         // Orthogonal route a → dummy → c: two rank-gap channels at
-        // x 200 / x 360 around the dummy's 110 line. §P3-M11 port
+        // x 200 / x 360 around the dummy's 110 line. Port
         // spread: a's RIGHT side hosts a→b too and c's LEFT side hosts
         // b→c, so a→c takes the lower slot of both sides (its far ends
         // sit below b's centre line) — y 80 instead of the 70 midpoint.
@@ -1339,7 +1337,7 @@ mod tests {
 
     #[test]
     fn edges_sharing_a_side_spread_into_thirds() {
-        // §P3-M11 M11-6 (user: arrows "should prefer to not land in
+        // Port spread (arrows "should prefer to not land in
         // each other"): a→h and b→h both enter h's LEFT side, so they
         // take the ⅓ / ⅔ slots in source-centre order — never the
         // shared midpoint.
@@ -1437,7 +1435,7 @@ mod tests {
     #[test]
     #[allow(clippy::float_cmp)] // exact layout values by design
     fn routes_are_axis_aligned() {
-        // The §P3-D5 orthogonal-ish promise: with vertices generated,
+        // The orthogonal-ish promise: with vertices generated,
         // every route leg of a mixed graph shares x or y.
         let mut g = LayoutGraph::new();
         for id in ["a", "b", "c", "d"] {
@@ -1529,7 +1527,7 @@ mod tests {
 
     #[test]
     fn same_input_lays_out_identically() {
-        // The hard determinism contract (P3-D5): a mid-size cyclic
+        // The hard determinism contract: a mid-size cyclic
         // synthetic, laid out twice.
         let mut g = LayoutGraph::new();
         let count = 60_usize;
@@ -1548,7 +1546,7 @@ mod tests {
 
     #[test]
     fn thousand_nodes_are_deterministic() {
-        // §P3-M2 M2-3 scale gate: the whole pipeline (sweeps, crossing
+        // Scale gate: the whole pipeline (sweeps, crossing
         // counts, priority passes, orthogonal routes) on 1k nodes —
         // twice, byte-identical, all coordinates finite.
         let mut g = LayoutGraph::new();
@@ -1588,8 +1586,8 @@ mod tests {
                 .iter()
                 .all(|pt| pt.x.is_finite() && pt.y.is_finite())
         }));
-        // §P4-M5 E-3: the lane pass leaves no colliding channel legs even
-        // at §P3-D5 scale (both maps: rank and cross channels).
+        // The lane pass leaves no colliding channel legs even at
+        // 1k-node scale (both maps: rank and cross channels).
         assert_eq!(
             overlapping_channel_pairs(&once),
             0,
@@ -1600,7 +1598,7 @@ mod tests {
     /// Counts channel legs (bend segments whose two neighbours are both
     /// perpendicular — exactly what [`spread_channels`] may move) sitting
     /// on one exact coordinate with strictly overlapping ranges.
-    #[allow(clippy::float_cmp)] // exact shared-coordinate test (§P3-D5)
+    #[allow(clippy::float_cmp)] // exact shared-coordinate test (determinism)
     fn overlapping_channel_pairs(result: &LayoutResult) -> usize {
         let mut pairs = 0_usize;
         for vertical in [true, false] {
@@ -1648,7 +1646,7 @@ mod tests {
 
     #[test]
     fn ranks_are_tightest_feasible() {
-        // §P4-M5 E-3(1) reality check: step 2 already relaxation-layers
+        // Reality check: step 2 already relaxation-layers
         // to `max(preds) + 1`, so a lone edge beside a longer chain sits
         // tight at rank 1 — there is no slack left to pull.
         let mut g = LayoutGraph::new();
@@ -1708,7 +1706,7 @@ mod tests {
 
     #[test]
     fn star_concentration_gets_distinct_lanes() {
-        // The bench's `star` shape in miniature: 59 edges share the hub's
+        // A star shape in miniature: 59 edges share the hub's
         // one attach side and the same bend midpoint — every vertical
         // channel leg collides until the lane pass spreads them.
         let mut g = LayoutGraph::new();

@@ -1,34 +1,33 @@
-//! The `!adrs` decision importers — ports of `structurizr-import`
-//! `documentation/AdrToolsDecisionImporter`, `MadrDecisionImporter` and
-//! `Log4brainsDecisionImporter` (the `AbstractDecisionImporter` excludes
-//! matcher is shared with [`crate::docs`]). Full pinned contract:
-//! `agents/plan/build/IMPORT-DOCS-ADRS.md`.
+//! The `!adrs` decision importers — the three official decision layouts
+//! (`AdrTools`, Madr, Log4brains; the shared excludes matcher is
+//! shared with [`crate::docs`]). Full verified contract:
+//! the import catalog.
 //!
-//! Pinned reference behaviors (verified @ `ad34036`):
+//! Pinned behaviors (verified):
 //! - all three are DIRECTORY-only: `"<abs> does not exist."` /
-//!   `"<abs> is not a directory."` (`getAbsolutePath` — lexical), thrown
+//!   (lexical absolute path), thrown
 //!   OUTSIDE the importer's try-blocks (clean messages);
 //! - content is UTF-8 (lossy), then `replace("\r", "")` before ANY
 //!   parsing, and `Decision.setContent` newline-normalizes;
-//! - Java `String.split("\\n")` drops TRAILING empty segments —
+//! - the newline split drops TRAILING empty segments —
 //!   `java_split_newlines` replicates it (leading empties stay);
-//! - dates parse via lenient `SimpleDateFormat` in `TimeZone.getDefault()`
-//!   — the port parses UTC (deviation D15), rolling out-of-range values
+//! - dates parse LENIENTLY in the local time zone —
+//!   — oxidizr parses UTC (a documented deviation), rolling out-of-range values
 //!   over like a lenient `Calendar`, and ignores trailing text after the
 //!   pattern;
 //! - post-import, EVERY decision's content has each imported FILENAME
-//!   replaced by `#` + urlEncode(id) (`URLEncoder`, spaces as `%20`; ids
+//!   replaced by `#` + url-encoded id (spaces as `%20`; ids
 //!   are digits ⇒ plain), and links resolve against the imported
 //!   FILENAME set only (unknown targets silently drop, self-links no-op);
 //! - failure wrapping decides the surfaced message: AdrTools/Log4brains
-//!   wrap everything after the guards in `DocumentationImportException
-//!   (cause)` (⇒ `cause.toString()`, e.g.
+//!   wrap everything after the guards in a wrapper exception
+//!   (message, cause) — the surfaced text is the cause string, e.g.
 //!   `"java.lang.IllegalArgumentException: …"`); Madr wraps EACH FILE in
 //!   `"Error importing decision from + <abs>"` (literal `+`) and its
 //!   link/rewrite loop swallows failures (warn-log);
-//! - the port SORTS every directory walk by name (`AdrTools`' `listFiles`
-//!   is FS-order — non-deterministic in the reference; determinism note
-//!   in the port contract).
+//! - oxidizr SORTS every directory walk by name (the official listing
+//!   is FS-order — non-deterministic in the official tooling; determinism note
+//!   in oxidizr contract).
 //!
 //! Empty `exclude` tokens (`"A regex must be provided."`) are a
 //! DSL-surface concern checked at the statement edge, not here.
@@ -61,10 +60,10 @@ pub enum DecisionKind {
 ///
 /// # Errors
 ///
-/// [`ImportError::Failed`] carries the reference inner message EXACTLY as
-/// `DocumentationDslContext.end()` would surface it after the
+/// [`ImportError::Failed`] carries the inner message EXACTLY as the
+/// official DSL context surfaces it after the
 /// `"Error importing decisions: "` prefix — guards clean, wrapped causes
-/// `toString()`-shaped (see the module docs).
+/// cause-string shaped (see the module docs).
 pub fn import_decisions(
     kind: DecisionKind,
     target: &mut Documentation,
@@ -90,7 +89,7 @@ pub fn import_decisions(
     }
 }
 
-/// `listFiles(filter)` + the port's sorted-by-name walk (determinism).
+/// `listFiles(filter)` + oxidizr's sorted-by-name walk (determinism).
 /// Exactly one of `suffix` (`AdrTools` `endsWith(".md")`) / `keep` (the
 /// regex filters) is used by the callers.
 fn md_files(
@@ -110,8 +109,8 @@ fn md_files(
         })?;
         let name = entry.file_name().to_string_lossy().into_owned();
         // `File.listFiles` yields directories too — a directory passing
-        // the name filter would fail the reference's `Files.readString`
-        // (wrapped `FileSystemException`); the port skips it (the corpus
+        // the name filter would fail a strict UTF-8 read
+        // (a wrapped read failure); oxidizr skips it (the corpus
         // never carries one and the skip is the deterministic reading).
         let matched = suffix.is_none_or(|s| name.ends_with(s))
             && keep.is_none_or(|re| re.is_match_full(&name));
@@ -125,8 +124,7 @@ fn md_files(
 
 /// `Documentation.addDecision` — the validation order that can actually
 /// fire from these importers (id/title/content/format are always set;
-/// status is never null). `Err` carries the `IllegalArgumentException`
-// message; each importer decides the wrapping.
+/// status is never null). `Err` carries the invalid-argument message;
 fn check_addable(target: &Documentation, d: &Decision) -> Result<(), String> {
     if d.title.is_empty() {
         return Err("A title must be specified.".into());
@@ -140,7 +138,7 @@ fn check_addable(target: &Documentation, d: &Decision) -> Result<(), String> {
     Ok(())
 }
 
-/// `Integer.parseInt(name.substring(0, 4))` → id; the 4-char prefix is
+/// The leading 4 characters parse to the id; the 4-char prefix is
 /// what adr-tools guarantees; a bad prefix aborts the WHOLE import.
 fn parse_id4(name: &str) -> Result<String, ImportError> {
     let prefix: String = name.chars().take(4).collect();
@@ -153,14 +151,14 @@ fn parse_id4(name: &str) -> Result<String, ImportError> {
     }
 }
 
-/// `java.lang.<Class>: <message>` — the `DocumentationImportException
-/// (cause)` wrapping seen through `e.getMessage()` at the DSL edge.
+/// `java.lang.<Class>: <message>` — the wrapped-cause shape, as
+/// surfaced at the DSL edge.
 pub(crate) fn java_error(class: &str, message: &str) -> ImportError {
     ImportError::Failed(format!("java.lang.{class}: {message}"))
 }
 
 /// `String.split("\\n")` — trailing empty segments dropped; the empty
-/// string splits to ONE empty segment, `"\n\n"` to NONE (pinned Java
+/// string splits to ONE empty segment, `"\n\n"` to NONE (verified the official tooling
 /// behavior — limit 0 discards all-trailing empties, nothing to discard
 /// when the input is empty).
 pub(crate) fn java_split_newlines(s: &str) -> Vec<&str> {
@@ -194,8 +192,8 @@ fn calculate_url(id: &str) -> String {
 }
 
 /// The post-import filename → `#id` content rewrite, INSERTION order
-/// (the reference iterates a `HashMap` keySet — FS/hash order, non-
-/// deterministic; sorted insertion is the port's registered choice).
+/// (the official tooling iterates a `HashMap` keySet — FS/hash order, non-
+/// deterministic; sorted insertion is oxidizr's registered choice).
 fn rewrite_filenames(content: &mut String, by_filename: &[(String, String)]) {
     for (filename, id) in by_filename {
         *content = content.replace(filename, &calculate_url(id));
@@ -203,7 +201,7 @@ fn rewrite_filenames(content: &mut String, by_filename: &[(String, String)]) {
 }
 
 /// `File.lastModified()` seconds (`new Date(ms)` truncated by the UTC
-/// JSON formatter); 0 on failure, like Java.
+/// JSON formatter); 0 on failure, like the official tooling.
 fn mtime_secs(file: &Path) -> i64 {
     std::fs::metadata(file)
         .and_then(|m| m.modified())
@@ -222,7 +220,7 @@ fn now_secs() -> i64 {
 }
 
 // ---------------------------------------------------------------------------
-// Lenient UTC dates (deviation D15: the reference parses in JVM-TZ)
+// Lenient UTC dates (the official tooling parses in the local time zone)
 // ---------------------------------------------------------------------------
 
 /// Days since epoch for a (possibly normalized) civil date — Howard
@@ -395,8 +393,8 @@ fn adrtools_import_decision(file: &Path, name: &str) -> Result<Decision, ImportE
     })
 }
 
-/// `titleLine.substring(titleLine.indexOf(".") + 2)` — no dot ⇒ drops
-/// the first character; too short ⇒ `StringIndexOutOfBoundsException`.
+/// The title cut starts two past the first dot — no dot ⇒ drops
+/// the first character; too short ⇒ an index-out-of-range crash.
 fn adrtools_title(line: &str) -> Result<String, ImportError> {
     let begin = line.find('.').map_or(1, |dot| dot + 2);
     if begin > line.len() {
@@ -437,7 +435,7 @@ fn adrtools_status(lines: &[&str]) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Madr
+// the importer
 // ---------------------------------------------------------------------------
 
 const MADR_FRONT_MATTER_SEPARATOR: &str = "---";
@@ -456,8 +454,8 @@ fn madr(target: &mut Documentation, dir: &Path, excludes: &[String]) -> Result<(
         if excluded(&name, excludes)? {
             continue;
         }
-        // the per-file wrap: `DocumentationImportException(message,
-        // cause)` — `getMessage()` is the message ONLY (the literal `+`,
+        // the per-file wrap: the wrapper exception takes (message,
+        // cause) — its message is the message ONLY (the literal `+`,
         // the cause text never surfaces at the DSL edge)
         let abs = java_absolute(&file).display().to_string();
         let wrap = || ImportError::Failed(format!("Error importing decision from + {abs}"));
@@ -471,7 +469,7 @@ fn madr(target: &mut Documentation, dir: &Path, excludes: &[String]) -> Result<(
         by_filename.push((name.clone(), target.decisions[idx].id.clone()));
         index.insert(name, idx);
     }
-    // pass 2 — Madr SWALLOWS failures here (warn-log); the port's
+    // pass 2 — the importer SWALLOWS failures here (warn-log); oxidizr's
     // extraction cannot fail, so the loop runs unguarded, honestly.
     let link_re = Regex::new(r"\[.*]\((.*)\)").expect("static");
     for &idx in &order {
@@ -620,7 +618,7 @@ fn log4brains(
         order.push(idx);
         by_filename.push((name.clone(), target.decisions[idx].id.clone()));
         index.insert(name, idx);
-        // the counter advances ONLY inside the import branch (pinned)
+        // the counter advances ONLY inside the import branch (verified)
         decision_id += 1;
     }
     let status_re = Regex::new(r"- Status: (.*) \[.*]\((.*)\)").expect("static");
@@ -686,7 +684,7 @@ fn log4brains_import_decision(id: i64, file: &Path, name: &str) -> Result<Decisi
         }
     }
 
-    // title: `lines[0].substring(2)` — NO `# ` check (pinned)
+    // title: first line minus 2 chars — NO `# ` check (verified)
     let first = lines.first().copied().unwrap_or("");
     if first.len() < 2 {
         return Err(java_error(
@@ -792,7 +790,7 @@ mod tests {
     #[test]
     fn adrtools_status_defaults_and_missing_date() {
         // no ## Status section content and no `Date:` line: status
-        // `Proposed` (capital P — pinned constant), date = NOW
+        // `Proposed` (capital P — verified constant), date = NOW
         let dir = scratch("adr-defaults", &[("0003-x.md", "# 3. X\n\nplain\n")]);
         let mut doc = Documentation::default();
         import_decisions(DecisionKind::AdrTools, &mut doc, &dir, &[]).expect("import");
@@ -864,7 +862,7 @@ mod tests {
         import_decisions(DecisionKind::Madr, &mut doc, &dir, &[]).expect("import");
         assert_eq!(doc.decisions[0].title, "Seven");
         assert_eq!(doc.decisions[0].status, "accepted");
-        // no front-matter date ⇒ file mtime (pinned): compare loosely
+        // no front-matter date ⇒ file mtime (verified): compare loosely
         let mtime = mtime_secs(&dir.join("0007-p.md"));
         assert_eq!(doc.decisions[0].date, mtime);
         let _ = std::fs::remove_dir_all(&dir);

@@ -1,4 +1,4 @@
-//! Neutral graph input types ([`LayoutGraph`] and friends) — P3-D5 surface.
+//! Neutral graph input types ([`LayoutGraph`] and friends).
 //!
 //! Ids are opaque [`String`] newtypes: the viewer maps `oxidizr-core` ids in
 //! and back (it keeps the side table), so this crate never learns what an
@@ -117,16 +117,15 @@ impl Edge {
 pub enum RankDirection {
     TopDown,
     BottomUp,
-    /// Reference `AutomaticLayout` default (verified from the reference
-    /// constants — see `oxidizr-core` `AutomaticLayout::default`).
+    /// The default: left-right (matches `oxidizr-core`'s
+    /// `AutomaticLayout::default`).
     #[default]
     LeftRight,
     RightLeft,
 }
 
-/// Engine configuration, mirroring the reference auto-layout dialog
-/// (`auto-layout.jspf`) parameters. Separations match the reference
-/// `AutomaticLayout` defaults (rank 100, node 50, edge 50, vertices true).
+/// Engine configuration (auto-layout parameters). Defaults: rank 100,
+/// node 50, edge 50, vertices on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LayoutConfig {
     /// Rank direction.
@@ -168,7 +167,7 @@ pub struct LayoutGraph {
 }
 
 impl LayoutGraph {
-    /// Empty graph with the reference-default [`LayoutConfig`].
+    /// Empty graph with the default [`LayoutConfig`].
     #[must_use]
     pub fn new() -> Self {
         Self::default()

@@ -1,15 +1,15 @@
-//! The viewer-facing open entry (P3-M1-1, `agents/plan/build/PHASE_3.md`
-//! §P3-M1): load a workspace file for INSPECTION. This is deliberately NOT
+//! The viewer-facing open entry: load
+//! a workspace file for INSPECTION. This is deliberately NOT
 //! a byte-contract path — the [`crate::pipeline::execute`] command bodies,
 //! their goldens and the CLI are untouched; the entry only reuses the
 //! pipeline's private load stages.
 //!
-//! Load tail mirror (reference `AbstractCommand.loadWorkspace`, same as
+//! Load tail mirror (the official loader tail, same as
 //! `load_export_workspace`): read → parse by extension (`.dsl` / `.json`)
-//! → `apply_default_views`. Viewer twist (the M1-1 row): a DSL with
-//! recoverable statement errors OPENS PARTIALLY — the decorated D1 issues
+//! → `apply_default_views`. Viewer twist: a DSL with
+//! recoverable statement errors OPENS PARTIALLY — the decorated statement issues
 //! ride [`Opened::log`] and the repaired workspace renders what parsed
-//! (the reference web tool has no DSL leg at all, so no parity constraint
+//! (the official tooling web tool has no DSL leg at all, so no parity constraint
 //! exists here; `--strict` has no meaning for a read-only viewer). JSON is
 //! strict (a half-read workspace would silently misrepresent the file).
 //! The core-validation tail runs INFORMATIONALLY: violations join the log,
@@ -37,7 +37,7 @@ pub struct Opened {
     pub log: Vec<LogItem>,
     /// File-system `!include`d files behind a DSL open, in parse order
     /// (canonical PATH form, `oxidizr_dsl::engine::ParseResult::includes`)
-    /// — the live-reload watch closure (§P3-M4); empty for JSON/stdin/
+    /// — the live-reload watch closure (§); empty for JSON/stdin/
     /// bytes inputs, which have no include tree.
     pub includes: Vec<String>,
 }
@@ -68,7 +68,7 @@ pub fn open(input: &Input, opts: &ApiOptions) -> Result<Opened, Outcome> {
         Some("dsl") | None => {
             let result =
                 parse_dsl_input(&source, opts).map_err(|e| failing(e, ExitClass::Diagnostics))?;
-            // D1 recovery, viewer twist: the repaired workspace opens even
+            // statement recovery, viewer twist: the repaired workspace opens even
             // with statement errors (see module docs).
             log.extend(statement_errors(&result).into_iter().map(LogItem::Issue));
             includes = result.includes;

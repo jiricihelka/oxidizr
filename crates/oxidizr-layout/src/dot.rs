@@ -1,28 +1,26 @@
-//! The optional graphviz `dot` backend (M4-6, `dot-backend` feature):
-//! [`Dot`] implements the same neutral [`LayoutEngine`] seam (P3-D5) by
+//! The optional graphviz `dot` backend (`dot-backend` feature, OFF by
+//! default): [`Dot`] implements the same neutral [`LayoutEngine`] seam by
 //! shelling out to `$OXIDZR_DOT_BIN` with `-Tplain` and parsing the
-//! placements back — the R-1 mitigation row in §P3-M4. The oracle
-//! posture holds: the feature is OFF by default and the real-binary
-//! test is Category B, gated on the env var.
+//! placements back. The real-binary test only runs when
+//! `$OXIDZR_DOT_BIN` is set.
 //!
-//! Format facts (graphviz 15.1.1, verified 2026-11-20 against
-//! `man dot` / `-Tplain` output):
+//! `dot -Tplain` format facts:
 //!
-//! - Plain is INCHES (72 pt/in ⇒ we use 72 px/in), y-axis points UP,
-//!   the origin is the bottom-left of each connected component.
+//! - Plain output is in INCHES (72 pt/in ⇒ we use 72 px/in), the y-axis
+//!   points UP, and the origin is the bottom-left of each connected
+//!   component.
 //! - Each connected component prints its own `graph G w h` block with
 //!   local coordinates — [`Dot::parse_plain`] stacks components
 //!   left-to-right with [`COMPONENT_GAP_PX`] between them.
 //! - `node` rows are `node NAME x y w h …` with `(x, y)` the box
-//!   CENTRE and `w`/`h` the FULL box extents (graphviz 15.1.1 echoes
-//!   the declared fixedsize inches), so the top-left is
-//!   `(x-w/2, graph_h-y-h/2)` in our frame.
-//! - `edge` rows are `edge SRC DST N p1 p2 …`; the documented point
-//!   spelling is joined `x,y`, graphviz 15.1.1 emits two plain numbers
-//!   — both are parsed. With `splines=true` the points trace the routed
-//!   polyline, with `splines=false` exactly the two endpoints.
+//!   CENTRE and `w`/`h` the FULL box extents (the declared fixedsize
+//!   inches), so the top-left is `(x-w/2, graph_h-y-h/2)` in our frame.
+//! - `edge` rows are `edge SRC DST N p1 p2 …`; a point is either the
+//!   documented joined `x,y` spelling or two plain numbers — both are
+//!   parsed. With `splines=true` the points trace the routed polyline,
+//!   with `splines=false` exactly the two endpoints.
 //!
-//! Determinism (P3-D5): the DOT source is written in graph input order
+//! Determinism: the DOT source is written in graph input order
 //! with positional names (`n0`, `n1`, …), results are re-emitted in
 //! input order, and plain output is deterministic for a fixed graphviz
 //! build — so same input + same binary ⇒ identical output. Parallel
@@ -44,7 +42,7 @@ pub const PX_PER_INCH: f64 = 72.0;
 pub const COMPONENT_GAP_PX: f64 = 50.0;
 
 /// The external-`dot` engine: holds the binary path (discovery via
-/// [`Dot::from_env`], the `$OXIDZR_DOT_BIN` oracle posture).
+/// [`Dot::from_env`] from `$OXIDZR_DOT_BIN`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dot {
     binary: PathBuf,
@@ -63,8 +61,7 @@ impl Dot {
         &self.binary
     }
 
-    /// `$OXIDZR_DOT_BIN` discovery (empty/unset ⇒ `None`, the oracle
-    /// pattern in `agents/plan/TESTING.md`).
+    /// `$OXIDZR_DOT_BIN` discovery (empty/unset ⇒ `None`).
     #[must_use]
     pub fn from_env() -> Option<Self> {
         let bin = std::env::var_os("OXIDZR_DOT_BIN")?;
@@ -73,7 +70,7 @@ impl Dot {
 
     /// The DOT source for `graph`: input order, positional names, sizes
     /// converted to inches, no labels (so `fixedsize` boxes are exact).
-    /// Public for the Category-A round-trip tests (source ⇄ fixture).
+    /// Public for the round-trip tests (source ⇄ fixture).
     #[must_use]
     pub fn dot_source(graph: &LayoutGraph) -> String {
         let mut out = String::from("digraph {\n");
@@ -172,9 +169,9 @@ impl Dot {
                     };
                     let cx = num("x")?;
                     let cy = num("y")?;
-                    // graphviz 15.1.1 (verified 2026-11-20): `w`/`h`
-                    // are the FULL box extents (they echo the declared
-                    // fixedsize inches), so the half-extent is half.
+                    // `w`/`h` are the FULL box extents (they echo
+                    // the declared fixedsize inches), so the
+                    // half-extent is half.
                     let half_w = num("width")? / 2.0;
                     let half_h = num("height")? / 2.0;
                     // Plain y is bottom-up; top-left in this component's
@@ -193,9 +190,8 @@ impl Dot {
                         .ok_or_else(|| fail("plain: bad edge point count".to_owned()))?;
                     let mut points = Vec::with_capacity(count);
                     for _ in 0..count {
-                        // The documented row form joins a point into one
-                        // `x,y` token; graphviz 15.1.1 emits two plain
-                        // numbers — accept both shapes.
+                        // A point is either one joined `x,y` token
+                        // or two plain numbers — accept both shapes.
                         let first = words
                             .next()
                             .ok_or_else(|| fail("plain: truncated edge points".to_owned()))?;
@@ -407,7 +403,7 @@ mod tests {
     #[test]
     fn parse_plain_flips_stacks_and_maps_order() {
         // One component 10x4 in: n0 centred (1,2), FULL extents 1x2
-        // (the real 15.1.1 row shape).
+        // (the real row shape).
         let plain = "graph 1 10 4\n\
                      node n0 1 2 1 2 solid box black lightgrey \"\"\n\
                      node n1 9 2 1 2 solid box black lightgrey \"\"\n\
@@ -482,10 +478,10 @@ mod tests {
         );
     }
 
-    /// Category B (oracle posture): real `$OXIDZR_DOT_BIN`, gated —
-    /// skipped silently when the var is unset. Pins the contract: one
+    /// Real-binary test, gated on `$OXIDZR_DOT_BIN` — skipped
+    /// silently when the var is unset. Pins the contract: one
     /// placement per node in input order, LR ranks left→right, routes
-    /// have endpoints, and TWO runs are identical (P3-D5 determinism).
+    /// have endpoints, and TWO runs are identical (determinism).
     #[test]
     fn real_dot_binary_places_and_is_deterministic() {
         let Some(engine) = Dot::from_env() else {

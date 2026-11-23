@@ -1,24 +1,24 @@
-//! `oxidizr-import` — diagram-model importers (P4 §P4-M2, F12 + the
-//! reference image port).
+//! `oxidizr-import` — diagram-model importers (the additional feature
+//! plus the official image importer).
 //!
 //! Each importer turns ONE diagram file into a fresh
-//! [`oxidizr_core::Workspace`]: the `image` leg is the port of
-//! `structurizr-import` `diagrams/image/ImageImporter` + `ImageUtils`
+//! [`oxidizr_core::Workspace`]: the `image` leg ports the official
+//! image importer and image utilities
 //! (file → `ImageView` data-URI / content-type / title); the
 //! C4-PlantUML and Mermaid model importers are the agreed additional
-//! feature **F12** (`agents/plan/ADDITIONAL_FEATURES.md` — the pinned
-//! reference has NO model-parser counterpart, P4-V3), scope per
-//! `agents/plan/build/PHASE_4.md` §P4-M2.
+//! feature **F12** (registered additional feature — verified:
+//! the official tooling has NO model-parser counterpart), scope per
+//! the phase plan.
 //!
 //! Contract invariants:
 //! - the output is a standard Structurizr workspace — features may never
 //!   bend the JSON byte contract (rule 1/2 of the registry; the bless
 //!   307×unchanged tripwire stands behind every milestone);
 //! - warning-and-skip: unrecognized source constructs ride
-//!   [`Imported::warnings`], they never abort the import (P4-D8, R-1);
+//!   [`Imported::warnings`], they never abort the import;
 //! - bodies-in-API stays upstream: loading, view-key policy at the CLI
-//!   edge, serialization and reporting live in `oxidizr-api` (T0-d); this
-//!   crate is pure construction via the reference `WorkspaceBuilder`
+//!   edge, serialization and reporting live in `oxidizr-api`; this
+//!   crate is pure construction under the official workspace-builder
 //!   rules (generated view keys, view order, id allocation).
 
 pub mod c4plantuml;
@@ -52,19 +52,19 @@ pub struct Imported {
     pub warnings: Vec<String>,
 }
 
-/// Everything that can stop an import. Messages quote the reference
-/// `IllegalArgumentException` texts verbatim (minus its
+/// Everything that can stop an import. Messages quote the official tooling
+/// `invalid-argument crash` texts verbatim (minus its
 /// `getCanonicalPath()`: diagnostics print the path as given).
 #[derive(Debug, Error)]
 pub enum ImportError {
-    /// The source file is absent (Java: `"<path> does not exist."`).
+    /// The source file is absent (the official tooling: `"<path> does not exist."`).
     #[error("{0} does not exist.")]
     Missing(PathBuf),
-    /// The source path exists but is not a regular file (Java:
+    /// The source path exists but is not a regular file (the official tooling:
     /// `"<path> is not a file."`).
     #[error("{0} is not a file.")]
     NotFile(PathBuf),
-    /// Not an image type the reference recognizes (Java:
+    /// Not an image type the official tooling recognizes (the official tooling:
     /// `"<path> is not a supported image file."`).
     #[error("{0} is not a supported image file.")]
     Unsupported(PathBuf),
@@ -79,19 +79,19 @@ pub enum ImportError {
     /// A workspace-construction failure (view-key uniqueness…).
     #[error(transparent)]
     Core(#[from] CoreError),
-    /// A `!docs`/`!adrs` import failure carrying the reference
-    /// exception MESSAGE verbatim (the `DocumentationImportException` /
-    /// `IllegalArgumentException` texts, `java.io.File` paths included —
+    /// A `!docs`/`!adrs` import failure carrying the official
+    /// exception MESSAGE verbatim (the wrapped-cause texts and file
+    /// paths included —
     /// the DSL layer prepends `Error importing documentation: ` /
-    /// `Error importing decisions: ` exactly like the reference `end()`
-    /// handlers).
+    /// `Error importing decisions: ` exactly like the official
+    /// end-of-context handlers).
     #[error("{0}")]
     Failed(String),
 }
 
-/// `oxidizr import` legs (§P4-M2 N-4, F12): which `oxidizr-import`
+/// `oxidizr import` legs (, F12): which `oxidizr-import`
 /// engine processes the source. Travels on the `oxidizr-api` pipeline
-/// `Request::Import` (re-exported there unchanged, §P4-R2); the CLI
+/// `Request::Import` (re-exported there unchanged); the CLI
 /// `--format` clap enum maps onto it 1:1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportFormat {
@@ -99,13 +99,13 @@ pub enum ImportFormat {
     C4PlantUml,
     /// `Mermaid` C4 diagram → the model.
     Mermaid,
-    /// Image file → a workspace with one `ImageView` (reference port).
+    /// Image file → a workspace with one `ImageView` (the official tooling oxidizr).
     Image,
 }
 
 impl ImportFormat {
-    /// Extension sniff (§P4-M2 N-4): `.puml`/`.iuml`/`.c4p` →
-    /// C4-`PlantUML`, `.mmd`/`.mermaid` → `Mermaid`, the reference image
+    /// Extension sniff: `.puml`/`.iuml`/`.c4p` →
+    /// C4-`PlantUML`, `.mmd`/`.mermaid` → `Mermaid`, the official tooling image
     /// extensions (the `ImageUtils` table behind
     /// [`image::content_type_of`]) → image.
     /// `None` = not guessable from the name.
@@ -120,8 +120,8 @@ impl ImportFormat {
     }
 }
 
-/// `java.io.File.getAbsolutePath()` — lexical only: prepend the CWD and
-/// normalize `.`/`..` segments WITHOUT touching the filesystem (Java never
+/// The absolute-path form — lexical only: prepend the CWD and
+/// normalize `.`/`..` segments WITHOUT touching the filesystem (the official tooling never
 /// fails here; symlinks stay unresolved, that is `getCanonicalPath`).
 pub(crate) fn java_absolute(path: &std::path::Path) -> std::path::PathBuf {
     use std::path::{Component, PathBuf};
@@ -136,7 +136,7 @@ pub(crate) fn java_absolute(path: &std::path::Path) -> std::path::PathBuf {
             Component::RootDir => out.push("/"),
             Component::Normal(seg) => out.push(seg),
             Component::ParentDir => {
-                // Java pops the last name segment unless the path is just
+                // the official tooling pops the last name segment unless the path is just
                 // `/`; an empty result keeps `/`.
                 if !matches!(out.components().next_back(), Some(Component::RootDir)) {
                     out.pop();
@@ -151,9 +151,9 @@ pub(crate) fn java_absolute(path: &std::path::Path) -> std::path::PathBuf {
     out
 }
 
-/// `java.io.File.getCanonicalPath()` — resolve symlinks + `..` against the
-/// filesystem; Java throws `IOException` when resolution fails, the
-/// importers never catch that path separately, so on failure the port
+/// The canonical-path form — resolve symlinks + `..` against the
+/// filesystem; the official tooling throws when resolution fails, and the
+/// importers never catch that path separately, so on failure oxidizr
 /// falls back to the absolute form (an I/O-failure analogue).
 pub(crate) fn java_canonical(path: &std::path::Path) -> std::path::PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| java_absolute(path))
@@ -163,32 +163,32 @@ pub(crate) fn java_canonical(path: &std::path::Path) -> std::path::PathBuf {
 // The `!docs`/`!adrs` importer registry (P4-M2f)
 // ---------------------------------------------------------------------------
 
-/// FQN of `documentation/DefaultDocumentationImporter` — the `!docs`
-/// default (`DocsParser.DEFAULT_DOCUMENT_IMPORTER`).
+/// FQN of the default `!docs` documentation importer — the
+/// official default.
 pub const DEFAULT_DOCUMENTATION_IMPORTER: &str =
     "com.structurizr.importer.documentation.DefaultDocumentationImporter";
-/// FQN of `documentation/RecursiveDefaultDocumentationImporter`.
+/// FQN of the recursive `!docs` documentation importer.
 pub const RECURSIVE_DOCUMENTATION_IMPORTER: &str =
     "com.structurizr.importer.documentation.RecursiveDefaultDocumentationImporter";
-/// FQN of `documentation/DefaultImageImporter` — DSL-reachable through
-/// `!docs`; the eager variant (no-arg constructor).
+/// FQN of the default image importer — DSL-reachable through
+/// `!docs`; the eager variant.
 pub const DEFAULT_IMAGE_IMPORTER: &str =
     "com.structurizr.importer.documentation.DefaultImageImporter";
-/// FQN of `documentation/AdrToolsDecisionImporter` — the `!adrs` default
-/// (`DecisionsParser`: `DECISION_IMPORTERS.get("adrtools")`).
+/// FQN of the `AdrTools` decision importer — the `!adrs` default
+/// (`adrtools` token).
 pub const ADRTOLS_DECISION_IMPORTER: &str =
     "com.structurizr.importer.documentation.AdrToolsDecisionImporter";
-/// FQN of `documentation/MadrDecisionImporter`.
+/// FQN of the Madr decision importer.
 pub const MADR_DECISION_IMPORTER: &str =
     "com.structurizr.importer.documentation.MadrDecisionImporter";
-/// FQN of `documentation/Log4brainsDecisionImporter`.
+/// FQN of the Log4brains decision importer.
 pub const LOG4BRAINS_DECISION_IMPORTER: &str =
     "com.structurizr.importer.documentation.Log4brainsDecisionImporter";
 
-/// One of the six built-in importer classes the reference `loadClass`s
-/// (`DocumentationDslContext`/`DecisionsDslContext.end()`). Everything
-/// else is the `"… was not found"` arm (the JVM `URLClassLoader` over
-/// plugin jars is out of reach by design — D7/D2).
+/// One of the six built-in importer classes the official tooling loads
+/// by name when the DSL contexts close. Everything
+/// else is the `"… was not found"` arm (a plugin class loader is
+/// out of reach by design).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportTarget {
     /// `DefaultDocumentationImporter` — `!docs` default.
@@ -219,8 +219,8 @@ pub fn resolve_importer(fqn: &str) -> Option<ImportTarget> {
     }
 }
 
-/// `DecisionsParser.DECISION_IMPORTERS.getOrDefault(token, token)` — the
-/// three aliases are case-SENSITIVE (Java `HashMap<String,String>`); any
+/// The decision-importer token lookup (default: the token itself) — the
+/// three aliases are case-SENSITIVE (a string-keyed table); any
 /// other token passes through as the FQN to resolve.
 #[must_use]
 pub fn decision_importer_fqn(token: &str) -> String {
@@ -257,9 +257,9 @@ mod tests {
     use super::ImportFormat;
 
     /// The sniff table (moved from `oxidizr-api`'s private `sniff_format`
-    /// at §P4-R2 — behavior byte-identical): the three macro families,
-    /// case-insensitive extension match, image fallback via the reference
-    /// `ImageUtils` table, and the two `None` arms the CLI turns into the
+    /// earlier — behavior byte-identical): the three macro families,
+    /// case-insensitive extension match, image fallback via the official
+    /// image-utils table, and the two `None` arms the CLI turns into the
     /// "pass --format" usage error.
     #[test]
     fn sniff_format_table() {

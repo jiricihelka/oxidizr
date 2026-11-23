@@ -1,16 +1,15 @@
-//! The headless command pipeline (Phase 1T T0-d, `agents/plan/build/PHASE_1T.md`
-//! P1T-D1): every P1 command body, ported verbatim from `oxidizr-cli` so the
-//! binary and the e2e suite share one implementation.
+//! The headless command pipeline: every command body lives here, so the
+//! binary and the in-process test suite share one implementation.
 //!
 //! Contract ([`execute`]): values in / values out — never panics, never
-//! renders, never touches the process env (hermetic [`oxidizr_dsl::engine::EnvLookup`]
-//! map, `None` = production V-3 behavior) or stdout/stderr. All human output
-//! rides the ordered [`Outcome::log`] (miette rendering and stream choice
-//! stay CLI concerns) plus [`Outcome::bytes`] for stdout payloads. File
-//! effects mirror the CLI exactly: inputs read from disk (`Input::File`,
-//! canonicalized like the reference path semantics), `-o` rewrites and
-//! `FmtMode::Write` in-place updates; `Input::Stdin` is resolved through the
-//! injected [`StdinReader`] at the same point the old code read stdin (so a
+//! renders, never touches the process env (hermetic
+//! [`oxidizr_dsl::engine::EnvLookup`] map, `None` = read the process
+//! environment) or stdout/stderr. All human output rides the ordered
+//! [`Outcome::log`] (miette rendering and stream choice stay CLI concerns)
+//! plus [`Outcome::bytes`] for stdout payloads. File effects mirror the
+//! CLI: inputs read from disk (`Input::File`, canonicalized), `-o`
+//! rewrites and `FmtMode::Write` in-place updates; `Input::Stdin` is
+//! resolved lazily through the injected [`StdinReader`] (so a
 //! `fmt --write -` usage exit never blocks on an open pipe).
 
 use std::collections::BTreeMap;
@@ -31,15 +30,15 @@ use crate::suggest;
 // Public surface
 // ---------------------------------------------------------------------------
 
-/// Exit classes of the P1-D8 contract (`code()` maps to the process codes).
+/// Exit classes of the CLI contract (`code` maps to the process codes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitClass {
     /// Success.
     Ok,
     /// Diagnostics with an error (or a warning under `--strict`) — 1.
     Diagnostics,
-    /// Differences found (the `diff` command; the documented P4-D1
-    /// extension of the P1-D8 contract, GNU-diff convention) — 1.
+    /// Differences / violations found (`diff`, `inspect`) — an extension
+    /// of the exit-code family following the GNU-diff convention — 1.
     Differences,
     /// Usage error (the `fmt --write -` family; clap exits 2 before `execute`).
     Usage,
@@ -53,8 +52,8 @@ impl ExitClass {
     pub fn code(self) -> i32 {
         match self {
             ExitClass::Ok => 0,
-            // `Differences` shares code 1 with `Diagnostics` (the P4-D1
-            // extension keeps the P1-D8 contract's codes).
+            // `Differences` shares code 1 with `Diagnostics`: the
+            // extension keeps the exit-code family's codes.
             ExitClass::Diagnostics | ExitClass::Differences => 1,
             ExitClass::Usage => 2,
             ExitClass::Io => 3,
@@ -64,7 +63,7 @@ impl ExitClass {
 
 /// One human-output item in emission order. The CLI replay writes: issues
 /// through the miette renderer (stderr), `OkLine` to stdout, `NoteLine` to
-/// stderr — the stream split the command bodies used before extraction.
+/// stderr.
 #[derive(Debug, Clone)]
 pub enum LogItem {
     /// Diagnostic (severity decides `--strict` blocking, already applied to
@@ -77,9 +76,9 @@ pub enum LogItem {
 }
 
 /// Where a command reads its input from. `Bytes` carries stdin *semantics*
-/// (no engine-visible file context — the reference `parse(String)` quirks
-/// hold); `Stdin` is resolved lazily through [`ApiOptions::stdin`] exactly
-/// where the pre-extraction code reached for stdin.
+/// (no engine-visible file context — the official tooling's string-input
+/// behavior holds); `Stdin` is resolved lazily through
+/// [`ApiOptions::stdin`].
 #[derive(Debug, Clone)]
 pub enum Input {
     /// Read from disk (canonicalized for engine messages, like the CLI).
@@ -93,48 +92,48 @@ pub enum Input {
 /// Reads the process stdin (CLI injects this; total — errors as values).
 pub type StdinReader = fn() -> Result<Vec<u8>, Issue>;
 
-/// The parse/load flag family (grouped at §P4-R3: both steer how sources
+/// The parse/load flag family: both steer how sources
 /// enter the model — `strict` turns load warnings into a block,
-/// `keep_unknown` extends the JSON reader with the D3 superset; the group
+/// `keep_unknown` extends the JSON reader with the superset; the group
 /// keeps [`ApiOptions`] within the `struct_excessive_bools` bound without
 /// modelling flags as enums).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ParseFlags {
     /// `--strict`: warnings block (exit 1).
     pub strict: bool,
-    /// `--keep-unknown`: D3 superset round-trip (`json2json`).
+    /// `--keep-unknown`: superset round-trip (`json2json`).
     pub keep_unknown: bool,
 }
 
-/// Flags the command bodies consume (P1-D8 global flags; extension by
+/// Flags the command bodies consume (global flags; extension by
 /// addition only).
 #[derive(Debug, Clone, Default)]
 pub struct ApiOptions {
-    /// The parse/load family (`--strict` / `--keep-unknown`, §P4-R3).
+    /// The parse/load family (`--strict` / `--keep-unknown`).
     pub parse: ParseFlags,
-    /// Hermetic `${VAR}` map (Phase 1T); `None` = the V-3 process-env
+    /// Hermetic `${VAR}` map; `None` = the process-env
     /// default the production CLI keeps.
     pub env: Option<BTreeMap<String, String>>,
     /// `Input::Stdin` resolver; `None` rejects stdin inputs with a clean
     /// OXZ-5006 error (e2e never sends `Stdin`).
     pub stdin: Option<StdinReader>,
-    /// `--allow-net` (D5, ships P2-M1): permits the theme-URL fetch in the
+    /// `--allow-net`: permits the theme-URL fetch in the
     /// `export` diagram branch (`ThemeUtils.loadThemes` mirror). Without it
     /// a `themes` URL fails OXZ-5001; parse-time URL inputs (`!include`,
     /// `extends`) keep the hardened P1 behavior regardless (`PHASE_2.md`
-    /// P2-D3 item 3 — the flag applies to theme URLs).
+    /// item 3 — the flag applies to theme URLs).
     pub allow_net: bool,
     /// `--themes-dir <dir>`: highest-priority installed-theme source
-    /// (`<dir>/<name>/theme.json`, P2-D3); `None` starts the chain at
+    /// (`<dir>/<name>/theme.json`); `None` starts the chain at
     /// `OXIDZR_THEMES_DIR`.
     pub themes_dir: Option<std::path::PathBuf>,
-    /// Paint the `diff` human report (± colors, §P4-M0 D-3). The CLI fills
+    /// Paint the `diff` human report (± colors). The CLI fills
     /// it from `!no_color && NO_COLOR unset` (the `report::Renderer` rule);
     /// the default stays PLAIN so API / e2e bytes are stable.
     pub color: bool,
 }
 
-/// `oxidizr diff` report shape (§P4-M0 D-3, typed at the API edge §P4-R3
+/// `oxidizr diff` report shape (typed at the API edge
 /// like the `Query` enums): the human ± report (default) or the schema-1
 /// JSON document (`docs/diff-schema.md`). The CLI `DiffCmdFormat` clap
 /// enum maps onto it 1:1.
@@ -147,8 +146,8 @@ pub enum DiffFormat {
     Json,
 }
 
-/// `oxidizr inspect` report shape (§P4-M1 I-4, typed at the API edge
-/// §P4-R3): the reference `type | SEVERITY | message` lines (default) or
+/// `oxidizr inspect` report shape (typed at the API edge):
+/// the official tooling `type | SEVERITY | message` lines (default) or
 /// the schema-1 violations document (`docs/inspect-schema.md`). The CLI
 /// `InspectCmdFormat` clap enum maps onto it 1:1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -160,7 +159,7 @@ pub enum InspectFormat {
     Json,
 }
 
-/// `fmt` modes (P1-D8): default prints to stdout (→ [`Outcome::bytes`]),
+/// `fmt` modes: default prints to stdout (→ [`Outcome::bytes`]),
 /// `Write` rewrites files in place (the only side-effecting mode), `Check`
 /// lists unformatted inputs and exits 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,7 +172,7 @@ pub enum FmtMode {
     Check,
 }
 
-/// One command invocation — the argv surface of P1-D8 in value form.
+/// One command invocation — the argv surface of in value form.
 #[derive(Debug, Clone)]
 pub enum Request {
     /// Parse DSL, emit standard JSON.
@@ -183,7 +182,7 @@ pub enum Request {
         /// Output file (`None` = stdout bytes on the outcome).
         output: Option<PathBuf>,
     },
-    /// Re-serialize standard JSON (normalization / D3 superset).
+    /// Re-serialize standard JSON (normalization / superset).
     Json2Json {
         /// JSON source.
         input: Input,
@@ -195,14 +194,14 @@ pub enum Request {
         /// Workspace files (at least one — like clap).
         files: Vec<PathBuf>,
     },
-    /// Reformat DSL sources (P1-D7 printer).
+    /// Reformat DSL sources (printer).
     Fmt {
         /// Inputs (empty never happens: the CLI maps "no files" to `[Stdin]`).
         inputs: Vec<Input>,
         /// Mode.
         mode: FmtMode,
     },
-    /// Re-attach layout JSON to a re-parsed DSL (F1).
+    /// Re-attach layout JSON to a re-parsed DSL .
     Reconcile {
         /// Edited DSL (model authority).
         dsl: Input,
@@ -211,19 +210,19 @@ pub enum Request {
         /// Output file (`None` = stdout bytes).
         output: Option<PathBuf>,
     },
-    /// Export the workspace (`export`, Phase 2): format strings per the
-    /// reference CLI (`theme`, `json`, `plantuml…`, `mermaid`, …).
+    /// Export the workspace (`export`): format strings per the
+    /// the official tooling CLI (`theme`, `json`, `plantuml…`, `mermaid`, …).
     Export {
-        /// Workspace file (`.dsl` or `.json`) — the reference requires a
+        /// Workspace file (`.dsl` or `.json`) — the official tooling requires a
         /// file path (no stdin).
         workspace: PathBuf,
         /// Raw `--format` value (lowercased and parsed by `ExportFormat`).
         format: String,
         /// Output directory (`None` = the workspace file's directory,
-        /// created as needed — reference `ExportCommand`).
+        /// created as needed — the official tooling `ExportCommand`).
         output: Option<PathBuf>,
     },
-    /// Compare two workspaces (`diff`, F3, §P4-M0): both sides load via
+    /// Compare two workspaces (`diff`, F3): both sides load via
     /// [`crate::open::open`] (extension dispatch, partial DSL opens ride
     /// the log), then the pure engine in [`crate::diff`] decides.
     Diff {
@@ -239,8 +238,8 @@ pub enum Request {
         /// `--quiet`: exit code only (no bytes, no log chatter).
         quiet: bool,
     },
-    /// Report the reference inspections over one workspace (`inspect`,
-    /// F-inspect-parity, §P4-M1): loaded via [`crate::open::open`] (like
+    /// Report the official tooling inspections over one workspace (`inspect`,
+    /// F-inspect-parity): loaded via [`crate::open::open`] (like
     /// [`Request::Diff`]), then the pure engine in [`oxidizr_inspect`]
     /// decides. Exit [`ExitClass::Differences`] iff any violation is
     /// REPORTED after the filters.
@@ -261,33 +260,32 @@ pub enum Request {
         /// `--quiet`: exit code only (no bytes, no log chatter).
         quiet: bool,
     },
-    /// Import one diagram into a fresh workspace (`import`, F12,
-    /// §P4-M2 N-4): the C4-`PlantUML`/`Mermaid` macro legs produce the
+    /// Import one diagram into a fresh workspace (`import`):
+    /// the C4-`PlantUML`/`Mermaid` macro legs produce the
     /// MODEL ONLY (no view kind hosts a mixed C4 set — the default views
     /// install at open, see `oxidizr_import::c4plantuml`); the image leg
-    /// is the reference `ImageImporter` port (one `ImageView`).
+    /// is the official tooling `ImageImporter` oxidizr (one `ImageView`).
     Import {
         /// Diagram source. Sniffing the format from the name needs
         /// [`Input::File`]; nameless inputs require `format`.
         input: Input,
         /// Import format; `None` = sniffed from the file name
         /// (`.puml`/`.iuml`/`.c4p` → C4-`PlantUML`, `.mmd`/`.mermaid` →
-        /// `Mermaid`, the reference image extensions → image).
+        /// `Mermaid`, the official tooling image extensions → image).
         format: Option<ImportFormat>,
         /// `ImageView` key (image leg; empty/absent ⇒ generated
-        /// `Image-001`, reference `generateViewKey`).
+        /// `Image-001`, the official tooling `generateViewKey`).
         view_key: Option<String>,
         /// `ImageView` title (image leg; absent ⇒ the file name).
         view_name: Option<String>,
         /// Output file (`None` = stdout bytes).
         output: Option<PathBuf>,
     },
-    /// Query one workspace with the DSL filter grammar (`query`, F6,
-    /// §P4-M3 O-1): model items through [`oxidizr_dsl::query`] (the
-    /// pinned `ExpressionParser` port), views through the documented
+    /// Query one workspace with the DSL filter grammar (`query`): model items
+    /// pinned expression evaluator oxidizr), views through the documented
     /// key/title/description subset (`docs/query-schema.md`). Zero
     /// matches is success — `query` is informational; a THROWING grammar
-    /// arm exits [`ExitClass::Diagnostics`] (the P4-D1 exit family).
+    /// arm exits [`ExitClass::Diagnostics`] (the exit family).
     Query {
         /// Workspace file (`.dsl` or `.json`) — a file path, like `diff`.
         workspace: PathBuf,
@@ -301,7 +299,7 @@ pub enum Request {
         /// Output file (`None` = stdout bytes).
         output: Option<PathBuf>,
     },
-    /// Scaffold a starter project (`init`, F7, §P4-M3 O-2, P4-D4): the
+    /// Scaffold a starter project (`init`, F7): the
     /// embedded template files (`include_str!` — zero network, zero new
     /// deps) written into `dir` (created when missing). Idempotent:
     /// existing files are SKIPPED with a note unless `force`; the human
@@ -316,15 +314,15 @@ pub enum Request {
         force: bool,
     },
     /// Derive the system landscape of 1..N workspaces (`generate
-    /// system-landscape`, §P4-M3 O-4, P4-D9): the
-    /// [`crate::generate::system_landscape`] port — app-layer ONLY, and
-    /// the oracle witness settled that the reference adds NO views. The
+    /// system-landscape`): the
+    /// [`crate::generate::system_landscape`] oxidizr — app-layer ONLY, and
+    /// the verification settled that the official tooling adds NO views. The
     /// output is ALWAYS standard JSON (regardless of the `-o` name).
     Generate {
         /// Input paths (1..N; the CLI enforces): directories are scanned
         /// recursively (sorted; `include`/`exclude` full-path filters),
         /// explicit files always load (documented deviation — the
-        /// reference applied its include to a single `-i` file too).
+        /// the official tooling applied its include to a single `-i` file too).
         inputs: Vec<PathBuf>,
         /// `--include` pattern (default [`crate::generate::DEFAULT_INCLUDE`]).
         include: Option<String>,
@@ -362,7 +360,7 @@ impl Default for Outcome {
     }
 }
 
-/// A command body's abort (2R R-mis-01): the [`Outcome`] as accumulated
+/// A command body's abort: the [`Outcome`] as accumulated
 /// when the command stopped — the partial log included — with the failing
 /// issue appended and the exit class set. Exactly what the old
 /// `out.fail(issue, class); return out` ladders handed back as the final
@@ -383,7 +381,7 @@ impl Fail {
 
 impl Outcome {
     /// Record the failing issue on the accumulated state and abort with
-    /// it (2R R-mis-01 — the `?` arm of every former fail ladder; takes a
+    /// it (— the `?` arm of every former fail ladder; takes a
     /// copy so the accumulator itself is never half-mutated).
     fn fail(&self, issue: Issue, exit: ExitClass) -> Fail {
         let mut out = self.clone();
@@ -397,13 +395,13 @@ impl Outcome {
 /// CLI contract already had (`-o` writes, `FmtMode::Write`).
 #[must_use]
 pub fn execute(request: Request, opts: &ApiOptions) -> Outcome {
-    // 2R R-mis-01: the bodies run in Result shape ([`Fail`] carries the
+    // the bodies run in Result shape ([`Fail`] carries the
     // partial outcome the old `out.fail(…); return out` ladders returned);
     // the frozen byte contract flattens it back at this boundary.
     command(request, opts).unwrap_or_else(|fail| fail.0)
 }
 
-/// Dispatch (2R R-mis-01): every former fail-laddered body returns the
+/// Dispatch: every former fail-laddered body returns the
 /// finished [`Outcome`] or the [`Fail`] it stopped at; `validate` has no
 /// fail legs (its per-file loop keeps the errors as data), so it wraps.
 fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
@@ -485,7 +483,7 @@ fn command(request: Request, opts: &ApiOptions) -> Result<Outcome, Fail> {
 // ---------------------------------------------------------------------------
 
 /// `oxidizr-json` as the engine's `.json` base loader for
-/// `workspace extends <file.json>` (topology P1-D1: the dsl crate must not
+/// `workspace extends <file.json>` (topology: the dsl crate must not
 /// depend on json — the pipeline injects it here).
 fn json_loader(path: &str) -> Result<Workspace, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("Error reading file at {path}: {e}"))?;
@@ -493,7 +491,7 @@ fn json_loader(path: &str) -> Result<Workspace, String> {
 }
 
 /// One decoded input: engine-visible file path (canonical, `None` for stdin
-/// so the reference `parse(String)` quirks hold) + UTF-8 text + display name.
+/// so the official tooling `parse(String)` quirks hold) + UTF-8 text + display name.
 pub(crate) struct Source {
     pub(crate) file: Option<String>,
     pub(crate) text: String,
@@ -546,7 +544,7 @@ pub(crate) fn read_input(input: &Input, opts: &ApiOptions) -> Result<Source, Iss
     }
 }
 
-/// V-8 (resolved): UTF-8 only at v0.1 — no `--encoding` flag; the reference
+/// V-8 (resolved): UTF-8 only at v0.1 — no `--encoding` flag; the official tooling
 /// `parse(File)` reads the platform charset, oxidizr pins UTF-8 and fails
 /// loudly instead of garbling.
 fn decode(bytes: &[u8], name: &str) -> Result<String, Issue> {
@@ -574,9 +572,9 @@ pub(crate) fn parse_dsl_input(input: &Source, opts: &ApiOptions) -> Result<Parse
         let map = map.clone();
         EnvLookup::new(move |name| map.get(name).cloned())
     });
-    // M1-d (P2-D3): the installed-theme registry is built BEFORE parsing —
-    // reference `AbstractCommand` order — and injected as the parser's
-    // installed-name check (`ThemeParser.addTheme`).
+    // The installed-theme registry is built BEFORE parsing —
+    // the official order — and injected as the parser’s
+    // installed-name check.
     let store = theme_store(input.file.as_deref(), opts);
     let installed_themes = Some(oxidizr_dsl::engine::InstalledThemes::new(move |name| {
         store.is_installed(name)
@@ -598,19 +596,19 @@ pub(crate) fn parse_dsl_input(input: &Source, opts: &ApiOptions) -> Result<Parse
     parse_dsl(&input.text, opts).map_err(|e| suggest::decorate(Issue::from_dsl(&e), None))
 }
 
-/// `AbstractCommand.loadWorkspace`'s tail (M1-e-B): after the shared load —
-/// DSL and JSON legs alike — the reference creates default views when the
-/// model is non-empty but the view set is empty (`!model.isEmpty() &&
-/// views.isEmpty()`; `Model.isEmpty` covers people + software systems +
+/// The load tail: after the shared load —
+/// DSL and JSON legs alike — the official tooling creates default views when the
+/// model is non-empty but the view set is empty (`!model.isEmpty &&
+/// views.isEmpty`; `Model.isEmpty` covers people + software systems +
 /// deployment nodes only, `ViewSet.isEmpty` all nine collections), before
 /// the workspace reaches the command. Applied where the load result becomes
 /// observable: `dsl2json`/`json2json` serialization and the `export` loader.
 /// `validate` deliberately does NOT hook: its violations mirror the
-/// reference steps that run BEFORE this tail (`WorkspaceScopeValidator`,
-/// `DefaultInspector`), and the reference `ValidateCommand` never serializes
+/// the official tooling steps that run BEFORE this tail (`WorkspaceScopeValidator`,
+/// `DefaultInspector`), and the official tooling `ValidateCommand` never serializes
 /// the views — creating them could only add noise to our added-feature
 /// diagnostics. `create_default_views` mirrors `ViewSet.createDefaultViews`;
-/// its `Err` is the reference's unguarded throw (aborts the command there),
+/// its `Err` is the official tooling’s unguarded throw (aborts the command there),
 /// so the workspace is restored and the failure surfaces as exit 1.
 pub(crate) fn apply_default_views(workspace: &mut Workspace) -> Result<(), Issue> {
     let model_empty = workspace.model.people.is_empty()
@@ -627,12 +625,12 @@ pub(crate) fn apply_default_views(workspace: &mut Workspace) -> Result<(), Issue
 }
 
 /// The install-chain of `AbstractCommand.installThemes` + `ThemeUtils`
-/// (P2-D3, catalog `EXPORT-PROPERTIES.md` §6.2): source order
+/// (catalog `EXPORT-PROPERTIES.md` §6.2): source order
 /// `--themes-dir` → `OXIDZR_THEMES_DIR` → `<workspace-parent>/themes` →
 /// `STRUCTURIZR_THEMES`, first directory wins. The env closure is the
 /// hermetic [`ApiOptions::env`] map when set (in-process runs never leak
-/// the process environment), the process environment otherwise (V-3).
-/// Non-file inputs (`Bytes`/stdin) skip the directory probe — the reference
+/// the process environment), the process environment otherwise .
+/// Non-file inputs (`Bytes`/stdin) skip the directory probe — the official tooling
 /// has no such input flow, and a CWD probe would break hermetic purity.
 fn theme_store(input_file: Option<&str>, opts: &ApiOptions) -> oxidizr_export::ThemeStore {
     let parent = input_file
@@ -656,7 +654,7 @@ fn push_issues(out: &mut Outcome, issues: Vec<Issue>) {
     out.log.extend(issues.into_iter().map(LogItem::Issue));
 }
 
-/// The D1 statement-error decoration ladder (2R R-mis-05: one helper for
+/// The statement-error decoration ladder (one helper for
 /// the old ×4 duplicate): every recorded statement error becomes a
 /// `did you mean`-decorated issue against the repaired workspace.
 pub(crate) fn statement_errors(result: &ParseResult) -> Vec<Issue> {
@@ -688,7 +686,7 @@ fn dsl2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<O
     let source = read_input(input, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
     let result = parse_dsl_input(&source, opts).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
     if !result.errors.is_empty() {
-        // D1 recovery: all recorded statement errors render; the reference
+        // statement recovery: all recorded statement errors render; the official tooling
         // export would have aborted on the first one — no partial output.
         push_issues(&mut out, statement_errors(&result));
         out.exit = ExitClass::Diagnostics;
@@ -711,8 +709,8 @@ fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<
     let source = read_input(input, opts).map_err(|e| out.fail(e, ExitClass::Io))?;
     let bytes = source.text.as_bytes();
     if opts.parse.keep_unknown {
-        // D3 superset mode: unknown / legacy / writer-omitted members ride
-        // through verbatim (output intentionally non-parity — the reference
+        // superset mode: unknown / legacy / writer-omitted members ride
+        // through verbatim (output intentionally non-parity — the official tooling
         // load tail, default views included, is part of the parity contract
         // only).
         let kept = oxidizr_json::roundtrip_keep_unknown(bytes).map_err(|e| {
@@ -741,7 +739,7 @@ fn json2json(input: &Input, output: Option<&Path>, opts: &ApiOptions) -> Result<
     Ok(out)
 }
 
-/// `reconcile` (F1, P1-D8): re-parse the edited DSL (the model authority),
+/// `reconcile` (F1): re-parse the edited DSL (the model authority),
 /// load the pre-edit layout JSON (the geometry authority), remap ids
 /// (identifier exact → canonical fallback, ambiguity = OXZ-3002, never
 /// guessed) and graft the layout. The standard JSON is emitted FIRST (the
@@ -768,10 +766,10 @@ fn reconcile_cmd(
             ExitClass::Diagnostics,
         )
     })?;
-    // The `AbstractCommand.loadWorkspace` tail (M1-e-B) on BOTH reconcile
-    // sides: the reference creates default views after every load, so a
+    // The load tail on BOTH reconcile
+    // sides: the official tooling creates default views after every load, so a
     // layout export carrying generated views must not drop them against a
-    // DSL whose views would be generated (P2T full-tier catch, 2026-11-18).
+    // DSL whose views would be generated (P2T full-tier catch).
     let mut updated = result.workspace;
     apply_default_views(&mut updated).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
     apply_default_views(&mut layout_ws).map_err(|e| out.fail(e, ExitClass::Diagnostics))?;
@@ -798,7 +796,7 @@ fn reconcile_cmd(
     Ok(out)
 }
 
-/// `validate`: format by extension (P1-D8), DSL parse or JSON read + hydrate,
+/// `validate`: format by extension, DSL parse or JSON read + hydrate,
 /// then the M2 validation catalog on the loaded workspace. Exit: `Diagnostics`
 /// when any issue blocks (severity vs `--strict`), else `Io` on I/O trouble,
 /// else `Ok`.
@@ -885,10 +883,10 @@ fn validate(files: &[PathBuf], opts: &ApiOptions) -> Outcome {
 /// The `export` loader — the `validate` file loader for ONE path: read by
 /// extension (`.dsl` → parse, `.json` → `oxidizr_json::from_slice`),
 /// returning the source (for error spans) plus the workspace. Failures
-/// RETURN as [`Fail`] (2R R-mis-01: the old shape mutated the caller's
+/// RETURN as [`Fail`] (the old shape mutated the caller's
 /// accumulator and answered `Option`); unblocked DSL statement errors ride
 /// out as the third tuple leg — they join the final log but do NOT stop
-/// the export (D1 recovery carries the repaired workspace, `--strict`
+/// the export (statement recovery carries the repaired workspace, `--strict`
 /// blocks).
 fn load_export_workspace(
     workspace_file: &Path,
@@ -943,24 +941,24 @@ fn load_export_workspace(
     Ok((source, workspace, recovered))
 }
 
-/// `export` (P2-D10, Phase 2 M0): load the workspace by extension (the
+/// `export`: load the workspace by extension (the
 /// `validate` loader), resolve the output directory exactly like
 /// `ExportCommand` (default = the canonicalized workspace parent; `mkdirs`
 /// happens BEFORE format dispatch, so it is created even for formats that
 /// then fail), and write every exported file verbatim, logging a
-/// `Writing <path>` line per file. Dispatch follows the reference registry:
-/// `theme` and `json` are implemented (M0) with the Structurizr `plantuml`
-/// diagram leg (M2-d — id-keyed per-view, `-key` legend and numbered frame
-/// files, and the reference's viewless `log.error` branch), the C4
-/// dialect (M3-b — no legend files, custom views skipped) and the Mermaid
-/// exporter (M4-b — `.mmd` files, custom views exported, the standalone
+/// `Writing <path>` line per file. Dispatch follows the official tooling registry:
+/// `theme` and `json` are implemented with the Structurizr `plantuml`
+/// diagram leg (id-keyed per-view, `-key` legend and numbered frame
+/// files, and the official tooling’s viewless `log.error` branch), the C4
+/// dialect (no legend files, custom views skipped) and the Mermaid
+/// exporter (`.mmd` files, custom views exported, the standalone
 /// `sequenceDiagram` form) and the `WebSequenceDiagrams` exporter (P4
-/// §P4-M2 N-5 — `.wsd` files, custom + dynamic views only); the unlanded
+///  — `.wsd` files, custom + dynamic views only); the unlanded
 /// registry formats (`static`) raise OXZ-5007; unknown strings mirror the
-/// reference's class-load miss — `Unknown export format: …`, exit 0. Theme
-/// pre-loading (`ThemeUtils.loadThemes`, P2-D3, M1-d) runs for
+/// the official tooling’s class-load miss — `Unknown export format: …`, exit 0. Theme
+/// theme pre-loading runs for
 /// `DiagramExporter` formats BEFORE the export attempt — exactly the
-/// reference order, so a broken theme (or a URL without `--allow-net`)
+/// the official tooling order, so a broken theme (or a URL without `--allow-net`)
 /// reports OXZ-5008/OXZ-5001 ahead of the format's OXZ-5007.
 fn export_cmd(
     workspace_file: &Path,
@@ -975,9 +973,9 @@ fn export_cmd(
     push_issues(&mut out, recovered);
 
     // `ExportCommand`: canonical parent of the workspace file; `mkdirs`
-    // before the format dispatch (reference does it before `findExporter`).
+    // before the format dispatch (the official tooling does it before `findExporter`).
     // Canonicalization can only fail for a file we just read — fall back to
-    // the CWD instead of the reference's NPE crash.
+    // the CWD instead of the official tooling’s null-pointer crash crash.
     let out_dir = match output {
         Some(dir) => dir.to_path_buf(),
         None => std::fs::canonicalize(workspace_file)
@@ -997,7 +995,7 @@ fn export_cmd(
 
     let export_format = oxidizr_export::ExportFormat::parse(format);
     if !export_format.is_known() {
-        // The reference tries to class-load the format string, logs
+        // The the official tooling tries to class-load the format string, logs
         // `Unknown export format: …` and STILL returns true — exit 0.
         out.log.push(LogItem::NoteLine(format!(
             "Unknown export format: {}",
@@ -1007,9 +1005,9 @@ fn export_cmd(
     }
     if export_format.is_diagram() {
         // `ExportCommand` 222-227: `ThemeUtils.loadThemes` BEFORE the export
-        // — reference order, so theme failures precede any export error the
+        // — the official tooling order, so theme failures precede any export error the
         // diagram format itself raises. Themes append to the non-serialized
-        // `Styles.themes` (resolution-time only, P2-D2).
+        // `Styles.themes` (resolution-time only).
         let store = theme_store(workspace_file.to_str(), opts);
         if let Err(e) = store.load_themes(&mut workspace) {
             let code = match &e {
@@ -1072,10 +1070,10 @@ fn export_cmd(
     Ok(out)
 }
 
-/// `fmt`: reformat DSL sources to the canonical P1-D7 style. The printer is
+/// `fmt`: reformat DSL sources to the canonical style. The printer is
 /// `oxidizr_dsl::fmt::format` (it never validates — an invalid statement is
 /// re-printed token-identically and fails to parse exactly as before).
-/// Modes (P1-D8): [`FmtMode::Print`] concatenates formatted text into
+/// Modes: [`FmtMode::Print`] concatenates formatted text into
 /// [`Outcome::bytes`]; [`FmtMode::Write`] rewrites files in place, only when
 /// they change (the only file effect); [`FmtMode::Check`] lists the
 /// unformatted inputs and exits `Diagnostics`. Stdin has no in-place target:
@@ -1089,7 +1087,7 @@ fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Result<Outco
     for input in inputs {
         let stdin_like = matches!(input, Input::Stdin | Input::Bytes(_));
         if mode == FmtMode::Write && stdin_like {
-            // usage error (P1-D8 code 2), not an I/O failure — 2R R-mis-01
+            // usage error (code 2), not an I/O failure —
             // aborts with the partial outcome the earlier files emitted.
             return Err(out.fail(
                 Issue::error(
@@ -1144,11 +1142,11 @@ fn fmt_cmd(inputs: Vec<Input>, mode: FmtMode, opts: &ApiOptions) -> Result<Outco
     Ok(out)
 }
 
-/// `diff` (F3, §P4-M0 D-3): load BOTH sides through [`crate::open::open`]
+/// `diff` (F3): load BOTH sides through [`crate::open::open`]
 /// (extension dispatch, `.dsl`/`.json`; a recoverable DSL opens partially —
-/// its diagnostics ride the log INFORMATIONALLY, the reference has no `diff`
+/// its diagnostics ride the log INFORMATIONALLY, the official tooling has no `diff`
 /// so no parity rule binds them), run the pure engine, and carry the result:
-/// `Differences` (exit 1, the documented P4-D1 extension) when any category
+/// `Differences` (exit 1, the documented extension) when any category
 /// is non-empty, `Ok` otherwise. [`DiffFormat::Json`] rides
 /// [`Outcome::bytes`] as the schema-1 document (`docs/diff-schema.md`);
 /// [`DiffFormat::Human`] is the ± report, painted per
@@ -1200,16 +1198,16 @@ fn diff_cmd(
     Ok(out)
 }
 
-/// `oxidizr inspect` (§P4-M1 I-4): load via [`crate::open::open`] (same
+/// `oxidizr inspect`: load via [`crate::open::open`] (same
 /// partial-DSL-open semantics as [`Request::Diff`]), run the pure engine
 /// in [`oxidizr_inspect`], then filter and report. The engine output IS
 /// the contract (run order, verbatim messages); this body decides only
 /// what is REPORTED:
-/// - `ignore` severity NEVER (the reference counts it, never prints it),
+/// - `ignore` severity NEVER (the official tooling counts it, never prints it),
 /// - the threshold keeps violations at or above its rank,
 /// - `--only` (when non-empty) BEFORE `--except`, exact type match.
 ///
-/// Exit is [`ExitClass::Differences`] iff anything survives — the P4-D1
+/// Exit is [`ExitClass::Differences`] iff anything survives — the
 /// family, same process code 1 as `diff`.
 fn inspect_cmd(
     workspace: &Path,
@@ -1263,8 +1261,8 @@ fn inspect_cmd(
             .map_err(|e| Fail::new(Issue::error(codes::CLI_IO, e.to_string()), ExitClass::Io))?;
         out.bytes = Some(format!("{doc}\n").into_bytes());
     } else if !reported.is_empty() {
-        // Silent when clean, like `diff` and like the reference CLI; one
-        // `type | SEVERITY | message` line per violation (`toString`).
+        // Silent when clean, like `diff` and like the official tooling CLI; one
+        // `type | SEVERITY | message` line per violation.
         let mut text = reported
             .iter()
             .map(|v| inspect_human_line(v, opts.color))
@@ -1277,11 +1275,11 @@ fn inspect_cmd(
     Ok(out)
 }
 
-/// The `import` body (§P4-M2 N-4, F12): ONE diagram → a fresh workspace
+/// The `import` body: ONE diagram → a fresh workspace
 /// through `oxidizr-import`. Format: `--format` else
 /// [`oxidizr_import::ImportFormat::sniff`];
 /// the importers' skip notes ride [`Outcome::log`] (warning-and-skip,
-/// never fail-all — P4-D8 R-1); the workspace bytes go through the
+/// never fail-all — R-1); the workspace bytes go through the
 /// standard writer exactly like `dsl2json`. Macro legs produce the MODEL
 /// ONLY (the default views install at open — the read-check below);
 /// `--view-key`/`--view-name` are image-leg options.
@@ -1323,7 +1321,7 @@ fn import_cmd(
         }
     };
     let imported = if format == ImportFormat::Image {
-        // The reference `ImageImporter` reads the bytes off disk, so the
+        // The the official tooling `ImageImporter` reads the bytes off disk, so the
         // image leg has no stdin form.
         let Input::File(path) = input else {
             return Err(out.fail(
@@ -1358,15 +1356,15 @@ fn import_cmd(
     Ok(out)
 }
 
-/// `oxidizr query` (§P4-M3 O-1, F6): load via [`crate::open::open`]
+/// `oxidizr query`: load via [`crate::open::open`]
 /// (like `diff`/`inspect` — a `.dsl` installs the default views, so
 /// `SystemLandscape-001`-style generated keys are queryable), evaluate
 /// the filter through [`oxidizr_dsl::query`] (the pinned
-/// `ExpressionParser` port), render the matched classes with
+/// expression evaluator oxidizr), render the matched classes with
 /// [`crate::query`]. Zero matches is success — `query` is informational
 /// (unlike `diff`/`inspect`, which exit 1 on findings); a THROWING
-/// grammar arm is a diagnostics failure with the reference message,
-/// never a new diagnostic code (the corpus gate stays untouched, P4-D12).
+/// grammar arm is a diagnostics failure with the official tooling message,
+/// never a new diagnostic code (the corpus gate stays untouched).
 fn query_cmd(
     workspace: &Path,
     filter: &str,
@@ -1393,7 +1391,7 @@ fn query_cmd(
     Ok(out)
 }
 
-/// `oxidizr init` (§P4-M3 O-2, F7, P4-D4): write the [`crate::init`]
+/// `oxidizr init` (F7): write the [`crate::init`]
 /// scaffold into `dir` (created when missing). Idempotent — existing
 /// files are skipped with a note unless `force`; every existing-file
 /// note keeps exit `Ok` (nothing failed). The report is RELATIVE paths
@@ -1435,16 +1433,16 @@ fn init_cmd(dir: &Path, template: crate::init::InitTemplate, force: bool) -> Res
     Ok(out)
 }
 
-/// `oxidizr generate system-landscape` (§P4-M3 O-4, P4-D9): the filters
+/// `oxidizr generate system-landscape`: the filters
 /// compile FIRST (an unsupported `--include`/`--exclude` pattern aborts
 /// with OXZ-5010 before any file is touched), the workspaces load (sorted
-/// recursive scans filtered over the FULL path like the reference
+/// recursive scans filtered over the FULL path like the official tooling
 /// `Pattern.matches`; an explicit file positional ALWAYS loads —
 /// documented deviation) and merge through
 /// [`crate::generate::system_landscape`]. A file that fails to load is
-/// the reference per-file `log.warn` skip (a note); ZERO loadable
-/// workspaces is the ported reference `IllegalArgumentException` text
-/// (exit 1). The JSON output NEVER carries views (the witness).
+/// the official tooling per-file a `log::warn`-style skip (a note); ZERO loadable
+/// workspaces is the ported the official tooling an invalid-argument failure text
+/// (exit 1). The JSON output NEVER carries views (the verified case).
 fn generate_cmd(
     inputs: &[PathBuf],
     include: Option<&str>,
@@ -1542,8 +1540,8 @@ fn scan_dir(dir: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()> {
     Ok(())
 }
 
-/// The `validate` extension dispatch (`oxidizr init` O-2's loader twin):
-/// `.json` reads JSON, `.dsl` parses DSL — and the reference `DslParser`
+/// The `validate` extension dispatch (`oxidizr init` 's loader twin):
+/// `.json` reads JSON, `.dsl` parses DSL — and the official parser
 /// THROWS on any statement error, so a recovered parse is NOT a loaded
 /// workspace here: the file takes the skip, reason in hand.
 fn load_for_generate(path: &Path, opts: &ApiOptions) -> Result<Workspace, String> {
@@ -1566,7 +1564,7 @@ fn load_for_generate(path: &Path, opts: &ApiOptions) -> Result<Workspace, String
     }
 }
 
-/// One human report line: the reference `Violation.toString()` verbatim;
+/// One human report line: the official violation line verbatim;
 /// `color` paints ONLY the SEVERITY token (error red, warning yellow,
 /// info cyan). The CLI goldens run `NO_COLOR`, so the PLAIN bytes are
 /// the golden contract.

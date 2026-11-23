@@ -1,20 +1,17 @@
-//! The `DefaultInspector` port: workspace, model and view phases
-//! (§P4-M1 I-2/I-3).
+//! The inspection run: workspace, model and view phases.
 //!
 //! Run order IS the report contract (documented in `lib.rs`): workspace
-//! inspections, then the model (every element in `ModelItem.compareTo`
-//! order — numeric ids — per-kind blocks exactly as the reference
-//! sequences them), each element's OUTGOING relationships in id order
-//! (source-side ownership ⇒ every relationship inspected exactly once).
+//! inspections, then the model (every element in numeric-id order,
+//! per-kind blocks in a fixed sequence), each element's OUTGOING
+//! relationships in id order (source-side ownership ⇒ every relationship
+//! inspected exactly once).
 //!
-//! Message strings are copied VERBATIM from the Java, including its
-//! quirks: `terminologyFor(…).toLowerCase()` terms, `nameOf` = the
-//! canonical name minus the `Type://` prefix (hierarchical, e.g.
-//! `Payment System/Web`), and the noview message alone using
-//! `element.getName()` instead. `EmptyModelInspection` fires exactly when
-//! Java's `Model.isEmpty()` does — PEOPLE + SOFTWARE SYSTEMS + DEPLOYMENT
-//! NODES only (custom elements and relationships do not count — verified
-//! @ `ad34036`).
+//! Message strings are the official tooling's, VERBATIM, including its
+//! quirks: lowercased terminology terms, the hierarchical name minus the
+//! `Type://` prefix (e.g. `Payment System/Web`), and the noview message
+//! alone using the plain element name. The empty-model check fires on
+//! PEOPLE + SOFTWARE SYSTEMS + DEPLOYMENT NODES only (custom elements
+//! and relationships do not count).
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -45,9 +42,8 @@ use crate::types;
 use crate::violation::Violation;
 
 /// Run every enabled inspection over `workspace` (the
-/// `structurizr.inspection = "false"` kill switch returns nothing — the
-/// `DefaultInspector` ctor guard). Violations keep the reference run
-/// order.
+/// `structurizr.inspection = "false"` kill switch returns nothing).
+/// Violations keep the fixed run order.
 #[must_use]
 pub fn inspect(workspace: &Workspace) -> Vec<Violation> {
     if !strategy::enabled(&workspace.properties) {
@@ -56,8 +52,7 @@ pub fn inspect(workspace: &Workspace) -> Vec<Violation> {
     Engine::new(workspace).run()
 }
 
-/// One element, whatever its kind (the `DefaultInspector` element loop is
-/// one `instanceof` ladder over `Model.getElements()`).
+/// One element, whatever its kind.
 #[derive(Debug, Clone, Copy)]
 enum Elem<'a> {
     /// `Person`.
@@ -95,8 +90,8 @@ impl<'a> Elem<'a> {
         }
     }
 
-    /// `getClass().getSimpleName().toLowerCase()` — the relationship
-    /// `[srcType->dstType]` operand.
+    /// The lowercase kind token — the relationship `[srcType->dstType]`
+    /// operand.
     fn java_kind(self) -> &'static str {
         match self {
             Elem::Person(_) => "person",
@@ -124,8 +119,7 @@ impl<'a> Elem<'a> {
         }
     }
 
-    /// The `Documentable` whose documentation the embedded-view
-    /// inspections scan (`DefaultInspector` runs them for software
+    /// The documentation the embedded-view inspections scan (software
     /// systems, containers and components only).
     fn embedded_documentation(self) -> Option<&'a Documentation> {
         match self {
@@ -141,8 +135,8 @@ impl<'a> Elem<'a> {
         }
     }
 
-    /// The description inspection TYPE for the kind (`None` = the
-    /// instanceof-ladder never runs one: custom elements and instances).
+    /// The description inspection TYPE for the kind (`None` = custom
+    /// elements and instances have none).
     fn description_type(self) -> Option<&'static str> {
         match self {
             Elem::Person(_) => Some(types::PERSON_DESCRIPTION),
@@ -155,8 +149,8 @@ impl<'a> Elem<'a> {
         }
     }
 
-    /// The technology inspection TYPE (no person/system technology
-    /// exists in the reference).
+    /// The technology inspection TYPE (persons, systems, custom elements
+    /// and instances have no technology).
     fn technology_type(self) -> Option<&'static str> {
         match self {
             Elem::Container(_) => Some(types::CONTAINER_TECHNOLOGY),
@@ -174,31 +168,31 @@ impl<'a> Elem<'a> {
 /// derived lookup tables the loops need.
 struct Engine<'a> {
     ws: &'a Workspace,
-    /// Canonical names over an adopted clone (the diff/reconcile
-    /// precedent — `nameOf` = the canonical name minus `Type://`).
+    /// Canonical names over an adopted clone — the display name is the
+    /// canonical name minus the `Type://` prefix.
     names: WorkspaceBuilder,
-    /// id → element, every kind flat (the `getElements()` merge).
+    /// id → element, every kind flat.
     by_id: HashMap<&'a str, Elem<'a>>,
     /// id → parent id (containers→systems, components→containers,
-    /// children/infra/instances→nodes — the reference `setParent` map).
+    /// children/infra/instances→nodes).
     parent: HashMap<&'a str, &'a str>,
     /// element id → own properties (the severity holder chain).
     props: HashMap<&'a str, &'a Properties>,
     /// element id → outgoing relationships, id-sorted.
     outgoing: HashMap<&'a str, Vec<&'a Relationship>>,
     /// ids carrying ANY relationship, source or destination
-    /// (`DisconnectedElementInspection`).
+    /// (the disconnected check).
     connected: HashSet<&'a str>,
-    /// ids on any MODEL view (`ElementNotIncludedInAnyViewsInspection`).
-    /// OWNED ids — `View::content` borrows its local enum wrapper.
+    /// ids on any MODEL view (the noview check). OWNED ids —
+    /// `View::content` borrows its local enum wrapper.
     in_views: HashSet<Id>,
     /// view key → generated-key flag (the embedded-view inspections).
     view_keys: HashMap<&'a str, bool>,
     out: Vec<Violation>,
 }
 
-/// Depth-first registration of the deployment-node tree (the reference
-/// `setParent` map: every child/infra-node/instance hangs off ITS node).
+/// Depth-first registration of the deployment-node tree: every
+/// child/infra-node/instance hangs off ITS node.
 fn walk_nodes<'n>(
     nodes: &'n [DeploymentNode],
     par: Option<&'n Id>,
@@ -262,7 +256,7 @@ impl<'a> Engine<'a> {
             connected.insert(r.destination.as_str());
         }
         for rels in outgoing.values_mut() {
-            // `Element.getRelationships()` is a TreeSet — id order.
+            // Outgoing relationships are inspected in id order.
             rels.sort_by_key(|r| r.id.clone());
         }
 
@@ -270,7 +264,7 @@ impl<'a> Engine<'a> {
         let mut view_keys = HashMap::new();
         for v in ws.views.all_views() {
             view_keys.insert(v.key(), v.base().generated_key);
-            // Java: ModelView only — filtered/image views carry no entries
+            // Model views only — filtered/image views carry no entries
             // (the `View::content` `Option` is exactly that split). The
             // ids are OWNED (`View::content` borrows the local enum).
             if let Some(content) = v.content() {
@@ -311,12 +305,12 @@ impl<'a> Engine<'a> {
         });
     }
 
-    /// Workspace-level holders (`AbstractWorkspaceInspection`).
+    /// Workspace-level holders.
     fn ws_holders(&self) -> [Option<&'a Properties>; 1] {
         [Some(&self.ws.properties)]
     }
 
-    /// Model-level holders (`AbstractModelInspection`: model → workspace).
+    /// Model-level holders: model → workspace.
     fn model_holders(&self) -> [Option<&'a Properties>; 2] {
         [Some(&self.ws.model.properties), Some(&self.ws.properties)]
     }
@@ -347,10 +341,9 @@ impl<'a> Engine<'a> {
         strategy::severity_from(inspection, &self.element_holders(id))
     }
 
-    /// `nameOf`: the canonical name minus the `Type://` prefix. The
-    /// fallback keeps the report total where Java's untyped model could
-    /// NPE (ids dangling above the validator — the `Unresolved://`
-    /// precedent in `oxidizr_api::diff`).
+    /// The canonical name minus the `Type://` prefix. The fallback keeps
+    /// the report total for ids the validator never saw (invalid
+    /// workspaces).
     fn name_of(&self, item: &ModelItem) -> String {
         self.names.canonical_name_full(&item.id).map_or_else(
             || item.name.clone(),
@@ -361,9 +354,9 @@ impl<'a> Engine<'a> {
         )
     }
 
-    /// `terminologyFor(…).toLowerCase()` — the view-config terminology
-    /// override when set, the Java default otherwise. Instances UNWRAP
-    /// to their static element (`Terminology.findTerminology`).
+    /// The lowercased terminology for a kind: the view-config override
+    /// when set, the default otherwise. Instances UNWRAP to their static
+    /// element.
     fn terminology(&self, e: Elem<'a>) -> String {
         let t = &self.ws.views.configuration.terminology;
         let pick = |ov: &'a Option<String>, default: &'static str| match ov {
@@ -421,8 +414,8 @@ impl<'a> Engine<'a> {
         self.push(ty, severity, message);
     }
 
-    /// The embedded-view pair for one documentable (missing first, then
-    /// generated-key — the `DefaultInspector` block order).
+    /// The embedded-view pair for one element's documentation (missing
+    /// first, then generated-key).
     fn embedded_views(&mut self, e: Elem<'a>) {
         let Some(doc) = e.embedded_documentation() else {
             return;
@@ -521,8 +514,8 @@ impl<'a> Engine<'a> {
 
     /// `The relationship between the {src} "{srcName}" and the {dst}
     /// "{dstName}" is missing a {noun}.` — dangling ends (invalid
-    /// workspaces above the validator) get `element`/the raw name where
-    /// Java would NPE.
+    /// workspaces) get `element` and an empty name; the official tooling
+    /// crashes here (a documented deviation).
     fn relationship_message(
         &self,
         src: Option<Elem<'_>>,
@@ -545,9 +538,9 @@ impl<'a> Engine<'a> {
 
     // -- phases ----------------------------------------------------------
 
-    /// `runWorkspaceInspections`.
+    /// The workspace phase.
     fn workspace_phase(&mut self) {
-        // WorkspaceToolingInspection.
+        // workspace.tooling: the browser-based DSL editor.
         if let Some(agent) = self.ws.last_modified_agent.as_deref()
             && !agent.is_empty()
             && (agent.starts_with("structurizr-cloud/dsl-editor")
@@ -565,7 +558,7 @@ impl<'a> Engine<'a> {
                     .to_owned(),
             );
         }
-        // WorkspaceScopeInspection.
+        // workspace.scope: no defined scope.
         if self.ws.configuration.scope.is_none() {
             let severity = strategy::severity_from(types::WORKSPACE_SCOPE, &self.ws_holders());
             self.push(
@@ -576,7 +569,7 @@ impl<'a> Engine<'a> {
                     .to_owned(),
             );
         }
-        // The workspace documentable pair (`run(getWorkspace())`).
+        // The workspace documentation embedded-view pair.
         let keys = embedded_keys(&self.ws.documentation);
         if !keys.is_empty() {
             let severity =
@@ -616,10 +609,10 @@ impl<'a> Engine<'a> {
         }
     }
 
-    /// `runModelInspections` (the element `instanceof` ladder included).
+    /// The model phase (the per-kind element loop included).
     fn model_phase(&mut self) {
-        // EmptyModelInspection — Java Model.isEmpty(): people + systems +
-        // deployment nodes ONLY (custom elements never count).
+        // model.empty: people + systems + deployment nodes ONLY
+        // (custom elements never count).
         if self.ws.model.people.is_empty()
             && self.ws.model.software_systems.is_empty()
             && self.ws.model.deployment_nodes.is_empty()
@@ -631,14 +624,15 @@ impl<'a> Engine<'a> {
                 "The model is empty.".to_owned(),
             );
         }
-        // MultipleSoftwareSystemsDetailedInspection (type = workspace.scope).
+        // workspace.scope again: several software systems described in
+        // detail.
         let detailed = self
             .ws
             .model
             .software_systems
             .iter()
             .filter(|s| {
-                // Java: hasContainers() || !documentation.isEmpty()
+                // "detailed" = has containers or any documentation.
                 !s.containers.is_empty()
                     || !s.documentation.sections.is_empty()
                     || !s.documentation.decisions.is_empty()
@@ -659,7 +653,7 @@ impl<'a> Engine<'a> {
             );
         }
 
-        // The element loop: `Model.getElements()` is a TreeSet — id order.
+        // The element loop: every kind, in id order.
         let mut all: Vec<Elem<'a>> = self.by_id.values().copied().collect();
         all.sort_by_key(|e| e.item().id.clone());
         for e in all {
@@ -667,9 +661,9 @@ impl<'a> Engine<'a> {
         }
     }
 
-    /// The per-element block of the ladder: kind-specific inspections,
-    /// then disconnected/noview, then the owned relationships — exactly
-    /// the `DefaultInspector` order for one `Element`.
+    /// The per-element block: kind-specific inspections, then
+    /// disconnected/noview, then the owned relationships (this order is
+    /// part of the report contract).
     fn element_inspections(&mut self, e: Elem<'a>) {
         let id = e.item().id.as_str();
         match e {
@@ -729,8 +723,8 @@ impl<'a> Engine<'a> {
             }
             Elem::Custom(_) | Elem::Ssi(_) | Elem::Ci(_) => {}
         }
-        // DisconnectedElementInspection (deployment nodes exempt —
-        // "deployment nodes typically won't have relationships").
+        // element.disconnected: deployment nodes exempt —
+        // "deployment nodes typically won't have relationships".
         if !matches!(e, Elem::Node(_)) && !self.connected.contains(id) {
             let severity = self.element_severity(types::ELEMENT_DISCONNECTED, id);
             let message = format!(
@@ -741,8 +735,8 @@ impl<'a> Engine<'a> {
             );
             self.push(types::ELEMENT_DISCONNECTED, severity, message);
         }
-        // ElementNotIncludedInAnyViewsInspection — the ONE message
-        // quoting getName() (not the canonical name).
+        // model.element.noview — the ONE message quoting the plain name
+        // (not the canonical name).
         if !self.in_views.contains(&e.item().id) {
             let severity = self.element_severity(types::ELEMENT_NOVIEW, id);
             let message = format!(
@@ -761,10 +755,9 @@ impl<'a> Engine<'a> {
         }
     }
 
-    // -- view phase (§P4-M1 I-3) ---------------------------------------------
+    // -- view phase ------------------------------------------------------------
 
-    /// views-level holders (`AbstractViewsInspection`: view-config →
-    /// workspace).
+    /// views-level holders: view-config → workspace.
     fn views_holders(&self) -> [Option<&'a Properties>; 2] {
         [
             Some(&self.ws.views.configuration.properties),
@@ -772,8 +765,7 @@ impl<'a> Engine<'a> {
         ]
     }
 
-    /// per-view holders (`AbstractViewInspection`/`AbstractModelView…`:
-    /// view → view-config → workspace).
+    /// per-view holders: view → view-config → workspace.
     fn view_holders(&self, base: &'a ViewBase) -> [Option<&'a Properties>; 3] {
         [
             Some(&base.properties),
@@ -782,8 +774,7 @@ impl<'a> Engine<'a> {
         ]
     }
 
-    /// element-style holders (`ElementStyleMetadataInspection`: style →
-    /// view-config → workspace).
+    /// element-style holders: style → view-config → workspace.
     fn style_holders(&self, style: &'a ElementStyle) -> [Option<&'a Properties>; 3] {
         [
             Some(&style.properties),
@@ -792,15 +783,15 @@ impl<'a> Engine<'a> {
         ]
     }
 
-    /// `runViewInspections` — the reference order verbatim: views.empty,
-    /// the per-kind model-view loops (key/empty/layout) with the two
-    /// multi-system scope checks woven in at their exact positions, the
-    /// generated-key-only filtered/image loops, then the element styles.
+    /// The view phase, order fixed: views.empty, the per-kind model-view
+    /// loops (key/empty/layout) with the two multi-system scope checks
+    /// woven in at their exact positions, the generated-key-only
+    /// filtered/image loops, then the element styles.
     fn view_phase(&mut self) {
         // The 'a reference is COPIED out so the loops stay out of `self`'s
         // borrow while violations are pushed.
         let ws = self.ws;
-        // EmptyViewsInspection.
+        // views.empty.
         if ws.views.all_views().is_empty() {
             let severity = strategy::severity_from(types::VIEWS_EMPTY, &self.views_holders());
             self.push(
@@ -815,8 +806,8 @@ impl<'a> Engine<'a> {
         for v in &ws.views.system_landscape_views {
             self.model_view(&v.base, &v.content);
         }
-        // SystemContextViewsForMultipleSoftwareSystemsInspection
-        // (distinct `softwareSystemId`s over the SC views).
+        // workspace.scope: distinct `software_system_id`s over the
+        // system context views.
         let systems: HashSet<&Id> = ws
             .views
             .system_context_views
@@ -839,7 +830,7 @@ impl<'a> Engine<'a> {
         for v in &ws.views.system_context_views {
             self.model_view(&v.base, &v.content);
         }
-        // ContainerViewsForMultipleSoftwareSystemsInspection.
+        // workspace.scope: the same check over container views.
         let systems: HashSet<&Id> = ws
             .views
             .container_views
@@ -878,8 +869,8 @@ impl<'a> Engine<'a> {
         for v in &ws.views.image_views {
             self.generated_key(&v.base);
         }
-        // ElementStyleMetadataInspection: fires on metadata = FALSE only
-        // (`getMetadata() != null && !getMetadata()`).
+        // views.styles.element.metadata: fires on metadata = FALSE only,
+        // never on absent metadata.
         for style in &ws.views.configuration.styles.element_styles {
             if style.metadata == Some(false) {
                 let severity = strategy::severity_from(
@@ -899,10 +890,9 @@ impl<'a> Engine<'a> {
         }
     }
 
-    /// The three inspections the reference runs for every model-view
-    /// kind: `GeneratedKeyInspection`, `EmptyViewInspection`
-    /// (`getElements().isEmpty()`), `ManualLayoutInspection` (generated
-    /// key AND no automatic layout).
+    /// The three inspections every model-view kind gets: generated key,
+    /// empty (no elements), manual layout (generated key AND no
+    /// automatic layout).
     fn model_view(&mut self, base: &'a ViewBase, content: &'a ViewContent) {
         self.generated_key(base);
         if content.elements.is_empty() {
@@ -928,7 +918,7 @@ impl<'a> Engine<'a> {
         }
     }
 
-    /// `GeneratedKeyInspection`.
+    /// views.view.key: the view key is automatically generated.
     fn generated_key(&mut self, base: &'a ViewBase) {
         if !base.generated_key {
             return;
@@ -946,11 +936,9 @@ impl<'a> Engine<'a> {
     }
 }
 
-/// `findEmbeddedViewKeys` — the `LinkedHashSet` scan: sections then
-/// decisions, line by line, `![](embed:KEY)` (Markdown) /
-/// `image::embed:KEY[]` (`AsciiDoc`), first-seen order, deduped. A `null`
-/// format (the nullable bean field) matches nothing, exactly like the
-/// reference `if/else if` on the enum.
+/// The embedded-view key scan: sections then decisions, line by line,
+/// `![](embed:KEY)` (Markdown) / `image::embed:KEY[]` (`AsciiDoc`),
+/// first-seen order, deduped. A `None` format matches nothing.
 fn embedded_keys<'d>(doc: &'d Documentation) -> Vec<&'d str> {
     let mut keys: Vec<&'d str> = Vec::new();
     let mut scan = |content: &'d str, format: &Option<Format>| {
@@ -976,11 +964,10 @@ fn embedded_keys<'d>(doc: &'d Documentation) -> Vec<&'d str> {
     keys
 }
 
-/// `!\[.*?]\(embed:(.+?)\)` under `Matcher.matches()` (whole line): the
-/// line starts with `![`, ends with `)`, and the KEY is everything from
-/// the FIRST `](embed:` to the last `)` — the non-greedy groups only ever
-/// resolve to that, because the tail `)` must consume the final
-/// character.
+/// The Markdown embed pattern, matched against the WHOLE line: the line
+/// starts with `![`, ends with `)`, and the KEY is everything from the
+/// FIRST `](embed:` to the last `)` — the tail `)` must consume the
+/// final character.
 fn markdown_embed_key(line: &str) -> Option<&str> {
     let inner = line.strip_prefix("![")?.strip_suffix(')')?;
     let at = inner.find("](embed:")?;
@@ -988,8 +975,8 @@ fn markdown_embed_key(line: &str) -> Option<&str> {
     (!key.is_empty()).then_some(key)
 }
 
-/// `image::embed:(.+?)\[\]` under `matches()`: the key is everything
-/// from the fixed prefix to the trailing `[]`.
+/// The `AsciiDoc` embed pattern (WHOLE line): the key is everything from
+/// the fixed prefix to the trailing `[]`.
 fn asciidoc_embed_key(line: &str) -> Option<&str> {
     let key = line.strip_prefix("image::embed:")?.strip_suffix("[]")?;
     (!key.is_empty()).then_some(key)
@@ -1005,15 +992,15 @@ mod tests {
         // Plain.
         assert_eq!(markdown_embed_key("![](embed:My-Key)"), Some("My-Key"));
         assert_eq!(markdown_embed_key("![alt text](embed:K1)"), Some("K1"));
-        // (.+?) needs a non-empty key.
+        // The key must be non-empty.
         assert_eq!(markdown_embed_key("![](embed:)"), None);
-        // matches() is whole-line: prefix/suffix text never matches.
+        // Whole-line matching: prefix/suffix text never matches.
         assert_eq!(markdown_embed_key("see ![](embed:K) here"), None);
         assert_eq!(markdown_embed_key("image::embed:K[]"), None);
         // The tail `)` must consume the final character: an earlier `)`
-        // stays INSIDE the key (the non-greedy group extends).
+        // stays INSIDE the key.
         assert_eq!(markdown_embed_key("![](embed:a)b)"), Some("a)b"));
-        // The FIRST `](embed:` wins (non-greedy `.*?`).
+        // The FIRST `](embed:` wins.
         assert_eq!(
             markdown_embed_key("![](embed:x](embed:y)"),
             Some("x](embed:y")
@@ -1065,8 +1052,7 @@ mod tests {
 
     #[test]
     fn embedded_keys_null_format_matches_nothing() {
-        // The nullable bean field (unknown JSON `format`): the reference
-        // `if/else if` on the enum skips it entirely.
+        // An unknown/absent JSON `format` (`None`) matches nothing.
         let doc = Documentation {
             sections: vec![Section {
                 order: 1,

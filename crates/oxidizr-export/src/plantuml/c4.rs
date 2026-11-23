@@ -1,13 +1,11 @@
-//! The C4-PlantUML dialect — port of
-//! `export/plantuml/C4PlantUMLExporter` (catalog
-//! `agents/plan/build/EXPORT-C4-PLANTUML.md`, pinned `ad34036`).
+//! The C4-PlantUML dialect — the official C4-PlantUML exporter port.
 //!
-//! Every line format, gate and quirk mirrors the Java source: the ALWAYS
-//! `<style>` root block with the P2-V5 `Styles.DEFAULT_*` constants, the
+//! Every line format, gate and quirk mirrors the official tooling source: the ALWAYS
+//! `<style>` root block with the default style constants, the
 //! `<C4/…>` include accumulation (sequence: `C4_Sequence` only), the
 //! tags-section `AddElementTag`/`AddRelTag`/`AddBoundaryTag` passes over
-//! Java `HashMap` order (`oxidizr_json::javahash::entry_order` — portable,
-//! unlike D8/D13), the boundary/group/element/relationship macros with the
+//! the hash-map order (`oxidizr_json::javahash::entry_order` — portable,
+//! the boundary/group/element/relationship macros with the
 //! quirk register (`, $borderThickness="1")` drop, boundary `#ffffff`
 //! background + stroke-as-font quirk, quoted `_boundary` aliases, the
 //! `group_<n>` counter, `(xN)` instance suffixes, response endpoint swap)
@@ -37,7 +35,7 @@ use crate::plantuml::{
 };
 
 /// The non-`<style>`-block C4 dialect: the engine drives the iteration, the
-/// dialect owns the per-diagram `groupId` counter (Java `groupId`, reset in
+/// dialect owns the per-diagram group-id counter (reset in
 /// `writeHeader`).
 #[derive(Debug, Default)]
 pub struct C4PlantUmlDialect {
@@ -45,7 +43,7 @@ pub struct C4PlantUmlDialect {
 }
 
 /// `put` + append: insert `(key, value)` into the entry list (replace in
-/// place on a duplicate key, push on a new one — Java `HashMap.put` keeps
+/// place on a duplicate key, push on a new one — the official map keeps
 /// the original insertion position).
 fn put_entry<V>(entries: &mut Vec<(String, V)>, key: String, value: V) {
     if let Some(slot) = entries.iter_mut().find(|(k, _)| *k == key) {
@@ -55,13 +53,13 @@ fn put_entry<V>(entries: &mut Vec<(String, V)>, key: String, value: V) {
     }
 }
 
-/// The Java `HashMap` iteration order of an already-distinct entry list.
+/// The hash-map iteration order of an already-distinct entry list.
 fn java_order<T>(entries: &[(String, T)]) -> Vec<usize> {
     let keys: Vec<&str> = entries.iter().map(|(k, _)| k.as_str()).collect();
     entry_order(&keys)
 }
 
-/// `Border.toString().toLowerCase()` — the merged style always carries a
+/// The border name lower-cased — the merged style always carries a
 /// border (the synthesized default is `Solid`).
 fn border_lower(border: Option<LineStyle>) -> &'static str {
     match border.unwrap_or(LineStyle::Solid) {
@@ -73,10 +71,10 @@ fn border_lower(border: Option<LineStyle>) -> &'static str {
 
 /// `addProperties`: drop `structurizr.` keys; when any remain, the
 /// `WithoutPropertyHeader()` marker then `AddProperty` per key in SORTED
-/// order (the Java `stream().sorted()` — `String` natural order).
-/// One Java color cascade: the `Group:{name}` style wins over the `Group`
+/// order (the official sorted pass — natural text order).
+/// One official color cascade: the `Group:{name}` style wins over the `Group`
 /// style, null/empty values skipped; first valid hit wins, `None` keeps the
-/// caller's current value (2R R-exp-14 — `start_group_boundary` spelled this
+/// caller's current value (the group-boundary helper spelled this
 /// cascade four times as inline `to_string()` copies).
 fn cascade_color<'s>(
     group: Option<&'s ElementStyle>,
@@ -105,7 +103,7 @@ fn add_properties(w: &mut IndentingWriter, properties: &Properties) {
 
 impl C4PlantUmlDialect {
     /// A fresh dialect (the group-id counter starts at 0; the header resets
-    /// it per diagram exactly like the Java field).
+    /// it per diagram exactly like the official counter.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -128,7 +126,7 @@ impl C4PlantUmlDialect {
     }
 
     /// `tagsOf(view, element)` — the MERGED element style tag, the leading
-    /// `Element,` dropped (only the first occurrence — quirk §10.7), or
+    /// `Element,` dropped (only the first occurrence — quirk), or
     /// empty when `c4plantuml.tags` is off.
     fn element_tags_of<'a>(
         e: &Engine<'a>,
@@ -206,7 +204,7 @@ impl C4PlantUmlDialect {
         boundaries
     }
 
-    /// The `c4plantuml.tags` section: the three Java `HashMap<String, Style>`
+    /// The `c4plantuml.tags` section: the three official tag
     /// collections (elements, relationships, boundaries — boundaries only on
     /// the non-sequence path) rendered in `HashMap` iteration order.
     fn write_tags<'a>(
@@ -244,7 +242,7 @@ impl C4PlantUmlDialect {
                 let tag = tag_list.replacen("Element,", "", 1);
                 let mut sprite = String::new();
                 if is_supported_icon(style.icon.as_deref()) {
-                    // The D12 pin: the reference `calculateIconScale` needs
+                    // The icon-scale pin: the official scale computation needs
                     // a network fetch — this port renders the constant.
                     sprite = format!(
                         "img:{}{{scale={}}}",
@@ -343,7 +341,7 @@ impl Dialect for C4PlantUmlDialect {
         w.write_line(None);
         w.write_line(Some("set separator none"));
 
-        // Java `groupId = 0` right after the `super` header.
+        // Group id resets to 0 right after the header.
         self.group_id = 0;
 
         let sequence = self.render_as_sequence_diagram(e, view);
@@ -557,7 +555,7 @@ impl Dialect for C4PlantUmlDialect {
                 .unwrap_or(""),
         );
 
-        // Java: `technology = getTechnology(); if (isNullOrEmpty) ""` —
+        // The official fallback: a blank technology renders `""` —
         // which is exactly `unwrap_or("")`.
         let technology = relationship.technology.as_deref().unwrap_or("");
         let url = relationship.url.as_deref().unwrap_or("");
@@ -590,8 +588,8 @@ impl Dialect for C4PlantUmlDialect {
         let (g, a) = (group_style.as_ref(), all_style.as_ref());
 
         // `#cccccc` default; the Group style COLOR, then the STROKE
-        // overrides it (two independent Java cascades), then the width.
-        // 2R R-exp-14: one helper call per Java cascade — the old shape
+        // overrides it (two independent the official tooling cascades), then the width.
+        // one helper call per the official tooling cascade — the old shape
         // spelled the group-over-all null/empty filter four times inline,
         // copying a String each leg.
         let mut color = "#cccccc";
@@ -674,7 +672,7 @@ impl Dialect for C4PlantUmlDialect {
         w: &mut IndentingWriter,
     ) {
         // The abort legs of `idOf`/style resolution are unreachable for a
-        // boundary element the engine resolved from the model (2R R-exp-15
+        // boundary element the engine resolved from the model (
         // cite, same idiom as the system leg above: behavior is the
         // contract, the `unwrap_or_default` stays).
         let id = id_of(e, container).unwrap_or_default();
@@ -782,8 +780,8 @@ impl Dialect for C4PlantUmlDialect {
             && is_true_ci(e.property(view.base(), PLANTUML_SEQUENCE_DIAGRAM_PROPERTY, "false"))
     }
 
-    /// Java `export(CustomView)` returns `null` — the workspace loop skips
-    /// the view (witness: `custom-view-animation` writes NO files).
+    /// The official C4 custom-view export returns `null` — the loop skips
+    /// the view (verified: `custom-view-animation` writes NO files).
     fn exports_custom_views(&self) -> bool {
         false
     }

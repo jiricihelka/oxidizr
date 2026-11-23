@@ -4,29 +4,28 @@
 //! `DefaultImageImporter`, plus `DocumentationContent.findImages`
 //! (`structurizr-core`). The DSL wiring (`!docs <path> [fqn]`, block form
 //! with `exclude …`) lives in `oxidizr-dsl`; this module is the file
-//! system half, run at the reference context `end()`.
+//! system half, run when the DSL context closes.
 //!
-//! Pinned reference behaviors (full contract: `agents/plan/build/
-//! IMPORT-DOCS-ADRS.md`):
-//! - the joined path resolves against the DSL file (Java
-//!   `new File(dslFile.getParentFile(), path)` — the port JOINS, so an
-//!   absolute-looking token concatenates exactly like Java's
-//!   `File(parent, child)`);
+//! Pinned behaviors (full contract: the import catalog):
+//! - the joined path resolves against the DSL file (the official tooling
+//!   joins the parent directory with the path — oxidizr JOINS, so an
+//!   absolute-looking token concatenates exactly like the official tooling’s
+//!   string join of parent and child);
 //! - a directory import walks `listFiles()` sorted by path, skipping
 //!   directories and dot-prefixed names; a lone FILE is imported
 //!   regardless of extension (`FormatFinder` “just assume Markdown”);
 //! - sections carry `order = sections.size() + 1` AT ADD TIME and the
 //!   canonical filename, which is then TRIMMED against the import root —
 //!   including sections added by EARLIER imports of the same documentable
-//!   (the reference trims the whole `getSections()` list); the recursive
+//!   (the official tooling trims the WHOLE section list); the recursive
 //!   variant also maps `\` to `/`;
 //! - `exclude` is `name.equals(x) || name.matches(x)` — a FULL-MATCH
 //!   REGEX (`regexlite`), evaluated against the file NAME only;
 //! - the reluctant image importer (auto-run after a DIRECTORY import)
-//!   walks recursively in sorted order (the reference uses FS order —
-//!   non-deterministic there; sorted is the port's registered choice),
+//!   walks recursively in sorted order (the official tooling uses FS order —
+//!   non-deterministic there; sorted is oxidizr's registered choice),
 //!   keeps `<subdir>/<file>.<ext>` names, and embeds RAW file bytes
-//!   (deviation D16 — the reference re-encodes non-SVG via `ImageIO`).
+//!   (a documented deviation — the official tooling re-encodes non-SVG).
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -82,9 +81,9 @@ pub fn find_format(name: &str) -> Format {
 }
 
 /// `DefaultDocumentationImporter.excluded` / `AbstractDecisionImporter
-/// .excluded` — `equals` short-circuit, then Java-regex FULL MATCH per
-/// exclude. An uncompilable regex is surfaced (the reference lets
-/// `PatternSyntaxException` abort the import).
+/// .excluded` — equality short-circuit, then a FULL-MATCH regex per
+/// exclude. An uncompilable regex is surfaced (the official tooling lets
+/// a regex-compile abort the import).
 pub(crate) fn excluded(name: &str, excludes: &[String]) -> Result<bool, ImportError> {
     for x in excludes {
         if name == x {
@@ -105,16 +104,16 @@ pub(crate) fn excluded(name: &str, excludes: &[String]) -> Result<bool, ImportEr
 ///
 /// # Errors
 ///
-/// [`ImportError::Failed`] carries the reference messages verbatim
+/// [`ImportError::Failed`] carries the official messages verbatim
 /// (`"<abs> does not exist."`); [`ImportError::Io`] for read failures
-/// (the reference wraps them in `DocumentationImportException`).
+/// (the DSL layer surfaces them as import failures).
 pub fn import_docs(
     kind: DocsKind,
     target: &mut Documentation,
     path: &Path,
     excludes: &[String],
 ) -> Result<(), ImportError> {
-    // the recursive variant's message carries NO trailing period (pinned)
+    // the recursive variant's message carries NO trailing period (verified)
     if !path.exists() {
         return Err(ImportError::Failed(format!(
             "{} does not exist{}",
@@ -131,7 +130,7 @@ pub fn import_docs(
         import_file(target, path, excludes)?;
     }
     // "now trim the filenames" — EVERY section of this documentable,
-    // including ones earlier imports added (pinned).
+    // including ones earlier imports added (verified).
     let base = java_canonical(path);
     let base_s = base.to_string_lossy().into_owned();
     for s in &mut target.sections {
@@ -175,7 +174,7 @@ fn walk_files_recursive(
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         if file.is_dir() {
-            // the reference recurses into dot-directories too (the dot
+            // the official tooling recurses into dot-directories too (the dot
             // test only gates FILES)
             walk_files_recursive(target, &file, excludes)?;
         } else if !name.starts_with('.') {
@@ -206,7 +205,7 @@ fn sorted_files(dir: &Path) -> Result<Vec<std::path::PathBuf>, ImportError> {
 
 /// `importFile` — `FormatFinder.isMarkdownOrAsciiDoc(file) && !excluded`
 /// gates, then `{format, content (UTF-8, newline-normalized), canonical
-/// filename, order}` appended with the reference `addSection` order rule.
+/// filename, order}` appended with the official add-section order rule.
 fn import_file(
     target: &mut Documentation,
     file: &Path,
@@ -232,7 +231,7 @@ fn import_file(
     Ok(())
 }
 
-/// UTF-8 read emulating Java's lossy decode (`new String(bytes, UTF_8)`):
+/// UTF-8 read emulating the official tooling’s LOSSY decode:
 /// invalid sequences become U+FFFD, the read never fails on content.
 pub(crate) fn read_utf8(path: &Path) -> Result<String, ImportError> {
     let bytes = std::fs::read(path).map_err(|source| ImportError::Io {
@@ -245,7 +244,7 @@ pub(crate) fn read_utf8(path: &Path) -> Result<String, ImportError> {
 /// `DocumentationContent.findImages` — the Markdown `!\[.*]\((.*)\)` or
 /// `AsciiDoc` `image:{1,2}(.*)\[.*]` group-1 captures over the content
 /// (`format == Markdown` picks Markdown; NULL format takes the `AsciiDoc`
-/// branch — pinned).
+/// branch — verified).
 pub(crate) fn find_images(content: &str, format: Option<Format>) -> BTreeSet<String> {
     let pattern = if format == Some(Format::Markdown) {
         r"!\[.*]\((.*)\)"
@@ -261,8 +260,8 @@ pub(crate) fn find_images(content: &str, format: Option<Format>) -> BTreeSet<Str
 }
 
 /// The referenced-image set of the WHOLE documentation tree — the
-/// reluctant `DefaultImageImporter` seed: sections first, then decisions
-/// (`structurizr-core` scan order).
+/// reluctant image-importer seed: sections first, then decisions
+/// (the official scan order).
 fn referenced_images(target: &Documentation) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for s in &target.sections {
@@ -277,12 +276,12 @@ fn referenced_images(target: &Documentation) -> BTreeSet<String> {
 /// `DefaultImageImporter.importDocumentation` — `<subdir>/<name>` keyed
 /// images, `.png .jpg .jpeg .gif .svg` on the LOWERCASED name, recursive
 /// walk (hidden directories skipped, hidden FILES are NOT), standard
-/// base64 of the RAW bytes (deviation D16), reluctant mode keeping only
-/// the `findImages`-referenced names.
+/// base64 of the RAW bytes (a documented deviation), reluctant mode keeping only
+/// the image-referenced names.
 ///
 /// # Errors
 ///
-/// [`ImportError::Failed`] for the reference `"<abs> does not exist."`;
+/// [`ImportError::Failed`] for the official tooling `"<abs> does not exist."`;
 /// [`ImportError::Io`] for read failures.
 pub fn import_images(
     target: &mut Documentation,
@@ -357,10 +356,10 @@ fn import_one_image(
     if reluctant && !referenced.contains(&full) {
         return Ok(());
     }
-    // `ImageUtils.getContentType(file)` gate: the JVM guess table must
+    // The content-type gate: the guess table must
     // resolve an `image/*` type (`content_type_of` is that table); then
-    // the base64 payload — SVG raw bytes ARE the reference behavior, the
-    // non-SVG ImageIO re-encode is deviation D16 (raw bytes here too).
+    // the base64 payload — SVG raw bytes ARE the official tooling behavior, the
+    // non-SVG image re-encode is a documented deviation (raw bytes here too).
     let content_type = content_type_of(&name).ok_or_else(|| {
         ImportError::Failed(format!(
             "{} is not a supported image file.",
@@ -496,7 +495,7 @@ pub(crate) mod tests {
         assert_eq!(doc.sections.len(), 1);
         assert_eq!(doc.sections[0].filename.as_deref(), Some(""));
         // the FormatFinder gate is SHARED with the single-file form (the
-        // reference `importFile` checks `isMarkdownOrAsciiDoc` first) — a
+        // the official check is the file format first) — a
         // lone `.txt` imports NOTHING.
         std::fs::write(dir.join("lone.txt"), "lone").expect("write");
         import_docs(DocsKind::Default, &mut doc, &dir.join("lone.txt"), &[]).expect("import2");
@@ -526,7 +525,7 @@ pub(crate) mod tests {
     #[test]
     fn trim_reaches_sections_of_earlier_imports() {
         // a second `!docs` of a SUBdirectory re-trims every section,
-        // exactly like the reference scanning `getSections()`.
+        // exactly like the official full-list trim scan.
         let dir = scratch("retree", &[("outer.md", "o\n"), ("inner/i.md", "i\n")]);
         let mut doc = Documentation::default();
         import_docs(DocsKind::Default, &mut doc, &dir, &[]).expect("first");
@@ -582,7 +581,7 @@ pub(crate) mod tests {
     fn find_images_formats_split() {
         let md = "![a](x.png)";
         assert!(find_images(md, Some(Format::Markdown)).contains("x.png"));
-        // null format takes the ASCIIDOC branch (pinned)
+        // null format takes the ASCIIDOC branch (verified)
         assert!(find_images(md, None).is_empty());
         assert!(find_images("image::y.png[a]", None).contains("y.png"));
         assert!(find_images("image::y.png[a]", Some(Format::AsciiDoc)).contains("y.png"));

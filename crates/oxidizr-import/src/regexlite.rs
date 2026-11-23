@@ -1,7 +1,7 @@
-//! `regexlite` — the std-only backtracking matcher for the Java regex
-//! subset the `!docs`/`!adrs` importers actually evaluate (P4-V8 CLOSED:
+//! `regexlite` — the std-only backtracking matcher for the official tooling regex
+//! subset the `!docs`/`!adrs` importers actually evaluate (closed:
 //! `exclude` is `name.equals(x) || name.matches(x)` — `String.matches` is a
-//! FULL MATCH, so no `globset`; the reference's own internals feed the same
+//! FULL MATCH, so no `globset`; the official tooling’s own internals feed the same
 //! engine: `findImages` (`!\[.*]\((.*)\)`, `image:{1,2}(.*)\[.*]`) and the
 //! ADR link patterns (`(.*) \[.*]\((.*)\)`, `\[.*]\((.*)\)`,
 //! `- Status: (.*) \[.*]\((.*)\)`, `- (.*) \[.*]\((.*)\)`) plus the
@@ -13,12 +13,12 @@
 //! capture groups `(...)` and non-capturing `(?:…)`, alternation `|`, and
 //! greedy + lazy `* + ? {n} {n,} {n,m}` quantifiers. Inline flags,
 //! backreferences and lookaround are OUT OF SCOPE — `Regex::new` reports
-//! them (a JVM-extended construct failing here mirrors the reference's
-//! failure intent, never a silent miss).
+//! them (a construct the official runtime extends, failing here, mirrors
+//! the official failure intent, never a silent miss).
 //!
-//! Semantics: leftmost-first with Java backtracking preference order.
+//! Semantics: leftmost-first with the official tooling backtracking preference order.
 //! [`Regex::is_match_full`] is `String.matches`; [`Regex::find`] /
-//! [`Regex::find_iter`] are `Matcher.find` (group text via
+//! [`Regex::find_iter`] mirror the official find loop (group text via
 //! [`Found::group`]). Repetition over a single atom iterates a character
 //! run in a loop (input length costs no stack depth); repetition over
 //! composites recurses through the backtracker (fine at filename and line
@@ -178,7 +178,7 @@ impl Regex {
             .is_some()
     }
 
-    /// `Matcher.find` at or after `from` (a BYTE offset; findings report
+    /// The first match at or after `from` (a BYTE offset; findings report
     /// byte bounds): the leftmost match, group captures recorded.
     #[must_use]
     pub fn find(&self, s: &str, from: usize) -> Option<Found> {
@@ -202,8 +202,8 @@ impl Regex {
         None
     }
 
-    /// All `find` results in order — the `while (matcher.find())` loop
-    /// (empty matches advance one char, exactly like `Matcher`).
+    /// All `find` results in order — the repeated-find loop
+    /// (empty matches advance one char, so iteration always terminates).
     pub fn find_iter<'a>(&'a self, s: &'a str) -> impl Iterator<Item = Found> + 'a {
         let mut from = 0_usize;
         std::iter::from_fn(move || {
@@ -525,7 +525,7 @@ impl Parser {
 
     /// `{n}` / `{n,}` / `{n,m}` at `self.i` → bounds plus the char span.
     /// `Ok(None)` means "not a counted quantifier" — the brace stays a
-    /// literal (Java's lenient reading).
+    /// literal (the official tooling’s lenient reading).
     fn counted(&mut self) -> Result<Option<Counted>, SyntaxError> {
         let start = self.i;
         let mut j = self.i + 1;
@@ -772,7 +772,7 @@ mod tests {
         let s = "see ![alt](sub/diagram.png) here";
         let m = re.find(s, 0).expect("match");
         assert_eq!(m.group(s, 1), Some("sub/diagram.png"));
-        // greedy across two links (Java `.*` runs to the LAST closing paren,
+        // greedy across two links (the official tooling `.*` runs to the LAST closing paren,
         // and one whole-line match registers only the trailing target)
         let s = "![a](x.png) ![b](y.png)";
         let m = re.find(s, 0).expect("match");
@@ -803,7 +803,7 @@ mod tests {
         let m = re.find(s, 0).expect("match");
         assert_eq!(m.group(s, 1), Some("0003-y.md"));
         // two links on one line: greedy `.*` runs the whole match to the
-        // LAST target — the Java `while (find())` collects one too
+        // LAST target — the official tooling `while (find())` collects one too
         let s = "[a](0001-a.md) and [b](0002-b.md)";
         let got: Vec<&str> = re.find_iter(s).map(|m| m.group(s, 1).unwrap()).collect();
         assert_eq!(got, vec!["0002-b.md"]);

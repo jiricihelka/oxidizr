@@ -1,24 +1,22 @@
-//! `ThemeStore` (P2-D3, `agents/plan/build/PHASE_2.md`): the offline-first
-//! theme resolution of `ThemeUtils` (structurizr-client, at the pin —
-//! catalog `EXPORT-PROPERTIES.md` §6) split into its two reference legs:
+//! `ThemeStore`: the offline-first
+//! theme resolution of the official tooling, split into its two legs:
 //!
-//! * **install** (name → `<dir>/<name>/theme.json` registry,
-//!   `AbstractCommand.installThemes` + `ThemeUtils.installThemes`): source
+//! * **install** (name → `<dir>/<name>/theme.json` registry): source
 //!   order `--themes-dir` flag → `OXIDZR_THEMES_DIR` →
-//!   `<workspace-parent>/themes` (the reference default) →
+//!   `<workspace-parent>/themes` (the official tooling default) →
 //!   `STRUCTURIZR_THEMES` (drop-in fallback); the FIRST source that is a
-//!   directory wins (the reference probes one directory only). The
+//!   directory wins (the official tooling probes one directory only). The
 //!   `OXIDZR_*` sources are the documented deviation (our env namespace);
-//!   the reference chain is preserved.
+//!   the official tooling chain is preserved.
 //! * **load** (`ThemeUtils.loadThemes`, called by the pipeline ONLY for
-//!   `DiagramExporter` formats, per P2-D4): URL → fetch (behind
-//!   `--allow-net`, D5; system `curl` via `std::process::Command` — std has
-//!   no TLS, Amendment 2026-11-17; local cache checked first — oxidizr
+//!   `DiagramExporter` formats): URL → fetch (behind
+//!   `--allow-net`; system `curl` via `std::process::Command` — std has
+//!   no TLS; local cache checked first — oxidizr
 //!   addition) → content-type must START WITH `application/json` or
-//!   `text/plain` (case-sensitive, like the reference `startsWith`) →
+//!   `text/plain` (case-sensitive prefix match) →
 //!   relative icons rewritten to `baseUrl + icon` (absolute `http(s)://` and
 //!   `data:image` pass through); installed name → file read, icons NOT
-//!   rewritten (reference asymmetry); anything else → silently skipped.
+//!   rewritten (the official tooling asymmetry); anything else → silently skipped.
 //!   Themes append to the NON-serialized `Styles.themes` — resolution-time
 //!   only, never merged into the workspace styles.
 
@@ -30,13 +28,13 @@ use oxidizr_core::{Workspace, views::Theme};
 use crate::paths;
 
 /// Theme-load failures. The pipeline surfaces `NetDisabled` as `OXZ-5001`
-/// (D5) and every other variant as `OXZ-5008` (`OXZ-5006` stays reserved
+/// and every other variant as `OXZ-5008` (`OXZ-5006` stays reserved
 /// for input/output I/O).
 #[derive(Debug, thiserror::Error)]
 pub enum ThemeError {
-    /// D5: a `themes { url … }` / `theme <url>` entry and `--allow-net` was
+    /// Net-fetch refusal: a `themes { url … }` / `theme <url>` entry and `--allow-net` was
     /// not given. The message names the URL and the offline escape hatch
-    /// (P2-D3 error UX).
+    /// (documented error UX).
     #[error(
         "theme `{url}` was not fetched: network access requires --allow-net; \
          place the theme at <themes-dir>/<name>/theme.json and reference it \
@@ -89,7 +87,7 @@ pub enum ThemeError {
 }
 
 /// The install registry + load policy. Cloneable snapshot; the pipeline
-/// builds ONE before the DSL parse (reference `AbstractCommand` order) and
+/// builds ONE before the DSL parse (the official tooling `AbstractCommand` order) and
 /// reuses it for `loadThemes` and the parser's installed-name check.
 #[derive(Debug, Clone, Default)]
 pub struct ThemeStore {
@@ -99,7 +97,7 @@ pub struct ThemeStore {
 }
 
 impl ThemeStore {
-    /// The reference `installThemes` scan for the first source that is a
+    /// The official install scan for the first source that is a
     /// directory (source order in the module docs). `env` is the `${VAR}`
     /// resolver (hermetic `ApiOptions.env` in tests/e2e, the process
     /// environment in the CLI).
@@ -110,11 +108,11 @@ impl ThemeStore {
         env: &dyn Fn(&str) -> Option<String>,
         allow_net: bool,
     ) -> Self {
-        // 2R R-exp-16: the source chain written out in its documented
-        // order (module docs, catalog §6.2) — the old shape looped the two
+        // the source chain written out in its documented
+        // order (module docs) — the old shape looped the two
         // env-var NAMES and string-compared `var == "OXIDZR_THEMES_DIR"` to
         // splice the workspace `themes/` dir in after the first leg (the
-        // reference order puts that dir BEFORE its env var, our env var
+        // the official tooling order puts that dir BEFORE its env var, our env var
         // before both).
         let env_dir = |var: &str| {
             env(var)
@@ -174,15 +172,15 @@ impl ThemeStore {
     ///
     /// # Errors
     ///
-    /// [`ThemeError`] on the first leg that fails (the reference throws
-    /// `RuntimeException` and the CLI aborts likewise).
+    /// [`ThemeError`] on the first leg that fails (the official tooling throws
+    /// `runtime crash` and the CLI aborts likewise).
     pub fn load_themes(&self, workspace: &mut Workspace) -> Result<(), ThemeError> {
-        // 2R R-exp-16: iterate `configuration.themes` directly — the clone
+        // iterate `configuration.themes` directly — the clone
         // guarded against a borrow that never overlaps: `add_styles_from_theme`
-        // appends to the SIBLING `styles.themes` field (catalog §6.1-3), so
+        // appends to the SIBLING `styles.themes` field (catalog -3), so
         // the two field borrows are disjoint. Error timing unchanged: the
         // first failing location aborts with the earlier themes appended
-        // (the reference throws mid-loop the same way).
+        // (the official tooling throws mid-loop the same way).
         for location in &workspace.views.configuration.themes {
             if let Some(theme) = self.load_one(location)? {
                 workspace
@@ -200,7 +198,7 @@ impl ThemeStore {
             let content = self.fetch(location)?;
             let mut theme = parse_theme(location, &content)?;
             // `loadThemes` rewrites relative icons against the URL's dir —
-            // ONLY on this leg (catalog §6.1-3).
+            // ONLY on this leg (catalog -3).
             let base = base_url(location);
             for style in &mut theme.elements {
                 if let Some(icon) = &style.icon {
@@ -218,16 +216,16 @@ impl ThemeStore {
             })?;
             Ok(Some(parse_theme(location, &text)?))
         } else {
-            // Not a URL, not installed: the reference `loadThemes` SILENTLY
-            // skips the entry (catalog §6.1-3) — no warning, no error.
+            // Not a URL, not installed: the official loader SILENTLY
+            // skips the entry (catalog -3) — no warning, no error.
             Ok(None)
         }
     }
 
     /// The URL leg: cache hit → file; else (with `--allow-net`) a bounded
-    /// `curl` fetch with the reference's content-type gate, then cache
+    /// `curl` fetch with the official tooling’s content-type gate, then cache
     /// store. Cache hits are trusted (no re-fetch, no content-type check —
-    /// an oxidizr addition per P2-D3, offline-first).
+    /// an oxidizr addition per documented, offline-first).
     fn fetch(&self, url: &str) -> Result<String, ThemeError> {
         if !self.allow_net {
             return Err(ThemeError::NetDisabled {
@@ -263,7 +261,7 @@ impl ThemeStore {
             .arg("--show-error")
             .arg("--location")
             .arg("--fail")
-            // The reference HttpClient has a fixed socket timeout; a bounded
+            // The official client has a fixed socket timeout; a bounded
             // fetch keeps CI jobs from hanging.
             .arg("--max-time")
             .arg("30")
@@ -302,7 +300,7 @@ impl ThemeStore {
                 reason,
             });
         }
-        // Case-sensitive startsWith, like the reference gate.
+        // Case-sensitive startsWith, like the official tooling gate.
         let actual = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !actual.starts_with("application/json") && !actual.starts_with("text/plain") {
             let _ = std::fs::remove_file(&tmp);
@@ -362,7 +360,7 @@ fn parse_theme(origin: &str, text: &str) -> Result<Theme, ThemeError> {
 
 /// The load gate's URL test: `Url.isUrl` + the http(s) prefixes — absolute
 /// `http(s)://` (case-insensitive, like `isHttpUrl`/`isHttpsUrl`). Other
-/// protocol strings are what the reference would try to fetch and fail on;
+/// protocol strings are what the official tooling would try to fetch and fail on;
 /// oxidizr treats them as names/skips, never fetches (deviation note).
 fn is_http_url(candidate: &str) -> bool {
     let lower = candidate.to_ascii_lowercase();
@@ -374,7 +372,7 @@ fn is_absolute_icon(icon: &str) -> bool {
     is_http_url(icon)
 }
 
-/// `themeLocation.substring(0, themeLocation.lastIndexOf('/') + 1)`.
+/// The URL directory part (up to and including the last `/`).
 fn base_url(url: &str) -> &str {
     match url.rfind('/') {
         Some(at) => &url[..=at],
@@ -508,7 +506,7 @@ mod tests {
         // Appended to Styles.themes, NOT merged into the workspace styles.
         assert_eq!(workspace.views.configuration.styles.themes.len(), 1);
         assert_eq!(workspace.views.configuration.styles.element_styles.len(), 1);
-        // Resolution: workspace style wins, theme participates (P2-D2).
+        // Resolution: workspace style wins, theme participates documented.
         let style = workspace
             .views
             .configuration
@@ -517,7 +515,7 @@ mod tests {
             .unwrap();
         assert_eq!(style.background.as_deref(), Some("#000000"));
 
-        // Unknown names silently skip (reference parity).
+        // Unknown names silently skip (the official tooling parity).
         let mut workspace = workspace_with_theme("ghost");
         store.load_themes(&mut workspace).unwrap();
         assert_eq!(workspace.views.configuration.styles.themes, Vec::new());
