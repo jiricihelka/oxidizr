@@ -1,6 +1,7 @@
 # PHASE_4D.md — detailed plan: documentation reset — short, human-first (interlude)
 
-**Status: SCAFFOLDED 2026-11-22 (user directive) — not started.**
+**Status: COMPLETE 2026-11-23 — D-1…D-8 closed (commits `6f8fd6d` → D-8);
+hand-over to the release tail (§P4-M5 E-4/E-5).**
 Position: the LAST hardening phase (after P4T + P4R, so prose describes
 the final code), immediately before the release tail (§P4-M5 E-4/E-5:
 version bump, CHANGELOG, cargo-dist, `v0.4.0`).
@@ -101,24 +102,25 @@ the P4T matrix (it is agent-facing and needed).
 
 | Item | Scope | Commit |
 |---|---|---|
-| **D-1** | Root README + `docs/README.md` | D1 |
-| **D-2** | The 14 crate READMEs (+ brevity review of existing ones) | D2 |
-| **D-3** | rustdoc strip: wave-A crates (core/ast/diag/dsl/json) | D3 |
-| **D-4** | rustdoc strip: wave-B crates (export/import/api/inspect/layout) | D4 |
-| **D-5** | rustdoc strip: wave-C crates (lsp/viewer/cli/xtask/e2e) | D5 |
-| **D-6** | help + diagnostics + docs/*.md message pass (bless moves on purpose — stamped) | D6 |
-| **D-7** | hygiene leg in `xtask refs` + agent-doc trim | D7 |
-| **D-8** | Close ritual (quartet + full tier + bless per D4 rule + PROGRESS `P4D` log) → hand over to the release tail (E-4/E-5) | D8 |
+| **D-1** | Root README + `docs/README.md` | `6f8fd6d` |
+| **D-2** | The 14 crate READMEs (+ brevity review of existing ones) | `f605cbe` |
+| **D-3** | rustdoc strip: wave-A crates (core/ast/diag/dsl/json) | `bce0ed9` |
+| **D-4** | rustdoc strip: wave-B crates (export/import/api/inspect/layout) | `a33fb16` |
+| **D-5** | rustdoc strip: wave-C crates (lsp/viewer/cli/xtask/e2e) | `8a3430f` |
+| **D-6** | help + diagnostics + docs/*.md message pass — bless moved NOT at all (307×unchanged: no golden embeds human text, V2) | `ec3e16f`+`a6caf09` |
+| **D-7** | hygiene leg in `xtask refs` + agent-doc trim | `cc5525b` |
+| **D-8** | Close ritual: quartet + full tier 8/8 + bless 307×unchanged + Category B (`oracle verify` 4+4+99+6, `export-verify` 31/31 × 3 `TZ=UTC`; landscape skipped — no oracle-path diff) + PROGRESS `P4D` log; close review fixed 5 residual help artifacts (incl. a stray F-tag in the crate description) | (this) |
 
-## P4D-D7 Verification list
+## P4D-D7 Verification list — RESOLVED
 
-- P4D-V1 — `cargo xtask refs` current semantics: extend vs new subcommand
-  (read `refs.rs` before scoping D-7).
-- P4D-V2 — enumerate EVERY golden artifact that embeds human text
-  (help snapshots? message assertions?) so the D-6 bless delta is fully
-  predicted before the pass runs.
-- P4D-V3 — miette renders diagnostics from `Issue.message` — confirm no
-  doc-comment is a string-literal source (none expected; verify).
+- P4D-V1 — `cargo xtask refs` semantics: **EXTENDED** (V1): `check_hygiene`
+  joined the existing step; the quartet picks it up with zero workflow change.
+- P4D-V2 — golden-artifact human-text inventory: settled BEFORE the pass
+  (`agents/notes/process/p4d-d6-bless-prediction.md`) — sidecars carry
+  exit/codes/counts/files/idempotent only, no help-snapshot goldens; bless
+  307×unchanged across every pass (predicted and held).
+- P4D-V3 — doc comments as string sources: **NONE** — `include_str!` embeds
+  the `init` scaffold templates only (verified at D-7).
 
 ## Risks
 

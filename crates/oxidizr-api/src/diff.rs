@@ -1011,7 +1011,7 @@ fn push_props(fields: &mut Fields, props: &Properties) {
         // them on every parse (`structurizr.dsl.identifier` = a fresh UUID
         // per item, `structurizr.dsl` = the base64 source snapshot), so
         // including them would break the `diff(a, a)` EMPTY property on
-        // every parsed input (; documented in diff-schema.md).
+        // every parsed input (documented in diff-schema.md).
         if k.starts_with("structurizr.dsl") {
             continue;
         }

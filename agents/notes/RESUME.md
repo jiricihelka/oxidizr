@@ -1,34 +1,26 @@
-# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D IN FLIGHT: D-1 `6f8fd6d`, D-2 `f605cbe`, D-3 `bce0ed9`, D-4 `a33fb16`, D-5 `8a3430f`, D-6 `ec3e16f`+`a6caf09`, D-7 committed (HEAD) — next D-8 (close ritual → hand to release tail), E-4 (cargo-dist + release.yml), E-5 (0.4.0 bump + CHANGELOG + LOCAL `v0.4.0` tag, NEVER push)**)
+# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D CLOSED (D-1 `6f8fd6d` … D-7 `cc5525b`, D-8 close commit at HEAD) — next: release tail E-4 (cargo-dist via `nix develop` + `release.yml`) then E-5 (0.4.0 bump + CHANGELOG + LOCAL `v0.4.0` tag, NEVER push/publish); after that the P4 phase arc is DONE** )
 
 ## Active now (2026-11-23)
 
-- **P4D-D-7 DONE (hygiene leg + agent-doc trim)** — `cargo xtask refs` now
-  carries a third leg (`check_hygiene`): FAILs on process ids (`§P`,
-  `P4-D2`-family, `M<n>`, `[ONV]-<n>`, `T<n>-x`, `D10/D11`, `Phase <n>`,
-  `2R R-`, `R-<area>-<n>`, bare `F1..F19` in COMMENTS only — string-literal
-  `F1` is fixture data) and reference-narration (`reference implementation`,
-  `Structurizr-Monolith`, `.java`, `the reference` with word boundary,
-  `ported from`) in comments + string literals of `crates/oxidizr-*/src`,
-  `oxidizr-e2e` excluded, `refs:ignore` honored. Self-gating test
-  `shipped_tree_is_hygiene_clean`; 4 unit tests; the quartet picks it up
-  with zero workflow change (V1 = extend, settled). V3 closed: `include_str!`
-  embeds init TEMPLATE files only — no doc comment is a string source.
-  Residual strip rode along (~15 files: bare `M<n>`/`V-8`/`F12`/`T0-c`/`N-2`
-  ids, `ElementStyle.java` citation, two `ported from`, the two JVM-codec
-  messages minus `D10` + their assertion, the viewer session-geometry UI
-  string, stmt_views module-doc grammar fix). Agent-doc trim: AGENTS.md
-  status line made durable + refs-leg blurb; t3 note pointer re-pathed.
-- **D-8 NEXT (close ritual)** — quartet + FULL e2e tier + bless (307×
-  unchanged expected) + Category B (`TZ=UTC cargo xtask oracle verify` +
-  export-verify ×3, `$OXIDZR_STRUCTURIZR_BIN=/
+- **§P4D CLOSED at D-8** — close evidence: quartet green, full tier 8/8,
+  bless 307×unchanged every close (never moved — V2 held), Category B green
+  (`oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme;
+  `export-verify` 31/31 × 3 `TZ=UTC`; landscape skipped with reason —
+  no oracle-path diff). PROGRESS row + `P4D` log + PHASE_4D stamps (D-table,
+  V1/V2/V3) all committed with D-8. The hygiene leg now guards refs forever
+  (`check_hygiene`, self-gating test).
+- **E-4 NEXT (cargo-dist)** — `nix develop` (cargo-dist 0.34.0); add
+  `[workspace.metadata.dist]` config + `dist` via `cargo dist init`-style
+  files BY HAND (plan first: WORKFLOW.md release rules + PHASE_4.md §P4-M5
+  E-4 row); `cargo dist check` green; add `.github/workflows/release.yml`
+  mirroring what `cargo dist generate` emits (NO push/publish).
+- **E-5 (version tail)** — bump every crate + path-dep to 0.4.0; write
+  `CHANGELOG.md` folding the 3 frozen churn lines
+  (`agents/notes/process/api-churn-v0.4.0.md`); LOCAL tag `v0.4.0` only.
+  Gates before the bump commit: full quartet; bless 307×unchanged after.
+- **Category B env**: `$OXIDZR_STRUCTURIZR_BIN=/
   nix/store/5yil7chk3cjg3qmsabq1vzdxv0v4bwm0-structurizr-2026.10.26/bin/
-  structurizr`; slow — background chain) + PROGRESS `P4D` milestone log +
-  PHASE_4D D-table stamps (D1..D8 + V1/V2/V3 results).
-- **E-4/E-5** — cargo-dist via `nix develop` (0.34.0, `cargo dist check`),
-  `.github/workflows/release.yml`; then 0.4.0 version bump (all path-deps),
-  CHANGELOG.md folding the 3 frozen churn lines from
-  `agents/notes/process/api-churn-v0.4.0.md`, LOCAL `v0.4.0` tag.
-  NEVER push/publish.
+  structurizr` (TZ=UTC for the legs).
 
 ## Workflow (measured, `agents/notes/process/parallelism.md`)
 

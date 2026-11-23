@@ -122,7 +122,7 @@ pub enum Command {
         #[arg(long, conflicts_with = "write")]
         check: bool,
     },
-    /// Remap layout-JSON ids onto a re-parsed DSL (; geometry-preserving edit loop).
+    /// Remap layout-JSON ids onto a re-parsed DSL (geometry-preserving edit loop).
     Reconcile {
         /// Re-parsed (edited) DSL workspace.
         #[arg(long)]
@@ -136,8 +136,8 @@ pub enum Command {
     /// Export the workspace: `theme`/`json` and the diagram
     /// formats `plantuml`/`c4plantuml`/`mermaid`/`websequencediagrams`;
     /// the known-but-unlanded `static`/`png`/`svg` raise OXZ-5007 (exit 1 —
-    /// the official tooling agrees for PNG/SVG); unknown format strings log the
-    /// the official tooling `Unknown export format:` note and still exit 0.
+    /// the official tooling agrees for PNG/SVG); unknown format strings log
+    /// the official tooling's `Unknown export format:` note and still exit 0.
     Export {
         /// Workspace file (`.dsl` or `.json`) — the official tooling `-w/--workspace`.
         #[arg(long, short = 'w')]
@@ -195,10 +195,10 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = InspectCmdFormat::Human)]
         format: InspectCmdFormat,
     },
-    /// Import one diagram into a fresh workspace (`import`, ,
-    /// ): the C4-`PlantUML`/`Mermaid` macro legs produce the
-    /// MODEL (the default views install at open), the `image` leg is the
-    /// the official tooling `ImageImporter` port (one `ImageView`).
+    /// Import one diagram into a fresh workspace (`import`): the
+    /// C4-`PlantUML`/`Mermaid` macro legs produce the MODEL (the default
+    /// views install at open), the `image` leg is the official tooling's
+    /// `ImageImporter` port (one `ImageView`).
     Import {
         /// Diagram file (`.puml`/`.iuml`/`.c4p`, `.mmd`/`.mermaid`, or a
         /// `.png`/`.jpg`/`.jpeg`/`.gif`/`.svg` image; `-` = stdin, which

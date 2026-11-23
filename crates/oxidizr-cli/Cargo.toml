@@ -1,6 +1,6 @@
 [package]
 name = "oxidizr-cli"
-description = "oxidizr CLI: dsl2json, json2json, validate, fmt, reconcile, view (F10, gui-gated)"
+description = "oxidizr CLI: dsl2json, json2json, validate, fmt, reconcile, view (gui feature)"
 publish = false
 edition.workspace = true
 version.workspace = true
