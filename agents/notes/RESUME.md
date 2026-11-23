@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-23, **PHASE 4 COMPLETE — §P4T/§P4R/§P4D closed, release endgame E-1…E-5 all DONE (M5a `696e849` … M5e at HEAD), local annotated tag `v0.4.0` created. The P1–P4 arc is DONE. Nothing is pending in-repo: pushing `main`/the tag, the GitHub Release and crates.io publishing are the USER's explicit actions (never executed here). Next work = whatever the user opens next; the P5 candidate list lives in `agents/plan/PLAN.md`**)
+# RESUME — session checkpoint (updated 2026-11-23, **PHASE 4 COMPLETE — §P4T/§P4R/§P4D closed, release endgame E-1…E-5 all DONE (M5a `696e849` … M5e `3c34a08`), local annotated tag `v0.4.0` created, post-close Windows CI fix at HEAD (M5f). The P1–P4 arc is DONE. Nothing is pending in-repo: re-pushing `main` (CI was red only on the M5f-fixed test), moving the tag, the GitHub Release and crates.io publishing are the USER's explicit actions (never executed here). Next work = whatever the user opens next; the P5 candidate list lives in `agents/plan/PLAN.md`**)
 
 ## State at hand-over (2026-11-23)
 
@@ -57,7 +57,12 @@
 
 ## Done earlier (committed, this arc)
 
-- M5e (release chore + P4 close, tag `v0.4.0` local), M5d (cargo-dist),
-  M5c (Layered polish), M5b (dialect comparators), M5a (`oxidizr oracle`).
+- M5f (post-close fix: `generate_probes` skip-note assertion compared a
+  hardcoded `/` against `Path::display`'s `\` — first native-Windows CI
+  run; fix compares the joined+rendered path; host 6/6 + Wine 6/6 +
+  quartet green; pitfall note `windows-path-separator-assertions.md`).
+- M5e (release chore + P4 close, tag `v0.4.0` local at `3c34a08`),
+  M5d (cargo-dist), M5c (Layered polish), M5b (dialect comparators),
+  M5a (`oxidizr oracle`).
 - P4D closed `41e2a3c`; P4R closed `c42d711` (churn frozen);
   P4T closed (matrix frozen, 307 re-blessed at T-3).

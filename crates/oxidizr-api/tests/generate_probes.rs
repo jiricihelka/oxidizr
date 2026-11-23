@@ -499,8 +499,13 @@ fn broken_workspace_is_skipped_with_note() {
     let (exit, json, log) = generate(vec![dir], None, None, RelationshipsStrategy::default());
     assert_eq!(exit, ExitClass::Ok, "the good workspaces still merge");
     assert_eq!(log.len(), 1, "one skip note: {log:?}");
+    // The note must name the file AS THE WALK RENDERED IT (on Windows the
+    // same join displays backslash-separated) — a hardcoded "/" here is a
+    // separator assumption, not a contract.
+    let named = gamma.join("workspace.dsl");
+    let named = named.display().to_string();
     assert!(
-        log[0].starts_with("Could not parse ") && log[0].contains("gamma/workspace.dsl"),
+        log[0].starts_with("Could not parse ") && log[0].contains(&named),
         "skip note names the file: {:?}",
         log[0]
     );

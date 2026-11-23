@@ -21,3 +21,4 @@ tools, not guessed.
 | [notify-windows-modify-any.md](notify-windows-modify-any.md) | notify 8 Windows backend maps every write to `Modify(Any)` (never `Modify(Data)`); cfg-widen pre-filters, hash layer decides; `#[cfg]` rejected in `matches!` pat |
 | [agent-shell-quoting.md](agent-shell-quoting.md) | tool-call `\b` = JSON backspace; double-quoted backticks EXECUTE commands; subagent reports ≠ evidence (`git diff --stat` is) |
 | [cargo-dist-installer-panic.md](cargo-dist-installer-panic.md) | dist 0.31–0.34 panics `couldn't find the release!?` whenever `installers` is set but GitHub hosting isn't; fix = v1 `dist-workspace.toml` with `ci`+`hosting` |
+| [windows-path-separator-assertions.md](windows-path-separator-assertions.md) | test assertion hardcoded `/` met `Path::display`'s `\` on the first Windows run; assert the joined+rendered path; closes with filesystem tests need the windows leg |

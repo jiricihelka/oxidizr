@@ -64,3 +64,4 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [parallelism.md](process/parallelism.md) | one-LLM box: background jobs, no subagents (9 concurrent = server memory thrash; cap 3) |
 | [p4d-strip-rules.md](process/p4d-strip-rules.md) | P4D comment-strip pass contract (comments only, facts restated, verify recipe) |
 | [p4d-d6-bless-prediction.md](process/p4d-d6-bless-prediction.md) | what may/must not move when D-6 rewrites human text (bless stays 307×) |
+| [windows-path-separator-assertions.md](pitfalls/windows-path-separator-assertions.md) | first native-Windows CI run caught a hardcoded `/` in a test assertion; fix = compare `join().display()`; windows leg belongs in closes touching the filesystem |
