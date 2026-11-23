@@ -73,7 +73,12 @@ time**. Consequences for how work is run — detail in
 - Offload to local tools whatever is deterministic (gates, `refs`, `lint`,
   ast-grep audits) — LLM turns are the scarce resource, harness cycles are not.
 - **Subagents are near-useless here**: they serialise on the single LLM slot,
-  so they add overhead without parallelism.
+  so they add overhead without parallelism. Measured 2026-11-22: 9 concurrent
+  strip subagents did not fit the LLM server's memory — ~90 % of the session's
+  turns were spent re-reading subagent contexts and the crate work was done
+  afterwards by the parent anyway. Hard cap 3 if ever unavoidable; default
+  NEVER — thinking work runs in the parent session, parallelism comes from
+  background shell jobs (`agents/notes/process/parallelism.md`).
 - Launch long independent harness jobs (nix builds, oracle/bench/cov runs,
   file analysis) in the background early; never serialise them behind turns.
 - Two `cargo` jobs do NOT parallelise (shared target-dir lock) — chain cargo

@@ -19,3 +19,4 @@ tools, not guessed.
 | [dsl-style-color-normalization.md](dsl-style-color-normalization.md) | T4 oracle verdicts: `Color` setter normalization applies on the DSL path too (lowercase hex, name→hex, bogus = statement error); `group { url }` rejection is reference-correct |
 | [epaint-037-font-stack.md](epaint-037-font-stack.md) | epaint 0.37: `default_fonts` OFF by default (silent empty font_data headless); skrifa not ab_glyph — outlines via companion ab_glyph; glyph/shape gotchas |
 | [notify-windows-modify-any.md](notify-windows-modify-any.md) | notify 8 Windows backend maps every write to `Modify(Any)` (never `Modify(Data)`); cfg-widen pre-filters, hash layer decides; `#[cfg]` rejected in `matches!` pat |
+| [agent-shell-quoting.md](agent-shell-quoting.md) | tool-call `\b` = JSON backspace; double-quoted backticks EXECUTE commands; subagent reports ≠ evidence (`git diff --stat` is) |

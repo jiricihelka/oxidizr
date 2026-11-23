@@ -25,6 +25,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [nixpkgs-quirks.md](pitfalls/nixpkgs-quirks.md) | win32-mingw has no winpthreads; `wine` not `wine64`; misc |
 | [expect-test-eol.md](pitfalls/expect-test-eol.md) | snapshots pin bytes incl. EOL; UPDATE_EXPECT pitfalls |
 | [git-mv-deletes-untracked.md](pitfalls/git-mv-deletes-untracked.md) | dir moves eat untracked files; Trash first |
+| [agent-shell-quoting.md](pitfalls/agent-shell-quoting.md) | tool-call `\b` = JSON backspace; double-quoted backticks EXECUTE; subagent reports ≠ evidence (`git diff --stat` is) |
 | [fmt-line-end-guards.md](pitfalls/fmt-line-end-guards.md) | fmt: CR-split contract, `\`/`"""` end guards, joiner-only stripLeading |
 | [reconcile-ambiguity-fixtures.md](pitfalls/reconcile-ambiguity-fixtures.md) | duplicate names die at parse/hydrate; contest needs identifier-vs-canonical |
 | [dsl-corpus-grammar-gotchas.md](pitfalls/dsl-corpus-grammar-gotchas.md) | e2e-corpus grammar traps: own-line comments, identifier charsets, context-statement tables, dotted scopes, extends-env via `!element` |
@@ -59,4 +60,6 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [resume-ritual.md](process/resume-ritual.md) | rewrite `RESUME.md` at each green commit; resume from it |
 | [faithful-port.md](process/faithful-port.md) | engine = port of pinned Java, lint allows need rationale |
 | [notes-policy.md](process/notes-policy.md) | when and how to write notes |
-| [parallelism.md](process/parallelism.md) | one-LLM box: background jobs, no subagents |
+| [parallelism.md](process/parallelism.md) | one-LLM box: background jobs, no subagents (9 concurrent = server memory thrash; cap 3) |
+| [p4d-strip-rules.md](process/p4d-strip-rules.md) | P4D comment-strip pass contract (comments only, facts restated, verify recipe) |
+| [p4d-d6-bless-prediction.md](process/p4d-d6-bless-prediction.md) | what may/must not move when D-6 rewrites human text (bless stays 307×) |

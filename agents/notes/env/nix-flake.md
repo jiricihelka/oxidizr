@@ -15,4 +15,9 @@ milestone + re-check NIGHTLY.md.
 broken toolchain wiring without running a test). The flake is deliberately NOT
 nixfmt-styled (compact list literals) — don't "fix" its formatting.
 
-Last useful: never
+**Plain `cargo` works outside the dev shell** on this machine (rust-toolchain.toml
+supplies the nightly; the full gate quartet runs without nix). Reach for
+`nix develop` only for the extras above (`cargo-dist`, `critcmp`, Wine leg, `dot`,
+oracle) — never as a precondition for `cargo test`/`fmt`/`doc`.
+
+Last useful: 2026-11-22
