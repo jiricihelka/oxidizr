@@ -1,10 +1,8 @@
-//! Live reload preserving layout (P3-D6, §P3-M4): watch the opened file
+//! Live reload preserving layout: watch the opened file
 //! plus its `!include` closure, coalesce the raw `notify` storm, and
 //! report "the sources changed" as a single edge the shell polls.
 //!
-//! The posture is pinned by the P3-V6 probe (Linux/inotify, the facts
-//! in `agents/plan/build/PHASE_3.md` §P3-M4): a plain write, a
-//! same-content touch and OUR temp+rename save arrive as
+//! A plain write, a same-content touch and OUR temp+rename save arrive as
 //! EVENT-IDENTICAL notifications — only a content-hash compare tells
 //! a real change from noise, so hashes are the authority and events
 //! merely schedule a check. FILE watches die on delete/rename swaps,
@@ -12,7 +10,7 @@
 //! exact-path filter (the `.tmp` siblings our saves churn can never
 //! match). Events are debounced per path-SET: the reload edge fires
 //! once [`DEBOUNCE`] has settled after the LAST event, then exactly
-//! once per content change — five rapid writes are 13 raw events (V6)
+//! once per content change — five rapid writes are 13 raw events
 //! and must still be one reload.
 //!
 //! The driver is headless (no eframe): the shell polls
@@ -31,15 +29,15 @@ use notify::{EventKind, RecursiveMode, Watcher};
 
 /// Wake handle the notify thread calls on every raw event that hits
 /// the watched set: a cheap "something moved, repaint and poll". The
-/// shell supplies `move || ctx.request_repaint()` over its cloned
-/// paint context (the 0.37 shell has no `RepaintSignal` type — the
-/// context method IS the cross-thread wake); keeping it a plain
-/// closure is what lets this module stay GUI-free (R-2 guard).
+/// shell supplies `move || ctx.request_repaint` over its cloned
+/// paint context — there is no repaint-signal type, that context
+/// method IS the cross-thread wake; keeping it a plain
+/// closure is what lets this module stay GUI-free (boundary guard).
 pub type Wake = Arc<dyn Fn() + Send + Sync>;
 
-/// Settle window after the LAST raw event before the hash check runs
-/// (P3-D6: 250 ms; V6: bursts arrive @30 ms apart, so this coalesces
-/// them into one check).
+/// Settle window after the LAST raw event before the hash check runs:
+/// 250 ms. External bursts arrive ~30 ms apart, so this coalesces them
+/// into one check.
 pub const DEBOUNCE: Duration = Duration::from_millis(250);
 
 /// The last content hash of a watched file; `None` = unreadable
@@ -77,7 +75,7 @@ struct Inner {
     /// Content hash per path as of the LAST emitted change.
     baseline: Vec<(PathBuf, Hashed)>,
     /// Instant of the last raw filtered event (debounce anchor); the
-    /// settle check is `elapsed() >= DEBOUNCE`, so no extra flag.
+    /// settle check is `elapsed >= DEBOUNCE`, so no extra flag.
     last_event: Option<Instant>,
     /// A raw event hit the set and no hash check ran yet.
     pending: bool,
@@ -95,7 +93,7 @@ pub struct ReloadDriver {
 impl ReloadDriver {
     /// Watch `paths` (display file, sidecar if any, `Opened::includes`)
     /// from their CURRENT content. Parent directories get `NonRecursive`
-    /// watches (V6: survive delete/rename); unreadable paths are
+    /// watches (they survive delete/rename); unreadable paths are
     /// watched anyway — their appearance IS a change. `wake` wakes the
     /// UI so a change is polled promptly (see [`Wake`]).
     ///
@@ -152,11 +150,11 @@ impl ReloadDriver {
         inner.pending = false;
     }
 
-    /// We just wrote `path` OURSELF with `bytes` (the M3-5 save): pin
+    /// We just wrote `path` OURSELF with `bytes` (our save): pin
     /// its baseline hash to exactly that content, so the rename events
     /// our save fired hash-match and no reload edge can fire for it —
-    /// without waiting for the re-baseline `adopt` performs (P3-D6:
-    /// saving must not self-trigger).
+    /// without waiting for the re-baseline `adopt` performs
+    /// (saving must not self-trigger).
     pub fn note_written(&self, path: &Path, bytes: &[u8]) {
         let mut inner = lock(&self.inner);
         if let Some(slot) = inner
@@ -235,20 +233,19 @@ fn pump(rx: mpsc::Receiver<notify::Result<notify::Event>>, inner: Arc<Mutex<Inne
     }
 }
 
-/// Content-relevant kinds (V6): data writes, create/remove and the
+/// Content-relevant kinds: data writes, create/remove and the
 /// rename both-ends; access/other kinds are noise (`Access(Open)` fires
 /// on every plain read, ours included).
 ///
 /// The path filter + settle + content-hash diff in
 /// [`ReloadDriver::poll`] is the edge contract; this is only a
-/// per-backend noise pre-filter. The Windows backend (`ReadDirectory
-/// ChangesW`, notify 8.2.1 `windows.rs`) maps EVERY `FILE_ACTION_
-/// MODIFIED` — content write or mtime touch alike — to `Modify(Any)`
-/// and never to `Modify(Data)`, so the inotify/fsevent data classes
-/// alone drop all plain writes there (the CI symptom: four reload
-/// tests never see an edge). Accepting `Any` on Windows cannot fire a
-/// false edge — a metadata-only write still hash-matches in `poll` and
-/// stays silent — while Linux/macOS keep the D6 classes verbatim.
+/// per-backend noise pre-filter. The Windows backend maps EVERY
+/// `FILE_ACTION_MODIFIED` — content write or mtime touch alike — to
+/// `Modify(Any)` and never to `Modify(Data)`, so the inotify/fsevent
+/// data classes alone drop all plain writes there. Accepting `Any` on
+/// Windows cannot fire a false edge — a metadata-only write still
+/// hash-matches in `poll` and stays silent — while Linux/macOS keep the
+/// data-only classes verbatim.
 fn interesting(kind: EventKind) -> bool {
     #[cfg(not(target_os = "windows"))]
     if matches!(
@@ -306,7 +303,7 @@ mod tests {
             AccessKind, AccessMode, CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind,
             RenameMode,
         };
-        // Cross-platform classes (V6/D6): data writes, create/remove,
+        // Cross-platform classes: data writes, create/remove,
         // rename both-ends are relevant; access/other/metadata are not.
         assert!(interesting(EventKind::Modify(ModifyKind::Data(
             DataChange::Content
@@ -325,8 +322,8 @@ mod tests {
             MetadataKind::WriteTime
         ))));
         assert!(!interesting(EventKind::Modify(ModifyKind::Other)));
-        // The §P3-M9 Windows seam: the reference backend reports every
-        // plain write as `Modify(Any)`, so only that OS accepts it here
+        // The Windows seam: that backend reports every plain write as
+        // `Modify(Any)`, so only that OS accepts it here
         // (the hash layer in `poll` is the cross-platform authority).
         assert_eq!(
             interesting(EventKind::Modify(ModifyKind::Any)),
@@ -354,9 +351,9 @@ mod tests {
         std::thread::sleep(DEBOUNCE + Duration::from_millis(100));
         assert!(!driver.poll(), "exactly once per change");
 
-        // OUR save posture (M3-5 `write_workspace`): temp write +
-        // rename of bytes IDENTICAL to the current content — V6 says
-        // this is event-indistinguishable from an external atomic
+        // OUR save posture (`write_workspace`): temp write +
+        // rename of bytes IDENTICAL to the current content — this is
+        // event-indistinguishable from an external atomic
         // save, so only the hash filter can keep it silent. It must.
         let save = |bytes: &[u8]| {
             std::fs::write(dir.join("demo.dsl.123.tmp"), bytes).unwrap();
@@ -381,7 +378,7 @@ mod tests {
         let file = dir.join("burst.dsl");
         std::fs::write(&file, "0").unwrap();
         let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake()).unwrap();
-        // V6 shape: 5 writes @30 ms — 13 raw events, one reload.
+        // 5 writes @30 ms — 13 raw events, one reload.
         for i in 1..=5 {
             std::fs::write(&file, format!("{i}")).unwrap();
             std::thread::sleep(Duration::from_millis(30));
@@ -433,7 +430,7 @@ mod tests {
         let file = dir.join("saved.dsl");
         std::fs::write(&file, "base").unwrap();
         let driver = ReloadDriver::watch(std::slice::from_ref(&file), wake()).unwrap();
-        // Our save: write temp, pin, rename (the M3-5 order).
+        // Our save: write temp, pin, rename (the save order).
         let bytes = b"saved geometry".to_vec();
         std::fs::write(dir.join("saved.dsl.7.tmp"), &bytes).unwrap();
         driver.note_written(&file, &bytes);

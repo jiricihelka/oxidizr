@@ -1,7 +1,7 @@
-//! The `<stem>.oxidizr.json` sidecar (§P3-M11 M11-12, F11): oxidizr-only
-//! per-file state the Structurizr JSON model cannot carry.
+//! The `<stem>.oxidizr.json` sidecar: oxidizr-only per-file state the
+//! Structurizr JSON model cannot carry.
 //!
-//! This is a PURE CACHE. The rules (`ADDITIONAL_FEATURES.md` F11):
+//! This is a PURE CACHE:
 //! * it is OUR OWN JSON — a versioned envelope, never fed to or read from
 //!   the contract reader/writer (`oxidizr_json` is not referenced here);
 //! * it is NEVER an open or reload source — the layout sidecar for
@@ -13,9 +13,8 @@
 //!   all decode to the same empty state, and writes never clobber a newer
 //!   file on a version mismatch.
 //!
-//! The first (and, at M11, only) user is per-view viewport memory: the
-//! zoom + world centre a view was last left at, restored when the file is
-//! reopened.
+//! The only user so far is per-view viewport memory: the zoom + world
+//! centre a view was last left at, restored when the file is reopened.
 //!
 //! Writes are atomic (temp file + rename in the same directory) so a
 //! crash mid-write can never leave a half-written sidecar beside the
@@ -63,14 +62,13 @@ impl ViewerState {
 
 /// The sidecar path for a source `display`: the source's DIRECTORY plus
 /// its STEM with `.oxidizr.json` appended — `work/big.dsl` →
-/// `work/big.oxidizr.json` (F11, matching the user's request). The
-/// `big.dsl`/`big.json` companion PAIR therefore shares ONE state file,
-/// which is exactly right: they are the same workspace, and the display
-/// flips between them the moment a save creates the sidecar (§P3-M4-3)
-/// — the viewport memory survives that transition. A different stem is
-/// a different workspace; the contract layout sidecar `big.json` is a
-/// different exact filename and can never collide. Empty and stdin
-/// (`-`) have no sidecar — there is nothing beside them.
+/// `work/big.oxidizr.json`. The `big.dsl`/`big.json` companion PAIR
+/// therefore shares ONE state file, which is exactly right: they are the
+/// same workspace, and the display flips between them the moment a save
+/// creates the sidecar — the viewport memory survives that transition.
+/// A different stem is a different workspace; the contract layout sidecar
+/// `big.json` is a different exact filename and can never collide. Empty
+/// and stdin (`-`) have no sidecar — there is nothing beside them.
 #[must_use]
 pub fn sidecar_path(display: &str) -> Option<std::path::PathBuf> {
     if display.is_empty() || display == "-" {
@@ -233,9 +231,9 @@ mod tests {
 
     #[test]
     fn sidecar_path_uses_the_stem_and_skips_stdin() {
-        // F11 exact filename: `<stem>.oxidizr.json`, so the big.dsl /
-        // big.json companion PAIR shares one state file and neither can
-        // collide with the contract layout sidecar `big.json`.
+        // Exact filename `<stem>.oxidizr.json`: the big.dsl / big.json
+        // companion PAIR shares one state file and neither can collide
+        // with the contract layout sidecar `big.json`.
         assert_eq!(
             sidecar_path("work/big.dsl").unwrap(),
             std::path::PathBuf::from("work/big.oxidizr.json")

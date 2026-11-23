@@ -1,7 +1,7 @@
-//! Invertible editing commands + undo/redo stacks (P3-D4, P3-M3-2):
+//! Invertible editing commands + undo/redo stacks:
 //! every edit is a [`Command`] mutating only the [`LayoutOverlay`] —
 //! geometry deltas over the read-only workspace; the model and DSL text
-//! are immutable (editor rule, P3-D0). Commands carry their own inverse
+//! are immutable (the editor rule). Commands carry their own inverse
 //! (`from`/`to` pairs), so undo is a symmetric re-apply — no closures
 //! on the stack, and a saved session never needs to serialise one.
 //!
@@ -13,14 +13,13 @@
 //! factory returns `None` when nothing would move, so the shell never
 //! pushes a no-op onto [`History`]. The auto-layout engine lands through
 //! the same door: the shell turns one run into `MoveElements` +
-//! `SetWaypoints` and it becomes undoable like any edit (P3-M3 row).
+//! `SetWaypoints` and it becomes undoable like any edit.
 //!
-//! Reference parity (§P3-D10 V4, monorepo `ad34036`): the layout
-//! semantics follow the web tool — `removeAllVertices` before every
-//! auto-layout run, Bring-elements-back and Remove-all-vertices as
-//! dialog-level commands, per-diagram undo stacks. Grid snap (10 px) is
-//! OURS (visual parity out of contract, P3-D0); the reference snaps
-//! nothing.
+//! Layout semantics follow the official tooling's layout editor:
+//! `removeAllVertices` before every auto-layout run,
+//! Bring-elements-back and Remove-all-vertices as dialog-level commands,
+//! per-diagram undo stacks. Grid snap (10 px) is OURS (visual parity is
+//! out of contract); the official tooling snaps nothing.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -31,9 +30,9 @@ use oxidizr_core::views::{Dimensions, Vertex, ViewContent};
 
 use crate::scene::{Overrides, Rect, Scene};
 
-/// Grid-snap pitch in world px (§P3-D4: 10 px, toggle in the shell).
+/// Grid-snap pitch in world px (10, toggle in the shell).
 pub const GRID_PX: f64 = 10.0;
-/// Undo-stack cap (§P3-D4: 200 — the oldest command drops off first).
+/// Undo-stack cap: 200 — the oldest command drops off first.
 pub const HISTORY_CAP: usize = 200;
 
 /// One element move: (id, previous top-left, new top-left) — the
@@ -50,12 +49,12 @@ pub fn snapped(value: f64) -> f64 {
     (value / GRID_PX).round() * GRID_PX
 }
 
-/// The session geometry of ONE view (P3-D4): deltas over the stored
+/// The session geometry of ONE view: deltas over the stored
 /// [`Workspace`], keyed by model ids — exactly
 /// the payload [`Overrides`] carries, plus the view-level canvas
-/// `dimensions` (the `SetCanvasSize` target; [`crate::scene::build`] ignores
-/// it until M4's export sizing). NEVER persisted directly: SAVE maps it
-/// onto a cloned workspace (M3-5).
+/// `dimensions` (the `SetCanvasSize` target; [`crate::scene::build`]
+/// ignores it — export sizing reads it). NEVER persisted directly: SAVE
+/// maps it onto a cloned workspace.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LayoutOverlay {
     /// The view this overlay belongs to (the shell keys its map, but
@@ -67,8 +66,8 @@ pub struct LayoutOverlay {
     pub elements: HashMap<Id, (f64, f64)>,
     /// Relationship id → INTERIOR waypoints, replacing the stored
     /// vertices wholesale — same contract as
-    /// [`Overrides::relationships`] (an empty vec straightens: the
-    /// reference's "remove vertices" lands here).
+    /// [`Overrides::relationships`] (an empty vec straightens — the
+    /// "remove vertices" edit lands here).
     pub relationships: HashMap<Id, Vec<(f64, f64)>>,
     /// View canvas size (`dimensions`), `None` = stored/automatic.
     pub dimensions: Option<Dimensions>,
@@ -114,7 +113,7 @@ impl LayoutOverlay {
     }
 
     /// The box the element is rendered at: overlay position, scene
-    /// SIZE (style-resolved — item sizes are not editable in P3).
+    /// SIZE (style-resolved — item sizes are not editable).
     #[must_use]
     pub fn rect(&self, scene: &Scene, id: &Id) -> Option<Rect> {
         let size = scene
@@ -183,7 +182,7 @@ pub enum Command {
         /// The overlay as it was before the clear.
         snapshot: Box<LayoutOverlay>,
     },
-    /// Compound edit: the steps land and undo as ONE unit (P3-M3: one
+    /// Compound edit: the steps land and undo as ONE unit (one
     /// auto-layout run produces positions AND routes — a single Ctrl+Z
     /// reverts both).
     Group {
@@ -243,10 +242,9 @@ impl Command {
     }
 }
 
-/// Undo/redo stacks over one view's [`LayoutOverlay`] (P3-D4): `Vec`
+/// Undo/redo stacks over one view's [`LayoutOverlay`]: `Vec`
 /// stacks, cap [`HISTORY_CAP`] (oldest drops), a fresh [`History::run`]
-/// clears the redo branch — the reference's per-diagram `undoStack`,
-/// one instance per view on the shell side.
+/// clears the redo branch. The shell keeps one instance per view.
 #[derive(Debug, Default)]
 pub struct History {
     undo: Vec<Command>,
@@ -301,9 +299,8 @@ impl History {
         !self.redo.is_empty()
     }
 
-    /// Drop both stacks (view switch / workspace reload — the reference
-    /// resets its undo buffer when the diagram re-renders from a new
-    /// view).
+    /// Drop both stacks (view switch / workspace reload — history does
+    /// not survive a re-render from a new view).
     pub fn reset(&mut self) {
         self.undo.clear();
         self.redo.clear();
@@ -335,10 +332,9 @@ pub fn move_by(
     non_empty_moves(moves)
 }
 
-/// Align the selection along one edge/axis (P3-D4 parity: l/c/r/t/m/b
-/// — `m` = the middle axis line). Targets: the selection's bounding
-/// box (reference: the lasso's bounding box, not the canvas). Needs at
-/// least two elements; `None` when nothing moves.
+/// Align the selection along one edge/axis (`m` = the middle axis
+/// line). Targets: the selection's bounding box, not the canvas. Needs
+/// at least two elements; `None` when nothing moves.
 #[must_use]
 pub fn align(
     scene: &Scene,
@@ -378,8 +374,7 @@ pub fn align(
 /// Even spacing along one axis: the first/last element (by centre)
 /// stay, the ones between spread so consecutive GAPS are equal
 /// (negative gaps — overlapping selections — are kept as computed: the
-/// reference distributes the same way and visual overlap is the user's
-/// cue, P3-D0). Needs at least three elements.
+/// overlap is the user's cue). Needs at least three elements.
 #[must_use]
 #[allow(clippy::cast_precision_loss)] // selection count: exact in f64 (≤ item count)
 pub fn distribute(
@@ -440,9 +435,9 @@ pub fn distribute(
     non_empty_moves(moves)
 }
 
-/// Centre the selection on the scene bounds (P3-D4
-/// `CenterViewOrSelection`; the shell passes ALL ids for "centre the
-/// view"). `None` when nothing moves.
+/// Centre the selection on the scene bounds (the
+/// shell passes ALL ids for "centre the view"). `None` when nothing
+/// moves.
 #[must_use]
 pub fn centre_view(scene: &Scene, overlay: &LayoutOverlay, ids: &[Id]) -> Option<Command> {
     let rects: Vec<Rect> = ids
@@ -472,9 +467,9 @@ pub fn centre_view(scene: &Scene, overlay: &LayoutOverlay, ids: &[Id]) -> Option
 }
 
 /// Bring every element that is not fully on the `page` back onto it
-/// (P3-D4 `BringOffCanvasBack`; the shell passes the dimensions rect,
-/// else the visible viewport rect — the reference's magnet button uses
-/// the current canvas page). Elements are shifted by the minimal
+/// (the shell passes the dimensions rect, else the visible viewport
+/// rect — the page the user sees).
+/// Elements are shifted by the minimal
 /// delta; the loop order is content order (deterministic).
 #[must_use]
 pub fn bring_back(scene: &Scene, overlay: &LayoutOverlay, page: Rect) -> Option<Command> {
@@ -508,8 +503,8 @@ pub fn bring_back(scene: &Scene, overlay: &LayoutOverlay, page: Rect) -> Option<
     non_empty_moves(moves)
 }
 
-/// Straighten EVERY edge that renders waypoints (P3-D4
-/// `RemoveAllEdgeWaypoints`, the reference's dialog-footer button):
+/// Straighten EVERY edge that renders waypoints (the dialog's
+/// remove-vertices button):
 /// one `SetWaypoints` change per rendered relationship, emptying the
 /// interiors. `None` when all edges are already straight.
 #[must_use]
@@ -532,8 +527,8 @@ pub fn remove_all_vertices(scene: &Scene, overlay: &LayoutOverlay) -> Option<Com
     Some(Command::SetWaypoints { changes })
 }
 
-/// Replace one edge's interiors (waypoint drag/insert/delete — M3-4
-/// computes the new list with the `hit` helpers, this makes it a
+/// Replace one edge's interiors (waypoint drag/insert/delete — the
+/// caller computes the new list with the `hit` helpers, this makes it a
 /// command). `None` when the list is unchanged.
 #[must_use]
 pub fn set_waypoints(
@@ -586,7 +581,7 @@ pub fn drag_target(origin: (f64, f64), delta: (f64, f64), snap: bool) -> (f64, f
     }
 }
 
-/// Commit a live group drag (P3-M3): `from` are the effective top-lefts
+/// Commit a live group drag: `from` are the effective top-lefts
 /// captured when the drag BEGAN (the overlay may already carry the live
 /// preview positions, so the delta is not re-read from it). `snap` grid-
 /// snaps every TARGET top-left exactly like [`move_by`]; the whole group
@@ -605,7 +600,7 @@ pub fn drag_move(from: &[(Id, (f64, f64))], delta: (f64, f64), snap: bool) -> Op
     non_empty_moves(moves)
 }
 
-/// The interior routes a group drag CARRIES (§P3-M11 M11-8): every
+/// The interior routes a group drag CARRIES: every
 /// edge whose BOTH ends are inside `ids` and that has non-empty
 /// effective interior waypoints. Endpoints re-anchor off the boxes on
 /// every rebuild, so only free-floating handles need translating; an
@@ -626,8 +621,8 @@ pub fn carried_interiors(
         .collect()
 }
 
-/// Commit a live group drag that also moves the arrow handles
-/// (P3-M11): `MoveElements` plus, unless `with_waypoints` is false
+/// Commit a live group drag that also moves the arrow
+/// handles: `MoveElements` plus, unless `with_waypoints` is false
 /// (Ctrl+drag), a `SetWaypoints` translating every `carries` route by
 /// the delta ACTUALLY applied to the first origin after snapping — the
 /// routes land exactly where the boxes did. `carries` are press-time
@@ -686,7 +681,7 @@ pub fn drag_group(
 /// captured at press (the same preview/commit contract as [`drag_move`]
 /// — the live preview writes the target first, the commit reads `from`,
 /// so re-applying is idempotent). `None` when nothing moves or the
-/// index leaves the route (P3-M4).
+/// index leaves the route.
 #[must_use]
 pub fn drag_waypoint(
     id: &Id,
@@ -707,7 +702,7 @@ pub fn drag_waypoint(
     })
 }
 
-/// Land one auto-layout run as a single undoable [`Command`] (P3-M3:
+/// Land one auto-layout run as a single undoable [`Command`]:
 /// the dialog Apply and the adopt-time pass are COMMANDS, not silent
 /// state — one Ctrl+Z reverts positions and routes together). `overrides`
 /// are the engine's absolute placements/routes ([`crate::layout::apply`]'s
@@ -753,7 +748,7 @@ pub fn apply_layout(
     }
 }
 
-/// Align target for [`align`] (the P3-D4 l/c/r/t/m/b set).
+/// Align target for [`align`] (edges and centre lines).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AlignEdge {
     /// Common left edge.
@@ -808,7 +803,7 @@ fn non_empty_moves(moves: Vec<ElementMove>) -> Option<Command> {
     }
 }
 
-/// A save failure (§P3-M5) — errors as values, presented verbatim.
+/// A save failure — errors as values, presented verbatim.
 #[derive(Debug, thiserror::Error)]
 pub enum SaveError {
     /// The shared `oxidizr_json` writer refused the workspace.
@@ -824,7 +819,7 @@ pub enum SaveError {
     },
 }
 
-/// Round world px onto the reference's integer grid — `elementViews`,
+/// Round world px onto the stored integer grid — `elementViews`,
 /// `vertices` and `dimensions` all store `Integer`s and overlay values
 /// come from grid-snapped or pixel drags.
 #[allow(clippy::cast_possible_truncation)] // clamped into i32::MIN..=MAX first
@@ -836,7 +831,7 @@ fn to_px(value: f64) -> i32 {
 
 /// The stored content of one MODEL view by key — `None` for filtered
 /// and image views, which carry no geometry of their own to save
-/// (§P3-M5: saving them is blocked, the base view holds the layout).
+/// (saving them is blocked: the base view holds the layout).
 fn content_of_key<'a>(workspace: &'a mut Workspace, key: &str) -> Option<&'a mut ViewContent> {
     let views = &mut workspace.views;
     macro_rules! find {
@@ -859,10 +854,10 @@ fn content_of_key<'a>(workspace: &'a mut Workspace, key: &str) -> Option<&'a mut
 /// Clone `workspace` and write `overlay`'s deltas into the stored
 /// geometry of `view_key`: element-view `x`/`y`, relationship-view
 /// `vertices` (replaced wholesale — an empty vec straightens) and the
-/// view `dimensions` (§P3-M5). The write direction is the read path
+/// view `dimensions`. The write direction is the read path
 /// inverted and NARROWER: only these three geometry slots change —
 /// the model, styles and the permanent `automaticLayout` block
-/// round-trip untouched (V4: save writes GEOMETRY, never the block).
+/// round-trip untouched (save writes GEOMETRY, never the block).
 /// A key without a content slot changes nothing.
 #[must_use]
 pub fn apply_overlay(workspace: &Workspace, view_key: &str, overlay: &LayoutOverlay) -> Workspace {
@@ -892,9 +887,9 @@ pub fn apply_overlay(workspace: &Workspace, view_key: &str, overlay: &LayoutOver
     workspace
 }
 
-/// The save target for a displayed input (§P3-M5): the opened `.json`
+/// The save target for a displayed input: the opened `.json`
 /// in place, a `<stem>.json` SIDE CAR next to a `.dsl` source (the DSL
-/// text is never rewritten, P3-D0), `None` for stdin (`"-"`).
+/// text is never rewritten), `None` for stdin (`"-"`).
 #[must_use]
 pub fn save_target(display: &str) -> Option<PathBuf> {
     if display == "-" {
@@ -912,10 +907,10 @@ pub fn save_target(display: &str) -> Option<PathBuf> {
 }
 
 /// Serialize with the SHARED JSON writer (the save path adds no second
-/// serializer — byte contract, COMPAT.md) to a temp file next to the
+/// serializer — one byte contract) to a temp file next to the
 /// target, then rename it into place: a crash or a full disk never
-/// leaves a truncated workspace behind (P3-D6 posture, shared with the
-/// M4 reload writer).
+/// leaves a truncated workspace behind (the same atomic posture the
+/// reload writer keeps).
 ///
 /// # Errors
 ///
@@ -926,8 +921,8 @@ pub fn write_workspace(path: &Path, workspace: &Workspace) -> Result<(), SaveErr
     write_atomic(path, &bytes)
 }
 
-/// Atomic byte write (the M3-5 pattern, shared by save and M4-5
-/// export): `.{pid}.tmp` beside the target, then rename. The temp
+/// Atomic byte write (shared by save and export): `.{pid}.tmp` beside
+/// the target, then rename. The temp
 /// suffix never matches the reload watch's exact-path filter, so
 /// exports landing in a watched directory cannot trigger a reload.
 ///
@@ -951,7 +946,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), SaveError> {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)] // test fixtures
-#[allow(clippy::float_cmp)] // exact geometry: equality IS the contract (§P3-D3)
+#[allow(clippy::float_cmp)] // exact geometry: equality IS the contract
 mod tests {
     use super::*;
     use crate::scene::{Edge, Item};
@@ -1383,7 +1378,7 @@ mod tests {
         let mut o = overlay();
         // The live preview already wrote the target into the overlay;
         // the commit reads the press-captured interior, not the
-        // mutated state (P3-M4 handle drag).
+        // mutated state (a handle drag).
         o.relationships
             .insert(id(10), vec![(120.0, 40.0), (215.0, 85.0)]);
         let from = [(120.0, 40.0), (200.0, 80.0)];
@@ -1441,7 +1436,7 @@ mod tests {
         assert_eq!(o.interior(&scene, &id(10)), Vec::new());
         assert_eq!(o.interior(&scene, &id(11)), vec![(300.0, 50.0)]);
         // Undo writes the `from` geometry back: the overlay RENDERS as
-        // before (M3-2 semantics — the entries keep the stored values,
+        // before (the entries keep the stored values,
         // they are not erased), and a save would write the identical
         // file.
         cmd.undo(&mut o);
@@ -1519,8 +1514,8 @@ mod tests {
         use oxidizr_api::pipeline::{ApiOptions, Input};
 
         // A real open (not a hand-built model): `from_slice` runs the
-        // hydrate-equivalent validation, so the fixture must be a real
-        // workspace the same way the golden_paint tests are (Category A).
+        // same validation the JSON reader applies, so the fixture must
+        // be a real workspace the same way the golden_paint tests are.
         let dir = std::env::temp_dir().join(format!("oxidizr-m35-save-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -1582,7 +1577,7 @@ mod tests {
         );
 
         // Sidecar target, temp+rename write, reader round-trip. The
-        // JSON READ applies the reference bean normalizations (an empty
+        // JSON READ applies its own normalizations (an empty
         // `description` string binds as `Some("")`, tags are rebuilt
         // from the serialized form) and the writer sorts the entry
         // arrays by id — so the contract is not struct equality but

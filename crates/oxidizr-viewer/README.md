@@ -1,104 +1,45 @@
 # oxidizr-viewer
 
-Native workspace viewer + layout editor (P3): open a Structurizr `.dsl` or
-`.json`, look at every view, edit the layout, save it back as JSON — the
-model and the DSL text are never rewritten.
-
-## Run
+Native workspace viewer + layout editor: open a Structurizr `.dsl` or
+`.json`, look at every view, edit the layout, save it back as JSON —
+the model and the DSL text are never rewritten.
 
 ```sh
 cargo run -p oxidizr-viewer --features gui -- workspace.dsl
-cargo run -p oxidizr-viewer --features gui -- workspace.json --theme dark
-
-# the unified binary drives the SAME window (F10, §P3-M8):
 cargo run -p oxidizr-cli --features gui -- view workspace.dsl --theme dark
 ```
 
-The `gui` feature compiles the eframe shell (`shell.rs`); the standalone
-binary is its argv shim and `oxidizr view` is the in-process entry of the
-unified `oxidizr` binary — both call one `oxidizr_viewer::shell::run`, so
-they cannot drift. Without the cli `gui` feature `oxidizr view` still
-appears in `--help` but exits with the rebuild hint. The library core is
-headless — `cargo test -p oxidizr-viewer` never opens a window or touches
-a GPU.
-
-`--theme light|dark|system` (default `system`: persisted toggle first, then
-the OS preference). A file argument opens at startup; otherwise use the
-toolbar path field + Enter / **Open**.
+The `gui` feature compiles the eframe shell; the standalone binary and
+`oxidizr view` share one entry point. The core is headless — tests
+never window or touch a GPU. `--theme light|dark|system`, default `system`.
 
 ## What you get
 
-- Every view kind renders with full styling (custom/image views are
-  placeholder boxes), arrows landing on box sides (never the middle) and
-  labels painted above every box (nested boxes never cover text),
-  light/dark themes, the bundled font, tooltips, a tag filter, and the
-  right panel: a **Selection info block** (click any element or edge —
-  name, kind, description, position / endpoints, technology…) above the
-  key/legend; the left panel: a **view selector grouped by
-  view type** (System landscape → context → Container → Component →
-  Deployment → Dynamic → Filtered → Image → Custom, each under its own
-  heading) plus a search that jumps to elements (select + center, rows
-  carry the element's real icon) or switches to matching views. The
-  opened path shows once — the toolbar edit bar (title bar carries the
-  file name only).
-- Navigation: wheel zoom (pinch too — two-finger trackpad scroll
-  pans), `−`/`+`/`Fit`, drag on empty canvas pans (middle-button or
-  Space-drag too), **right-drag** lassos, minimap (click/drag
-  recenters). Per-view undo history (cap 200).
-- Editing: drag a box to move (optional **Snap**, 10 px grid) — the arrow
-  handles of its fully-contained edges move with it, **Ctrl+drag**
-  leaves them behind. Right-drag empty canvas to lasso, click/Shift-click
-  to select, click an edge to select, drag its handles to reroute,
-  double-click inserts a handle, Alt+click deletes one and **Delete**
-  drops them all. Views whose file carries NO element coordinates
-  open laid out by the bundled engine automatically (the view's
-  `autolayout` settings when present) — a display default, never marked
-  dirty; it is written out when you save. The **Layout** dialog runs the
-  bundled layered engine on demand (direction + spacings, optional route
-  vertices) and offers align/distribute/centre/bring-back/remove-vertices.
-  All edits live in a per-view overlay — the opened workspace stays
-  immutable in-app.
-- **Save** (Ctrl+S, enabled when dirty): writes the layout back as JSON —
-  the opened `.json` in place, or a `<stem>.json` sidecar for DSL sources —
-  through the same byte-contract writer as the CLI (atomic temp+rename).
-  A view that opened with automatic layout saves the COMPLETE geometry
-  the screen showed — engine placements plus your edits.
-- **Export**: writes `<stem>.svg` + `<stem>.png` with the diagram key
-  beside the save file — the current view exactly as painted, no selection.
-- Live reload: edits to the file on disk (including `!include` files)
-  reload the view and KEEP your layout, selected view and camera
-  (reconcile remaps surviving ids).
-  A saved `.json` sidecar becomes the open/reload source until the `.dsl`
-  is edited again — newest wins. A failed reparse keeps the last-good view.
-- **Viewport memory**: every view you pan/zoom is remembered per
-  workspace and restored on reopen, in a `<stem>.oxidizr.json` file — a
-  versioned, atomic, pure cache that is never read as a workspace (the
-  contract sidecar `<stem>.json` is a different file; deleting the state
-  file loses nothing but the camera positions).
-
-Keyboard: Ctrl+Z / Ctrl+Y undo/redo · Ctrl+S save · Ctrl/⌘-click opens an
-element URL · Esc deselects. Toolbar `?` lists every gesture.
-
-## Layout engines
-
-The bundled `oxidizr-layout` `Layered` engine is always available.
-Optionally, build with `--features dot-backend` and set `$OXIDZR_DOT_BIN`
-to a graphviz binary: the Layout dialog then grows an **Engine** combo
-(graphviz `dot`, via `-Tplain`). The choice is session-only; without the
-feature or the variable the dialog looks exactly as before and the binary
-spawns nothing.
+- Every view kind renders fully styled: arrows land on box sides,
+  labels paint above every box, light/dark themes, tooltips, a tag
+  filter, a view selector grouped by kind with search, selection
+  facts in the right panel.
+- Navigation: wheel zoom, drag pans, **right-drag** lassos, minimap,
+  per-view undo history.
+- Editing: drag boxes (optional 10 px snap), reroute edges by their
+  handles, double-click inserts one, **Delete** drops them. All edits
+  live in a per-view overlay; views without stored coordinates open
+  laid out by the bundled engine, and the **Layout** dialog runs it
+  on demand (+ graphviz: `dot-backend` feature, `$OXIDZR_DOT_BIN`).
+- **Save** (Ctrl+S) writes the layout back as JSON (in place, or a
+  `<stem>.json` sidecar for DSL sources) through the same
+  byte-contract writer as the CLI; **Export** writes the current
+  view as `<stem>.svg` + `<stem>.png`, exactly as painted.
+- Live reload keeps layout, view and camera; viewport memory
+  restores each view's pan/zoom from a `<stem>.oxidizr.json` cache.
+- Keyboard: Ctrl+Z/Ctrl+Y undo/redo, Ctrl+S save, Ctrl/⌘-click
+  opens an element URL, Esc deselects; toolbar `?` shows gestures.
 
 ## Development
 
-```sh
-cargo test -p oxidizr-viewer                                  # lib core + golden paint
-cargo run -p oxidizr-viewer --features gui                    # the shell
-cargo test --release -p oxidizr-viewer --test perf_scene -- --ignored --nocapture  # perf probe
-```
+The library core never references eframe/egui — a guard test enforces it.
 
-Headless library modules (`scene`, `paint`, `hit`, `layout`, `commands`,
-`reload`, `overview`, `export`, …) never reference eframe/egui — a guard
-test enforces it; the shell in `main.rs` (feature `gui`) is the only
-windowing surface. See `agents/plan/build/PHASE_3.md` for the design
-decisions and `agents/notes/perf/scene-paint-budgets.md` for frame-budget
-figures.
+```sh
+cargo test -p oxidizr-viewer                 # lib core + golden paint
+cargo run -p oxidizr-viewer --features gui   # the shell
+```

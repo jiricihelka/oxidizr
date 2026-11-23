@@ -1,4 +1,4 @@
-//! The retained scene (P3-D3): `Workspace` + resolved styles →
+//! The retained scene: `Workspace` + resolved styles →
 //! [`Scene`] layers/items/edges, rebuilt only on model change, layout edit
 //! or zoom-band transition — never per frame.
 //!
@@ -6,25 +6,25 @@
 //! workspace into presentation-ready data — no eframe/egui types anywhere
 //! (the boundary guard in [`crate`] keeps it that way).
 //!
-//! Decisions baked in here (§P3-M1, pinned 2026-11-19):
+//! Decisions baked in here:
 //!
 //! - **Geometry** is the stored `x/y` (top-left), except where a session
-//!   [`Overrides`] (P3-M2-5 auto-layout) replaces it — build-time only,
-//!   the stored workspace is never touched (editor rule, P3-D0).
+//!   [`Overrides`] (auto-layout) replaces it — build-time only,
+//!   the stored workspace is never touched (editor rule).
 //!   **Size** is the resolved style's `width`/`height`,
 //!   else the [`DEFAULT_ITEM_WIDTH`]×[`DEFAULT_ITEM_HEIGHT`] box: the
-//!   reference auto-sizes boxes by measuring text on a canvas
+//!   the official UI auto-sizes boxes by measuring text on a canvas
 //!   (`structurizr-diagram.js` `calculateWidth`/`calculateHeight`), which
-//!   is visual parity — out of contract per P3-D0.
+//!   is visual parity — out of contract per .
 //! - **Text is kept as plain runs** (name, description and metadata
 //!   strings plus the font size). The decomposition sketch allowed
-//!   `epaint` layout jobs; deferring them to the M1-4 paint step keeps
+//!   `epaint` layout jobs; deferring them to the paint step keeps
 //!   this module (and the whole lib core) free of the egui stack —
-//!   recorded on the §P3-M1 M1-2 row.
+//!   recorded on the row.
 //! - **Styles resolve through [`core`](oxidizr_core::styles) only**
-//!   (P2-D2): `element_style`/`relationship_style` guarantee
+//!   : `element_style`/`relationship_style` guarantee
 //!   background/stroke/color after the scheme defaults.
-//! - **Metadata lines and terminology mirror the reference UI**:
+//! - **Metadata lines and terminology mirror the official UI UI**:
 //!   `structurizr.ui.getMetadataForElement` (`structurizr-ui.js:638`, with
 //!   the technology suffix) / `getMetadataForRelationship` /
 //!   `Workspace.getTerminologyFor` (`structurizr-workspace.js:1161` — the
@@ -32,17 +32,17 @@
 //!   `metadataSymbols` wrapping (default `SquareBrackets`,
 //!   `structurizr-workspace.js:735`).
 //! - **`DeploymentNode` elements are boundaries, not items** — the
-//!   reference skips them in the element loop (`structurizr-diagram.js:558`)
+//!   the official UI skips them in the element loop
 //!   and embeds their children instead. Group boundaries follow the same
-//!   scoping as `includeGroup` (`structurizr-diagram.js:663`): scope is the
+//!   scoping as `includeGroup`: scope is the
 //!   model parent, else the environment (top-level deployment nodes), else
-//!   the root scope. (The reference's `Internal`/`External` scope split and
+//!   the root scope. (The the official UI's `Internal`/`External` scope split and
 //!   the enterprise boundary ride the `location`/`enterprise` fields, which
 //!   our byte contract does not carry — a single root scope is used and no
 //!   enterprise boundary is rendered.)
 //! - **Filtered views resolve inside [`build`]**: the base view's content
-//!   is evaluated with [`oxidizr_core::filter::eval`] (P3-V5). The `mask`
-//!   parameter is the session tag filter (P3-V7: session-only, the model
+//!   is evaluated with [`oxidizr_core::filter::eval`] . The `mask`
+//!   parameter is the session tag filter (: session-only, the model
 //!   file is never touched) pre-evaluated by the caller; it INTERSECTS the
 //!   view's own filter.
 //! - **Determinism**: items and edges follow content order; boundaries are
@@ -66,8 +66,8 @@ use oxidizr_core::views::{
 };
 use oxidizr_core::{Id, Workspace};
 
-/// Reference `LIGHT_MODE_DEFAULTS.strokeWidth` / `DARK_MODE_DEFAULTS`
-/// (`structurizr-ui.js:15`): the element/boundary stroke width when the
+/// The official UI default stroke widths (`LIGHT_MODE_DEFAULTS` /
+/// `DARK_MODE_DEFAULTS`): the element/boundary stroke width when the
 /// resolved style leaves `strokeWidth` unset.
 pub const DEFAULT_STROKE_WIDTH: i32 = 2;
 /// Box width when the resolved style sets no `width` (see module docs).
@@ -75,7 +75,7 @@ pub const DEFAULT_ITEM_WIDTH: f64 = 350.0;
 /// Box height when the resolved style sets no `height` (see module docs).
 pub const DEFAULT_ITEM_HEIGHT: f64 = 150.0;
 /// Padding a boundary's member union grows by (chrome of ours — the
-/// reference computes boundary insets from its own layout passes).
+/// the official UI computes boundary insets from its own layout passes).
 pub const BOUNDARY_PADDING: f64 = 20.0;
 /// Margin around the [`Scene::bounds`] union.
 pub const SCENE_MARGIN: f64 = 20.0;
@@ -120,14 +120,14 @@ impl Rect {
         }
     }
 
-    /// Geometric centre (the origin of the edge-anchor ray, §P3-M11).
+    /// Geometric centre (the origin of the edge-anchor ray).
     #[must_use]
     pub fn center(self) -> (f64, f64) {
         (self.x + self.width / 2.0, self.y + self.height / 2.0)
     }
 
     /// Inclusive containment of a point (hit-test semantics: edges of the
-    /// box count, matching the reference's `includePoints` boxes).
+    /// box count, matching the official UI’s `includePoints` boxes).
     #[must_use]
     pub fn contains(self, point: (f64, f64)) -> bool {
         point.0 >= self.x
@@ -142,7 +142,7 @@ fn union_all(rects: impl Iterator<Item = Rect>) -> Option<Rect> {
     rects.reduce(Rect::union)
 }
 
-/// One rendered model element (reference: the `structurizr.box` cell).
+/// One rendered model element (the official UI: the `structurizr.box` cell).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item {
     /// Model element id.
@@ -166,21 +166,21 @@ pub struct Item {
     /// Resolved shape (default `Box`).
     pub shape: Shape,
     /// Resolved background `#rrggbb` (opacity shading stays a paint
-    /// concern — `shadeColor` equivalent lives in M1-4).
+    /// concern — `shadeColor` equivalent lives in).
     pub background: String,
-    /// Resolved stroke `#rrggbb` (auto = darker background per P2-D2).
+    /// Resolved stroke `#rrggbb` (auto = darker background per).
     pub stroke: String,
-    /// Stroke width px (reference default 2).
+    /// Stroke width px (the official UI default 2).
     pub stroke_width: i32,
     /// Border style (Solid/Dashed/Dotted).
     pub border: LineStyle,
     /// Text color `#rrggbb`.
     pub color: String,
-    /// Font size px (reference default 24).
+    /// Font size px (the official UI default 24).
     pub font_size: i32,
     /// Opacity percent (0-100).
     pub opacity: i32,
-    /// Icon reference from the style (resolved by the M1-5 atlas).
+    /// Icon the official UI from the style (resolved by the atlas).
     pub icon: Option<String>,
     /// Icon slot within the box.
     pub icon_position: IconPosition,
@@ -199,7 +199,7 @@ pub enum BoundaryKind {
     Container,
 }
 
-/// A boundary box behind the items (reference `createBoundary` /
+/// A boundary box behind the items (the official UI `createBoundary` /
 /// `createDeploymentNode` / group embedding).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Boundary {
@@ -210,7 +210,7 @@ pub struct Boundary {
     pub id: String,
     /// Box label (group name or element name).
     pub label: String,
-    /// Metadata line under the label — `None` for groups (the reference
+    /// Metadata line under the label — `None` for groups (the official UI
     /// `createBoundaryForGroup` passes no metadata).
     pub metadata: Option<String>,
     /// Union of the member rects + [`BOUNDARY_PADDING`].
@@ -231,7 +231,7 @@ pub struct Boundary {
     pub opacity: i32,
 }
 
-/// One rendered relationship (reference: the `structurizr.arrow` cell).
+/// One rendered relationship (the official UI: the `structurizr.arrow` cell).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Edge {
     /// Model relationship id.
@@ -241,7 +241,7 @@ pub struct Edge {
     /// Destination element id.
     pub destination: Id,
     /// Polyline: source box SIDE → stored vertices → destination side
-    /// (§P3-M11 M11-3: endpoints are the centre rays clipped to the
+    /// (endpoints are the centre rays clipped to the
     /// box borders, so arrows never land on the middle).
     pub points: Vec<(f64, f64)>,
     /// Label (the relationship description; the relationship view's
@@ -254,7 +254,7 @@ pub struct Edge {
     pub order: Option<String>,
     /// Line color `#rrggbb`.
     pub color: String,
-    /// Line thickness px (reference default 2).
+    /// Line thickness px (the official UI default 2).
     pub thickness: i32,
     /// Line style (Solid/Dashed/Dotted).
     pub line_style: LineStyle,
@@ -270,7 +270,7 @@ pub struct Edge {
     pub url: Option<String>,
 }
 
-/// The retained scene graph of one view (P3-D3).
+/// The retained scene graph of one view .
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scene {
     /// Key of the rendered view (a filtered view's own key when one was
@@ -279,7 +279,7 @@ pub struct Scene {
     /// View title (`getTitleForView` mirror: explicit title, else the
     /// kind-derived default name).
     pub title: String,
-    /// Canvas background for the scheme (the reference
+    /// Canvas background for the scheme (the official UI
     /// `LIGHT/DARK_MODE_DEFAULTS.background` — same values as the core
     /// style defaults).
     pub background: String,
@@ -294,9 +294,9 @@ pub struct Scene {
     pub bounds: Rect,
 }
 
-/// Session auto-layout geometry (P3-M2-5): what the [`layout`] module
+/// Session auto-layout geometry: what the [`layout`] module
 /// produced for the current view, overlaid on the stored values at
-/// [`build`] time. NEVER persisted (the editor rule, P3-D0: session
+/// [`build`] time. NEVER persisted (the editor rule,: session
 /// geometry only until M3 owns saving) and per-view (the shell clears
 /// it on every view change).
 ///
@@ -315,7 +315,7 @@ pub struct Overrides {
 }
 
 impl Overrides {
-    /// The shell's display composition (§P3-M6): the engine geometry of
+    /// The shell's display composition: the engine geometry of
     /// an un-laid-out view with the user overlay merged on top PER ID —
     /// a dragged element pins its own box, everything else keeps the
     /// engine's placement. `user` wins, `auto` fills the gaps.
@@ -373,8 +373,8 @@ pub enum SceneError {
 /// `mask` is the optional session tag-filter inclusion ([`Included`],
 /// pre-evaluated by the caller with [`oxidizr_core::filter::eval`]); it
 /// INTERSECTS the view's own filter (a filtered view is resolved against
-/// its base here, P3-V5). `overrides` is the optional session auto-layout
-/// geometry ([`Overrides`], P3-M2-5): element top-lefts and relationship
+/// its base here). `overrides` is the optional session auto-layout
+/// geometry ([`Overrides`]): element top-lefts and relationship
 /// interior waypoints OVERLAID on the stored values — boundaries follow
 /// their members automatically. Geometry resolution rules: module docs.
 ///
@@ -402,8 +402,8 @@ pub fn build(
         });
     };
 
-    // Filtered view: resolve the base (reference `findViewByKey`); its
-    // content is the render target and its filter evaluates first (P3-V5).
+    // Filtered view: resolve the base (the official UI `findViewByKey`); its
+    // content is the render target and its filter evaluates first .
     // `base_view` is declared here so its borrow outlives `content`.
     let base_view: View;
     let (rendered, content, filtered, title_base) = match view {
@@ -470,7 +470,7 @@ pub fn build(
     };
 
     // Container-view legality (`removeIllegalElements`,
-    // `structurizr-diagram.js:3401`): a foreign container outranks its
+    // the official UI script): a foreign container outranks its
     // parent software system — the parent leaves the diagram.
     let mut removed: Vec<&Id> = Vec::new();
     if let View::Container(v) = rendered {
@@ -512,8 +512,8 @@ pub fn build(
         let tags = tags_csv(&el);
         let style = styles.element_style(&tags, color_scheme);
         let placement = if el.kind == ElementKind::DeploymentNode {
-            // Reference: `continue` in the element loop
-            // (`structurizr-diagram.js:558`) — the node becomes a boundary
+            // The official UI `continue`s in the element loop
+            // — the node becomes a boundary
             // via its embedded children instead.
             let spec = DnSpec {
                 id: id.clone(),
@@ -527,7 +527,7 @@ pub fn build(
             dns.push(spec);
             Placement::Dn(dn_idx)
         } else {
-            // Session auto-layout wins over the stored top-left (P3-M2-5);
+            // Session auto-layout wins over the stored top-left;
             // sizes stay style-resolved either way.
             let (x, y) = overrides
                 .and_then(|o| o.elements.get(id))
@@ -588,7 +588,7 @@ pub fn build(
         };
         placements.push(Some(placement));
 
-        // Group membership (`includeGroup`, reference `findOrCreateGroup`).
+        // Group membership (`includeGroup`, the official UI `findOrCreateGroup`).
         if let Some(group) = el.group {
             let scope = group_scope(&el);
             let key = (scope.clone(), group.to_string());
@@ -615,7 +615,7 @@ pub fn build(
             }
         }
 
-        // Parent-scope boundaries (the reference's view-type-guarded
+        // Parent-scope boundaries (the official UI’s view-type-guarded
         // `addElementToBoundary` calls, `structurizr-diagram.js:710-740`).
         for (kind, boundary_id) in scope_targets(rendered, el.kind, el.parent, model) {
             let key = format!("{}:{boundary_id}", boundary_tag(kind));
@@ -648,7 +648,7 @@ pub fn build(
     }
 
     // Deployment-node embedding: direct model children on the diagram
-    // (reference `createDeploymentNode` + the second embed pass).
+    // (the official UI `createDeploymentNode` + the second embed pass).
     let mut dn_child_items: HashMap<usize, Vec<usize>> = HashMap::new();
     let mut dn_child_dns: HashMap<usize, Vec<usize>> = HashMap::new();
     for (element_idx, placement) in placements.iter().enumerate() {
@@ -754,7 +754,7 @@ pub fn build(
     let boundaries: Vec<Boundary> = pending.into_iter().map(|(_, b)| b).collect();
 
     // Edges: source side → stored vertices → destination side
-    // (§P3-M11 M11-3, see `border_anchor`).
+    // (see `border_anchor`).
     let mut edges: Vec<Edge> = Vec::new();
     for rv in &content.relationships {
         if !keep_relationship(&rv.id) {
@@ -769,7 +769,7 @@ pub fn build(
             continue; // endpoint not an item (stale, filtered, deployment node)
         };
         let style = styles.relationship_style(rel, model, color_scheme);
-        // §P3-M11 M11-3: arrows LAND ON BOX SIDES, not centres — each
+        // arrows LAND ON BOX SIDES, not centres — each
         // endpoint is the ray from its box centre toward the next route
         // point, clipped where it exits the box (the dx/dy exit rule
         // matches the engine's `endpoint(None)`, so an engine-routed
@@ -777,7 +777,7 @@ pub fn build(
         // waypoints the pair is the two facing border points.
         let waypoints: Vec<(f64, f64)> = match overrides.and_then(|o| o.relationships.get(&rv.id)) {
             // Session auto-layout replaces the stored vertices
-            // wholesale (P3-M2-5) — an empty override vec
+            // wholesale — an empty override vec
             // straightens the edge.
             Some(points) => points.clone(),
             None => rv
@@ -868,7 +868,7 @@ pub fn build(
 // ---- scene-local element resolution ---------------------------------------
 
 /// A model element resolved for rendering: identity + the fields the
-/// reference draws (the `filter` module's own resolve is tag-only).
+/// the official UI draws (the `filter` module's own resolve is tag-only).
 struct Resolved<'m> {
     kind: ElementKind,
     item: &'m ModelItem,
@@ -877,7 +877,7 @@ struct Resolved<'m> {
     custom_metadata: Option<&'m str>,
     parent: Option<&'m Id>,
     environment: Option<&'m str>,
-    /// Instance → static element (tag-chain prepending, reference
+    /// Instance → static element (tag-chain prepending, the official UI
     /// `findElementStyle`).
     static_element: Option<(&'m ModelItem, ElementKind)>,
 }
@@ -1034,9 +1034,9 @@ fn resolve_node<'m>(
     None
 }
 
-/// The element's full style tag chain as CSV — the reference
-/// `getTags()` (`Tags::serialized_for`), with the instance prepending
-/// (`instance_tag_chain`, reference `Styles.findElementStyle`).
+/// The element's full style tag chain as CSV — the official UI
+/// `getTags` (`Tags::serialized_for`), with the instance prepending
+/// (`instance_tag_chain`, the official UI `Styles.findElementStyle`).
 fn tags_csv(el: &Resolved<'_>) -> String {
     let own = el
         .item
@@ -1130,7 +1130,7 @@ fn boundary_from(
     }
 }
 
-/// Memoized bottom-up deployment-node rect (reference: the deployment-node
+/// Memoized bottom-up deployment-node rect (the official UI: the deployment-node
 /// cells embed child cells, then the second pass embeds nodes into their
 /// parent cell).
 fn dn_rect(
@@ -1160,7 +1160,7 @@ fn dn_rect(
     rect
 }
 
-/// Reference `includeGroup` scoping (`structurizr-diagram.js:663`): the
+/// Group-membership scoping: the
 /// model parent, else the environment (top-level deployment nodes), else
 /// the single root scope (the `location` split is not in the contract).
 fn group_scope(el: &Resolved<'_>) -> String {
@@ -1217,7 +1217,7 @@ fn boundary_tag(kind: BoundaryKind) -> &'static str {
     }
 }
 
-// ---- reference text helpers ------------------------------------------------
+// ---- the official UI text helpers ------------------------------------------------
 
 /// The element metadata line: `getMetadataForElement(element,
 /// includeTechnology)` — `symbol + term [+ ": " + technology] + symbol`;
@@ -1358,14 +1358,14 @@ fn default_title(workspace: &Workspace, view: View<'_>) -> String {
 }
 
 /// The rect an id rendered as, when it became an item.
-/// Edge endpoint (§P3-M11 M11-3, spread-aware since M11-6): the ray
+/// Edge endpoint (spread-aware since): the ray
 /// from `rect`'s centre toward `toward` CHOOSES the exit side (the
 /// exact `endpoint(None)` rule, so engine-routed views enter the side
 /// it chose), but the anchor then sits where `toward` FACES that side
 /// — its cross coordinate projected onto the side and clamped to the
 /// side's extent. Axis-parallel route legs therefore stay
 /// axis-parallel after re-anchoring, which is what re-adds the engine
-/// §P3-M11 port-spread anchors EXACTLY (an engine leg shares its cross
+/// port-spread anchors EXACTLY (an engine leg shares its cross
 /// coordinate with the port). Pure centre→centre pairs still meet at
 /// the facing midpoints; a degenerate ray (both deltas zero) falls
 /// back to the centre.
@@ -1611,7 +1611,7 @@ mod tests {
             Some("[Software System]")
         );
         assert_eq!(scene.boundaries, [] as [Boundary; 0]);
-        // Edge = facing box SIDES (§P3-M11 M11-3, not centres).
+        // Edge = facing box SIDES (not centres).
         assert_eq!(scene.edges.len(), 1);
         assert_eq!(scene.edges[0].points, vec![(350.0, 75.0), (400.0, 75.0)]);
         assert_eq!(scene.edges[0].label.as_deref(), Some("Uses"));
@@ -1825,7 +1825,7 @@ mod tests {
         // The endpoint got filtered away: edge dropped.
         assert_eq!(scene.edges, [] as [Edge; 0]);
 
-        // A session mask on the BASE view composes the same way (V7).
+        // A session mask on the BASE view composes the same way .
         let mask = Included {
             element_ids: vec![id(1)],
             relationship_ids: Vec::new(),
@@ -1936,7 +1936,7 @@ mod tests {
         assert_eq!(
             edge.points,
             // Ray-picked sides, then the anchor SLIDES to face the
-            // waypoint (§P3-M11 M11-6): both legs become axis-parallel
+            // waypoint: both legs become axis-parallel
             // — bottom facing x 300, bottom facing x 400.
             vec![(300.0, 150.0), (300.0, 200.0), (400.0, 150.0)]
         );
@@ -1966,7 +1966,7 @@ mod tests {
 
     #[test]
     fn overrides_replace_stored_geometry() {
-        // P3-M2-5 seam: element top-lefts and relationship INTERIOR
+        // seam: element top-lefts and relationship INTERIOR
         // waypoints overlay the stored values (the workspace is never
         // touched — session state, like the tag mask).
         let ws = with_landscape(
@@ -1988,7 +1988,7 @@ mod tests {
         assert_eq!((alice.rect.x, alice.rect.y), (2000.0, 600.0));
         let edge = scene.edges.iter().find(|e| e.id == id(20)).unwrap();
         // Endpoints land on the sides, slid to face the adjacent vertex
-        // (§P3-M11 M11-6): alice exits the TOP directly above (2100,300);
+        //: alice exits the TOP directly above (2100,300);
         // the bank enters from the BOTTOM at its near corner — toward.x
         // (300) is left of the bank (x starts at 400), so it clamps to
         // the bank's bottom-left corner.

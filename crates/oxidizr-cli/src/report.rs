@@ -1,4 +1,4 @@
-//! miette rendering of CLI diagnostics (P1-D2 codes, P1-D8 rendering).
+//! miette rendering of CLI diagnostics.
 //!
 //! The diagnostic data type itself is `oxidizr_api::Issue` (pure, shared with
 //! the headless pipeline since T0); this module is the ONLY miette consumer:

@@ -1,21 +1,21 @@
-//! `xtask` — dev-only tooling (P1-D10): vendor the reference fixture corpus into
-//! `testdata/` with attribution, generate/verify goldens with the pinned official
+//! `xtask` — dev-only tooling: vendor the official tooling fixture corpus into
+//! `testdata/` with attribution, generate/verify goldens with the official
 //! `structurizr` application binary (the oracle), and run the CI gates locally
 //! (`ci` / `bench` / `cov`, mirroring `.github/workflows/ci.yml`).
 //!
-//! Oracle discovery follows agents/plan/TESTING.md: `$OXIDZR_STRUCTURIZR_BIN` first, then
+//! Oracle discovery follows `$OXIDZR_STRUCTURIZR_BIN` first, then
 //! `structurizr` on `PATH`. The binary is slow — run this sparingly; goldens are
 //! committed.
 //!
-//! Invocation contract (verified against 2026.10.26, see agents/plan/PROGRESS.md):
+//! Invocation contract (verified against the official binary):
 //! `structurizr export --workspace F --format json --output DIR` — GNU-style options
 //! only; `DIR` is a directory and receives `<input-basename>.json`.
 //! `--format plantuml` writes `structurizr-<id>-<key>.puml` (+ `-key` legend) files
-//! into `DIR` instead (M2-d); those goldens land under
+//! into `DIR` instead; those goldens land under
 //! `testdata/golden/plantuml/<fixture>/` and need NO normalization.
-//! `--format plantuml/c4plantuml` (M3-d) emits the same file naming, no legend
+//! `--format plantuml/c4plantuml` emits the same file naming, no legend
 //! files, and lands goldens under `testdata/golden/plantuml-c4/<fixture>/`.
-//! `cargo xtask export-verify` (M3-d, P2-D9; §P4-M5 E-2: `--format`)
+//! `cargo xtask export-verify` (the `--format` job)
 //! semantically compares C4 / plain-plantuml / Mermaid output
 //! (fact multisets, order-normalized — `exportcmp`) between oracle and
 //! oxidizr; run it sparingly, like the oracle itself.
@@ -32,7 +32,7 @@ use anyhow::{Context, Result, bail, ensure};
 mod exportcmp;
 mod refs;
 
-/// Pinned upstream monorepo commit (agents/plan/COMPAT.md).
+/// Pinned upstream monorepo commit (compat contract).
 const REFERENCE_COMMIT: &str = "ad34036";
 /// Pinned unified application release used for goldens (bundles library 6.2.4);
 /// mirrors `packages.structurizr` in flake.nix.
@@ -149,7 +149,7 @@ fn print_help() {
          cargo xtask bench save <LABEL>       snapshot criterion results into bench-baseline/<LABEL>/\n\
          cargo xtask bench cmp <LABEL>        critcmp bench-baseline/<LABEL> vs target/criterion\n\
          cargo xtask cov                      cargo llvm-cov --workspace --summary-only (report only)\n\
-         cargo xtask fuzz [SECONDS]           cargo-fuzz job mirror (M6-d): build every target,\n\
+         cargo xtask fuzz [SECONDS]           cargo-fuzz job mirror: build every target,\n\
          \x20              seed from testdata/, run each SECONDS (default 10; CI nightly)\n\
          \n\
          cargo xtask vendor --src <clone>     vendor reference fixtures into testdata/\n\
@@ -161,7 +161,7 @@ fn print_help() {
          \x20     generate diagram (golden/plantuml[-c4|mermaid|websequencediagrams]/<N>/) or\n\
          \x20     theme (golden/theme/<N>.json) goldens\n\
          cargo xtask oracle verify              re-run goldens and byte-compare (slow)\n\
-         cargo xtask oracle landscape          A/B the landscape generator (slow, §P4-M3 O-4)\n\
+         cargo xtask oracle landscape          A/B the landscape generator (slow)\n\
          \n\
          pinned reference: commit {REFERENCE_COMMIT}, app release {REFERENCE_APP_VERSION}\n\
          oracle discovery: $OXIDZR_STRUCTURIZR_BIN, then `structurizr` on PATH"
@@ -188,9 +188,9 @@ fn repo_root() -> Result<PathBuf> {
 // ---------------------------------------------------------------- e2e corpus
 
 /// `cargo xtask e2e bless [FILTER]` — regenerate the `workspace.e2e.json`
-/// sidecars from observed behavior (Phase 1T, P1T-D3). The resulting git
+/// sidecars from observed behavior. The resulting git
 /// diff is the review artifact.
-/// `cargo xtask e2e …` — bless / mutate dispatch (Phase 1T).
+/// `cargo xtask e2e …` — bless / mutate dispatch.
 fn cmd_e2e(args: &mut impl Iterator<Item = String>) -> Result<()> {
     match args.next().as_deref() {
         Some("bless") => {
@@ -240,8 +240,7 @@ fn cmd_e2e_mutate(seed: u64) -> Result<()> {
 
 /// One CI gate. Cargo steps mirror a job's `run:` line in
 /// `.github/workflows/ci.yml`; `Refs` is a local-only extra gate
-/// (doc-reference integrity; user decision 2026-11-15: every commit gate,
-/// not CI).
+/// (doc-link integrity; a deliberate call: every commit gate, not CI).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Step {
     Fmt,
@@ -249,9 +248,9 @@ enum Step {
     Test,
     Refs,
     Lint,
-    /// GUI clippy (eframe shell + the in-process `oxidizr view` entry,
-    /// §P3-M8): `oxidizr-viewer` AND `oxidizr-cli` with `gui`. The default
-    /// quartet omits it (keeps `cargo test --workspace` headless, P3-D1);
+    /// GUI clippy (eframe shell + the in-process `oxidizr view` entry):
+    /// `oxidizr-viewer` AND `oxidizr-cli` with `gui`. The default
+    /// quartet omits it (keeps `cargo test --workspace` headless);
     /// CI runs it as an extra leg.
     Gui,
     /// windows-latest matrix leg approximated via the windows-gnu + Wine dev leg.
@@ -337,7 +336,7 @@ fn resolve_ci_steps(args: &[String]) -> Result<Vec<Step>> {
 }
 
 /// cargo honoring the `cargo` wrapper cargo sets for subcommands when available.
-/// 2R R-tool-02 (same non-test-panic class as the bench-copy unwraps):
+/// Same no-panic contract as the bench-copy unwraps:
 /// `repo_root` failing means the binary lives outside `<root>/crates/xtask` —
 /// an error to report, not a panic to crash on.
 fn cargo_cmd() -> Result<Command> {
@@ -390,7 +389,7 @@ fn cmd_ci(steps: Vec<Step>) -> Result<()> {
 /// Bench job mirror: no trailing args (they would hit the libtest harnesses —
 /// see ci.yml note), criterion defaults to `target/criterion` anyway. Unlike
 /// CI, the local mirror passes `--features e2e-bench` so the whole-corpus
-/// benches are always measured (P1T-D7: CI skips them, they are local dev).
+/// benches are always measured (CI skips them, they are local dev).
 fn cmd_bench() -> Result<()> {
     let status = cargo_cmd()?
         .args([
@@ -434,7 +433,7 @@ fn cmd_bench_save(label: &str) -> Result<()> {
         let group = bench?.path();
         // criterion layout: target/criterion/<group>/new/{estimates,sample,tukey,
         // benchmark}.json — the committed baseline is the same, minus `new/`
-        // (M0 layout, bench-baseline/README.md).
+        // (layout per bench-baseline/README.md).
         let new_dir = group.join("new");
         if !new_dir.is_dir() {
             continue; // stray files at criterion root (top-level report/)
@@ -444,7 +443,7 @@ fn cmd_bench_save(label: &str) -> Result<()> {
             let p = entry?.path();
             if p.extension().is_some_and(|e| e == "json") {
                 fs::create_dir_all(dst.join(&name))?;
-                // 2R R-tool-02: a `read_dir` entry always has a file name —
+                // a `read_dir` entry always has a file name —
                 // but the charter says a broken answer surfaces as an
                 // error, never a panic (`unwrap` is test-only).
                 let file_name = p
@@ -519,7 +518,7 @@ fn stage_baseline(criterion: &Path, base: &Path, label: &str) -> Result<usize> {
             let p = entry?.path();
             if p.extension().is_some_and(|e| e == "json") {
                 fs::create_dir_all(&dest)?;
-                // 2R R-tool-02: same contract as the save leg above.
+                // same contract as the save leg above.
                 let file_name = p
                     .file_name()
                     .with_context(|| format!("no file name: {}", p.display()))?;
@@ -588,7 +587,7 @@ fn reap_wine() {
     }
 }
 
-/// Coverage job mirror: report only, never a gate (agents/plan/TESTING.md).
+/// Coverage job mirror: report only, never a gate.
 fn cmd_cov() -> Result<()> {
     let probe = cargo_cmd()?
         .args(["llvm-cov", "--version"])
@@ -606,11 +605,11 @@ fn cmd_cov() -> Result<()> {
     Ok(())
 }
 
-// ------------------------------------------------------------------------ fuzz (M6-d)
+// ------------------------------------------------------------------------ fuzz
 
 /// cargo-fuzz targets and their seed roots (relative to the repo root):
 /// `(target, &[(testdata dir, extension)])`. Seed corpus = the vendored
-/// fixture corpus itself (`PHASE_1` §P1-D11: "fixture seed corpus").
+/// fixture corpus itself ("fixture seed corpus").
 const FUZZ_TARGETS: &[(&str, &[(&str, &str)])] = &[
     ("dsl_parse", &[("testdata/dsl", "dsl")]),
     ("dsl_fmt", &[("testdata/dsl", "dsl")]),
@@ -623,7 +622,7 @@ const FUZZ_TARGETS: &[(&str, &[(&str, &str)])] = &[
             ("testdata/probes", "json"),
         ],
     ),
-    // §P4T T-5 (gap 3): the Phase-4 parsers. Importer seeds are the
+    // The newer targets. Importer seeds are the
     // authored fixture corpus; the query/pathfilter grammars ride their
     // committed seed tables under fuzz/seeds/ (the corpus dir stays
     // gitignored scratch); diff_pair opens the vendored `.dsl` set.
@@ -709,17 +708,17 @@ fn cmd_fuzz(secs: u64) -> Result<()> {
 
 // ---------------------------------------------------------------- oracle plumbing
 
-/// §P4-M5 E-1: the discovery/export/normalize PRIMITIVES live in
+/// the discovery/export/normalize PRIMITIVES live in
 /// `oxidizr_cli::oracle` (shared with the `oxidizr oracle` user command,
-/// P4-D6 "xtask stays a dev shim"); the legs below drive them over the
+/// "xtask stays a dev shim"); the legs below drive them over the
 /// VENDORED corpus. Error text moved with the functions.
 fn find_oracle() -> Result<PathBuf> {
     Ok(oxidizr_cli::oracle::find_oracle(None)?)
 }
 
-/// The oracle export prologue (2R R-tool-01: the create-dirs + run + exit-
+/// The oracle export prologue (the create-dirs + run + exit-
 /// status leg the json/plantuml/theme runners used to triplicate). Delegated
-/// to the shared engine since §P4-M5 E-1.
+/// to the shared engine.
 fn run_oracle_export(oracle: &Path, workspace: &Path, outdir: &Path, format: &str) -> Result<()> {
     Ok(oxidizr_cli::oracle::run_export(
         oracle, workspace, outdir, format,
@@ -744,7 +743,7 @@ fn reference_export_json(oracle: &Path, workspace: &Path, outdir: &Path) -> Resu
 
 /// Run `structurizr export --format <format>` (plantuml, plantuml/c4plantuml
 /// or mermaid) and return the `<ext>` files the app wrote (sorted by name).
-/// The reference names diagram files `structurizr-<workspaceId>-<key><ext>`
+/// The the official tooling names diagram files `structurizr-<workspaceId>-<key><ext>`
 /// (+ a `-key` legend file per view with a legend — the C4 and Mermaid
 /// exporters emit none, their `createLegend` is null); an empty set is
 /// legitimate only for viewless workspaces, which the golden corpus excludes
@@ -761,7 +760,7 @@ fn reference_export_plantuml(
 }
 
 /// Run `structurizr export --format theme` and return the single
-/// `<stem>-theme.json` the reference wrote (workspace-stem naming, M0).
+/// `<stem>-theme.json` the official tooling wrote (workspace-stem naming).
 fn reference_export_theme(oracle: &Path, workspace: &Path, outdir: &Path) -> Result<PathBuf> {
     run_oracle_export(oracle, workspace, outdir, "theme")?;
     let stem = workspace
@@ -777,9 +776,9 @@ fn reference_export_theme(oracle: &Path, workspace: &Path, outdir: &Path) -> Res
     Ok(produced)
 }
 
-/// Golden normalization — §P4-M5 E-1: the function MOVED to
+/// Golden normalization — the function MOVED to
 /// `oxidizr_cli::oracle` (shared with the `oxidizr oracle` user command);
-/// the corpus legs call it through this dev-shim wrapper (P4-D6). The unit
+/// the corpus legs call it through this dev-shim wrapper. The unit
 /// tests moved with it.
 fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
     oxidizr_cli::oracle::normalize_reference_output(raw)
@@ -826,8 +825,8 @@ fn cmd_vendor(src: &Path) -> Result<()> {
     )?;
     fs::create_dir_all(testdata.join("golden"))?;
 
-    // Deferred corpus (D7): fixtures using `!docs`/`!adrs` are vendored but excluded
-    // from the P1 parse/golden gates; P4-D13 retires the exclusion.
+    // Deferred corpus fixtures using `!docs`/`!adrs` are vendored but excluded
+    // the exclusion is retired.
     let deferred = scan_deferred(&testdata.join("dsl"))?;
     let dsl_count = walk_files(&testdata.join("dsl"), ".dsl")?.len();
     let json_count = walk_files(&testdata.join("read-corpus"), ".json")?.len()
@@ -910,7 +909,7 @@ fn copy_dir_all(from: &Path, to: &Path) -> Result<()> {
 }
 
 fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>> {
-    // `extension` may be given as ".dsl" or "dsl"; Path::extension() has no dot.
+    // `extension` may be given as ".dsl" or "dsl"; Path::extension has no dot.
     let extension = extension.strip_prefix('.').unwrap_or(extension);
     let mut out = Vec::new();
     if !root.exists() {
@@ -937,8 +936,8 @@ fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>> {
 fn find_fixture(root: &Path, name: &str) -> Result<PathBuf> {
     let mut candidates = walk_files(&root.join("testdata").join("dsl"), ".dsl")?;
     // Probe fixtures (testdata/probes) are first-class golden sources too
-    // (WRITE-CATALOG witnesses), including the JSON ones (`m3b-defaults` is a
-    // read→write byte witness), as are the read-corpus workspaces.
+    // (verified write cases), including the JSON ones (`m3b-defaults` is a
+    // read→write byte verified case), as are the read-corpus workspaces.
     candidates.extend(walk_files(&root.join("testdata").join("probes"), ".dsl")?);
     candidates.extend(walk_files(&root.join("testdata").join("probes"), ".json")?);
     candidates.extend(walk_files(
@@ -966,7 +965,7 @@ fn scratch(name: &str) -> PathBuf {
 
 /// The `oracle gen` golden mode — the mutually exclusive flag combination
 /// (JSON workspace goldens by default; diagram corpora per dialect; the
-/// theme corpus from M4-d).
+/// theme corpus).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GenMode {
     Json,
@@ -980,9 +979,9 @@ enum GenMode {
 /// `oracle gen` option parsing: `--fixture NAME` repeats, `--plantuml`
 /// selects the diagram goldens, `--c4` (with `--plantuml`) the
 /// `plantuml/c4plantuml` dialect, `--mermaid` the Mermaid goldens
-/// (`golden/mermaid/`, M4-d), `--wsd` the `WebSequenceDiagrams` goldens
-/// (`golden/websequencediagrams/`, P4 §P4-M2 N-5) and `--theme` the theme
-/// goldens (`golden/theme/`, also M4-d).
+/// (`golden/mermaid/`), `--wsd` the `WebSequenceDiagrams` goldens
+/// (`golden/websequencediagrams/`) and `--theme` the theme
+/// goldens (`golden/theme/`).
 fn oracle_gen_args(oracle: &Path, args: &mut impl Iterator<Item = String>) -> Result<()> {
     let mut fixtures = Vec::new();
     let mut plantuml = false;
@@ -1113,7 +1112,7 @@ fn cmd_oracle_gen(oracle: &Path, fixtures: &[String], mode: GenMode) -> Result<(
 
 fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
     let root = repo_root()?;
-    // 2R R-tool-01: the legs answer their failure LINES instead of mutating
+    // the legs answer their failure LINES instead of mutating
     // a shared counter; this fold prints them (after the streaming `ok:`
     // lines) and bails with the count, as the old `failures == 0` did.
     let (goldens, mut failed) = verify_json_legs(oracle, &root)?;
@@ -1138,9 +1137,9 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
     Ok(())
 }
 
-/// `cargo xtask oracle landscape` — §P4-M3 O-4 Category B leg (run
-/// sparingly, like `export-verify`). Writes the witness alpha/beta
-/// fixtures under the scratch dir, runs BOTH generators (reference
+/// `cargo xtask oracle landscape` — Category B leg (run
+/// sparingly, like `export-verify`). Writes the alpha/beta
+/// fixtures under the scratch dir, runs BOTH generators (the official tooling
 /// `generate system-landscape -i <dir> -o out.json` with `TZ=UTC`, ours
 /// in-process through [`oxidizr_api::pipeline::execute`]) and compares
 /// SEMANTIC fact vectors: workspace name + scope, the element
@@ -1149,8 +1148,8 @@ fn cmd_oracle_verify(oracle: &Path) -> Result<()> {
 /// RESOLVED TO NAMES (the shared counter legitimately differs where the
 /// scan order differs); properties are not compared at all (the loader
 /// regenerates the `structurizr.*` keys per parse).
-/// The witness alpha/beta fixtures for the `oracle landscape` leg (the
-/// same shapes the 2026-11-21 witness ran: Alice merge + container-bearing
+/// The alpha/beta fixtures for the `oracle landscape` leg (the
+/// same verified shapes: Alice merge + container-bearing
 /// systems + the `First`-strategy edge set).
 const LANDSCAPE_FIXTURES: [(&str, &str); 2] = [
     (
@@ -1344,16 +1343,16 @@ fn verify_json_legs(oracle: &Path, root: &Path) -> Result<(Vec<PathBuf>, Vec<Str
     Ok((goldens, failed))
 }
 
-/// Saved-sidecar legs (P3-M5 / M5-1, deferred from M3-5): the reference
+/// Saved-sidecar legs: the official tooling
 /// must load the JSON the viewer's save path writes. Per top-level JSON
 /// golden fixture: (1) IDENTITY — open the fixture through the real api
 /// pipeline, save it with `commands::write_workspace` (the Ctrl+S path),
-/// and compare the reference's json→json re-export of OUR sidecar with
+/// and compare the official tooling’s json→json re-export of OUR sidecar with
 /// its re-export of the committed golden, byte-equal after normalization.
-/// Comparing the two RE-EXPORTS isolates our writer from any reference
+/// Comparing the two RE-EXPORTS isolates our writer from any the official tooling
 /// json→json quirk. (2) EDITED — run the bundled layered engine over the
 /// first non-filtered view with ≥ 2 items, save the overlay through
-/// `apply_overlay` + `write_workspace`, and require the reference to load
+/// `apply_overlay` + `write_workspace`, and require the official tooling to load
 /// it: the `model` section unchanged, every written view placement
 /// (id → x/y) surviving the load VERBATIM, and the placement map
 /// different from the stored one (the geometry actually flowed).
@@ -1406,7 +1405,7 @@ fn verify_sidecar_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>
             ));
         }
 
-        // (2) EDITED: real layered geometry through the reference loader.
+        // (2) EDITED: real layered geometry through the official tooling loader.
         let edited_ok = sidecar_edited_leg(oracle, &tmp, name, workspace, &ours_norm, &mut failed)?;
         if edited_ok {
             println!("ok: {name} (sidecar edited)");
@@ -1419,9 +1418,9 @@ fn verify_sidecar_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>
     Ok((fixtures, failed))
 }
 
-/// The EDITED half of the saved-sidecar leg (§P3-M5 M5-1): layered
+/// The EDITED half of the saved-sidecar leg: layered
 /// geometry for the first non-filtered view with ≥ 2 items, saved through
-/// `apply_overlay` + the viewer save path, loaded back by the reference.
+/// `apply_overlay` + the viewer save path, loaded back by the official tooling.
 /// Failures append lines; the answer says whether the leg actually ran.
 fn sidecar_edited_leg(
     oracle: &Path,
@@ -1520,7 +1519,7 @@ fn collect_xy_maps(value: &serde_json::Value, out: &mut BTreeMap<String, (i64, i
     }
 }
 
-/// Diagram goldens (M2-d, C4 leg M3-d, Mermaid leg M4-d):
+/// Diagram goldens:
 /// `testdata/golden/<subdir>/<fixture>/*<ext>`, byte-exact (no
 /// normalization — the diagram writer injects no harness artifacts).
 /// The fixture name is the directory name.
@@ -1582,7 +1581,7 @@ fn verify_diagram_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>
     Ok((diagram_sets, failed))
 }
 
-/// Theme goldens (M4-d): `testdata/golden/theme/<fixture>.json`, the raw
+/// Theme goldens: `testdata/golden/theme/<fixture>.json`, the raw
 /// `--format theme` output (`ThemeUtils.toJson`, P2-V1 — no harness
 /// artifacts), byte-exact.
 fn verify_theme_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>)> {
@@ -1623,7 +1622,7 @@ fn verify_theme_legs(oracle: &Path, root: &Path) -> Result<(usize, Vec<String>)>
 }
 
 /// `cargo xtask export-verify [--format c4|plantuml|mermaid] [--fixture N]…`
-/// — P2-D9 + §P4-M5 E-2 semantic comparator (Category B, run sparingly).
+/// — semantic comparator (Category B, run sparingly).
 /// Requires `$OXIDZR_STRUCTURIZR_BIN` (or `structurizr` on PATH) AND a
 /// pre-built `oxidizr` binary (`cargo build -p oxidizr-cli`). Runs both
 /// exporters over each fixture, parses both into [`exportcmp`] fact
@@ -1668,8 +1667,8 @@ fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
             other => bail!("unknown export-verify format `{other}` (c4 | plantuml | mermaid)"),
         };
     // Default corpus: all goldens for the dialect (already byte-pinned) +
-    // `bulk-operations` (D13: byte-order deviation but semantically equal —
-    // E-2 witnessed the same line-reorder drift in the other two dialects).
+    // `bulk-operations` (byte-order deviation but semantically equal —
+    // verified the same line-reorder drift in the other two dialects).
     if !explicit {
         let base = root.join("testdata").join("golden").join(corpus);
         if let Ok(entries) = fs::read_dir(&base) {

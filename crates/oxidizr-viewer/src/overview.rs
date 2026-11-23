@@ -1,12 +1,11 @@
-//! The minimap + quick-nav core (M4-4, the reference `navigator.jspf`
-//! analogue): an [`Overview`] maps the scene's WORLD bounds into a fixed
-//! screen box and emits the whole box as an inert [`epaint::Shape`] list
-//! — the same headless contract as [`crate::paint`] (Category A
-//! testable, the shell just draws the list; the R-2 boundary guard holds
-//! because `epaint` is geometry-only).
+//! The minimap + quick-nav core: an [`Overview`] maps the scene's WORLD
+//! bounds into a fixed screen box and emits the whole box as an inert
+//! [`epaint::Shape`] list — the same headless contract as
+//! [`crate::paint`] (testable with no windowing, the shell just draws the
+//! list; the boundary guard holds because `epaint` is geometry-only).
 //!
-//! The map is UNIFORM-scaled and centred (the reference navigator keeps
-//! proportions too); [`Overview::map_to_world`] is the click/drag
+//! The map is UNIFORM-scaled and centred, so proportions survive;
+//! [`Overview::map_to_world`] is the click/drag
 //! inverse: a point picked in the map is the world point the shell
 //! centers its viewport on. The current viewport appears as an accent
 //! rect, clipped by the shell's painter to the box.
@@ -14,7 +13,7 @@
 //! Quick-nav rides the same module: [`nav_matches`] is the pure filter
 //! the shell's search field runs over element names/ids and view
 //! titles. So does the sidebar's kind split: [`section`] + [`grouped`]
-//! partition the view list into per-type sections (§P3-M7).
+//! partition the view list into per-type sections.
 
 use epaint::{Color32, Rect as ERect, Shape, Stroke, pos2};
 use oxidizr_core::Id;
@@ -33,8 +32,7 @@ pub const MAP_MARGIN_PX: f32 = 12.0;
 /// border stroke the shell draws).
 pub const MAP_PAD_PX: f32 = 4.0;
 
-/// Item boxes in the map (the reference navigator greys them; the
-/// default element blue reads on both schemes).
+/// Item boxes in the map (a muted blue that reads on both schemes).
 pub const ITEM_FILL: Color32 = Color32::from_rgb(96, 144, 192);
 /// Selected item boxes — the same accent as the main canvas.
 pub const SELECTED_FILL: Color32 = crate::paint::SELECTION_COLOR;
@@ -176,7 +174,7 @@ impl Overview {
     }
 }
 
-/// Quick-nav filter (M4-4): case-insensitive substring of `query` in
+/// Quick-nav filter: case-insensitive substring of `query` in
 /// either the display `name` or the `id`. An empty/whitespace query
 /// matches NOTHING — the result list only opens once the user types.
 #[must_use]
@@ -188,8 +186,8 @@ pub fn nav_matches(query: &str, name: &str, id: &str) -> bool {
     name.to_lowercase().contains(&needle) || id.to_lowercase().contains(&needle)
 }
 
-/// The sidebar section of one view kind (§P3-M7, user request: split
-/// the view list by view type): `(rank, header)`. The order is C4
+/// The sidebar section of one view kind (the view list is split by view
+/// type): `(rank, header)`. The order is C4
 /// granularity first (landscape → context → container → component),
 /// then deployment and dynamic, then the derived kinds (filtered,
 /// image) and custom last.
@@ -208,7 +206,7 @@ pub const fn section(view: View<'_>) -> (u8, &'static str) {
     }
 }
 
-/// Group `views` by kind for the sidebar (§P3-M7): `(header, members)`
+/// Group `views` by kind for the sidebar: `(header, members)`
 /// runs in [`section`] order, empty kinds skipped. Inside a section the
 /// input's (order, key) ranking survives — each block keeps the file's
 /// own view order (`sort_by_key` is STABLE and the key carries the
@@ -228,7 +226,7 @@ pub fn grouped<'a>(views: &[View<'a>]) -> Vec<(&'static str, Vec<View<'a>>)> {
     runs
 }
 
-/// Factual rows about the current selection (§P3-M11 M11-11, the right
+/// Factual rows about the current selection (the right
 /// panel's Info block): labelled key/value lines for one element, the
 /// element group, or one edge. Edge endpoints resolve to ELEMENT NAMES
 /// (ids only when an end is off-scene); rows that would be empty are
@@ -540,7 +538,7 @@ mod tests {
         assert!(grouped(&[]).is_empty());
     }
 
-    /// Exhaustive §P3-M7 fixture: one view per `View` variant, plus TWO
+    /// One view per `View` variant, plus TWO
     /// landscape views to pin the (order, key) ranking inside a section.
     struct NineKinds {
         land_a: SystemLandscapeView,

@@ -1,8 +1,8 @@
-//! P2-D9 + §P4-M5 E-2 semantic comparator for the three diagram dialects
+//! Semantic comparator for the three diagram dialects
 //! (`plantuml/c4plantuml`, plain `plantuml`, `mermaid`; Category B, run
 //! sparingly via `cargo xtask export-verify --format c4|plantuml|mermaid`).
 //!
-//! Byte parity pins the exact reference formatting; this comparator proves
+//! Byte parity pins the exact the official tooling formatting; this comparator proves
 //! the weaker, intended-equal property: the two outputs state the SAME facts,
 //! ignoring line ORDER — the diagram bodies are order-insensitive except
 //! where the dialect itself binds position (those order-stable fixtures stay
@@ -13,14 +13,14 @@
 //! `%%`) and blank lines are dropped — everything else becomes a fact, so
 //! nothing silently disappears.
 //!
-//! [`C4_MACROS`] doubles as the C4-PlantUML macro inventory the P4 importer
-//! builds on (union of what the pinned reference emits; an unknown
+//! [`C4_MACROS`] doubles as the C4-PlantUML macro inventory that the
+//! importer builds on (union of what the official tooling emits; an unknown
 //! `Name(…)` line still parses — it just gets the `macro?` kind tag).
 
 use std::collections::BTreeMap;
 
-/// C4-PlantUML macros the pinned reference `C4PlantUMLExporter` emits
-/// (`ad34036`, incl. the `Container`/`Component` `Db`/`Queue` shape verbs).
+/// C4-PlantUML macros the official C4-PlantUML exporter emits
+/// (incl. the `Container`/`Component` `Db`/`Queue` shape verbs).
 pub const C4_MACROS: &[&str] = &[
     "AddBoundaryTag",
     "AddElementTag",
@@ -156,9 +156,9 @@ fn classify(line: &str) -> String {
     }
 }
 
-/// Classify one plain-plantuml (`Structurizr-PlantUML` dialect) file.
+/// Classify one plain-plantuml (the official Structurizr dialect) file.
 ///
-/// §P4-M5 E-2. The E-2 witness legs (pinned reference vs ours over the
+/// Verified legs (official tooling vs ours over the
 /// `testdata/golden/plantuml` corpus) show this dialect is byte-identical
 /// except for relationship-line ORDER (the `bulk-operations` case), so the
 /// same tolerant line grammar applies: directives, `<style>` blocks (whose
@@ -171,8 +171,8 @@ pub fn facts_plantuml(text: &str) -> FactSet {
     facts(text)
 }
 
-/// Classify one Mermaid (`MermaidDiagramExporter` dialect) file. §P4-M5
-/// E-2. Witnessed grammar (same corpus, `.mmd`): `graph <dir>`,
+/// Classify one Mermaid (the official Mermaid dialect) file.
+/// Verified grammar (same corpus, `.mmd`): `graph <dir>`,
 /// `linkStyle default …`, nested `subgraph <id> ["title"]` / `end`, node
 /// declarations `N["<div…>"]`, per-id `style N …` lines and edges
 /// `N-. "<div>label</div><div …>[tech]</div>" .->M` (every edge labeled;
@@ -315,7 +315,7 @@ mod tests {
         assert!(names.contains(&&"struct }".to_string()));
     }
 
-    // §P4-M5 E-2: the two P4-era dialects, witness-shaped samples.
+    // The two newer dialects, verified-shape samples.
 
     const PLAIN_A: &str = "@startuml\nset separator none\n<style>\n  // Element,Person\n  .Element-abc= {\n    BackgroundColor: #08427b;\n  }\n</style>\nperson \"==A\" <<Element-abc=>> as A\nrectangle \"G\" <<Group-Z>> as group1 {\n  person \"==B\" <<Element-abc=>> as B\n}\nA --> B <<Relationship-x>> : \"Uses\"\nB --> A <<Relationship-x>> : \"Back\"\n@enduml\n";
 
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn mermaid_reordering_is_equal() {
-        // swap the two edge lines (the witnessed `bulk-operations` drift)
+        // swap the two edge lines (the verified `bulk-operations` drift)
         let e1 = "1-. \"<div>Uses</div><div style='font-size: 70%'></div>\" .->2";
         let e2 = "2-. \"<div>Uses</div><div style='font-size: 70%'>[T]</div>\" .->3";
         let swapped = MERMAID_A

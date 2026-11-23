@@ -1,11 +1,10 @@
-//! The stdio binary: the ONLY OS-facing surface of `oxidizr-lsp`
-//! (§P4-LSP L-1/L-2). Everything real lives in
-//! [`oxidizr_lsp::server`]; here it is `Connection::stdio()` + the
-//! shared `run` loop, nothing else.
+//! The stdio binary: the ONLY OS-facing surface of `oxidizr-lsp`.
+//! Everything real lives in [`oxidizr_lsp::server`]; here it is
+//! `Connection::stdio()` + the shared `run` loop, nothing else.
 
 use std::process::ExitCode;
 
-/// `--version`/`-V` answer and exit (the P4-D10 binary smoke hook);
+/// `--version`/`-V` answer and exit (what the binary smoke test runs);
 /// any other argv opens the stdio server loop.
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);

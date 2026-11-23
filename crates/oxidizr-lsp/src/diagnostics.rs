@@ -1,4 +1,4 @@
-//! Diagnostics on open/change (§P4-LSP L-3).
+//! Diagnostics on open/change ().
 //!
 //! [`collect`] is the pure heart: buffer text in, `lsp_types::Diagnostic`
 //! list out. The pipeline is the exact CLI one — `oxidizr_api::open` over
@@ -25,7 +25,7 @@ use oxidizr_diag::Severity;
 
 use crate::config::Config;
 
-/// `maxNumberOfProblems` default (P4-D5), overridden per connection by
+/// `maxNumberOfProblems` default, overridden per connection by
 /// the `initializationOptions` of §L-7 ([`crate::config::Config`]). A
 /// pathological DSL sprays one error per line; an editor gutter copes
 /// with 100.
@@ -56,7 +56,7 @@ pub fn collect(uri: &Uri, text: &str, config: &Config) -> Vec<Diagnostic> {
 }
 
 /// DSL route: the viewer-facing open — a partial parse reports every
-/// statement error (D1 recovery), a fatal parse reports the failure.
+/// statement error (statement recovery), a fatal parse reports the failure.
 fn dsl_issues(text: &str, opts: &oxidizr_api::ApiOptions) -> Vec<Issue> {
     let log = match oxidizr_api::open(&Input::Bytes(text.as_bytes().to_vec()), opts) {
         Ok(opened) => opened.log,
@@ -86,9 +86,9 @@ pub(crate) fn is_json(uri: &Uri) -> bool {
     uri.as_str().to_ascii_lowercase().ends_with(".json")
 }
 
-/// The hover store's source (§P4-LSP L3): the buffer parsed to a
+/// The hover store's source: the buffer parsed to a
 /// [`Workspace`] ONLY when the pipeline is CLEAN — DSL: `api::open`
-/// succeeds AND the partial-open log carries NO issue (a D1 recovery
+/// succeeds AND the partial-open log carries NO issue (a statement recovery
 /// logged errors, the buffer is not trustworthy); JSON: `from_slice`
 /// succeeds. Any failure is `None` — and the server then keeps the
 /// PREVIOUS workspace for that URI, which is what makes hover survive
@@ -239,7 +239,7 @@ mod tests {
             diags[0].message
         );
         assert_eq!(diags[0].range.start.line, 0);
-        // The lenient read COERCES scalars (D3), so the next rejection
+        // The lenient read COERCES scalars, so the next rejection
         // the leg adds is hydrate validation — duplicate element names.
         let duplicate = r#"{"name": "w", "model": {"people": [{"id": "1", "name": "a"}, {"id": "2", "name": "a"}], "relationships": []}}"#;
         let diags = collect(&uri("ws.json"), duplicate, &Config::default());

@@ -1,4 +1,4 @@
-//! `textDocument/completion` (§P4-LSP L2, item L-4).
+//! `textDocument/completion` .
 //!
 //! [`completions`] is the pure heart: buffer text + position in, item list
 //! out. The scope comes from [`oxidizr_dsl::engine::cursor_scope`] — the

@@ -1,36 +1,34 @@
-//! Style `icon` rasters and the shared icon atlas (P3-M1-5, §P3-D7).
+//! Style `icon` rasters and the shared icon atlas.
 //!
-//! Headless (P3-D1): every decode and rasterization happens here — the
+//! Headless: every decode and rasterization happens here — the
 //! shell only uploads the finished RGBA buffer as ONE texture and draws
-//! atlas cells. Sources are exactly what D10 lets the model store:
+//! atlas cells. Sources are exactly what the model can store:
 //!
 //! - `data:` URIs (the DSL embeds `icon <file>` values as data URIs):
 //!   base64 or percent-encoded payloads, sniffed by content;
 //! - bare file paths (JSON workspaces may keep raw paths): read relative
 //!   to the workspace file's directory ([`build_atlas`]'s `base_dir`);
-//! - `http(s)` URLs — never fetched (offline viewer, the D12 zero-network
-//!   posture); the caller keeps the dashed [`crate::paint::icon_slot`]
-//!   placeholder and surfaces the [`IconError`] as a warning diagnostic;
+//! - `http(s)` URLs — never fetched (the viewer is offline); the caller
+//!   keeps the dashed [`crate::paint::icon_slot`] placeholder and
+//!   surfaces the [`IconError`] as a warning diagnostic;
 //! - anything that sniffs neither PNG nor SVG →
 //!   [`IconError::Unsupported`].
 //!
-//! Rasterization rules (§P3-D7, seam recorded on the §P3-M1 M1-5 row):
+//! Rasterization rules:
 //!
 //! - PNGs decode to RGBA8 through `png` (16-bit stripped, palettes
 //!   expanded); they keep their native size until atlas packing, which
 //!   down-scales oversized cells with a box filter;
-//! - foreign SVGs go usvg → resvg → tiny-skia (the pinned 0.50/0.50/0.12
-//!   trio — tiny-skia 0.12 removed the old usvg `Renderer`, resvg is the
-//!   sanctioned seam) and rasterize fitted into an [`ICON_RASTER_PX`]
-//!   box;
+//! - foreign SVGs go usvg → resvg → tiny-skia (tiny-skia dropped the old
+//!   usvg `Renderer`, so resvg is the raster seam) and rasterize fitted
+//!   into an [`ICON_RASTER_PX`] box;
 //! - SVGs containing text render text-less ON PURPOSE: the raster stack
-//!   carries no font features and no fontdb surface (§P3-D7 — "the
-//!   reference never loads web fonts at all"; V3 CLOSED verified the
-//!   bundled themes contain zero SVG-with-text icons).
+//!   carries no font features and no fontdb surface, and the bundled
+//!   themes contain no SVG-with-text icons.
 //!
 //! The whole visible icon set packs into a single [`Atlas`] (RGBA8,
-//! shelf-packed, keyed `icon × size × scheme` per §P3-D7 — icons are
-//! never re-tinted by scheme today, the key slot is reserved). Entries
+//! shelf-packed, keyed `icon × size × scheme` — icons are never re-tinted
+//! by scheme today, the key slot is reserved). Entries
 //! that failed rasterization are absent from [`Atlas::entries`] (the
 //! placeholder stands in) and reported once each in [`Atlas::errors`].
 
@@ -113,12 +111,12 @@ pub const fn scheme_code(scheme: ColorScheme) -> u8 {
     }
 }
 
-/// Atlas cell request: icon text × rasterization box × color scheme
-/// (the §P3-D7 atlas key). Ord — the atlas packs in this order, so the
-/// packing is deterministic.
+/// Atlas cell request: icon text × rasterization box × color scheme (the
+/// atlas key). Ord — the atlas packs in this order, so the packing is
+/// deterministic.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IconKey {
-    /// Style `icon` value, stored verbatim (D10).
+    /// Style `icon` value, stored verbatim.
     pub icon: String,
     /// Rasterization box edge (`ICON_RASTER_PX` in the viewer).
     pub size: u32,
@@ -340,7 +338,7 @@ fn slice_at(data: &[u8], start: usize, len: usize) -> Option<&[u8]> {
     start.checked_add(len).and_then(|end| data.get(start..end))
 }
 
-/// Icon string → raw image bytes (D10 storage forms, see module docs).
+/// Icon string → raw image bytes (storage forms: see module docs).
 fn payload(icon: &str, base_dir: Option<&Path>) -> Result<Vec<u8>, IconError> {
     let text = icon.trim();
     if text.is_empty() {
@@ -459,7 +457,7 @@ fn decode_png(bytes: &[u8]) -> Result<Raster, IconError> {
 
 /// SVG bytes → RGBA8 fitted into [`ICON_RASTER_PX`] (usvg parse →
 /// resvg paint → demultiplied tiny-skia pixmap). `resources_dir` lets a
-/// file-path SVG reference siblings.
+/// file-path SVG the official UI siblings.
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
@@ -485,7 +483,7 @@ fn rasterize_svg(bytes: &[u8], base_dir: Option<&Path>) -> Result<Raster, IconEr
     let th = (h * scale).max(1.0).round() as u32;
     let mut pixmap = tiny_skia::Pixmap::new(tw, th)
         .ok_or_else(|| IconError::Decode("svg: zero-size pixmap".to_owned()))?;
-    // `render` takes `&mut PixmapMut`; `as_mut()` hands out one by value.
+    // `render` takes `&mut PixmapMut`; `as_mut` hands out one by value.
     resvg::render(
         &tree,
         tiny_skia::Transform::from_scale(scale, scale),
@@ -563,8 +561,7 @@ mod tests {
 
     #[test]
     fn svg_with_text_still_rasterizes() {
-        // The §P3-D7 limitation: text is skipped (no font stack), the
-        // shapes around it render.
+        // Text is skipped (no font stack); the shapes around it render.
         let svg = RED_SVG.replace(
             "</svg>",
             "<text x=\"50\" y=\"50\" font-size=\"40\">hi</text></svg>",

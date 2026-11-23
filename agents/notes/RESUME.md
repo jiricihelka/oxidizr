@@ -1,34 +1,34 @@
-# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D IN FLIGHT: D-1 `6f8fd6d`, D-2 `f605cbe`, D-3 wave-A strip committed, D-4 wave-B strip DONE (commit pending at HEAD+1) — next D-5 (wave-C: lsp/viewer/cli/xtask/e2e + viewer README rewrite), D-6 (message/string-literal pass — docs/*.md pages already rewritten, uncommitted), D-7 (refs hygiene leg + agent-doc trim), D-8 (close) → release tail E-4/E-5 (cargo-dist + `v0.4.0` tag + CHANGELOG, LOCAL)**)
+# RESUME — session checkpoint (updated 2026-11-23, **§P4R CLOSED (`c42d711`); §P4D IN FLIGHT: D-1 `6f8fd6d`, D-2 `f605cbe`, D-3 `bce0ed9`, D-4 `a33fb16`, D-5 wave-C strip committed (HEAD) — next D-6 (message/string-literal pass — docs/*.md pages already rewritten, uncommitted), D-7 (refs hygiene leg + agent-doc trim), D-8 (close) → release tail E-4/E-5 (cargo-dist + `v0.4.0` tag + CHANGELOG, LOCAL)**)
 
 ## Active now (2026-11-23)
 
-- **P4D-D-4 DONE (wave-B strip)** — export/import/api/inspect/layout:
-  batteries at KEEP-only (residual false positives: our `ReferenceAbort`
-  type, Java `TreeSet`/`HashSet`/`LinkedHashSet`/`HashMap` order-contract
-  facts, plain-English "referenced"/"probe"/"preference"/"backreferences",
-  Base64/U+2028/OXZ codes, pinned `IllegalArgumentException` message text,
-  our own probe-corpus citations). Comment-only audit 0 code-side changes;
-  quartet green (fixes on the way: `mod@format` doc-link disambiguation,
-  `AdrTools` backticks, 24 `\x01` control chars repaired — a cancelled
-  wave-B helper wrote chr(1) where a regex `\\1` backreference belonged;
-  always double-escape backrefs in rewrite strings).
-- **D-5 NEXT (wave-C)** — residual batteries: lsp 33, viewer 199, cli 127,
-  xtask 66, e2e 0. Same mechanism: global phrase regex (reuse
-  ap_strip.py/ap_strip2.py rule lists) → anchored batch → artifact scan
-  (dangling `(`/` :`/`the the` after id removal) → per-crate
-  fmt/test-ALL-lines/doc-zero → comment-only audit → ci → commit.
-  `viewer` also = README 104→≤45 human-first rewrite; `cli` clap `///`
-  help IS user help (rewrite it; update help-assertions same commit);
-  string literals in viewer/cli are D-6.
-- **Strip scripts reusable**: `/tmp/nix-shell.BoHvza/opencode/{exp,imp,ap}_strip*.py`
-  + `{exp,imp,ap}_batch.py` + `waveb_artifacts.py` + `battery_dsl.py`
-  (takes file/dir paths); mechanism = approx-line + must-contain fragment +
-  marker-normalizing rewrite, `None` deletes, apply descending.
-- **D-6 (message pass)** — string literals + docs pages: the five
+- **P4D-D-5 DONE (wave-C strip)** — lsp/viewer/cli/xtask (e2e was 0):
+  batteries at KEEP-only (residuals: `oracle`/`oxidizr oracle` command
+  names, refs.rs checker-grammar examples, `testdata/probes` path tokens,
+  "OS preference"/`f32`/Base64/Java-in-example-strings false positives).
+  Viewer README rewritten 104→45 lines human-first; cli clap `///` help
+  rewritten (only help assertion is `--theme` at tests/cli.rs:576 — a
+  flag, unaffected). Comment-only audit: 0 code-side changes except two
+  INTENTIONAL xtask HELP string-literal pairs (`mirror (M6-d):`→`mirror:`,
+  `(slow, §P4-M3 O-4)`→`(slow)`) — dev-only binary, done early, flagged
+  in the commit note; D-6 skips them. Quartet green, bless 307×unchanged.
+  **Trap re-tripped**: the mid-line whitespace collapse
+  (`(?<=\S)  +(?=\S)`) crushed 108 3-space bullet-continuation indents
+  in viewer module docs + refs.rs → `clippy::doc_lazy_continuation`
+  under `-D warnings`; repair = re-indent continuation lines ONLY
+  (script kept at `/tmp/…/fix_continuations.py`). NEVER run it again on
+  comment lines.
+- **Strip scripts reusable**: `/tmp/nix-shell.BoHvza/opencode/{cli,xt,vw,lsp}_strip*.py`
+  + `{cli,xt}_batch.py` + `battery_dsl.py` (takes file/dir paths) +
+  `fix_continuations.py` (bullet-indent repair); mechanism = approx-line +
+  must-contain fragment + marker-normalizing rewrite, `None` deletes,
+  apply descending.
+- **D-6 NEXT (message pass)** — string literals + docs pages: the five
   `docs/*.md` pages are ALREADY rewritten human-first (uncommitted; ride an
   early D-6 commit). Bless prediction + what may/must not move:
   `agents/notes/process/p4d-d6-bless-prediction.md`. In-test message
   assertions update in the same commit as the message they assert.
+  Excludes the two xtask HELP lines (done at D-5).
 - **D-7** — hygiene leg in `crates/xtask/src/refs.rs` (FAIL on process ids
   / official-impl narration in public doc comments + human strings of the
   shipped crates; allowlist `agents/`, tests; reuse `check_file`/`check_tree`,

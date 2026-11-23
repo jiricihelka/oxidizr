@@ -1,5 +1,5 @@
 //! `textDocument/formatting` + `textDocument/rangeFormatting`
-//! (§P4-LSP L4, item L-6).
+//! .
 //!
 //! Both requests print through the P1-M6b canonical formatter
 //! ([`oxidizr_dsl::fmt::format`]): lossless over the CST and NEVER

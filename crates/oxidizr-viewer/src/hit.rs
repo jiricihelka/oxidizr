@@ -1,26 +1,24 @@
-//! Headless viewport transform + hit-testing (P3-D3): world (stored
-//! layout) coordinates ↔ screen pixels, AABB item picks and
+//! Headless viewport transform + hit-testing: world (stored layout)
+//! coordinates ↔ screen pixels, AABB item picks and
 //! point-to-polyline edge picks over a [`Scene`] — hand-rolled, no
 //! geometry crate, no egui (the boundary guard keeps it that way).
 //!
 //! The [`Viewport`] is the shell's only view state: a uniform `scale`
 //! plus a pixel `offset`, `screen = world * scale + offset`. The zoom
-//! clamps and the pick tolerance are OURS (the reference inherits its
-//! limits from the jsPlumb canvas — visual parity is out of contract,
-//! P3-D0); they are stable constants the M1-4 shell and its tests rely
-//! on.
+//! clamps and the pick tolerance are OURS — matching another tool's limits
+//! is out of contract — and they are stable constants the shell and its
+//! tests rely on.
 //!
-//! Pick semantics (M1):
+//! Pick semantics:
 //!
 //! - Items paint in content order, so the LAST box containing the point
 //!   is on top and wins ([`pick`] scans [`Scene::items`] back to front).
-//! - Boundaries are not pickable yet — nothing selects or drags them
-//!   until M3 layout editing.
+//! - Boundaries are not pickable: selection and drags never target them.
 //! - Edges hit by polyline distance: the tolerance is
 //!   [`HIT_TOLERANCE_PX`] screen pixels converted to world units at the
 //!   current scale, so thin lines stay clickable when zoomed out.
-//! - Item over edge wins: the reference draws arrows under boxes, so a
-//!   point inside a box is never an arrow click.
+//! - Item over edge wins: arrows paint under boxes, so a point inside a
+//!   box is never an arrow click.
 
 use crate::scene::{Rect, Scene};
 
@@ -160,7 +158,7 @@ pub enum Hit {
 pub fn pick(scene: &Scene, viewport: Viewport, point: (f64, f64)) -> Option<Hit> {
     let world = viewport.screen_to_world(point);
     // Items paint in content order: the LAST box containing the point is
-    // on top (reference: boxes sit above arrows).
+    // on top (arrows sit below boxes).
     if let Some(index) = scene
         .items
         .iter()
@@ -176,10 +174,9 @@ pub fn pick(scene: &Scene, viewport: Viewport, point: (f64, f64)) -> Option<Hit>
         .map(Hit::Edge)
 }
 
-/// Lasso helper (M3-3 box-select): the indices of every item whose box
+/// Lasso helper (box-select): the indices of every item whose box
 /// INTERSECTS the world-space `rect`, in content order. Intersection,
-/// not containment — a lasso clipping a box edge selects it, like the
-/// reference's rubber-band drag.
+/// not containment — a lasso clipping a box edge selects it.
 #[must_use]
 pub fn items_in_rect(scene: &Scene, rect: Rect) -> Vec<usize> {
     scene
@@ -197,7 +194,7 @@ pub fn items_in_rect(scene: &Scene, rect: Rect) -> Vec<usize> {
 }
 
 /// Index of the INTERIOR vertex of `points` nearest to `point`, when it
-/// sits within `tol` world units — the waypoint-handle hit (P3-M4).
+/// sits within `tol` world units — the waypoint-handle hit.
 /// The polyline is the scene contract `[source, interiors…, destination]`,
 /// so the endpoints are skipped: they belong to the boxes, never the
 /// route. `None` for polylines without interior vertices.

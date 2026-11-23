@@ -1,11 +1,11 @@
-//! `textDocument/hover` (§P4-LSP L3, item L-5).
+//! `textDocument/hover` .
 //!
 //! Two legs, one pure entry point ([`hover`]):
 //!
 //! - **Model hover** over the LAST SUCCESSFUL parse of the document: the
 //!   token under the cursor (a quoted string, a registered identifier, or
 //!   a name) is matched against the model and rendered as a card — kind,
-//!   reference canonical name ([`oxidizr_core::canonical`]), technology,
+//!   canonical name ([`oxidizr_core::canonical`]), technology,
 //!   stored tags, relationship counts. A buffer mid-typing still hovers:
 //!   the server keeps the last good [`Workspace`] per document
 //!   (`server::Server::last_good`) — a failed reparse NEVER replaces it.
@@ -29,7 +29,7 @@ use crate::completion::position_to_offset;
 struct ElementRef<'a> {
     /// Human kind label ("Person", "Container", "Deployment node", …).
     kind: &'static str,
-    /// The reference canonical name (`Container://S.C`).
+    /// The canonical name (`Container://S.C`).
     canonical: String,
     /// Shared fields (name, description, tags).
     item: &'a ModelItem,
@@ -39,7 +39,7 @@ struct ElementRef<'a> {
 
 /// The keyword/directive documentation table: exact token → one-liner.
 /// Keys are the tokens `oxidizr-dsl` dispatches on; the texts are our
-/// editor-facing prose (the reference ships no hover docs).
+/// editor-facing prose (the official tooling ships no hover docs).
 const KEYWORD_DOCS: &[(&str, &str)] = &[
     (
         "workspace",
@@ -396,7 +396,7 @@ fn model_card(ws: &Workspace, needle: &str) -> Option<String> {
     Some(md)
 }
 
-/// Every element, reference `getElements` order (custom, people,
+/// Every element, the official element order (custom, people,
 /// systems/containers/components, then the deployment trees).
 fn elements(ws: &Workspace) -> Vec<ElementRef<'_>> {
     let m = &ws.model;
@@ -442,9 +442,9 @@ fn elements(ws: &Workspace) -> Vec<ElementRef<'_>> {
 }
 
 /// Deployment recursion; `chain` holds the ANCESTOR node names (root
-/// first), exactly the reference canonical-name chain. `ws` resolves the
+/// first), exactly the official canonical-name chain. `ws` resolves the
 /// instances' model references (`software_system_id`/`container_id`) to
-/// the names the reference canonicals are built from.
+/// the names the canonical strings are built from.
 fn walk_node<'a>(
     ws: &'a Workspace,
     n: &'a DeploymentNode,

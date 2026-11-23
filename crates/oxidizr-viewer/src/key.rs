@@ -1,7 +1,7 @@
-//! The key/legend + session tag filter (P3-M1-4b, headless per P3-D1).
+//! The key/legend + session tag filter (headless).
 //!
-//! Three pure computations over a [`Scene`] / [`Workspace`], each
-//! Category-A testable with no windowing:
+//! Three pure computations over a [`Scene`] / [`Workspace`], each testable
+//! with no windowing:
 //!
 //! - [`legend`] folds a scene into its distinct appearances (element
 //!   swatches by kind+shape+colors, edge swatches by color+line style,
@@ -12,9 +12,9 @@
 //! - [`session_mask`] evaluates the chip selection with
 //!   [`oxidizr_core::filter::eval`] against the view's renderable
 //!   content, producing the [`Included`] mask `scene::build` consumes.
-//!   The selection is SESSION state (P3-V7): the workspace model and
-//!   any view definition are never touched, and the mask INTERSECTS the
-//!   view's own filter downstream in `scene::build` (P3-V5).
+//!   The selection is SESSION state: the workspace model and any view
+//!   definition are never touched, and the mask INTERSECTS the view's own
+//!   filter downstream in `scene::build`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,8 +38,8 @@ pub struct ElementKey {
     pub background: String,
     /// Swatch outline `#rrggbb`.
     pub stroke: String,
-    /// Style `icon` the row's elements carry (part of the dedup key
-    /// since M1-5 — distinct icons mean distinct legend rows).
+    /// Style `icon` the row's elements carry (part of the dedup key:
+    /// distinct icons mean distinct legend rows).
     pub icon: Option<String>,
 }
 
@@ -116,8 +116,8 @@ fn push_unique<T: PartialEq>(rows: &mut Vec<T>, row: T) {
     }
 }
 
-/// Panel label for a boundary kind (our wording, the reference draws no
-/// boundary key at all).
+/// Panel label for a boundary kind (our wording — the official tooling
+/// draws no boundary key at all).
 #[must_use]
 pub const fn boundary_label(kind: BoundaryKind) -> &'static str {
     match kind {
@@ -142,8 +142,8 @@ pub struct TagCount {
 
 /// Inventory of all stored tags in the model: case-insensitively sorted,
 /// ties by exact text — deterministic chip order. Derived tags (kind /
-/// `Relationship` defaults) are excluded, matching the reference filter
-/// dialog's custom-tag focus.
+/// `Relationship` defaults) are excluded: the filter dialog covers custom
+/// tags only, like the official tooling.
 #[must_use]
 pub fn tags(workspace: &Workspace) -> Vec<TagCount> {
     let mut counts: BTreeMap<String, (usize, usize)> = BTreeMap::new();
@@ -235,8 +235,8 @@ fn walk_nodes(nodes: &[DeploymentNode], visit: &mut impl FnMut(&ModelItem)) {
 
 /// Evaluate the session chip selection ([`FilterMode`] + tag list)
 /// against the view's renderable content (a filtered view's BASE content
-/// — the same resolution `scene::build` performs, so chips and the
-/// view's own filter compose the way P3-V5/V7 pinned).
+/// — the same resolution `scene::build` performs, so chips and the view's
+/// own filter compose).
 ///
 /// `None` when the view has no renderable content (unknown key, image
 /// view, dangling filtered base): the scene build fails the same way,
@@ -417,8 +417,8 @@ mod tests {
         let live = vec!["Live".to_owned()];
         let excluded = session_mask(&ws, "L1", FilterMode::Exclude, &live).unwrap();
         // Only Bob survives; BOTH relationships touch the Live-tagged
-        // bank, so both die with it (reference keeps only edges whose
-        // BOTH ends survive).
+        // bank, so both die with it (an edge survives only when BOTH ends
+        // survive).
         assert_eq!(excluded.element_ids, vec![id(2)]);
         assert_eq!(excluded.relationship_ids, [] as [Id; 0]);
         let included = session_mask(&ws, "L1", FilterMode::Include, &live).unwrap();

@@ -1,30 +1,27 @@
-//! The auto-layout seam (P3-M2-5): scene → neutral [`LayoutGraph`] →
-//! the §P3-D5 MVP engine (`oxidizr_layout::Layered`) → [`Overrides`]
+//! The auto-layout seam: scene → neutral [`LayoutGraph`] →
+//! the bundled engine (`oxidizr_layout::Layered`) → [`Overrides`]
 //! that [`crate::scene::build`] overlays on the stored geometry. The GUI shell
 //! (feature `gui`) only wires button + dialog + the ONE pass — every
-//! decision lives here, tested headlessly (boundary guard, P3-D1).
-//!
-//! Design facts (the §P3-M2 M2-5 row):
+//! decision lives here, tested headlessly (boundary guard).
 //!
 //! - [`graph_for`] reads **ids and sizes only** from the scene — never
 //!   positions — so a run with the same config is IDEMPOTENT: re-running
 //!   on an already-overridden scene reproduces identical [`Overrides`].
 //! - Boundaries need no override entries: [`crate::scene::build`] recomputes
-//!   them from member unions, so they follow moved items (V1). The
-//!   boundary pad stays [`crate::scene::BOUNDARY_PADDING`] (the M1
-//!   chrome constant, not dagre's internal 50 px — the deviation
-//!   recorded on the M2-5 row).
+//!   them from member unions, so they follow moved items. The
+//!   boundary pad stays [`crate::scene::BOUNDARY_PADDING`] (our chrome
+//!   constant, not the engine's internal 50 px).
 //! - Engine node placements are box TOP-LEFTS in the scene's frame;
 //!   route points are world-space polylines whose FIRST and LAST points
 //!   are endpoint anchors — those are re-derived from the (moved) boxes
 //!   by the scene, so only `points[1..len-1]` become interior waypoints.
-//! - The engine ignores `edge_separation` at MVP scope; the dialog
-//!   keeps the field for reference parity (`auto-layout.jspf`).
-//! - M4-6: the ENGINE is a session choice ([`Engine`]) — the dialog
+//! - The engine ignores `edge_separation`; the dialog keeps the field
+//!   because the stored format has it.
+//! - The ENGINE is a session choice ([`Engine`]) — the dialog
 //!   combo lists [`Engine::available`], so graphviz `dot` appears only
 //!   when the `dot-backend` feature is compiled in AND `$OXIDZR_DOT_BIN`
 //!   names a binary. The choice is deliberately NOT persisted:
-//!   `encode`/`decode` keep their pre-M4 `"LR|100|50|50|1"` format.
+//!   `encode`/`decode` keep their five-field `"LR|100|50|50|1"` format.
 
 use oxidizr_core::Id;
 use oxidizr_core::Workspace;
@@ -38,9 +35,9 @@ use oxidizr_layout::{
 
 use crate::scene::{Overrides, Scene};
 
-/// Which engine a layout run uses (M4-6). `Layered` is the bundled
-/// MVP engine (P3-D5); `Dot` exists only behind the viewer's
-/// `dot-backend` feature and shells to graphviz (P3-D5 neutral trait).
+/// Which engine a layout run uses. `Layered` is the bundled
+/// engine; `Dot` exists only behind the viewer's
+/// `dot-backend` feature and shells to graphviz.
 /// Session-only: the selection is never persisted.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Engine {
@@ -55,7 +52,7 @@ pub enum Engine {
 impl Engine {
     /// The engines THIS build+environment can actually run: `Layered`
     /// always, `Dot` only when compiled in and `$OXIDZR_DOT_BIN` is
-    /// set (the oracle posture — the dialog lists exactly these).
+    /// set (the dialog lists exactly these).
     #[must_use]
     pub fn available() -> Vec<Self> {
         // Shape avoids `mut` in the feature-OFF build (no unused-mut).
@@ -78,8 +75,8 @@ impl Engine {
 }
 
 /// The engine config a stored `automaticLayout` (or the dialog's
-/// working copy) maps to. A null `rankDirection` falls to the reference
-/// default, exactly like the core's [`AutomaticLayout::default`].
+/// working copy) maps to. A null `rankDirection` falls to the default
+/// direction, exactly like the core's [`AutomaticLayout::default`].
 #[must_use]
 pub fn config_for(layout: &AutomaticLayout) -> LayoutConfig {
     LayoutConfig {
@@ -123,10 +120,9 @@ pub fn stored_for(workspace: &Workspace, view_key: &str) -> Option<AutomaticLayo
 /// Does the RENDERED view (filtered → base, as [`stored_for`] and
 /// `scene::build` resolve it) carry NO stored coordinates at all? The
 /// loader materializes a missing `location` as the `0`/`0` pair, so
-/// all-zeros means "the file has no layout for this view" — the same
-/// trigger under which the structurizr web application runs automatic
-/// layout ON DISPLAY (§P3-M6, post-v0.3.0: such a view opens laid out by
-/// the bundled engine as a session DISPLAY, never dirty).
+/// all-zeros means "the file has no layout for this view" — such a view
+/// opens laid out by the bundled engine as a session DISPLAY, never
+/// dirty.
 #[must_use]
 pub fn view_needs_layout(workspace: &Workspace, view_key: &str) -> bool {
     let views = workspace.views.all_views();
@@ -150,11 +146,11 @@ pub fn view_needs_layout(workspace: &Workspace, view_key: &str) -> bool {
             .all(|element| element.x == 0 && element.y == 0)
 }
 
-/// Generous display fallback spacing (§P3-M10, user report: the JSON
+/// Generous display fallback spacing (the JSON
 /// defaults of 100/50 read as cramped to the bundled engine next to
 /// 350 px-wide boxes). Applies ONLY when the rendered view carries no
 /// `automaticLayout` at all — a stored one stays authoritative, file for
-/// file. The geometry is session display state (§P3-M6), so no byte is
+/// file. The geometry is session display state, so no byte is
 /// touched and the core's [`AutomaticLayout::default`] (a JSON default)
 /// stands untouched.
 pub const DISPLAY_FALLBACK: AutomaticLayout = AutomaticLayout {
@@ -167,13 +163,13 @@ pub const DISPLAY_FALLBACK: AutomaticLayout = AutomaticLayout {
 
 /// Parameters for the display pass: the view's stored `automaticLayout`
 /// (filtered → base), else [`DISPLAY_FALLBACK`], with the separations
-/// raised to the [`DISPLAY_FALLBACK`] floors (§P3-M10, user report: 100/50
+/// raised to the [`DISPLAY_FALLBACK`] floors (100/50
 /// reads as cramped against 350 px-wide boxes — the DSL `autoLayout`
 /// statement stores exactly those defaults). Semantics follow graphviz,
 /// where ranksep/nodesep are LOWER bounds: a file asking for more gets
 /// more; the direction and vertex routing stay the file's. The dialog
 /// path is untouched — an explicit dialog run is precise, file for file.
-/// Display stays deterministic and file-driven (§P3-M6): no byte of any
+/// Display stays deterministic and file-driven: no byte of any
 /// output changes (geometry is session state until a save seeds it).
 #[must_use]
 pub fn display_params(workspace: &Workspace, view_key: &str) -> AutomaticLayout {
@@ -183,7 +179,7 @@ pub fn display_params(workspace: &Workspace, view_key: &str) -> AutomaticLayout 
     params
 }
 
-/// The §P3-M6 display auto-layout for an un-laid-out view: `Some(engine
+/// The display auto-layout for an un-laid-out view: `Some(engine
 /// geometry)` when [`view_needs_layout`] holds and the bundled
 /// [`Engine::Layered`] run succeeds, `None` when the view HAS stored
 /// coordinates (it renders verbatim) or the engine run failed. The shell
@@ -197,7 +193,7 @@ pub fn auto_display(workspace: &Workspace, view_key: &str, scene: &Scene) -> Opt
     apply(scene, &display_params(workspace, view_key)).ok()
 }
 
-/// Seed `overlay` with the display geometry it rides on (§P3-M6, the
+/// Seed `overlay` with the display geometry it rides on (the
 /// SAVE-side twin of [`auto_display`]): a view that opened un-laid-out
 /// displays engine geometry, so the user saw it — fill that geometry in
 /// for every id the overlay does not cover so `apply_overlay` writes a
@@ -229,7 +225,7 @@ pub fn seed_overlay(
 /// The layout graph of `scene`: one node per ITEM (id + the
 /// style-resolved box size), one edge per relationship edge between
 /// items (the scene already dropped boundary/unresolvable endpoints).
-/// Content order = insertion order (deterministic, §P3-D5).
+/// Content order = insertion order (deterministic).
 #[must_use]
 pub fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
     let mut graph = LayoutGraph::new();
@@ -315,8 +311,8 @@ fn translate(result: &LayoutResult) -> Overrides {
     overrides
 }
 
-/// The persisted form of the dialog parameters (§P3-D2: eframe storage
-/// carries PARAMETERS only — the produced geometry is session state):
+/// The persisted form of the dialog parameters — eframe storage carries
+/// PARAMETERS only (the produced geometry is session state):
 /// `"LR|100|50|50|1"`.
 #[must_use]
 pub fn encode(layout: &AutomaticLayout) -> String {
@@ -516,7 +512,7 @@ mod tests {
     }
 
     /// The `chain` fixture with every stored coordinate zeroed — the
-    /// shape a DSL WITHOUT `location` statements loads as (§P3-M6).
+    /// shape a DSL WITHOUT `location` statements loads as.
     fn stacked() -> Workspace {
         let mut ws = chain(None);
         for entry in &mut ws.views.system_landscape_views[0].content.elements {
@@ -551,7 +547,7 @@ mod tests {
         let ws = chain(None);
         assert!(auto_display(&ws, "L1", &scene_of(&ws, None)).is_none());
         // All-zero stored geometry → the engine's exact placements AT
-        // the §P3-M10 display floors (rank 200 → box pitch 350 + 200).
+        // the display floors (rank 200 → box pitch 350 + 200).
         let ws = stacked();
         let auto = auto_display(&ws, "L1", &scene_of(&ws, None)).unwrap();
         assert_eq!(auto.elements.get(&id(1)), Some(&(0.0, 0.0)));
@@ -561,7 +557,7 @@ mod tests {
 
     #[test]
     fn display_params_floor_the_separations_only_upwards() {
-        // §P3-M10: stored separations are LOWER bounds (graphviz
+        // Stored separations are LOWER bounds (graphviz
         // semantics) — a cramped `autoLayout` (100/50) rides up to the
         // floors, a generous one survives untouched, and the direction
         // + vertex routing always stay the file's.
@@ -646,7 +642,8 @@ mod tests {
 
     #[test]
     // Exact layout values (integer separations, exact halves): the
-    // axis-alignment check IS equality by design (§P3-D5 determinism).
+    // axis-alignment check IS equality by design (the engine output is
+    // deterministic).
     #[allow(clippy::float_cmp)]
     fn long_edge_gets_waypoints_in_the_scene() {
         // a → b → c PLUS a → c spanning two ranks: the scene polyline
@@ -699,7 +696,7 @@ mod tests {
 
     #[test]
     fn apply_with_layered_is_apply() {
-        // The session-engine seam (M4-6) must not change the default
+        // The session-engine seam must not change the default
         // path at all — byte-identical overrides.
         let ws = chain(None);
         let scene = scene_of(&ws, None);
@@ -718,8 +715,8 @@ mod tests {
     #[cfg(feature = "dot-backend")]
     #[test]
     fn dot_without_the_env_is_an_error_value() {
-        // Only the UNSET leg is testable in-process (Category B owns
-        // the real binary); a set var just skips this leg.
+        // Only the UNSET leg is testable in-process (the set leg needs a
+        // real graphviz binary); a set var just skips this leg.
         if std::env::var_os("OXIDZR_DOT_BIN").is_some_and(|v| !v.is_empty()) {
             eprintln!("OXIDZR_DOT_BIN set — skipping unset-leg check");
             return;

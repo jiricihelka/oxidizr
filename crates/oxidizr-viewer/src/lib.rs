@@ -1,31 +1,27 @@
-//! `oxidizr-viewer` — native workspace viewer + layout editor (P3).
+//! `oxidizr-viewer` — native workspace viewer + layout editor.
 //!
-//! Architecture promise (P3-D1, `agents/plan/build/PHASE_3.md`): all
-//! non-trivial logic lives in the library modules below — [`scene`],
+//! All non-trivial logic lives in the library modules below — [`scene`],
 //! [`hit`], [`paint`], [`key`], [`icons`], [`commands`], [`reload`],
-//! [`layout`] — which import NOTHING from the eframe shell. The shell
-//! itself is `shell`, compiled only with `feature = "gui"` (§P3-M8):
-//! the `oxidizr-viewer` binary is its argv shim and `oxidizr view`
+//! [`layout`] — which import NOTHING from the GUI shell. The shell itself
+//! is `shell`, compiled only with `feature = "gui"`: the
+//! `oxidizr-viewer` binary is its argv shim and `oxidizr view`
 //! (the `gui` feature of `oxidizr-cli`) drives the same
 //! `shell::run` in-process, so both entries share one window.
-//! Category A tests build and exercise the whole core headlessly: zero
-//! GPU, zero windowing (`cargo test --workspace` never enables `gui`).
+//! Tests build and exercise the whole core headlessly: zero GPU, zero
+//! windowing (`cargo test --workspace` never enables `gui`).
 //! [`paint`] emits `epaint::Shape` data (software raster + text layout,
-//! no windowing) — the boundary guard forbids the eframe/egui tokens
-//! only, so epaint stays allowed exactly because the guard's own test
-//! below runs with no GPU.
+//! no windowing) — the boundary guard forbids eframe and egui only, so
+//! epaint stays allowed exactly because the guard's own test below runs
+//! with no GPU.
 //!
-//! The editor rule (P3-D0): editing features change only layout JSON values
-//! — the workspace model and any DSL text are immutable here.
+//! Editing features change only layout JSON values — the workspace model
+//! and any DSL text are immutable here.
 //!
-//! # Dependency pins (P3-D2)
+//! # Rendering
 //!
-//! `eframe` = 0.37 (wgpu renderer — better HiDPI/text path; glow is not
-//! used), `epaint` = 0.37 (the headless [`paint`] module's shape + text
-//! toolkit; unifies with eframe's), `notify` = 8 (9 is rc as of
-//! 2026-11-19), `usvg` = 0.50 + `tiny-skia` = 0.12 (SVG icon
-//! rasterization, P3-D7), `dark-light` = 3 (OS light/dark preference,
-//! P3-D7). Event-driven repaint only (D2).
+//! eframe's wgpu renderer (better HiDPI/text path; glow is not used), and
+//! repaint on demand only — never every frame. Icons are rasterized from
+//! SVG and the OS light/dark preference comes from `dark-light`.
 
 pub mod commands;
 pub mod export;
@@ -43,9 +39,9 @@ pub mod statefile;
 
 #[cfg(test)]
 mod tests {
-    /// R-2 boundary guard (P3-D1): the lib core must never reference the
+    /// R-2 boundary guard: the lib core must never the official UI the
     /// eframe shell — no import, no qualified path, in any lib source.
-    /// The two `gui`-gated shell files (§P3-M8) are the only allowed
+    /// The two `gui`-gated shell files are the only allowed
     /// places: `src/shell.rs` (the shell itself) and `src/main.rs`
     /// (the binary's argv shim).
     #[test]

@@ -1,7 +1,6 @@
-//! `initializationOptions` (§P4-LSP L5, item L-7).
-//!
-//! The whole per-connection configuration of the server, parsed ONCE at
-//! `initialize` from the client's `initializationOptions` JSON:
+//! `initializationOptions` — the whole per-connection configuration,
+//! parsed ONCE at `initialize` from the client's
+//! `initializationOptions` JSON:
 //!
 //! ```json
 //! { "strict": false, "themesDir": null, "allowNet": false,
@@ -9,7 +8,7 @@
 //! ```
 //!
 //! `strict`/`themesDir`/`allowNet` are the CLI flags of the same names
-//! ([`oxidizr_api::ApiOptions`], P1-D8/P2-D3, D5) and ride EVERY pipeline
+//! ([`oxidizr_api::ApiOptions`]) and ride EVERY pipeline
 //! run the server performs, so the editor sees exactly what `oxidizr
 //! validate` would see with those flags. `allowNet` defaults to `false`
 //! and the LSP NEVER introduces network access of its own — the flag
@@ -38,7 +37,7 @@ pub struct Config {
     pub strict: bool,
     /// `--themes-dir <dir>`: highest-priority installed-theme source.
     pub themes_dir: Option<PathBuf>,
-    /// `--allow-net` (D5): lifts the pipeline's theme-URL fetch gate.
+    /// `--allow-net`: lifts the pipeline's theme-URL fetch gate.
     /// OFF by default; the LSP itself never touches the network.
     pub allow_net: bool,
     /// `maxNumberOfProblems`: the `publishDiagnostics` cap (0 is

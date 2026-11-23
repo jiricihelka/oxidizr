@@ -1,10 +1,10 @@
-//! The shared `oracle` engine (§P4-M5 E-1, F4, P4-D6): reference-binary
+//! The shared `oracle` engine: official tooling binary
 //! discovery, the JSON export prologue, and golden normalization. It backs
 //! BOTH the `oxidizr oracle gen|verify` user command and the `cargo xtask
-//! oracle …` dev legs — xtask stays a dev shim (P4-D6) and delegates here,
-//! so the normalization rules live exactly once. The reference CLI is an
+//! oracle …` dev legs — xtask stays a dev shim and delegates here,
+//! so the normalization rules live exactly once. The official tooling CLI is an
 //! EXTERNAL prerequisite (`$OXIDZR_STRUCTURIZR_BIN` → PATH); oxidizr never
-//! downloads anything (D5).
+//! downloads anything .
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -16,14 +16,14 @@ use oxidizr_diag::codes;
 /// What `oxidizr oracle` does per workspace (the clap arg maps onto this).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Action {
-    /// Write the normalized reference output to the golden file.
+    /// Write the normalized the official tooling output to the golden file.
     Gen,
-    /// Re-run the reference and byte-compare against the committed golden.
+    /// Re-run the official tooling and byte-compare against the committed golden.
     Verify,
 }
 
 /// Engine errors, CLASSIFIED because the exit family splits on the class
-/// (§P4-M5 E-1): discovery/spawn/I-O abort with exit 3, while a reference
+///: discovery/spawn/I-O abort with exit 3, while a the official tooling
 /// run that merely FAILS on one workspace is that leg's `error` status
 /// (exit 1, with the report).
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub enum OracleError {
     NotFound(String),
     /// Spawn/exec or filesystem failure (exit class 3).
     Io(String),
-    /// The reference ran and rejected the workspace (leg-level `error`).
+    /// The official tooling ran and rejected the workspace (leg-level `error`).
     Failed(String),
 }
 
@@ -49,10 +49,10 @@ impl fmt::Display for OracleError {
 
 impl std::error::Error for OracleError {}
 
-/// Reference CLI discovery: an explicit `--bin` (a non-file is a hard
+/// Official CLI discovery: an explicit `--bin` (a non-file is a hard
 /// miss — explicit means explicit), else `$OXIDZR_STRUCTURIZR_BIN`, else
 /// `structurizr` on PATH (the `.bat`/`.cmd` wrappers cover Windows). The
-/// message stays xtask-verbatim (agents/plan/TESTING.md documents setup).
+/// message stays xtask-verbatim (the testing docs document setup).
 ///
 /// # Errors
 ///
@@ -101,7 +101,7 @@ pub fn find_oracle(explicit: Option<&Path>) -> Result<PathBuf, OracleError> {
 /// # Errors
 ///
 /// [`OracleError::Io`] on directory/spawn failure, [`OracleError::Failed`]
-/// when the reference exits non-zero.
+/// when the official tooling exits non-zero.
 pub fn run_export(
     oracle: &Path,
     workspace: &Path,
@@ -130,7 +130,7 @@ pub fn run_export(
     Ok(())
 }
 
-/// `export --format json`: the reference writes `<stem>.json` into the
+/// `export --format json`: the official tooling writes `<stem>.json` into the
 /// output dir; return the produced path (moved from `xtask`).
 ///
 /// # Errors
@@ -157,28 +157,28 @@ pub fn reference_export_json(
     Ok(produced)
 }
 
-/// Golden normalization: drop the four violation-counter properties the reference
+/// Golden normalization: drop the four violation-counter properties the official tooling
 /// **application harness** injects into `workspace.properties` on every load
 /// (`AbstractCommand.loadWorkspace` → `new DefaultInspector(workspace)`;
-/// `structurizr-inspection/DefaultInspector.java`). They are harness artifacts, not
+/// the official inspector). They are harness artifacts, not
 /// workspace content — oxidizr models them as ordinary (round-tripped) properties but
 /// never computes counts (that would mean reimplementing `structurizr-inspection`).
-/// Verified against 2026.10.26 (2026-11-14, `agents/plan/PROGRESS.md`).
+/// Verified against .
 ///
 /// Line deletion must fix up the preceding comma when a removed entry was the object's
-/// LAST member (the reference pretty-prints one entry per line, so a comma-less removed
+/// LAST member (the official tooling pretty-prints one entry per line, so a comma-less removed
 /// line means the previous line's trailing comma must go too); when the removed entries
-/// were the object's ONLY members, the emptied `"properties" : { }` shell goes too — the
+/// were the object's ONLY members, the emptied `"properties": { }` shell goes too — the
 /// `NON_EMPTY` writer can never produce an empty properties object, so its braces are a
-/// deletion artifact (M5: `workspace extends` clears the retained source, leaving the
+/// deletion artifact (`workspace extends` clears the retained source, leaving the
 /// inspection entries alone). Note the export output has NO volatile members
 /// (`lastModifiedDate*` only round-trips from JSON inputs, deterministically) — nothing
 /// else is stripped.
 #[must_use]
 pub fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
     let text = String::from_utf8_lossy(raw);
-    // Byte parity includes EOF: the reference pretty-printer emits NO trailing
-    // newline; `lines()` would invent one (M0 goldens carried that artifact).
+    // Byte parity includes EOF: the official tooling pretty-printer emits NO trailing
+    // newline; `lines` would invent one (early goldens carried that artifact).
     let raw_trailing_newline = text.ends_with('\n');
     let drop_trailing_comma = |lines: &mut [String]| {
         // removed entry was the last in its object: drop the previous comma
@@ -209,7 +209,7 @@ pub fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
     // Pass 2: when the inspection entries were the ONLY members of the
     // workspace-level `properties` object (`workspace extends` clears the
     // retained source, M5), pass 1 emptied it — but the library writer uses
-    // NON_EMPTY inclusion, so an EMPTY `"properties" : { }` can only be a
+    // NON_EMPTY inclusion, so an EMPTY `"properties": { }` can only be a
     // deletion artifact: drop the braces too (comma rules as in pass 1).
     let mut out_lines: Vec<String> = Vec::new();
     let mut i = 0;
@@ -236,7 +236,7 @@ pub fn normalize_reference_output(raw: &[u8]) -> Vec<u8> {
     out.into_bytes()
 }
 
-/// One workspace's outcome. `status` is the report vocabulary (§P4-M5 E-1:
+/// One workspace's outcome. `status` is the report vocabulary (:
 /// `generated|match|mismatch|missing|error`); `io` marks the I/O class of
 /// failure that raises the whole command's exit code to 3.
 struct Leg {
@@ -441,7 +441,7 @@ fn json_report(legs: &[Leg]) -> Vec<u8> {
 }
 
 /// The minimal JSON string escape (report payloads are our own strings —
-/// paths and error texts; std-only, §P4-M5 E-1).
+/// paths and error texts; std-only).
 fn esc(s: &str) -> String {
     use std::fmt::Write as _;
     let mut out = String::with_capacity(s.len());
@@ -480,7 +480,7 @@ mod tests {
 
     #[test]
     fn preserves_missing_trailing_newline() {
-        // The reference pretty-printer emits no trailing newline; goldens must
+        // The official tooling pretty-printer emits no trailing newline; goldens must
         // not invent one (byte parity includes EOF).
         let src = "{\n  \"a\" : \"1\"\n}";
         assert_eq!(norm(src), "{\n  \"a\" : \"1\"\n}");
@@ -488,7 +488,7 @@ mod tests {
 
     #[test]
     fn removes_last_entry_and_fixes_comma() {
-        // inspection entries sorted last (as in workspace-properties.dsl, 2026-11-14):
+        // inspection entries sorted last (as in workspace-properties.dsl):
         // the surviving `structurizr.dslEditor` line must lose its trailing comma.
         let src = "{\n  \"properties\" : {\n    \"structurizr.dslEditor\" : \"false\",\n    \"structurizr.inspection.warning\" : \"0\"\n  }\n}\n";
         assert_eq!(

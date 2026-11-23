@@ -1,4 +1,4 @@
-//! The headless server state machine (§P4-LSP L-2).
+//! The headless server state machine ().
 //!
 //! [`Server::handle`] is a pure function of (state, inbound message) →
 //! (outbound messages, keep-running): no I/O, no threads — the
@@ -52,11 +52,11 @@ pub struct Document {
 pub struct Server {
     /// Open buffers keyed by document URI.
     docs: HashMap<Uri, Document>,
-    /// The `initializationOptions` (§P4-LSP L5, item L-7), captured on
+    /// The `initializationOptions`, captured on
     /// `initialize` — defaults until then, malformed options included
     /// ([`crate::config::Config`] is total).
     config: crate::config::Config,
-    /// The LAST SUCCESSFUL parse per document (§P4-LSP L3): replaced on
+    /// The LAST SUCCESSFUL parse per document: replaced on
     /// `didOpen`/`didChange` ONLY by a clean pipeline run, so a buffer
     /// mid-typing keeps hovers over the model as it last parsed; dropped
     /// on `didClose`.
@@ -143,7 +143,7 @@ impl Server {
     }
 
     fn initialize_response(&mut self, request: &Request) -> Vec<Message> {
-        // §P4-LSP L5 (item L-7): capture the client's
+        //  (item L-7): capture the client's
         // `initializationOptions`. The read is TOTAL — a missing or
         // malformed options blob, or even malformed params, keeps the
         // defaults; configuration never costs the handshake.
@@ -171,7 +171,7 @@ impl Server {
         vec![response.into()]
     }
 
-    /// `textDocument/completion` (§P4-LSP L2, item L-4): the stored
+    /// `textDocument/completion`: the stored
     /// buffer replayed through the real scope machine. A document the
     /// client never opened answers the EMPTY array — completion is
     /// opportunistic, an empty menu beats an error popup (editors race
@@ -197,7 +197,7 @@ impl Server {
         vec![Response::new_ok(request.id.clone(), CompletionResponse::Array(response)).into()]
     }
 
-    /// `textDocument/hover` (§P4-LSP L3, item L-5): the token under the
+    /// `textDocument/hover`: the token under the
     /// cursor against the stored buffer and the document's last good
     /// parse. An unopened document (or a cursor with nothing hoverable)
     /// answers the spec's NULL result — hover is pure opportunism.
@@ -221,7 +221,7 @@ impl Server {
         vec![Response::new_ok(request.id.clone(), response).into()]
     }
 
-    /// `textDocument/formatting` (§P4-LSP L4, item L-6): the canonical
+    /// `textDocument/formatting`: the canonical
     /// print of the stored buffer as ONE whole-document `TextEdit`. An
     /// unopened document answers the EMPTY array (nothing to print);
     /// so does a `.json` buffer — the byte contract never sees the DSL
@@ -246,7 +246,7 @@ impl Server {
         vec![Response::new_ok(request.id.clone(), edits).into()]
     }
 
-    /// `textDocument/rangeFormatting` (§P4-LSP L4, item L-6): the
+    /// `textDocument/rangeFormatting`: the
     /// request widened to WHOLE top-level statements — canonical style
     /// is a global re-print, the choice is documented in
     /// [`crate::formatting`].
@@ -328,7 +328,7 @@ impl Server {
         self.publish(&uri)
     }
 
-    /// Hover-store update (§P4-LSP L-5): a CLEAN pipeline parse replaces
+    /// Hover-store update (): a CLEAN pipeline parse replaces
     /// the document's last good [`Workspace`]; a failing parse keeps the
     /// previous one — a buffer mid-typing still hovers the model as it
     /// last parsed ([`crate::diagnostics::workspace`] is the judge).
@@ -349,7 +349,7 @@ impl Server {
         vec![Notification::new(PublishDiagnostics::METHOD.to_owned(), cleared).into()]
     }
 
-    /// Diagnostics for the stored buffer of `uri` (§P4-LSP L-3) as one
+    /// Diagnostics for the stored buffer of `uri` () as one
     /// `textDocument/publishDiagnostics` notification. Parsing is the
     /// exact CLI pipeline over the buffer — [`crate::diagnostics::collect`]
     /// never touches the filesystem, so every keystroke republish is safe.
@@ -612,7 +612,7 @@ mod tests {
     fn unknown_method_gets_method_not_found_with_the_same_id() {
         let mut server = Server::new();
         // L-6 implemented BOTH formatting requests, so the fallback
-        // example is a method §P4-LSP never ships.
+        // example is a method never ships.
         let (out, stop) = server.handle(&request("textDocument/documentSymbol"));
         assert!(!stop);
         let sent = responses(&out);
@@ -963,7 +963,7 @@ mod tests {
         publishes(&out)
     }
 
-    /// Three distinct junk lines ⇒ three recovered errors (D1 recovery
+    /// Three distinct junk lines ⇒ three recovered errors (statement recovery
     /// reports every broken statement).
     const DIRTY: &str = "workspace {\n  model {\n    a ~~~\n    b ~~~\n    c ~~~\n  }\n}\n";
 

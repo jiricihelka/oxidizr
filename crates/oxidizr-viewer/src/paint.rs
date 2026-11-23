@@ -1,5 +1,5 @@
-//! The paint step (M1-4): [`Scene`] + [`Viewport`] → one frame's canvas
-//! as an inert [`epaint::Shape`] list — P3-D3's "build once, paint cheap"
+//! The paint step: [`Scene`] + [`Viewport`] → one frame's canvas
+//! as an inert [`epaint::Shape`] list — 's "build once, paint cheap"
 //! transform: no workspace access, no state, no windowing.
 //!
 //! `epaint` is allowed in the lib core (the R-2 boundary guard forbids
@@ -8,18 +8,18 @@
 //! draws the list verbatim, so the whole paint path is testable
 //! headlessly (Category A).
 //!
-//! Visual-parity approximations (out of contract per P3-D0, recorded on
-//! the §P3-M1 M1-4 row):
+//! Visual-parity approximations (out of contract per recorded on
+//! the row):
 //!
 //! - Opacity becomes an alpha byte on the fill, stroke and text colors
-//!   (the reference composites whole boxes via canvas group opacity).
+//!   (the official UI composites whole boxes via canvas group opacity).
 //! - `Dashed`/`Dotted` strokes expand to dash segments — `epaint` 0.37
 //!   has no dashed stroke style, `Shape::dashed_line_many` is the
 //!   mechanism; dash periods are our screen-pixel constants.
 //! - Text is the name / metadata / description stack centred in the
-//!   box; the reference's bold name falls back to the same bundled
-//!   face (P3-D2: bundled fonts only, no bold variant).
-//! - Element glyphs are polygon approximations of the reference SVG
+//!   box; the official UI’s bold name falls back to the same bundled
+//!   face (: bundled fonts only, no bold variant).
+//! - Element glyphs are polygon approximations of the official UI SVG
 //!   paths (arcs sampled at [`ARC_SEGMENTS`] points); arrowheads are
 //!   filled triangles at the destination end.
 //! - Below [`MIN_TEXT_PX`] text is skipped, and anything outside the
@@ -36,7 +36,7 @@ use crate::scene::{Boundary, Edge, Item, Rect, Scene};
 use oxidizr_core::Id;
 use oxidizr_core::views::{IconPosition, LineStyle, Shape as ElementShape};
 
-/// Selection accent outline color (ours — the reference uses its CSS
+/// Selection accent outline color (ours — the official UI uses its CSS
 /// accent; visual parity is out of contract).
 pub const SELECTION_COLOR: Color32 = Color32::from_rgb(0, 150, 215);
 /// Text below this many SCREEN pixels is not painted at all (zoomed-out
@@ -47,7 +47,7 @@ pub const DASH_PX: f32 = 8.0;
 /// `Dashed` gap length in screen px.
 pub const DASH_GAP_PX: f32 = 6.0;
 /// Arrowhead length in WORLD px (clamped into 5..=40 screen px at paint
-/// time; reference marker ≈ 10).
+/// time; the official UI marker ≈ 10).
 pub const ARROW_LEN: f32 = 10.0;
 /// Box-interior text padding in world px (scaled).
 pub const TEXT_PAD: f32 = 8.0;
@@ -58,7 +58,7 @@ pub const FALLBACK_FILL: Color32 = Color32::from_rgb(135, 180, 220);
 /// Fallback ink (stroke/text) when a scene color fails [`parse_color`].
 pub const FALLBACK_INK: Color32 = Color32::BLACK;
 /// Screen-space radius of the waypoint handles painted on the SELECTED
-/// edge (P3-M4) — fixed pixels, so they stay grabbable at any zoom.
+/// edge — fixed pixels, so they stay grabbable at any zoom.
 pub const WAYPOINT_HANDLE_PX: f32 = 4.0;
 
 /// What the shell selects (id-based so the selection survives scene
@@ -66,7 +66,7 @@ pub const WAYPOINT_HANDLE_PX: f32 = 4.0;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Selection {
     /// Element boxes — every id gets an accent outline (single click
-    /// selects one; box-select and Shift-click select many, M3-3).
+    /// selects one; box-select and Shift-click select many).
     Items(Vec<Id>),
     /// A relationship polyline — a [`Scene::edges`] entry with this id.
     Edge(Id),
@@ -88,15 +88,15 @@ pub struct PaintOptions<'a> {
     pub screen: ERect,
     /// The current selection, painted as an accent outline.
     pub selection: Option<&'a Selection>,
-    /// Edge whose waypoint handles paint WITHOUT a selection (§P3-M11
-    /// M11-2): hovering advertises the handles, so they can be dragged
+    /// Edge whose waypoint handles paint WITHOUT a selection (
+    ///): hovering advertises the handles, so they can be dragged
     /// or Alt+deleted before the edge is even selected.
     pub hover_edge: Option<&'a Id>,
 }
 
 /// Paint one scene into a shape list, background first, then boundaries,
-/// items, edges and the selection accent — the layer order the reference
-/// paints (boundaries under boxes, arrows over boxes). §P3-M11 M11-5:
+/// items, edges and the selection accent — the layer order the official UI
+/// paints (boundaries under boxes, arrows over boxes):
 /// every galley is EMITTED LAST (two lanes, geometry then text), so a
 /// later box never paints over an earlier box's label.
 #[must_use]
@@ -107,10 +107,10 @@ pub fn paint_scene(
     options: &PaintOptions<'_>,
 ) -> Vec<Shape> {
     let background = parse_color(&scene.background).unwrap_or(Color32::from_rgb(255, 255, 255));
-    // §P3-M11 M11-5: geometry first, ALL text last — a nested box
+    // geometry first, ALL text last — a nested box
     // (deployment node, group member painted later) may still overlap
     // an earlier box's label rectangle, but it can no longer paint
-    // OVER the label glyphs. Reference order keeps its meaning inside
+    // OVER the label glyphs. The official UI order keeps its meaning inside
     // each lane: boundaries under items under edges, labels topmost.
     let mut geometry = vec![Shape::rect_filled(options.screen, 0.0, background)];
     let mut text: Vec<Shape> = Vec::new();
@@ -135,7 +135,7 @@ pub fn paint_scene(
 }
 
 /// Move a layer's galley shapes into the text lane, the rest into the
-/// geometry lane (§P3-M11: the two-pass z-order of [`paint_scene`]).
+/// geometry lane (: the two-pass z-order of [`paint_scene`]).
 fn split_text(layer: &mut Vec<Shape>, geometry: &mut Vec<Shape>, text: &mut Vec<Shape>) {
     for shape in layer.drain(..) {
         if matches!(shape, Shape::Text(_)) {
@@ -307,8 +307,8 @@ fn paint_edge(
             Stroke::new(width + 2.0, SELECTION_COLOR),
         ));
     }
-    // P3-M4: one handle circle per INTERIOR vertex — the endpoints
-    // belong to the boxes and never get one. §P3-M11: the hovered edge
+    //: one handle circle per INTERIOR vertex — the endpoints
+    // belong to the boxes and never get one.: the hovered edge
     // shows them too (delete/drag without selecting first).
     if (selected || options.hover_edge == Some(&edge.id)) && points.len() >= 3 {
         for at in &points[1..points.len() - 1] {
@@ -587,7 +587,7 @@ fn element_geometry(
 }
 
 /// Icon slot geometry: `(box, text-area shrink vector)` — the shell's
-/// M1-5 icon-texture overlay reuses the exact box the placeholder draws.
+/// it-texture overlay reuses the exact box the placeholder draws.
 fn icon_box(r: ERect, position: IconPosition) -> (ERect, Vec2) {
     let slot = (r.size().min_elem() * 0.28).clamp(8.0, 64.0);
     match position {
@@ -607,14 +607,14 @@ fn icon_box(r: ERect, position: IconPosition) -> (ERect, Vec2) {
 }
 
 /// The icon slot rect inside a screen rect — where the shell overlays a
-/// rasterized icon texture (M1-5) and where the placeholder below draws.
+/// rasterized icon texture and where the placeholder below draws.
 #[must_use]
 pub fn icon_slot(r: ERect, position: IconPosition) -> ERect {
     icon_box(r, position).0
 }
 
 /// World-space item/boundary rect → screen rect through `viewport` —
-/// paint's own mapping, shared with the shell's icon overlay (M1-5).
+/// paint's own mapping, shared with the shell's icon overlay .
 #[must_use]
 pub fn to_screen_rect(rect: Rect, viewport: &Viewport) -> ERect {
     to_rect(rect, viewport)
@@ -990,7 +990,7 @@ mod tests {
 
     #[test]
     fn text_shapes_are_always_the_final_run() {
-        // §P3-M11 M11-5: paint_scene emits geometry first, ALL galleys
+        // paint_scene emits geometry first, ALL galleys
         // last, so no later box can cover earlier text. The fixture
         // paints boundaries, items and a labelled edge in one scene.
         let shapes = painted(&scene(), None);
@@ -1008,7 +1008,7 @@ mod tests {
 
     #[test]
     fn hover_edge_paints_handles_without_selection() {
-        // §P3-M11 M11-2: the hovered edge advertises its route.
+        // the hovered edge advertises its route.
         let mut s = scene();
         s.edges[0].points = vec![(175.0, 75.0), (500.0, 300.0), (900.0, 75.0)];
         let hover = s.edges[0].id.clone();

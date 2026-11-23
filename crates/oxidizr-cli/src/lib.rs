@@ -1,31 +1,31 @@
-//! `oxidizr-cli` — the user-facing binary (P1-D8). Command surface is defined
+//! `oxidizr-cli` — the user-facing binary . Command surface is defined
 //! here from day one (stable flags).
 //!
 //! Exit codes: `0` ok · `1` diagnostics errors (or warnings with `--strict`) ·
 //! `2` usage (clap default) · `3` I/O. `-` means stdin/stdout where a command takes a
-//! file argument. No config files: flags + the documented env family only (agents/plan/WORKFLOW.md §CLI/config policy).
+//! file argument. No config files: flags + the documented env family only (documented CLI/config policy).
 //!
-//! M6-a landed `dsl2json` / `json2json` / `validate` (miette-rendered
+//! The first release shipped `dsl2json` / `json2json` / `validate` (miette-rendered
 //! diagnostics, JSON-base loader injected for `workspace extends <*.json>`,
-//! D3 `--keep-unknown` capture through `oxidizr_json::roundtrip_keep_unknown`);
-//! M6-b landed `fmt` (the P1-D7 printer lives in `oxidizr_dsl::fmt`);
-//! M6-c landed `reconcile` (the F1 geometry re-attach, [`reconcile`], plus
+//! `--keep-unknown` capture through `oxidizr_json::roundtrip_keep_unknown`);
+//! The first release shipped `fmt` (the printer lives in `oxidizr_dsl::fmt`);
+//! The first release shipped `reconcile` (the geometry re-attach, [`reconcile`], plus
 //! its OXZ-3002 ambiguity code). Input decoding is UTF-8-only at v0.1
-//! (V-8 resolved: no `--encoding` flag; non-UTF-8 input is an OXZ-5006 exit-3
-//! failure like any other I/O problem). Phase 2 M0 added `export` (reference
+//! (no `--encoding` flag; non-UTF-8 input is an OXZ-5006 exit-3
+//! failure like any other I/O problem). A later release added `export` (the official tooling
 //! `-w/--workspace`, required `-f/--format`, optional `-o/--output`): `theme`,
-//! `json` and the Structurizr `plantuml` diagram leg (M2-d) write through the
-//! `oxidizr_export` dispatch; `plantuml/c4plantuml` landed at M3-b,
-//! `mermaid` at M4-b and `websequencediagrams` at P4 §P4-M2 N-5; the
+//! `json` and the Structurizr `plantuml` diagram leg write through the
+//! `oxidizr_export` dispatch; `plantuml/c4plantuml` landed at ,
+//! `mermaid` at and `websequencediagrams` at P4; the
 //! remaining registry formats raise OXZ-5007; unknown format strings stay
-//! the exit-0 note, mirroring `ExportCommand` (`agents/plan/build/PHASE_2.md`).
+//! the exit-0 note, mirroring `ExportCommand` (the phase plan).
 //!
-//! Since Phase 1T T0-d the command bodies live in [`oxidizr_api`]
-//! (`Request → execute() → Outcome`); this crate adds ONLY the argv surface,
-//! the miette rendering ([`report`]) and the exit-code mapping. `run()` adds
+//! Since the API extraction the command bodies live in [`oxidizr_api`]
+//! (`Request → execute → Outcome`); this crate adds ONLY the argv surface,
+//! the miette rendering ([`report`]) and the exit-code mapping. `run` adds
 //! no command logic — the invariant that keeps the binary and the e2e suite
 //! (which drives the API in-process) in lockstep
-//! (`agents/plan/build/PHASE_1T.md` P1T-D1).
+//! (the phase plan).
 
 pub mod oracle;
 pub mod report;
@@ -48,7 +48,7 @@ use report::{Issue, Renderer};
 /// Structurizr-compatible C4 workspace tooling.
 #[derive(Parser, Debug)]
 #[command(name = "oxidizr", version, about, propagate_version = true)]
-// Global flags are the stable P1-D8 CLI surface (agents/plan/WORKFLOW.md: flags + env only, no
+// Global flags are the stable CLI surface (flags + env only, no
 // config files) — a bool per flag is the clap idiom, not state to model as enums.
 #[allow(clippy::struct_excessive_bools)]
 pub struct Cli {
@@ -56,25 +56,25 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub strict: bool,
     /// Keep non-schema / writer-omitted JSON keys on read and re-write them
-    /// (`json2json` only; superset round-trip, intentionally non-parity — D3).
+    /// (`json2json` only; superset round-trip, intentionally non-parity).
     #[arg(long, global = true)]
     pub keep_unknown: bool,
-    /// Request `${VAR}` environment-variable fallback. The reference parser
-    /// enables env substitution by default (V-3), so it is ON here too; the
+    /// Request `${VAR}` environment-variable fallback. The official tooling parser
+    /// enables env substitution by default, so it is ON here too; the
     /// flag is accepted for explicitness and future feature gates.
     #[arg(long, global = true)]
     pub env: bool,
     /// Disable color output (also honored via `NO_COLOR`).
     #[arg(long, global = true)]
     pub no_color: bool,
-    /// Fetch theme URLs during `export` (D5): without it a theme URL in
+    /// Fetch theme URLs during `export`: without it a theme URL in
     /// `configuration.themes` fails OXZ-5001 and installed names /
-    /// `--themes-dir` remain the offline path (P2-D3).
+    /// `--themes-dir` remain the offline path .
     #[arg(long, global = true)]
     pub allow_net: bool,
     /// Highest-priority installed-theme root (`<dir>/<name>/theme.json`);
     /// the chain continues `OXIDZR_THEMES_DIR` → `<workspace>/themes` →
-    /// `STRUCTURIZR_THEMES` (P2-D3).
+    /// `STRUCTURIZR_THEMES` .
     #[arg(long, global = true, value_name = "DIR")]
     pub themes_dir: Option<std::path::PathBuf>,
     /// Suppress non-error output.
@@ -110,7 +110,7 @@ pub enum Command {
         #[arg(required = true)]
         files: Vec<PathBuf>,
     },
-    /// Reformat DSL source (canonical style, P1-D7 invariants).
+    /// Reformat DSL source (canonical style, invariants).
     Fmt {
         /// DSL files to format (`-` or none = stdin; output goes to stdout
         /// unless `--write`).
@@ -122,7 +122,7 @@ pub enum Command {
         #[arg(long, conflicts_with = "write")]
         check: bool,
     },
-    /// Remap layout-JSON ids onto a re-parsed DSL (F1; geometry-preserving edit loop).
+    /// Remap layout-JSON ids onto a re-parsed DSL (; geometry-preserving edit loop).
     Reconcile {
         /// Re-parsed (edited) DSL workspace.
         #[arg(long)]
@@ -133,27 +133,27 @@ pub enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// Export the workspace (Phase 2): `theme`/`json` and the diagram
+    /// Export the workspace: `theme`/`json` and the diagram
     /// formats `plantuml`/`c4plantuml`/`mermaid`/`websequencediagrams`;
     /// the known-but-unlanded `static`/`png`/`svg` raise OXZ-5007 (exit 1 —
-    /// the reference agrees for PNG/SVG); unknown format strings log the
-    /// reference `Unknown export format:` note and still exit 0.
+    /// the official tooling agrees for PNG/SVG); unknown format strings log the
+    /// the official tooling `Unknown export format:` note and still exit 0.
     Export {
-        /// Workspace file (`.dsl` or `.json`) — reference `-w/--workspace`.
+        /// Workspace file (`.dsl` or `.json`) — the official tooling `-w/--workspace`.
         #[arg(long, short = 'w')]
         workspace: PathBuf,
         /// Export format (lowercased): `theme` | `json` |
         /// `plantuml[/structurizr|/c4plantuml][-light|-dark]` | `mermaid` |
-        /// `websequencediagrams` | `static` | `png` | `svg` — reference `-f/--format`.
+        /// `websequencediagrams` | `static` | `png` | `svg` — the official tooling `-f/--format`.
         #[arg(long, short = 'f')]
         format: String,
         /// Output directory; default is the workspace file's directory
-        /// (created if missing) — reference `-o/--output`.
+        /// (created if missing) — the official tooling `-o/--output`.
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
-    /// Compare two workspaces (`diff`, F3, §P4-M0): canonical-identity
-    /// diff, exit 1 when they differ (the P4-D1 exit-code extension).
+    /// Compare two workspaces (`diff`): canonical-identity
+    /// diff, exit 1 when they differ (the exit-code extension).
     Diff {
         /// Left workspace file (`.dsl` or `.json`).
         a: PathBuf,
@@ -169,9 +169,9 @@ pub enum Command {
         #[arg(long = "ignore-layout")]
         ignore_layout: bool,
     },
-    /// Report the reference inspections over one workspace (`inspect`,
-    /// F-inspect-parity, §P4-M1): advisory only (the JSON contract is
-    /// untouched); exit 1 when any violation is REPORTED (the P4-D1
+    /// Report the official tooling inspections over one workspace (`inspect`,
+    /// inspection parity): advisory only (the JSON contract is
+    /// untouched); exit 1 when any violation is REPORTED (the
     /// exit-code family — the same code 1 as `diff`).
     Inspect {
         /// Workspace file (`.dsl` or `.json`).
@@ -195,10 +195,10 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = InspectCmdFormat::Human)]
         format: InspectCmdFormat,
     },
-    /// Import one diagram into a fresh workspace (`import`, F12,
-    /// §P4-M2 N-4): the C4-`PlantUML`/`Mermaid` macro legs produce the
+    /// Import one diagram into a fresh workspace (`import`, ,
+    /// ): the C4-`PlantUML`/`Mermaid` macro legs produce the
     /// MODEL (the default views install at open), the `image` leg is the
-    /// reference `ImageImporter` port (one `ImageView`).
+    /// the official tooling `ImageImporter` port (one `ImageView`).
     Import {
         /// Diagram file (`.puml`/`.iuml`/`.c4p`, `.mmd`/`.mermaid`, or a
         /// `.png`/`.jpg`/`.jpeg`/`.gif`/`.svg` image; `-` = stdin, which
@@ -210,7 +210,7 @@ pub enum Command {
         #[arg(long, value_enum)]
         format: Option<ImportCmdFormat>,
         /// `ImageView` key (image leg; omitted = generated `Image-001`,
-        /// reference `generateViewKey`).
+        /// the official tooling `generateViewKey`).
         #[arg(long = "view-key")]
         view_key: Option<String>,
         /// `ImageView` title (image leg; omitted = the file name).
@@ -220,8 +220,8 @@ pub enum Command {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
-    /// Query one workspace with the DSL filter grammar (`query`, F6,
-    /// §P4-M3 O-1): model items through the pinned `ExpressionParser`
+    /// Query one workspace with the DSL filter grammar (`query`):
+    /// model items through the pinned expression evaluator
     /// arms (`element.tag==Web`, `user->system`, ` && `/` || ` …), views
     /// through the documented key/title/description subset —
     /// `docs/query-schema.md`. Informational: exit 0 even on zero
@@ -237,7 +237,7 @@ pub enum Command {
         /// grammar AND the view subset over every class.
         #[arg(long, value_enum, default_value_t = QueryCmdKind::All)]
         kind: QueryCmdKind,
-        /// `table` (default) prints `id  kind  name  [tags]` rows,
+        /// `table` (default) prints `id kind name [tags]` rows,
         /// `ids` one id/key per line, `json` the schema-1 document.
         #[arg(long, value_enum, default_value_t = QueryCmdFormat::Table)]
         format: QueryCmdFormat,
@@ -245,7 +245,7 @@ pub enum Command {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
-    /// Scaffold a starter project (`init`, F7, §P4-M3 O-2, P4-D4): the
+    /// Scaffold a starter project (`init`): the
     /// `include_str!`-embedded template files — zero network, zero new
     /// deps — written into DIR (created when missing; default `.`).
     /// Idempotent: existing files are SKIPPED with a note unless
@@ -262,17 +262,16 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
-    /// Landscape generators (`generate`, §P4-M3 O-4, P4-D9): the ONE
-    /// subcommand is the reference `SystemLandscapeGenerator` port — the
-    /// output NEVER carries views (the oracle witness settled the open
-    /// P4-D9 question).
+    /// Landscape generators (`generate`): the ONE
+    /// subcommand mirrors the official system-landscape generator —
+    /// the output NEVER carries views (settled against the official tooling).
     Generate {
         /// Generator to run (only `system-landscape` exists).
         #[command(subcommand)]
         command: GenerateCommand,
     },
     /// Emit a shell-completion script for this CLI to stdout (`completions`,
-    /// §P4-M3 O-3): rendered by `clap_complete` from the argv surface itself
+    /// ): rendered by `clap_complete` from the argv surface itself
     /// — dispatched in `run` BEFORE the pipeline (it never opens a
     /// workspace, so it is not a [`Request`], like `view`).
     Completions {
@@ -280,24 +279,24 @@ pub enum Command {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
-    /// Generate or verify reference-oracle goldens over USER fixture
-    /// paths (`oracle`, F4 graduation, §P4-M5 E-1): fixture-author CI
+    /// Generate or verify external-reference goldens over USER fixture
+    /// paths (`oracle`): fixture-author CI
     /// automation of the `structurizr export --format json` round —
     /// dispatched in `run` before the pipeline (it spawns the EXTERNAL
-    /// reference binary; oxidizr never downloads anything, D5).
+    /// the official tooling binary; oxidizr never downloads anything).
     /// Discovery: `--bin` → `$OXIDZR_STRUCTURIZR_BIN` → `structurizr`
     /// on PATH. Goldens: `<stem>.golden.json` next to the workspace (or
     /// under `--goldens DIR`). Exit: 0 all ok · 1 mismatch/missing ·
     /// 2 usage · 3 discovery/spawn/I-O.
     Oracle {
-        /// `gen` writes the normalized reference output to the golden;
-        /// `verify` re-runs the reference and byte-compares against it.
+        /// `gen` writes the normalized official output to the golden;
+        /// `verify` re-runs the official tooling and byte-compares against it.
         #[arg(value_enum)]
         action: OracleAction,
         /// Workspace files (`.dsl` or `.json`) to run through the oracle.
         #[arg(required = true)]
         workspaces: Vec<PathBuf>,
-        /// Reference binary path (default: `$OXIDZR_STRUCTURIZR_BIN` → PATH).
+        /// Official tooling binary path (default: `$OXIDZR_STRUCTURIZR_BIN` → PATH).
         #[arg(long, value_name = "PATH")]
         bin: Option<PathBuf>,
         /// Golden directory (default: next to each workspace file).
@@ -308,7 +307,7 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Open the workspace in the native viewer window (F10, §P3-M8) —
+    /// Open the workspace in the native viewer window —
     /// needs the cli `gui` feature at BUILD time; without it the
     /// subcommand stays in `--help` but exits with a rebuild hint.
     View {
@@ -316,13 +315,13 @@ pub enum Command {
         /// window, open it from the toolbar).
         file: Option<PathBuf>,
         /// Color scheme; `system` consults the OS preference, then the
-        /// persisted runtime toggle (§P3-D7).
+        /// persisted runtime toggle.
         #[arg(long, value_enum, default_value_t = ViewTheme::System)]
         theme: ViewTheme,
     },
 }
 
-/// `oxidizr generate` subcommands (§P4-M3 O-4).
+/// `oxidizr generate` subcommands.
 #[derive(Subcommand, Debug)]
 pub enum GenerateCommand {
     /// Merge 1..N workspaces into the system-landscape workspace
@@ -335,12 +334,12 @@ pub enum GenerateCommand {
         /// Workspace files and/or directories (1..N). Directories are
         /// scanned recursively (sorted) and filtered by
         /// `--include`/`--exclude`; an explicit file ALWAYS loads
-        /// (documented deviation — the reference applied its include to
+        /// (documented deviation — the official tooling applied its include to
         /// a single `-i` file too).
         #[arg(required = true)]
         inputs: Vec<PathBuf>,
-        /// Full-path include regex (full match, like the reference's
-        /// `Pattern.matches`); default `.*workspace.(json|dsl)`.
+        /// Full-path include regex (full match against the whole path);
+        /// default `.*workspace.(json|dsl)`.
         #[arg(long)]
         include: Option<String>,
         /// Full-path exclude regex (wins over `--include`).
@@ -355,18 +354,18 @@ pub enum GenerateCommand {
     },
 }
 
-/// `oxidizr oracle` actions (§P4-M5 E-1, F4): the two golden legs of the
+/// `oxidizr oracle` actions: the two golden legs of the
 /// user-facing oracle command; maps onto [`oracle::Action`].
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug)]
 pub enum OracleAction {
-    /// Write the normalized reference output to `<stem>.golden.json`.
+    /// Write the normalized the official tooling output to `<stem>.golden.json`.
     Gen,
-    /// Re-run the reference and byte-compare against the golden.
+    /// Re-run the official tooling and byte-compare against the golden.
     Verify,
 }
 
 /// `oxidizr generate system-landscape --relationships` values: the
-/// reference `RelationshipsStrategy`; maps onto
+/// official relationship strategies; maps onto
 /// [`oxidizr_api::RelationshipsStrategy`].
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
 pub enum RelationshipsArg {
@@ -377,9 +376,9 @@ pub enum RelationshipsArg {
     All,
 }
 
-/// `oxidizr diff --format` values (§P4-M0 D-3): the human ± report (the
+/// `oxidizr diff --format` values: the human ± report (the
 /// default) or the schema-1 JSON document (`docs/diff-schema.md`). The
-/// `Cmd` infix (§P4-R3, like `ImportCmdFormat`) keeps the clap type apart
+/// `Cmd` infix (like `ImportCmdFormat`) keeps the clap type apart
 /// from the API-side [`oxidizr_api::DiffFormat`] it maps onto 1:1.
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
 pub enum DiffCmdFormat {
@@ -390,10 +389,10 @@ pub enum DiffCmdFormat {
     Json,
 }
 
-/// `oxidizr inspect --format` values (§P4-M1 I-4): the reference
+/// `oxidizr inspect --format` values: the official tooling
 /// `type | SEVERITY | message` lines (the default) or the schema-1
 /// violations document (`docs/inspect-schema.md`). The `Cmd` infix
-/// (§P4-R3, like `ImportCmdFormat`) keeps the clap type apart from the
+/// (like `ImportCmdFormat`) keeps the clap type apart from the
 /// API-side [`oxidizr_api::InspectFormat`] it maps onto 1:1.
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
 pub enum InspectCmdFormat {
@@ -404,7 +403,7 @@ pub enum InspectCmdFormat {
     Json,
 }
 
-/// `oxidizr inspect --severity-threshold` values (§P4-M1 I-4): the three
+/// `oxidizr inspect --severity-threshold` values: the three
 /// REPORTABLE levels — `ignore` is not a threshold (nothing outranks
 /// it; `ignore` violations are never reported regardless).
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
@@ -418,7 +417,7 @@ pub enum InspectThreshold {
     Error,
 }
 
-/// `oxidizr import --format` values (§P4-M2 N-4, F12): which
+/// `oxidizr import --format` values: which
 /// `oxidizr-import` engine processes the source; omitted = sniffed from
 /// the file extension. `C4PlantUml` spells its value `c4plantuml` — the
 /// clap default would kebab-case it to `c4-plant-uml`.
@@ -429,11 +428,11 @@ pub enum ImportCmdFormat {
     C4PlantUml,
     /// `Mermaid` C4 diagram → the model.
     Mermaid,
-    /// Image file → one `ImageView` (reference port).
+    /// Image file → one `ImageView` (the official tooling port).
     Image,
 }
 
-/// `oxidizr query --kind` values (§P4-M3 O-1, F6): which report classes
+/// `oxidizr query --kind` values: which report classes
 /// the query includes; maps onto [`oxidizr_api::QueryKind`].
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
 pub enum QueryCmdKind {
@@ -448,11 +447,11 @@ pub enum QueryCmdKind {
     All,
 }
 
-/// `oxidizr query --format` values (§P4-M3 O-1, F6): output shape; maps
+/// `oxidizr query --format` values: output shape; maps
 /// onto [`oxidizr_api::QueryFormat`] (`docs/query-schema.md`).
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
 pub enum QueryCmdFormat {
-    /// `id  kind  name  [tags]` rows (the default).
+    /// `id kind name [tags]` rows (the default).
     #[default]
     Table,
     /// One id (or view key) per line — pipeline-friendly.
@@ -461,7 +460,7 @@ pub enum QueryCmdFormat {
     Json,
 }
 
-/// `oxidizr init --template` values (§P4-M3 O-2, F7, P4-D4): starter
+/// `oxidizr init --template` values: starter
 /// content; maps onto [`oxidizr_api::InitTemplate`].
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug, Default)]
 pub enum InitCmdTemplate {
@@ -472,7 +471,7 @@ pub enum InitCmdTemplate {
     C4,
 }
 
-/// `oxidizr view --theme` values (F10) — mirrors the viewer's own
+/// `oxidizr view --theme` values — mirrors the viewer's own
 /// `ThemeArg` so both entries read alike; mapped when the `gui`
 /// feature links the shell.
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug)]
@@ -493,9 +492,9 @@ pub enum ViewTheme {
 /// is reserved for internal faults and main maps it to exit `1`. Usage
 /// errors never reach `Err`: clap exits `2` directly.
 ///
-/// Pipeline (T0-d): argv → [`Request`] → [`oxidizr_api::execute`] → replay
+/// Pipeline: argv → [`Request`] → [`oxidizr_api::execute`] → replay
 /// the [`Outcome`] (stdout bytes, then the ordered log) → exit code. No
-/// command logic here — EXCEPT F10 (§P3-M8): `view` is the GUI shell,
+/// command logic here — EXCEPT: `view` is the GUI shell,
 /// dispatched before the pipeline and never a [`Request`].
 ///
 /// # Errors
@@ -505,7 +504,7 @@ pub enum ViewTheme {
 pub fn run() -> anyhow::Result<i32> {
     let cli = Cli::parse();
     let renderer = Renderer::new(cli.no_color, cli.quiet);
-    // §P4-M3 O-3: `completions` renders the argv surface via
+    //: `completions` renders the argv surface via
     // `clap_complete` — CLI-only machinery, dispatched before the
     // pipeline like `view` (the script is stdout payload, never an
     // `Outcome` byte contract).
@@ -514,15 +513,15 @@ pub fn run() -> anyhow::Result<i32> {
         clap_complete::generate(*shell, &mut command, "oxidizr", &mut std::io::stdout());
         return Ok(0);
     }
-    // §P3-M8 / F10: `view` is the GUI shell, not a pipeline command —
+    // /: `view` is the GUI shell, not a pipeline command —
     // it dispatches before anything touches `oxidizr-api`.
     if let Command::View { file, theme } = &cli.command {
         return run_view(file.as_deref(), *theme);
     }
-    // §P4-M5 E-1 / F4: `oracle` spawns the EXTERNAL reference binary —
+    // `oracle` spawns the EXTERNAL official tooling binary —
     // no workspace is ever opened here, so it is not a `Request`
     // (dispatched like `view`/`completions`; the report is the stdout
-    // payload, the exit family 0/1/3 per §P4-M5 E-1).
+    // payload, the exit family 0/1/3.
     if let Command::Oracle {
         action,
         workspaces,
@@ -550,12 +549,12 @@ pub fn run() -> anyhow::Result<i32> {
             strict: cli.strict,
             keep_unknown: cli.keep_unknown,
         },
-        // Production keeps the V-3 process-env behavior (ApiOptions::env=None).
+        // Production keeps the process-env behavior (ApiOptions::env=None).
         env: None,
         stdin: Some(read_stdin),
         allow_net: cli.allow_net,
         themes_dir: cli.themes_dir,
-        // The `report::Renderer` rule (§P4-M0 D-3): `--no-color` or a set
+        // The `report::Renderer` rule: `--no-color` or a set
         // `NO_COLOR` both disable the `diff` human paint.
         color: !cli.no_color && std::env::var_os("NO_COLOR").is_none(),
     };
@@ -567,18 +566,18 @@ pub fn run() -> anyhow::Result<i32> {
 
 /// argv → Request mapping: `-`/omitted paths become the lazy [`Input::Stdin`]
 /// variant (nothing is read before `execute` decides — a `fmt --write -`
-/// usage exit must not block on an open pipe). 2R R-mis-10: the `Command`
+/// usage exit must not block on an open pipe). The `Command`
 /// MOVES into the [`Request`] — the old `&Cli` leg cloned every path the
-/// caller was about to drop anyway. `None` ONLY for the §P3-M8 `view`
-/// shell: [`run`] dispatches it BEFORE the pipeline — the GUI entry (F10)
+/// caller was about to drop anyway. `None` ONLY for the `view`
+/// shell: [`run`] dispatches it BEFORE the pipeline — the GUI entry
 /// is not a byte-contract command and never becomes a [`Request`]. The
-/// global `--quiet` reaches `diff` (exit code only, §P4-M0 D-3) — the other
+/// global `--quiet` reaches `diff` (exit code only) — the other
 /// commands consume it in the [`Renderer`].
 #[allow(clippy::too_many_lines)] // one arm per `Command` variant: the flat argv → Request
-// table IS the content (§P4-R4 KEEP row, R1 arm-order precedent) — every
+// table IS the content — every
 // mapping is a 1:1 field move, so any "dedupe" would hide argv semantics
 // behind indirection; the cli `report` plumbing follows the same reading
-// (one `Renderer`, one `replay`, reviewed §P4-R4 = KEEP).
+// (one `Renderer`, one `replay`).
 fn to_request(command: Command, quiet: bool) -> Option<Request> {
     Some(match command {
         Command::Dsl2Json { dsl, output } => Request::Dsl2Json {
@@ -595,7 +594,7 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             write,
             check,
         } => Request::Fmt {
-            // No file arguments = stdin (P1-D8: `-` stands for stdin/stdout).
+            // No file arguments = stdin (: `-` stands for stdin/stdout).
             inputs: if files.is_empty() {
                 vec![Input::Stdin]
             } else {
@@ -733,15 +732,15 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
             },
             output,
         },
-        // §P3-M8 + §P4-M3 O-3 + §P4-M5 E-1: dispatched in `run` before the
+        // Dispatched in `run` before the
         // pipeline is reached (`view` = the GUI shell, `completions` = the
-        // argv table, `oracle` = the external reference binary — none of
+        // argv table, `oracle` = the external official tooling binary — none
         // them is a `Request`).
         Command::View { .. } | Command::Completions { .. } | Command::Oracle { .. } => return None,
     })
 }
 
-/// §P3-M8 / F10: `oxidizr view` opens the native viewer window
+/// `oxidizr view` opens the native viewer window
 /// IN-PROCESS when the cli is built with `gui` — the SAME
 /// `oxidizr_viewer::shell::run` the standalone `oxidizr-viewer` binary
 /// drives, so the entries cannot drift. eframe faults (no display)
@@ -757,9 +756,9 @@ fn run_view(file: Option<&Path>, theme: ViewTheme) -> anyhow::Result<i32> {
     Ok(0)
 }
 
-/// The `gui`-less build (§P3-M8): the argv is valid clap surface, but
+/// The `gui`-less build: the argv is valid clap surface, but
 /// this binary links no shell — exit 1 via the binary's error arm with
-/// the rebuild hint (the request is unserveable, P1-D8 codes).
+/// the rebuild hint (the request is unserveable).
 #[cfg(not(feature = "gui"))]
 fn run_view(_file: Option<&Path>, _theme: ViewTheme) -> anyhow::Result<i32> {
     anyhow::bail!(
@@ -789,7 +788,7 @@ fn read_stdin() -> Result<Vec<u8>, Issue> {
 /// Replay an [`Outcome`] onto the process streams: stdout payload first (a
 /// write failure is the old `write_output` exit 3 and suppresses the log —
 /// the extracted contract), then the ordered log. Consecutive issues render
-/// as one batch (single stderr write, as before). 2R R-mis-10: the outcome
+/// as one batch (single stderr write, as before). The outcome
 /// MOVES in — issues step into the render batch instead of being cloned
 /// item by item.
 fn replay(renderer: &Renderer, outcome: Outcome) -> i32 {
@@ -884,7 +883,7 @@ mod tests {
         ])
         .unwrap();
         Cli::try_parse_from(["oxidizr", "export", "-w", "ws.dsl", "-f", "theme"]).unwrap();
-        // §P4-M2 N-4: `import` parses bare, with the sniffed format, and
+        // `import` parses bare, with the sniffed format, and
         // with every explicit option (`c4plantuml` is the spelled value).
         Cli::try_parse_from(["oxidizr", "import", "diagram.puml"]).unwrap();
         Cli::try_parse_from([
@@ -927,14 +926,14 @@ mod tests {
             "out/",
         ])
         .unwrap();
-        // `--format` is required (reference parity: the option is REQUIRED);
+        // `--format` is required (the official tooling marks it REQUIRED);
         // missing it is a clap usage error, exit 2.
         assert!(Cli::try_parse_from(["oxidizr", "export", "-w", "ws.dsl"]).is_err());
-        // §P3-M8 / F10: `view` parses with and without its optional file.
+        // `view` parses with and without its optional file.
         Cli::try_parse_from(["oxidizr", "view"]).unwrap();
         Cli::try_parse_from(["oxidizr", "view", "ws.dsl", "--theme", "dark"]).unwrap();
         assert!(Cli::try_parse_from(["oxidizr", "view", "--theme", "sepia"]).is_err());
-        // §P4-M0 / F3: `diff` needs both sides; `--format` defaults to human.
+        // /: `diff` needs both sides; `--format` defaults to human.
         Cli::try_parse_from(["oxidizr", "diff", "a.dsl", "b.json"]).unwrap();
         Cli::try_parse_from(["oxidizr", "diff", "a.json", "b.json", "--format", "json"]).unwrap();
         Cli::try_parse_from([
@@ -953,12 +952,12 @@ mod tests {
         assert!(Cli::try_parse_from(["oxidizr", "merge"]).is_err());
         // `validate` needs at least one file (clap usage error, exit 2).
         assert!(Cli::try_parse_from(["oxidizr", "validate"]).is_err());
-        // §P4-M3 O-3: `completions` takes exactly one known shell token.
+        // `completions` takes exactly one known shell token.
         Cli::try_parse_from(["oxidizr", "completions", "bash"]).unwrap();
         Cli::try_parse_from(["oxidizr", "completions", "powershell"]).unwrap();
         assert!(Cli::try_parse_from(["oxidizr", "completions", "csh"]).is_err());
         assert!(Cli::try_parse_from(["oxidizr", "completions"]).is_err());
-        // §P4-M3 O-4: `generate system-landscape` takes 1..N inputs and
+        // `generate system-landscape` takes 1..N inputs and
         // the full filter/strategy surface; zero inputs and unknown
         // strategies are clap usage errors (exit 2).
         Cli::try_parse_from(["oxidizr", "generate", "system-landscape", "ws.dsl"]).unwrap();
@@ -990,7 +989,7 @@ mod tests {
             ])
             .is_err()
         );
-        // §P4-M5 E-1: `oracle` — value-enum action positional, 1..N
+        // `oracle` — value-enum action positional, 1..N
         // workspace positionals; zero workspaces and unknown actions are
         // clap usage errors (exit 2).
         Cli::try_parse_from(["oxidizr", "oracle", "gen", "a.dsl"]).unwrap();
@@ -1015,7 +1014,7 @@ mod tests {
     fn command_names_stable() {
         let cli = Cli::try_parse_from(["oxidizr", "dsl2json"]).unwrap();
         assert_eq!(command_name(&cli.command), "dsl2json");
-        // §P4-M3 O-4: the `generate` family reports ONE name (the
+        // the `generate` family reports ONE name (the
         // generator is a subcommand, like `export --format`).
         let cli =
             Cli::try_parse_from(["oxidizr", "generate", "system-landscape", "ws.dsl"]).unwrap();

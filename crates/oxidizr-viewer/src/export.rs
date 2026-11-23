@@ -1,30 +1,25 @@
-//! SVG/PNG export with the key (M4-5, `export.jspf` analogue): a flat
+//! SVG/PNG export with the key: a flat
 //! [`epaint::Shape`] list → self-contained SVG → PNG, all headless
-//! (Category A — the shell only orchestrates the font view and the file
-//! write, P3-D1).
+//! (the shell only orchestrates the font view and the file write).
 //!
-//! Design (recorded on the §P3-M4 M4-5 row):
-//!
-//! - **Own Shape→SVG translator.** epaint 0.37 has no SVG serializer,
+//! - **Own Shape→SVG translator.** epaint has no SVG serializer,
 //!   and `paint` emits a CLOSED subset — Rect/Circle/Ellipse/LineSegment/
 //!   Path(open|closed)/Text (dashes are already expanded to segments at
 //!   paint time) — so this module maps exactly that subset and skips
 //!   anything else (Mesh/Bézier/Band/Callback are never produced).
-//! - **Text is glyph OUTLINES as paths.** The pinned raster stack is
-//!   built WITHOUT text features, so resvg cannot resolve `<text>`; and
-//!   epaint 0.37 renders glyphs via skrifa, NOT `ab_glyph` (the row's
-//!   "version-unified" premise — reality check 2026-11-20). `ab_glyph`
+//! - **Text is glyph OUTLINES as paths.** The raster stack is built
+//!   WITHOUT text features, so resvg cannot resolve `<text>`, and epaint
+//!   renders glyphs via skrifa, not `ab_glyph`. `ab_glyph`
 //!   is therefore a companion dep parsing the SAME bundled TTF bytes
-//!   epaint embeds (`FontDefinitions::default().font_data`), producing
+//!   epaint embeds (`FontDefinitions::default.font_data`), producing
 //!   quadratic path segments. Result: the SVG is self-contained (no
 //!   `@font-face`, no font dependency in viewers) and PNG renders
-//!   identically without fonts — the recorded `<text>` fallback stays
-//!   unused.
+//!   identically without fonts.
 //! - **The key rides the same shape pipeline** ([`compose`]): composed
-//!   BELOW the diagram (P3-V8: our anatomy, margins of ours), reusing
+//!   BELOW the diagram, on margins of ours, reusing
 //!   [`crate::key::legend`] rows — no second legend model.
-//! - Export bytes are NOT goldens (visual parity is out of contract,
-//!   P3-D0): the snapshot gate is XML well-formedness (usvg parse) +
+//! - Export bytes are NOT goldens (visual parity is out of contract):
+//!   the snapshot gate is XML well-formedness (usvg parse) +
 //!   PNG magic bytes.
 
 use std::collections::BTreeMap;
@@ -107,7 +102,7 @@ pub fn export_scale(bounds: Rect) -> f64 {
     scale
 }
 
-/// Compose the whole export (diagram + key, V8 anatomy: key BELOW,
+/// Compose the whole export (diagram + key: key BELOW,
 /// margins ours) through the given font view. The diagram rides
 /// [`paint::paint_scene`] at a fitted [`Viewport`]; the key band reuses
 /// [`crate::key::legend`] rows. The selection is NEVER painted (export
@@ -162,7 +157,7 @@ pub fn compose(scene: &Scene, fonts: &mut FontsView<'_>) -> Composed {
     let width = fig_w.max(key_w + 2.0 * f64::from(KEY_SWATCH_X));
     let height = fig_h + f64::from(KEY_TOP_PAD) + key_h + f64::from(EXPORT_MARGIN);
     // `key_shapes` composes at the document origin — slide the whole
-    // band into its place BELOW the diagram (P3-V8 anatomy).
+    // band into its place BELOW the diagram.
     let key_top = to_f32(fig_h + f64::from(KEY_TOP_PAD), EXPORT_MAX_SIDE);
     let mut key_shapes_out = key_shapes_out;
     for shape in &mut key_shapes_out {
@@ -324,8 +319,8 @@ fn swatch_line(out: &mut Vec<Shape>, row_y: f32, color: Color32, style: LineStyl
     }
 }
 
-/// Luma-contrast ink for a background (export key text; visual parity
-/// is out of contract, P3-D0 — this is OUR legibility choice).
+/// Luma-contrast ink for a background (export key text — a legibility
+/// choice of ours, not a contract).
 fn contrast_ink(background: Color32) -> Color32 {
     let [r, g, b, _] = background.to_array();
     if u32::from(r) * 299 + u32::from(g) * 587 + u32::from(b) * 114 > 127_000 {
@@ -335,7 +330,7 @@ fn contrast_ink(background: Color32) -> Color32 {
     }
 }
 
-/// The SAME bundled faces the viewer paints with (P3-D2), as an
+/// The SAME bundled faces the viewer paints with, as an
 /// `ab_glyph` font for the outline pass. `None` only when epaint's
 /// `default_fonts` feature is off (no embedded bytes) — text is then
 /// skipped.
