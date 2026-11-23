@@ -1,25 +1,23 @@
-//! Tags: an insertion-ordered unique set with DERIVED default tags (Locked stack
-//! table, `agents/plan/FEATURES.md` §3).
+//! Tags: an insertion-ordered unique set with DERIVED default tags.
 //!
-//! Reference model (`model/ModelItem.java`, verified @ `ad34036`):
+//! The tag model:
 //!
 //! * The `tags` FIELD stores only what was explicitly set/added ("custom" tags);
 //!   each kind contributes [`TagKind::default_tags`] which are PREPENDED (deduped) at
-//!   read time — `getTags() = LinkedHashSet(defaults ++ stored)`.
-//! * `setTags(csv)` (JSON read path): CLEARS the stored set, then `csv.split(",")`
+//!   read time — effective tags = defaults ++ stored, insertion order.
+//! * The JSON read path CLEARS the stored set, then splits the CSV on `","`
 //!   WITHOUT trimming — `"a, b"` stores `["a", " b"]` (bug-compatible). The
 //!   defaults therefore get re-stored on a JSON load and deduped again on write.
-//! * `addTags(...)` (DSL / ctor path): TRIMS each tag, skips empties? (no: an
-//!   empty/whitespace tag is stored as-is if non-null), keeps first position.
+//! * The DSL / ctor path TRIMS each tag and keeps first position (an
+//!   empty/whitespace tag is still stored as-is).
 //! * Relationship defaults depend on state: a linked (implied/replicated)
 //!   relationship has NO default tags at all; a normal one gets `Relationship`
-//!   plus `Synchronous`/`Asynchronous` when an interaction style is set
-//!   (`Relationship.getDefaultTags`, verified).
+//!   plus `Synchronous`/`Asynchronous` when an interaction style is set.
 //! * `SoftwareSystemInstance`/`ContainerInstance` have NO derived defaults —
-//!   their kind tag is stored by the constructor (the v5 claim that instances
-//!   inherit the parent element's tags is GONE in v6).
+//!   their kind tag is stored by the constructor (instances do NOT inherit
+//!   the parent element's tags).
 
-/// Tag-name constants (`model/Tags.java`).
+/// Tag-name constants.
 pub mod tag {
     pub const ELEMENT: &str = "Element";
     pub const RELATIONSHIP: &str = "Relationship";
@@ -70,7 +68,7 @@ impl TagKind {
         }
     }
 
-    /// The reference `getDefaultTags()` stack, in serialization order.
+    /// The derived default-tag stack, in serialization order.
     #[must_use]
     pub const fn default_tags(self) -> &'static [&'static str] {
         use tag::{
@@ -111,9 +109,9 @@ impl Tags {
     }
 
     /// JSON-load path: parse a comma-separated string into a tag set.
-    /// Reference `setTags(String)`: `split(",")` with NO trim (a stored default
-    /// tag simply re-dedups against the derived one on write). `from_`-named
-    /// because it constructs, not mutates (2R R-core-14).
+    /// The official JSON path splits the CSV on `","` with NO trim (a stored
+    /// default tag simply re-dedups against the derived one on write). `from_`-named
+    /// because it constructs, not mutates.
     #[must_use]
     pub fn from_json_csv(csv: &str) -> Tags {
         let mut tags = Tags::new();
@@ -124,8 +122,7 @@ impl Tags {
     }
 
     /// Add one explicitly-given tag (DSL `tags "a,b"` parts or `tag "x"`),
-    /// trimming — reference `addTags(String...)` (`tag.trim()`, first position
-    /// kept on duplicates).
+    /// trimming, first position kept on duplicates.
     pub fn add(&mut self, tag: &str) {
         self.push_unique(tag.trim());
     }
@@ -136,9 +133,8 @@ impl Tags {
         self.stored.iter().any(|t| t == tag)
     }
 
-    /// Remove a stored tag; derived defaults cannot be removed (the reference
-    /// `removeTag` CAN remove a re-stored default copy — mirrored: it just
-    /// removes what is stored).
+    /// Remove a stored tag; derived defaults cannot be removed (a re-stored
+    /// default copy IS removable — this removes exactly what is stored).
     pub fn remove(&mut self, tag: &str) -> bool {
         if let Some(pos) = self.stored.iter().position(|t| t == tag) {
             self.stored.remove(pos);
@@ -148,7 +144,7 @@ impl Tags {
         }
     }
 
-    /// `getTagsAsSet().contains(tag)`: defaults first, then stored.
+    /// Effective-tag membership: defaults first, then stored.
     #[must_use]
     pub fn has(&self, kind: TagKind, tag: &str) -> bool {
         self.has_against(kind.default_tags(), tag)
@@ -160,17 +156,17 @@ impl Tags {
         defaults.contains(&tag) || self.contains_stored(tag)
     }
 
-    /// `getTags()` for an element kind (derived stack from [`TagKind`]).
+    /// CSV of the derived tag stack for an element kind (from [`TagKind`]).
     #[must_use]
     pub fn serialized_for(&self, kind: TagKind) -> String {
         self.serialized(kind.default_tags())
     }
 
-    /// The EFFECTIVE tag list — `getTags()` as `defaults ++ stored`, deduped
+    /// The EFFECTIVE tag list — `defaults ++ stored`, deduped
     /// keeping first position (the same view [`Tags::serialized`] joins).
     /// Loaders represent the same effective list differently (the DSL path
     /// keeps kind defaults DERIVED, a JSON load re-stores the CSV), so
-    /// format-agnostic comparison must go through this view (§P4-M0 D-4).
+    /// format-agnostic comparison must go through this view.
     #[must_use]
     pub fn effective<'a>(&'a self, defaults: &[&'a str]) -> Vec<&'a str> {
         let mut out: Vec<&str> = Vec::with_capacity(self.stored.len() + defaults.len());
@@ -187,7 +183,7 @@ impl Tags {
         out
     }
 
-    /// `getTags()`: `defaults ++ stored`, deduped keeping first position, joined
+    /// Effective tags as CSV: `defaults ++ stored`, deduped keeping first position, joined
     /// with `,`.
     #[must_use]
     pub fn serialized(&self, defaults: &[&str]) -> String {
@@ -225,7 +221,7 @@ pub enum InteractionStyle {
 }
 
 impl InteractionStyle {
-    /// JSON spelling (the Java constant name).
+    /// JSON spelling (the official constant name).
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -245,7 +241,7 @@ impl InteractionStyle {
     }
 }
 
-/// `Relationship.getDefaultTags()`: a linked (implied / instance-replicated)
+/// A relationship's default tags: a linked (implied / instance-replicated)
 /// relationship has NO default tags at all; a normal one gets `Relationship`,
 /// plus the interaction style tag when a style is set.
 #[must_use]
@@ -278,7 +274,7 @@ mod tests {
 
     #[test]
     fn from_json_csv_does_not_trim() {
-        // Reference `split(",")` keeps the space: " b" is a distinct stored tag.
+        // The untrimmed CSV split keeps the space: " b" is a distinct stored tag.
         let t = Tags::from_json_csv("a, b");
         assert_eq!(t.stored(), ["a".to_string(), " b".to_string()]);
         assert!(t.contains_stored(" b"));

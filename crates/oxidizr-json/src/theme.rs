@@ -1,15 +1,13 @@
-//! `theme.json` de/serialization — the `view/Theme` bean behind
-//! `ThemeUtils.toJson` / `ThemeUtils.fromJson` (Phase 2 `export --format
-//! theme`, P2-D4; theme loading is M1).
+//! `theme.json` de/serialization — the theme document `export --format
+//! theme` reads and writes.
 //!
-//! The reference uses a PLAIN `ObjectMapper` (not the workspace mapper): key
-//! order is the Java declaration order, the mapper inclusion is `NON_EMPTY`
-//! (theme fields and style arrays), style fields carry per-field
-//! `@JsonInclude(NON_NULL)` (so `0`/`false`/`""` survive), while `tag` and
-//! `properties` follow `AbstractStyle`'s `NON_EMPTY`. Witnesses:
-//! `/tmp/nix-shell.uni100/p2/v1/out3,out6` (oracle probes 2026-11-17).
-//! Indentation is the same `DefaultPrettyPrinter` emulation as the workspace
-//! writer (§0) — the reference configures both identically.
+//! Theme JSON is written PLAIN (not through the workspace mapper): key
+//! order is field-declaration order, empty values are omitted
+//! (theme fields and style arrays), while numeric/boolean/empty-string
+//! style fields survive (`0`/`false`/`""` are meaningful there), and `tag`
+//! and `properties` omit empties. The format is witnessed by the
+//! committed goldens. Indentation is the same pretty-JSON shape as the
+//! workspace writer — both are configured identically.
 
 use oxidizr_core::Workspace;
 use oxidizr_core::views::{ElementStyle, RelationshipStyle, Theme};
@@ -19,14 +17,14 @@ use crate::printer::{Json, to_bytes};
 use crate::reader;
 use crate::writer::opt_nnn;
 
-/// Deserialize a `theme.json` document with the `ThemeUtils.fromJson`
-/// leniency matrix (unknown keys ignored, `ACCEPT_EMPTY_STRING_AS_NULL_OBJECT`
-/// — the style-item binding is the workspace one, clamps included).
+/// Deserialize a `theme.json` document with the theme leniency matrix
+/// (unknown keys ignored, empty objects bind as null — the style-item
+/// binding is the workspace one, clamps included).
 ///
 /// # Errors
 ///
 /// [`JsonError::Parse`] for malformed JSON, [`JsonError::Read`] for a
-/// non-object root or a style value the reference setters reject (invalid
+/// non-object root or a style value the writer's setters reject (invalid
 /// color), [`JsonError::Validation`] never (themes are not validated).
 pub fn theme_from_slice(bytes: &[u8]) -> Result<Theme, JsonError> {
     let root: serde_json::Value = serde_json::from_slice(bytes)?;
@@ -54,7 +52,7 @@ pub fn theme_write(theme: &Theme) -> Vec<u8> {
     to_bytes(&theme_json(&ThemeView::of(theme)))
 }
 
-/// Borrowed `Theme` for serialization (2R R-mis-08): `theme_to_vec` feeds
+/// Borrowed `Theme` for serialization: `theme_to_vec` feeds
 /// the live workspace fields directly; `theme_write` borrows a bean.
 struct ThemeView<'a> {
     name: Option<&'a str>,
@@ -78,14 +76,13 @@ impl ThemeView<'_> {
 }
 
 /// The `export --format theme` payload: `ThemeUtils.toJson(workspace)` —
-/// name/description from the workspace (`NON_EMPTY`), the LIVE style
+/// name/description from the workspace (omitted when empty), the LIVE style
 /// collections in storage order (sorted for DSL-built workspaces, document
-/// order for JSON-loaded ones — §5), `license` never set.
+/// order for JSON-loaded ones), `license` never set.
 #[must_use]
 pub fn theme_to_vec(workspace: &Workspace) -> Vec<u8> {
-    // 2R R-mis-08: the LIVE workspace fields serialize through a borrowed
-    // view — the old shape deep-cloned name/description/both style vectors
-    // into a throwaway `Theme` for one serialize pass.
+    // The LIVE workspace fields serialize through a borrowed view — no
+    // clone of name/description/style vectors is needed for one pass.
     let styles = &workspace.views.configuration.styles;
     to_bytes(&theme_json(&ThemeView {
         name: workspace.name.as_deref(),
@@ -98,7 +95,7 @@ pub fn theme_to_vec(workspace: &Workspace) -> Vec<u8> {
 
 fn theme_json(t: &ThemeView<'_>) -> Json {
     // `Theme` declaration order (name, description, elements, relationships,
-    // license); NON_EMPTY hides null/"" and empty arrays (a theme with no
+    // license); empty-value omission hides null/"" and empty arrays (a theme with no
     // styles serializes as `{ }` — witness out1-era probe).
     let mut entries = vec![
         ("name", Json::opt_text(t.name)),

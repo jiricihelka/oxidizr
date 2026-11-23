@@ -1,11 +1,11 @@
-//! The static + deployment model (`com.structurizr.model`). Plain data; field
-//! names mirror the Java model classes so the JSON layer maps 1:1 (P1-D4).
+//! The static + deployment model. Plain data; field names mirror the JSON
+//! contract fields exactly so the JSON layer maps 1:1.
 //!
-//! Structure mirrors OWNSHIP, not the reference's flat id maps: containers live
+//! Structure mirrors OWNSHIP, not the official flat id maps: containers live
 //! in their system, components in their container, deployment children in their
 //! node. Relationships live in a flat arena on [`Model`] (referenced by id from
 //! their source element) because they are shared storage with a counter that is
-//! ALSO shared with elements (Locked).
+//! ALSO shared with elements.
 
 use std::collections::BTreeMap;
 
@@ -25,13 +25,13 @@ pub struct Perspective {
     pub url: Option<String>,
 }
 
-/// An HTTP health check (`model/HttpHealthCheck`) attached to software-system /
-/// container instances. Java primitives `interval` (seconds, default 60) and
-/// `timeout` (millis, default 0) are NEVER "empty" under `NON_EMPTY` — both
-/// are ALWAYS written (WRITE-CATALOG §2).
+/// An HTTP health check attached to software-system /
+/// container instances. Primitive `interval` (seconds, default 60) and
+/// `timeout` (millis, default 0) are never treated as empty — both
+/// are ALWAYS written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpHealthCheck {
-    /// Display name (the reference defaults it to the URL).
+    /// Display name (the official tooling defaults it to the URL).
     pub name: String,
     /// URL to check.
     pub url: String,
@@ -55,14 +55,14 @@ impl Default for HttpHealthCheck {
     }
 }
 
-/// Common fields of every identified model item (`model/ModelItem`): elements,
+/// Common fields of every identified model item ([`ModelItem`]): elements,
 /// deployment elements and relationships all carry these (relationships just
 /// have no NAME — their description plays that role).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelItem {
     /// Shared-counter id (string-typed; see [`crate::ids`]).
     pub id: Id,
-    /// Item name (reference: non-null, non-empty).
+    /// Item name (official contract: non-null, non-empty).
     pub name: String,
     /// Optional description.
     pub description: Option<String>,
@@ -93,8 +93,8 @@ impl ModelItem {
     }
 }
 
-/// A relationship (`model/Relationship`). Source/destination are ids into the
-/// [`Model`] element space; the reference hydrates object links, we resolve on
+/// A relationship. Source/destination are ids into the
+/// [`Model`] element space; the official format stores object links, we resolve on
 /// demand.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Relationship {
@@ -128,7 +128,7 @@ pub struct Relationship {
 pub struct Person {
     /// Shared fields.
     pub item: ModelItem,
-    /// Optional group (`GroupableElement`).
+    /// Optional group.
     pub group: Option<String>,
     /// Outgoing relationship ids, in definition order.
     pub relationships: Vec<Id>,
@@ -143,8 +143,8 @@ pub struct SoftwareSystem {
     pub group: Option<String>,
     /// Owned containers.
     pub containers: Vec<Container>,
-    /// Nested documentation (`Documentable`; the lazy bean ALWAYS serializes,
-    /// at least as `{ }` — WRITE-CATALOG §2).
+    /// Nested documentation (always serialized,
+    /// at least as `{ }`).
     pub documentation: crate::docs::Documentation,
     /// Outgoing relationship ids, in definition order.
     pub relationships: Vec<Id>,
@@ -189,14 +189,14 @@ pub struct CustomElement {
     pub item: ModelItem,
     /// Optional group.
     pub group: Option<String>,
-    /// Free-form `metadata` string (Java-only; the DSL never sets it).
+    /// Free-form `metadata` string (★ not in the `OpenAPI` schema; the DSL never sets it).
     pub metadata: Option<String>,
     /// Outgoing relationship ids, in definition order.
     pub relationships: Vec<Id>,
 }
 
 /// A deployment node (`model/DeploymentNode`). Environment is a plain stored
-/// field (`DeploymentElement.environment`, reference default `"Default"`) —
+/// field (official default `"Default"`) —
 /// there is NO read-time inheritance; the creation API propagates the
 /// environment from parent to child, so JSON produced by the tooling always
 /// carries it on every node.
@@ -206,15 +206,15 @@ pub struct DeploymentNode {
     pub item: ModelItem,
     /// Optional group.
     pub group: Option<String>,
-    /// Environment (empty until a loader sets it; the reference default is
+    /// Environment (empty until a loader sets it; the official default is
     /// `"Default"`).
     pub environment: String,
     /// Optional technology.
     pub technology: Option<String>,
-    /// Instance count (JSON `instances` — a Java STRING, default `"1"`; the
+    /// Instance count (JSON `instances` — a STRING, default `"1"`; the
     /// reader must also accept numbers, the writer emits the string).
     pub instances: String,
-    /// Deployment groups (reference `TreeSet` — writer emits SORTED).
+    /// Deployment groups (the format sorts them on write).
     pub deployment_groups: Vec<String>,
     /// Child nodes.
     pub children: Vec<DeploymentNode>,
@@ -258,7 +258,7 @@ pub struct SoftwareSystemInstance {
     pub software_system_id: Id,
     /// Own integer id (JSON `instanceId` — per-node per-system 1-based count).
     pub instance_id: i32,
-    /// Deployment groups (reference `TreeSet` — writer emits SORTED).
+    /// Deployment groups (the format sorts them on write).
     pub deployment_groups: Vec<String>,
     /// Health checks.
     pub health_checks: Vec<HttpHealthCheck>,
@@ -279,7 +279,7 @@ pub struct ContainerInstance {
     pub container_id: Id,
     /// Own integer id (JSON `instanceId` — per-node per-container 1-based count).
     pub instance_id: i32,
-    /// Deployment groups (reference `TreeSet` — writer emits SORTED).
+    /// Deployment groups (the format sorts them on write).
     pub deployment_groups: Vec<String>,
     /// Health checks.
     pub health_checks: Vec<HttpHealthCheck>,
@@ -305,7 +305,7 @@ pub struct Model {
 }
 
 impl Default for DeploymentNode {
-    /// Matches the reference field initializer: environment defaults to
+    /// Matches the format default: environment defaults to
     /// [`crate::DEFAULT_ENVIRONMENT`].
     fn default() -> Self {
         DeploymentNode {

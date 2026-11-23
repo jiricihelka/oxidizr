@@ -1,33 +1,33 @@
-//! Stage 1 of the DSL pipeline (P1-D3): split the source into reference "logical
-//! lines" — the exact grouping `StructurizrDslParser.preProcessLines` performs at the
-//! pinned revision, keeping byte spans into the ORIGINAL source so tokens can carry
-//! faithful spans and diagnostics can quote original lines (D1).
+//! Stage 1 of the DSL pipeline: split the source into "logical
+//! lines" — the exact grouping the official parser performs before
+//! parsing, keeping byte spans into the ORIGINAL source so tokens can carry
+//! faithful spans and diagnostics can quote original lines.
 //!
-//! Reference facts this mirrors verbatim (verified @ `ad34036`, see agents/plan/PROGRESS.md):
+//! Official-format facts this mirrors verbatim:
 //!
 //! * BOM: the parse loop strips a leading `\u{FEFF}` from each logical line's start
-//!   (reachable on the first line of a file / of an included file — M5 reuses this).
+//!   (reachable on the first line of a file / of an included file).
 //! * Continuation: a line ENDING WITH `\` (raw check, CRLF-insensitive, whole-line
 //!   `//`/`#` comment lines exempt) loses the backslash; the next line is appended
 //!   with its leading whitespace stripped. Nothing is inserted between the parts.
 //! * Text blocks: a line ending with `"""` opens a block closed by the next line that
 //!   ENDS with `"""`; middle lines are dedented by the first middle line's leading
-//!   whitespace count, joined with `\n`; the reference folds the logical line into
+//!   whitespace count, joined with `\n`; the official parser folds the logical line into
 //!   `prefix + "\"${name}\""`, i.e. the prefix is everything before the FIRST `"""`
 //!   in the joined opener text. The closing line's content before its marker is
-//!   DISCARDED and a `"""` inside the value TRUNCATES it (reference `split`
-//!   behavior) — [`text_block_value`] replicates both.
+//!   DISCARDED and a `"""` inside the value TRUNCATES it (the official
+//!   split behavior) — [`text_block_value`] replicates both.
 //! * Dropped tails: at EOF an unfinished continuation or unterminated text block is
-//!   SILENTLY DROPPED by the reference (its buffer only flushes on a complete line);
+//!   SILENTLY DROPPED by the official parser (its buffer only flushes on a complete line);
 //!   we mark such a tail [`Logical::dropped`] so the CST can still cover the bytes
 //!   while the parser ignores it.
-//! * Line terminators: Java's reader consumes `\n`, `\r\n`, `\r` — here physical
+//! * Line terminators: the official reader consumes `\n`, `\r\n`, `\r` — here
 //!   lines split on `\n` with trailing `\r` stripped from content; a lone trailing
 //!   `\r` at EOF is likewise invisible to the logic but kept in the byte spans.
 
 use crate::compat;
 
-/// The reference `TEXT_BLOCK_MARKER`.
+/// The text-block opener/closer marker.
 const TEXT_BLOCK_MARKER: &str = "\"\"\"";
 
 /// A physical line with its byte spans (offsets into the whole source).
@@ -64,9 +64,9 @@ pub struct TextBlock {
     /// From the opening `"""` through the closing line's end (incl. its line
     /// terminator); unterminated blocks run to EOF.
     pub raw: (usize, usize),
-    /// Text on the opener line AFTER the opening `"""` (reference `buf` holds the
-    /// whole opener line; `split(TEXT_BLOCK_MARKER)` makes this the start of the
-    /// value, part `parts[1]`). Normally empty.
+    /// Text on the opener line AFTER the opening `"""` (the official buffer holds
+    /// the whole opener line; the marker split makes this the start of the
+    /// value). Normally empty.
     pub after_opener: (usize, usize),
     /// Start of the middle content region (first byte after the opener line).
     pub middle_start: usize,
@@ -76,19 +76,19 @@ pub struct TextBlock {
     pub closed: bool,
 }
 
-/// Compute the reference text-block value (`parts[1].substring(0, len - 1)` of the
-/// reconstructed buffer in `preProcessLines`).
+/// Compute the official parser text-block value (drop the last character of
+/// the reconstructed buffer).
 ///
 /// The value body = text after the opening `"""` on the opener line, then each
 /// middle line dedented by the FIRST middle line's leading-whitespace count and
 /// followed by `\n` (a zero-length middle line contributes just `\n`). The body is
-/// then cut at the first `"""` occurring in it (the `split` keeps only `parts[1]`)
-/// and its LAST character is dropped (`substring(0, length - 1)` — normally the
+/// then cut at the first `"""` occurring in it (the split keeps only that part)
+/// and its LAST character is dropped — normally the
 /// trailing `\n`).
 ///
-/// Inputs where the reference would throw (`StringIndexOutOfBoundsException` /
-/// `IndexOutOfBoundsException`) return `None` so callers emit a diagnostic instead
-/// of crashing (divergence recorded in agents/plan/PROGRESS.md).
+/// Inputs where the official parser would crash (index-out-of-bounds
+/// exceptions) return `None` so callers emit a diagnostic instead
+/// of crashing (a documented deviation).
 #[must_use]
 pub fn text_block_value(source: &str, block: &TextBlock) -> Option<String> {
     let mut body = source[block.after_opener.0..block.after_opener.1].to_string();
@@ -130,10 +130,10 @@ fn strip_cr(line: &str) -> &str {
     line.strip_suffix('\r').unwrap_or(line)
 }
 
-/// A reference logical line: one statement unit as the reference parse loop sees it.
+/// A logical line: one statement unit as the official parse loop sees it.
 #[derive(Debug, Clone)]
 pub struct Logical {
-    /// 1-based number of the physical line at which the reference EMITTED this
+    /// 1-based number of the physical line at which the official parser EMITTED this
     /// logical line — the LAST line of a continuation / text-block group (the parse
     /// loop flushes with its already-advanced `lineNumber`).
     pub number: u32,
@@ -145,12 +145,12 @@ pub struct Logical {
     /// Text block folded onto this line, if any.
     pub text_block: Option<TextBlock>,
     /// True for the silently-dropped EOF tail (unfinished continuation or
-    /// unterminated text block). The reference never parses these bytes.
+    /// unterminated text block). The official parser never parses these bytes.
     pub dropped: bool,
 }
 
 impl Logical {
-    /// The joined logical text the reference tokenizer would see.
+    /// The joined logical text the official tokenizer would see.
     #[must_use]
     pub fn joined(&self, source: &str) -> String {
         let mut out = String::new();
@@ -160,7 +160,7 @@ impl Logical {
         out
     }
 
-    /// Reference `EMPTY_LINE_PATTERN` (`^\s*$`, Java ASCII `\s`): the logical line is
+    /// The blank-line test (`^\s*$`, ASCII `\s`): the logical line is
     /// blank.
     #[must_use]
     pub fn is_empty_line(&self, source: &str) -> bool {
@@ -170,7 +170,7 @@ impl Logical {
             .any(|c| !compat::is_java_regex_s(c))
     }
 
-    /// Reference `COMMENT_PATTERN` (`^\s*(//|#).*$`): whole-line comment.
+    /// The whole-line-comment test (`^\s*(//|#).*$`): whole-line comment.
     #[must_use]
     pub fn is_comment_line(&self, source: &str) -> bool {
         let text = self.joined(source);
@@ -187,7 +187,7 @@ struct TbOpen {
     prefix: Vec<Segment>,
     /// Byte offset of the opening `"""`.
     raw_start: usize,
-    /// Text on the opener line after the opening marker (reference `parts[1]` start;
+    /// Text on the opener line after the opening marker (the value start;
     /// see the pathological-cross-segment note in the opener branch).
     after_opener: (usize, usize),
     /// First byte after the opener line.
@@ -198,7 +198,7 @@ struct TbOpen {
 ///
 /// Begin a text block on this line. Computes the byte position of the FIRST
 /// `"""` in the reconstructed join (`pending` text + current line) — the boundary
-/// the reference's `split(TEXT_BLOCK_MARKER)` puts at `parts[0]`'s end — drains
+/// the official parser's marker split puts at the prefix's end — drains
 /// `pending` into the trimmed prefix segments, and returns the open state.
 ///
 /// The marker straddling a continuation boundary is a pathological, unmodeled
@@ -246,7 +246,7 @@ fn open_text_block(
         pending_start
     };
     let mut prefix: Vec<Segment> = std::mem::take(pending);
-    // Trim prefix so it ends exactly at `raw_start` (reference parts[0]).
+    // Trim prefix so it ends exactly at `raw_start`.
     trim_segments_to(&mut prefix, raw_start);
     prefix.retain(|s| s.start < s.end);
     if raw_start > content.0 {
@@ -266,7 +266,7 @@ fn open_text_block(
 }
 
 /// Finish a logical line at this physical line: joins any accumulated
-/// continuation (`pending`, the reference `buf`) with this line — the final
+/// continuation (`pending`) with this line — the final
 /// joiner line is `stripLeading`ed — and returns the logical line emitted under
 /// this line's number.
 fn complete_line(
@@ -285,7 +285,7 @@ fn complete_line(
     };
     let mut s = content.0;
     if !segments.is_empty() {
-        // Joiner lines are `stripLeading`ed (reference `String.stripLeading`).
+        // Joiner lines are left-trimmed (the official parser strips leading whitespace).
         let text = &source[s..content.1];
         let stripped = text.trim_start_matches(compat::is_java_whitespace);
         s += text.len() - stripped.len();
@@ -312,7 +312,7 @@ pub fn preprocess(source: &str) -> Vec<Logical> {
     let mut out: Vec<Logical> = Vec::new();
     let lines = physical_lines(source);
 
-    // Continuation accumulation (reference `buf` with `lineComplete == false`).
+    // Continuation accumulation (the official parser's pending buffer).
     let mut pending: Vec<Segment> = Vec::new();
     let mut pending_start = 0_usize;
     let mut tb: Option<TbOpen> = None;
@@ -323,7 +323,7 @@ pub fn preprocess(source: &str) -> Vec<Logical> {
         let content_text = &source[content.0..content.1];
 
         if tb.is_some() {
-            // Inside a text block: only the closing check runs (reference textBlock
+            // Inside a text block: only the closing check runs (the official text-block
             // branch); middle lines are captured by span, not per-line segments.
             if content_text.ends_with(TEXT_BLOCK_MARKER) {
                 if let Some(open) = tb.take() {
@@ -354,7 +354,7 @@ pub fn preprocess(source: &str) -> Vec<Logical> {
 
         if !is_comment && content_text.ends_with('\\') {
             // Continuation: drop the trailing backslash and keep joining (middle
-            // lines keep their indentation — the reference only `stripLeading`s the
+            // lines keep their indentation — the official parser only `stripLeading`s the
             // final completing line).
             if pending.is_empty() {
                 pending_start = line.start;
@@ -381,7 +381,7 @@ pub fn preprocess(source: &str) -> Vec<Logical> {
         ));
     }
 
-    // Dropped tails (reference discards the incomplete `buf` at EOF).
+    // Dropped tails (the official parser discards the incomplete buffer at EOF).
     let last_line = u32::try_from(lines.len()).unwrap_or(u32::MAX);
     if let Some(open) = tb {
         let mut logical = Logical {
@@ -434,7 +434,7 @@ fn trim_segments_to(segments: &mut [Segment], end: usize) {
     }
 }
 
-/// Split into physical lines on `\n`; content drops a trailing `\r` (the Java line
+/// Split into physical lines on `\n`; content drops a trailing `\r` (the official
 /// reader's behavior); terminator bytes stay inside `start..end` spans.
 #[must_use]
 pub fn physical_lines(source: &str) -> Vec<PhysicalLine> {
@@ -458,7 +458,7 @@ pub fn physical_lines(source: &str) -> Vec<PhysicalLine> {
     }
     if start < bytes.len() {
         // Final line without terminator; a lone trailing \r is invisible to the
-        // logic (Java readLine) but stays covered in the span.
+        // logic (the official reader) but stays covered in the span.
         let content_end = if *bytes.last().unwrap_or(&0) == b'\r' {
             bytes.len() - 1
         } else {
@@ -514,7 +514,7 @@ mod tests {
 
     #[test]
     fn continuation_joins_without_separator() {
-        // Reference semantics: middle lines keep their indentation (only the FINAL
+        // Official semantics: middle lines keep their indentation (only the FINAL
         // completing line is `stripLeading`ed), and the group is emitted under the
         // LAST physical line's number.
         let src = "x = \\\n    y \\\n    \"Software \\\n    System\"\nz\n";
@@ -556,7 +556,7 @@ mod tests {
             text_block_value(src, &tb).as_deref(),
             Some("line one\nline two")
         );
-        // Reference prefix: everything before the first `"""`.
+        // Official prefix: everything before the first `"""`.
         assert_eq!(ls[0].joined(src), "a b ");
         assert_eq!(ls[1].joined(src), "z");
         covered(src);
@@ -588,13 +588,13 @@ mod tests {
 
     #[test]
     fn text_block_reference_crash_cases_return_none() {
-        // Empty value: reference `substring(0, -1)` throws → None here.
+        // Empty value: the official parser throws here → None.
         let src = "d \"\"\"\n  \"\"\"\n";
         let ls = preprocess(src);
         let tb = ls[0].text_block.unwrap();
         assert_eq!(text_block_value(src, &tb), None);
-        // Dedent slices CHARACTERS blindly (Java `append(line, n, len)`), so a
-        // 2-space-shallow line simply loses its first 4 chars ("  shallow" → "allow");
+        // Dedent slices CHARACTERS blindly (the official append), so a
+        // 2-space-shallow line simply loses its first 4 chars (" shallow" → "allow");
         // only a line SHORTER than the width throws (→ None).
         let src = "d \"\"\"\n    deep\n  shallow\n    \"\"\"\n";
         let ls = preprocess(src);

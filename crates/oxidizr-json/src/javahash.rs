@@ -1,15 +1,14 @@
-//! Java `String.hashCode` + `HashMap` iteration-order emulation (V-11,
-//! `WRITE-CATALOG` §1).
+//! Java `String.hashCode` + `HashMap` iteration-order emulation.
 //!
-//! The reference stores every free-form `properties` map in a Java `HashMap`
-//! and Jackson serializes it in `HashMap` ITERATION order — not sorted, not
-//! insertion order. Free-form maps are therefore the one place where key
-//! order is not alphabetical; the writer replays each map's INSERTION
-//! sequence (kept verbatim in [`oxidizr_core::properties::Properties`])
-//! through [`entry_order`] to reproduce the reference byte order exactly.
+//! In the official format every free-form `properties` map is written in
+//! Java `HashMap` ITERATION order — not sorted, not insertion order. Free-form
+//! maps are therefore the one place where key order is not alphabetical; the
+//! writer replays each map's INSERTION sequence (kept verbatim in
+//! [`oxidizr_core::properties::Properties`]) through [`entry_order`] to
+//! reproduce the byte order exactly.
 //!
-//! Semantics replicated (Java 8+ `HashMap`, verified against the
-//! `testdata/golden/m3-order.json` witness 2026-11-14):
+//! Semantics replicated (Java 8+ `HashMap`, witnessed by
+//! `testdata/golden/m3-order.json`):
 //!
 //! * `String.hashCode`: `h = 31*h + utf16Unit` with `int` wrap-around.
 //! * Spread: `h ^ (h >>> 16)` (LOGICAL shift on the 32-bit pattern).
@@ -22,10 +21,10 @@
 //!   resize preserves exactly this), and entries of one bucket keep their
 //!   insertion order.
 //!
-//! Accepted deviations (`agents/plan/DEVIATIONS.md` D8): treeified buckets
+//! Accepted deviations: treeified buckets
 //! (≥ 8 same-bucket keys at cap ≥ 64) iterate in tree order in Java,
 //! insertion order here; capacity inputs containing stripped
-//! `structurizr.inspection.*` keys follow the M0 golden-stripping rule.
+//! `structurizr.inspection.*` keys follow the golden-stripping rule.
 
 /// `java.lang.String.hashCode()` over UTF-16 code units (surrogate pairs
 /// count as TWO units — Rust `char`s must be expanded, not iterated raw).
@@ -102,7 +101,7 @@ mod tests {
     use super::{entry_order, spread, string_hash_code};
 
     /// The person map of `testdata/probes/m3-order.dsl` (14 keys; the
-    /// reference's golden order is the test vector — WRITE-CATALOG §1).
+    /// golden key order is the test vector).
     #[test]
     fn golden_person_map_order() {
         let inserted = [

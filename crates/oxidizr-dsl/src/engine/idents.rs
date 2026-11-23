@@ -1,14 +1,14 @@
-//! Port of the reference `IdentifiersRegister` (identifier → model item),
+//! Port of the official parser `IdentifiersRegister` (identifier → model item),
 //! including its failure texts, case-insensitive lookups, hierarchical
 //! identifier computation and UUID fallback.
 //!
-//! Identity model: Java compares registered items with `equals` —
-//! `Element`/`Relationship`/`ElementGroup`/`DeploymentGroup` do NOT override
-//! it (object identity, so `RegItem::Element` compares ids and each PSEUDO
-//! registration carries a fresh uid), but the DSL's `DeploymentEnvironment`
-//! DOES: it equals by NAME (`name.equals(that.name)` + matching class). A
-//! fresh `new DeploymentEnvironment(name)` therefore FINDS the environment's
-//! registered identifier (verified against the oracle: hierarchical node
+//! Identity model: the official register compares items with its
+//! equality contract - elements, relationships and groups do NOT
+//! override it (object identity, so `RegItem::Element` compares ids and each PSEUDO
+//! registration carries a fresh uid), but the DSL
+//! DOES: it compares by NAME (plus matching kind). A
+//! fresh environment pseudo of the same name therefore FINDS the environment
+//! registered identifier (verified: hierarchical node
 //! identifiers are `<envIdentifier>.<nodeIdentifier>`), and two
 //! `deploymentEnvironment` statements with the same name collide in the
 //! register. `null.<name>` prefixes only survive where no environment of
@@ -33,7 +33,7 @@ pub enum IdentifierScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PseudoKind {
     /// `group "..." {` (the full, separator-joined name). `parent` mirrors
-    /// `ElementGroup.setParent`, which the reference calls ONLY in the
+    /// The group parent link, which the official parser sets ONLY in the
     /// softwareSystem/container group arms — model-scope groups have no
     /// parent, so their hierarchical registration gets no prefix.
     Group {
@@ -43,8 +43,8 @@ pub enum PseudoKind {
         parent: Option<Id>,
     },
     /// `deploymentEnvironment "..."` — the `DeploymentEnvironment` the
-    /// statement registers. Java `equals` is NAME-BASED for this class, so
-    /// `findIdentifier(new DeploymentEnvironment(name))` resolves through it
+    /// statement registers. The official comparison is NAME-BASED for this
+    /// pseudo-kind, so the environment identifier lookup resolves through it
     /// (the deployment-node / deployment-group hierarchical prefix).
     DeploymentEnvironment(String),
     /// `deploymentGroup "..."`. Java's parent is the context's
@@ -68,7 +68,7 @@ pub enum RegItem {
     Relationship(Id),
     /// A DSL pseudo-element.
     Pseudo {
-        /// Fresh per registration (identity, like Java object identity).
+        /// Fresh per registration (true object identity).
         uid: u64,
         /// The pseudo kind/value.
         kind: PseudoKind,
@@ -76,8 +76,8 @@ pub enum RegItem {
 }
 
 impl RegItem {
-    /// Java `equals` semantics for registered objects — the comparison the
-    /// reference's `findIdentifier` scan and `register` duplicate-check use.
+    /// The official equality semantics for registered objects - the comparison
+    /// the identifier lookup scan and the register duplicate-check use.
     /// Everything is identity EXCEPT the DSL `DeploymentEnvironment`, which
     /// overrides `equals` by name.
     #[must_use]
@@ -113,7 +113,7 @@ struct Entry {
 
 /// The identifier register. Element and relationship NAMES share one
 /// namespace (collision-checked both ways) but lookups are per-kind, like the
-/// reference's two maps.
+/// the official register's two maps.
 #[derive(Debug, Default)]
 pub struct IdentifiersRegister {
     scope: IdentifierScope,
@@ -140,15 +140,15 @@ impl IdentifiersRegister {
     }
 
     /// Merge another register's entries into this one (`workspace extends`:
-    /// reference `DslParserContext.copyFrom`, which replays the child's
-    /// entries through `register()`). A verbatim append is equivalent for
+    /// the official context copy, which replays the child
+    /// entries through `register`). A verbatim append is equivalent for
     /// every REACHABLE extends case: the target register is always empty at
     /// copy time (extends is the first statement, the register is created
     /// with the parser), so no collision guard can fire; re-running
     /// hierarchical prefix computation on already-composite keys would
-    /// double-prefix them, and the reference only avoids that by `HashMap`
+    /// double-prefix them, and the official parser only avoids that by `HashMap`
     /// iteration luck — so keys are kept verbatim (deterministic choice,
-    /// matches every reference test).
+    /// matches the official behavior).
     pub(crate) fn adopt_entries(&mut self, other: &mut IdentifiersRegister) {
         self.elements.append(&mut other.elements);
         self.relationships.append(&mut other.relationships);
@@ -172,7 +172,7 @@ impl IdentifiersRegister {
             .map(|e| &e.item)
     }
 
-    /// The identifier under which this item is registered (Java `equals`),
+    /// The identifier under which this item is registered (identity match),
     /// if any.
     #[must_use]
     pub fn find_element(&self, item: &RegItem) -> Option<&str> {
@@ -182,9 +182,9 @@ impl IdentifiersRegister {
             .map(|e| e.identifier.as_str())
     }
 
-    /// `findIdentifier(new DeploymentEnvironment(name))` — the identifier of
+    /// The environment identifier lookup - the identifier of
     /// the environment registered under this name (case-SENSITIVE, like the
-    /// Java `equals`), or `None` (`null` in Java) when no such environment
+    /// official name comparison), or `None` when no such environment
     /// was registered.
     #[must_use]
     pub fn find_env(&self, name: &str) -> Option<&str> {
@@ -202,7 +202,7 @@ impl IdentifiersRegister {
 
     /// Every EXPLICITLY registered element+relationship identifier
     /// (elements first, registration order), auto-UUID keys dropped — the
-    /// completion inventory for P4 §P4-LSP L-4 (`cursor_scope`). UUID keys
+    /// completion inventory for P4 (`cursor_scope`). UUID keys
     /// come from statements without an `id =` prefix; nothing can be typed
     /// with them, so they are noise.
     pub(crate) fn all_identifiers(&self) -> impl Iterator<Item = &str> {
@@ -227,7 +227,7 @@ impl IdentifiersRegister {
     ///
     /// * `prefix` — `Some(p)` applies the hierarchical-scope prefix when the
     ///   register is in `Hierarchical` scope: the parent's found identifier,
-    ///   or the literal `"null"` reproducing the reference's `null + "." +
+    ///   or the literal `"null"` reproducing the official parser's `null + "." +
     ///   name` string concatenation (unregistered parent / fresh
     ///   `DeploymentEnvironment` pseudo). `None` keeps the name (an element
     ///   with no parent).
@@ -238,7 +238,7 @@ impl IdentifiersRegister {
     ///
     /// # Errors
     ///
-    /// Returns the reference message when the identifier is invalid, is
+    /// Returns the official message when the identifier is invalid, is
     /// already registered, or an automatic name would be needed without
     /// `Auto` scope.
     pub fn register_element(
@@ -258,7 +258,7 @@ impl IdentifiersRegister {
             identifier = format!("{p}.{identifier}");
         }
 
-        // Re-registration of the same item (Java `equals`) under another
+        // Re-registration of the same item (identity match) under another
         // name.
         for entry in &self.elements {
             if entry.item.java_equals(&item)
@@ -293,7 +293,7 @@ impl IdentifiersRegister {
     ///
     /// # Errors
     ///
-    /// Returns the reference message when the identifier is invalid or
+    /// Returns the official message when the identifier is invalid or
     /// already registered.
     pub fn register_relationship(
         &mut self,
@@ -339,13 +339,13 @@ impl IdentifiersRegister {
     ///
     /// # Errors
     ///
-    /// Returns the reference message for `-`-prefixed, empty or
+    /// Returns the official message for `-`-prefixed, empty or
     /// non-`\w[a-zA-Z0-9_-]*` names.
     pub fn validate_identifier_name(identifier: &str) -> Result<(), String> {
         if identifier.starts_with('-') {
             return Err("Identifiers cannot start with a - character".to_string());
         }
-        // Java \w[a-zA-Z0-9_-]* : first char [a-zA-Z0-9_], rest also allow -.
+        // Identifier pattern: first char [a-zA-Z0-9_], rest also allow -.
         let valid = !identifier.is_empty()
             && identifier
                 .chars()
@@ -458,7 +458,7 @@ mod tests {
             "Live",
         )
         .unwrap();
-        // Java `DeploymentEnvironment.equals` is name-based: a second
+        // The environment comparison is name-based: a second
         // `deploymentEnvironment "Live"` collides.
         assert_eq!(
             r.register_element(
@@ -473,7 +473,7 @@ mod tests {
             Err("The element is already registered with an identifier of \"live\"".to_string())
         );
         // … and a fresh by-name lookup finds the registered identifier
-        // (the `<envIdentifier>.<nodeId>` hierarchical prefix oracle check).
+        // (the `<envIdentifier>.<nodeId>` hierarchical prefix check).
         assert_eq!(r.find_env("Live"), Some("live"));
         assert_eq!(r.find_env("Dev"), None);
         // DeploymentGroup has no equals override — identity (uid) only.

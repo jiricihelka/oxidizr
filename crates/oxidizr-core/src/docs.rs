@@ -1,14 +1,14 @@
-//! Workspace documentation (`com.structurizr.documentation`): sections,
-//! decisions and images. The `!docs`/`!adrs` IMPORTERS land in Phase 4 (D7);
-//! the model types are complete now so JSON round-trips fully.
+//! Workspace documentation: sections, decisions and images. The
+//! `!docs`/`!adrs` importers are shipped; the model types are complete so
+//! JSON round-trips fully.
 //!
-//! v6.2.4 field truth (verified @ `ad34036`): `Section` = `{filename, order,
+//! Field truth (library 6.2.4): `Section` = `{filename, order,
 //! elementId?, content, format}` plus a BACK-COMPAT `title` that always
-//! serializes as `""` (`@JsonGetter @JsonInclude(ALWAYS)` — write-catalog item);
+//! serializes as `""` (always written);
 //! no `id`/`language`/nested `sections`/`links` on sections (legacy keys in
 //! older goldens are read-ignored). `Decision` = `{id, title, date, status,
 //! links, elementId?, content, format}` — the rich `options`/`rationale`/
-//! `decisionStatus` shape lives in the decisions IMPORT module (Phase 4), not
+//! `decisionStatus` shape lives in the decisions import module, not
 //! the core model.
 
 use crate::ids::Id;
@@ -24,7 +24,7 @@ pub enum Format {
 }
 
 impl Format {
-    /// JSON spelling (the Java constant name).
+    /// JSON spelling (the official constant name).
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -54,7 +54,7 @@ pub struct Section {
     /// Markdown/AsciiDoc content.
     pub content: String,
     /// Content format — nullable bean field (unknown/absent JSON `format`
-    /// binds null; omitted on write — probe 2026-11-14).
+    /// binds null; omitted on write).
     pub format: Option<Format>,
     /// Element this section is attached to (JSON `elementId`).
     pub element_id: Option<Id>,
@@ -65,7 +65,7 @@ pub struct Section {
 pub struct Link {
     /// Linked decision id.
     pub id: String,
-    /// Description (Java default `""`).
+    /// Description (defaults to `""`).
     pub description: String,
 }
 
@@ -78,9 +78,9 @@ pub struct Decision {
     pub title: String,
     /// Status.
     pub status: String,
-    /// Decision date, epoch SECONDS (reference `java.util.Date`; the JSON
+    /// Decision date, epoch SECONDS (the JSON
     /// writer formats `yyyy-MM-dd'T'HH:mm:ss'Z'` UTC — sub-second precision is
-    /// dropped exactly like the reference format).
+    /// dropped by the format).
     pub date: i64,
     /// Links to other decisions.
     pub links: Vec<Link>,
@@ -100,8 +100,8 @@ pub struct Image {
     pub name: String,
     /// Base64/data-URI content.
     pub content: String,
-    /// Content type (Java field `type`; exact JSON key pinned by the M3 write
-    /// catalog).
+    /// Content type (exact JSON key `type`,
+    /// pinned by the goldens).
     pub content_type: Option<String>,
 }
 

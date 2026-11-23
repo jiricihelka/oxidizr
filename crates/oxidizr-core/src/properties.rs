@@ -1,12 +1,11 @@
-//! Free-form property maps with STABLE INSERTION ORDER (`PropertyHolder`
-//! fields, `structurizr-client` WRITE-CATALOG §1).
+//! Free-form property maps with STABLE INSERTION ORDER.
 //!
-//! The reference stores these in Java `HashMap`s and Jackson serializes them
-//! in hash-bucket order — not sorted, not insertion order. Bucket order is
+//! In the official format these are written in Java `HashMap` bucket order —
+//! not sorted, not insertion order. Bucket order is
 //! computed by `oxidizr-json` at write time from (a) the final capacity and
 //! (b) the exact insertion sequence, so the model must preserve insertion
 //! order verbatim: a `BTreeMap` (sorted) or any order-losing map is wrong
-//! for byte parity (V-11).
+//! for byte parity.
 
 /// Insertion-ordered `String -> String` map replicating Java `HashMap`
 /// mutation semantics.
@@ -51,7 +50,8 @@ impl Properties {
 
     /// Java `HashMap.remove` semantics: drops the entry and returns its
     /// value; a later re-insert of the same key takes a NEW slot
-    /// (`DslUtils.clearDsl` + DSL retention re-adding `structurizr.dsl`).
+    /// (the DSL pipeline clears the managed keys, then re-adds
+    /// `structurizr.dsl`).
     pub fn remove(&mut self, name: &str) -> Option<String> {
         let at = self.entries.iter().position(|(k, _)| k == name)?;
         Some(self.entries.remove(at).1)
@@ -69,7 +69,7 @@ impl Properties {
         self.entries.len()
     }
 
-    /// Whether the map is empty (`NON_EMPTY` inclusion hides empty ones).
+    /// Whether the map is empty (the writer omits empty maps).
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()

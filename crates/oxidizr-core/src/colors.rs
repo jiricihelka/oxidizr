@@ -1,12 +1,11 @@
-//! HTML color handling replicating `com.structurizr.view.Color` +
-//! `ElementStyle`/`RelationshipStyle` color setters (§2 errata, 2026-11-14):
+//! HTML color handling as the style color setters apply it:
 //! a `#rrggbb` hex code is stored LOWERCASED; an HTML color NAME (case
 //! insensitive, 148-entry table) maps to its lowercased hex; anything else
 //! throws `"<color> is not a valid hex colour code or HTML colour name."` —
 //! which the JSON reader surfaces as a read error. The table is vendored
-//! from the Apache-2.0 reference implementation (pinned `ad34036`).
+//! from the official tooling (Apache-2.0 licensed).
 
-/// `Color.NAMED_COLORS` (name → `#rrggbb`, names already lowercased there).
+/// The HTML color-name table (name → `#rrggbb`, names lowercased).
 const NAMED_COLORS: [(&str, &str); 148] = [
     ("aliceblue", "#f0f8ff"),
     ("antiquewhite", "#faebd7"),
@@ -158,8 +157,8 @@ const NAMED_COLORS: [(&str, &str); 148] = [
     ("yellowgreen", "#9acd32"),
 ];
 
-/// `Color.isHexColorCode`: `matches("^#[A-Fa-f0-9]{6}")` — `String.matches`
-/// is FULLY anchored, so exactly `#` + six hex digits.
+/// Hex color-code test: the format's regex is FULLY anchored,
+/// so exactly `#` + six hex digits.
 fn is_hex_color_code(color: &str) -> bool {
     let Some(digits) = color.strip_prefix('#') else {
         return false;
@@ -168,11 +167,11 @@ fn is_hex_color_code(color: &str) -> bool {
 }
 
 /// Normalization as the style color setters store it; `Err` carries the
-/// reference message verbatim.
+/// official message, verbatim.
 ///
 /// # Errors
 ///
-/// Returns the reference `IllegalArgumentException` text when `color` is
+/// Returns the official rejection text when `color` is
 /// neither a `#rrggbb` code nor an HTML color name.
 pub fn normalize(color: &str) -> Result<String, String> {
     if is_hex_color_code(color) {
@@ -206,7 +205,7 @@ mod tests {
     fn names_map_to_lowercase_hex_case_insensitively() {
         assert_eq!(normalize("red").unwrap(), "#ff0000");
         assert_eq!(normalize("DarkSlateGray").unwrap(), "#2f4f4f");
-        // "transparent" is NOT in the reference table.
+        // "transparent" is NOT in the official table.
         assert!(normalize("transparent").is_err());
     }
 
@@ -216,7 +215,7 @@ mod tests {
             normalize("nope"),
             Err("nope is not a valid hex colour code or HTML colour name.".to_string())
         );
-        // Not full-match hex (Java `matches` anchors both ends).
+        // Not full-match hex (the format anchors both ends).
         assert!(normalize("#ff00").is_err());
         assert!(normalize("#ff0000ff").is_err());
     }

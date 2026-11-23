@@ -1,24 +1,26 @@
-//! Java-`char`/`String` semantics the reference lexer depends on. Full fidelity for
-//! ASCII (where DSL files live); Unicode divergences documented per function.
+//! Character/string semantics as the official tooling defines them, which
+//! the lexer and parser depend on. Full fidelity for ASCII (where DSL files
+//! live); Unicode divergences documented per function.
 
-/// `Character.isWhitespace` for the tokenizer's purposes: ASCII `\t\n\x0B\f\r` and
-/// space. Divergence: Java's Unicode whitespace beyond ASCII (e.g. U+2028) also
-/// splits tokens there but not here; NBSP is NOT whitespace in Java either, so the
-/// common cases match. Recorded in agents/plan/PROGRESS.md.
+/// Whitespace for the tokenizer's purposes: ASCII `\t\n\x0B\f\r` and space.
+/// Divergence: Unicode whitespace beyond ASCII (e.g. U+2028) splits tokens in
+/// the official tooling but not here; NBSP is not whitespace there either, so
+/// the common cases match.
 #[must_use]
 pub fn is_java_whitespace(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r')
 }
 
-/// Java regex `\s` (`[ \t\n\x0B\f\r]`) — same ASCII set as
-/// [`is_java_whitespace`]; separate name because the reference uses the two in
-/// different places (patterns vs tokenizer).
+/// The official tooling's regex `\s` set (`[ \t\n\x0B\f\r]`) — same ASCII set
+/// as [`is_java_whitespace`]; separate name because the official tooling uses
+/// the two in different places (line patterns vs tokenizer).
 #[must_use]
 pub fn is_java_regex_s(c: char) -> bool {
     is_java_whitespace(c)
 }
 
-/// `String.trim` semantics: strip leading/trailing code points `<= U+0020`.
+/// Trim as the official tooling defines it: strip leading/trailing code
+/// points `<= U+0020`.
 #[must_use]
 pub fn java_trim(s: &str) -> &str {
     let start = s
@@ -36,9 +38,9 @@ pub fn java_trim(s: &str) -> &str {
     &s[start..end]
 }
 
-/// Strip `n` CHARACTERS from the front, mirroring `StringBuilder.append(s, n, len)`:
-/// exact `n == char_count` yields the empty string; `n > char_count` is the
-/// reference's `IndexOutOfBoundsException` case and maps to `None`.
+/// Strip `n` CHARACTERS from the front: exact `n == char_count` yields the
+/// empty string; `n > char_count` is the official tooling's
+/// index-out-of-bounds case and maps to `None`.
 #[must_use]
 pub fn strip_prefix_chars(s: &str, n: usize) -> Option<&str> {
     match s.char_indices().nth(n) {
@@ -48,21 +50,21 @@ pub fn strip_prefix_chars(s: &str, n: usize) -> Option<&str> {
     }
 }
 
-/// Java `Integer.parseInt`: optional `+`/`-` sign, ASCII digits only, `i32`
-/// range; `None` is the `NumberFormatException` case.
+/// Integer parsing as the official tooling defines it: optional `+`/`-`
+/// sign, ASCII digits only, `i32` range; `None` is the rejected case.
 ///
-/// Divergence (recorded in `agents/plan/PROGRESS.md` errata list): Java's
-/// `Character.digit` also accepts non-ASCII decimal digits (e.g. Arabic-Indic
-/// `٣`); those throw here. Style values in real workspaces are ASCII.
+/// Divergence: the official tooling also accepts non-ASCII decimal digits
+/// (e.g. Arabic-Indic `٣`); those fail here. Style values in real workspaces
+/// are ASCII.
 #[must_use]
 pub fn java_parse_int(s: &str) -> Option<i32> {
     s.parse::<i32>().ok()
 }
 
-/// `String.equalsIgnoreCase`: length in UTF-16 code units must match (Rust
-/// compares scalar values, so astral-vs-surrogate divergences are the only
-/// theoretical difference), then per-character
-/// `toUpperCase(a) == toUpperCase(b) || toLowerCase(a) == toLowerCase(b)`.
+/// Case-insensitive string equality as the official tooling defines it:
+/// length in UTF-16 code units must match (Rust compares scalar values, so
+/// astral-vs-surrogate divergences are the only theoretical difference), then
+/// per-character upper-or-lowercase equality.
 #[must_use]
 pub fn java_eq_ignore_case(a: &str, b: &str) -> bool {
     let mut ia = a.chars();
@@ -84,12 +86,11 @@ pub fn java_eq_ignore_case(a: &str, b: &str) -> bool {
     }
 }
 
-/// `String.split("\\r?\\n")` — the reference parser's line split
-/// (`StructurizrDslParser.parse(String)`), used for the retained-DSL source
-/// lines (M1-e): one `\r` directly before each `\n` belongs to the
-/// separator, and Java's limit-0 `split` drops ALL trailing empty strings —
-/// a file ending in a newline never retains one, and trailing blank lines
-/// vanish. `""` keeps Java's documented single-empty-element result.
+/// The official tooling's line split, used for the retained-DSL source
+/// lines: one `\r` directly before each `\n` belongs to the separator, and
+/// ALL trailing empty strings are dropped — a file ending in a newline never
+/// retains one, and trailing blank lines vanish. The empty string splits to
+/// a single empty element.
 #[must_use]
 pub fn java_split_dsl_lines(text: &str) -> Vec<String> {
     if text.is_empty() {
@@ -116,8 +117,8 @@ mod tests {
             java_split_dsl_lines("a\nb"),
             ["a".to_string(), "b".to_string()]
         );
-        // Final newline: Java drops the trailing empty entry (the M1-e A/B
-        // finding — the reference's retained DSL never carries it).
+        // Final newline: the trailing empty entry is dropped (the official
+        // tooling's retained DSL never carries it).
         assert_eq!(
             java_split_dsl_lines("a\nb\n"),
             ["a".to_string(), "b".to_string()]
@@ -131,7 +132,7 @@ mod tests {
             ["a".to_string(), "b".to_string()]
         );
         assert_eq!(java_split_dsl_lines("a\r\r\n"), ["a\r".to_string()]);
-        // Interior empties stay; all-empty input reduces to Java's [].
+        // Interior empties stay; all-empty input reduces to [].
         assert_eq!(
             java_split_dsl_lines("a\n\nb\n\n"),
             ["a".to_string(), String::new(), "b".to_string()]
@@ -144,8 +145,8 @@ mod tests {
     fn trim_matches_java_control_boundary() {
         assert_eq!(java_trim("  \t x \r "), "x");
         assert_eq!(java_trim("\u{0}x\u{1F}"), "x");
-        // NBSP (U+00A0) is NOT trimmed by Java trim, and is not whitespace for the
-        // tokenizer either:
+        // NBSP (U+00A0) is NOT trimmed, and is not whitespace for the
+        // tokenizer either (same as the official tooling):
         assert_eq!(java_trim("\u{A0}x"), "\u{A0}x");
         assert!(!is_java_whitespace('\u{A0}'));
     }

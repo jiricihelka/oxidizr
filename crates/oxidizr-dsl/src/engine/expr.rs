@@ -1,17 +1,16 @@
-//! Port of `ExpressionParser` — the filter expressions used by
+//! Filter-expression evaluation — the expressions used by
 //! `include`/`exclude`, the `!element(s)`/`!relationship(s)` finders and
-//! custom views (evaluated @ `ad34036`).
+//! custom views.
 //!
-//! The reference collects results into `HashSet`/`LinkedHashSet`s. As
-//! agreed in `agents/plan/PROGRESS.md`, Java `HashSet` iteration order cannot be
-//! ported deterministically; every set here is an insertion-ordered
-//! deduping `Vec` fed from TreeSet-ordered model traversals (ascending
-//! numeric id), which is the closest portable equivalent.
+//! The official tooling collects results into hash sets. Its iteration
+//! order cannot be reproduced deterministically, so every set here is an
+//! insertion-ordered deduping `Vec` fed from ascending-numeric-id model
+//! traversals — the closest portable equivalent.
 //!
-//! The `&&`/`||` handling reproduces the reference exactly, including its
-//! quirks: only `parts[0]` and `parts[1]` are ever used (later clauses of
-//! a three-part expression are silently IGNORED), and Java `split` drops
-//! trailing empty parts.
+//! The `&&`/`||` handling is reproduced exactly, quirks included: only
+//! the first two split parts are ever used (later clauses of a three-part
+//! expression are silently IGNORED), and the split drops trailing empty
+//! parts.
 
 use oxidizr_core::Id;
 
@@ -19,7 +18,7 @@ use super::Parser;
 use super::idents::RegItem;
 use super::{DslError, java_index_or_oob, java_split_str, split_keeping_lead_dropping_trail};
 
-/// `StructurizrDslExpressions` — verbatim constants.
+/// Expression prefixes — verbatim grammar constants.
 const ELEMENT_EQUALS: &str = "element==";
 const ELEMENT_NOT_EQUALS: &str = "element!=";
 const ELEMENT_TYPE_EQUALS: &str = "element.type==";
@@ -37,8 +36,8 @@ const RELATIONSHIP_SOURCE_EQUALS: &str = "relationship.source==";
 const RELATIONSHIP_DESTINATION_EQUALS: &str = "relationship.destination==";
 const WILDCARD: &str = "*";
 
-/// A `ModelItem`: element or relationship. `Ord` follows the reference
-/// `ModelItem.compareTo` (numeric id) so set complements are deterministic.
+/// A model item: element or relationship. `Ord` is numeric-id order
+/// so set complements are deterministic.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Mi {
     /// A model element.
@@ -50,24 +49,23 @@ pub(crate) enum Mi {
 /// An ordered (insertion-order, deduped) model-item set.
 pub(crate) type Items = Vec<Mi>;
 
-/// Which `ExpressionParser` subclass evaluates an expression. The view kind
-/// picks the element-type whitelist, the deployment instance expansion and
-/// the coupling class passes (`StaticViewExpressionParser`,
-/// `DeploymentViewExpressionParser`, `CustomViewExpressionParser`);
-/// `Model` is the base parser used by the finders and the model scope.
+/// Which evaluator dialect handles an expression. The view kind picks
+/// the element-type whitelist, the deployment instance expansion and the
+/// coupling class passes; `Model` is the base dialect used by the finders
+/// and the model scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExprScope {
-    /// Base `ExpressionParser` (`!elements`, `!relationships`, model).
+    /// Base dialect (`!elements`, `!relationships`, model).
     Model,
-    /// `StaticViewExpressionParser` (landscape/context/container/component).
+    /// Static-view dialect (landscape/context/container/component).
     Static,
-    /// `DeploymentViewExpressionParser`.
+    /// Deployment-view dialect.
     Deployment,
-    /// `CustomViewExpressionParser`.
+    /// Custom-view dialect.
     Custom,
 }
 
-/// `Set.addAll`.
+/// Set union: add every item, deduping, keeping insertion order.
 pub(crate) fn union(into: &mut Items, more: Items) {
     for item in more {
         if !into.contains(&item) {
@@ -76,23 +74,23 @@ pub(crate) fn union(into: &mut Items, more: Items) {
     }
 }
 
-/// `Set.retainAll`.
+/// Set intersection: keep only the shared items.
 pub(crate) fn intersect(set: &mut Items, other: &Items) {
     set.retain(|item| other.contains(item));
 }
 
-/// `element\\.properties\\[.*]==.*` as `String.matches` (whole-string):
+/// Whole-string match for an element property expression:
 /// a lowercase literal prefix, a `]` and a following `==`.
 fn matches_element_property(expr: &str) -> bool {
     expr.starts_with("element.properties[") && expr.contains("]==")
 }
 
-/// `relationship\\.properties\\[.*]==.*` as `String.matches`.
+/// Whole-string match for a relationship property expression.
 fn matches_relationship_property(expr: &str) -> bool {
     expr.starts_with("relationship.properties[") && expr.contains("]==")
 }
 
-/// `ExpressionParser.isExpression(token)`.
+/// Whether a token is an expression (rather than a bare identifier).
 pub(crate) fn is_expression(token: &str) -> bool {
     let token = token.to_lowercase();
     token.starts_with(ELEMENT_EQUALS)
@@ -115,7 +113,7 @@ pub(crate) fn is_expression(token: &str) -> bool {
 }
 
 impl Parser<'_> {
-    /// `ExpressionParser.parseExpression(expr, context)`.
+    /// Expression entry point: split on ` && `/` || ` first, then evaluate.
     pub(crate) fn parse_expression(
         &mut self,
         expr: &str,
@@ -142,7 +140,7 @@ impl Parser<'_> {
         }
     }
 
-    /// `ExpressionParser.evaluateExpression(expr, context)` — the arm
+    /// Evaluate a single expression — the arm
     /// order IS the compatibility contract (verbatim if-else chain).
     #[allow(clippy::too_many_lines)] // the chain arm order IS the contract
     fn evaluate(&mut self, expr: &str, scope: ExprScope) -> Result<Items, DslError> {
@@ -160,7 +158,7 @@ impl Parser<'_> {
             } else {
                 self.parse_identifier(inner, scope)?
             };
-            // all elements EXCEPT the excluded set (TreeSet order)
+            // all elements EXCEPT the excluded set (name order)
             for id in self.builder.all_element_ids() {
                 let item = Mi::Element(id);
                 if !excluded.contains(&item) {
@@ -184,7 +182,7 @@ impl Parser<'_> {
             return Err(self.stmt_err(format!("Unexpected identifier \"{expr}\"")));
         } else if expr.starts_with(RELATIONSHIP) || expr.ends_with(RELATIONSHIP) {
             // an element expression with coupling expansion:
-            // ->identifier  identifier->  ->identifier->
+            // ->identifier identifier-> ->identifier->
             let mut include_incoming = false;
             let mut include_outgoing = false;
             let mut identifier = expr;
@@ -225,7 +223,7 @@ impl Parser<'_> {
             // source->destination identifier pair
             let parts = java_split_str(expr, RELATIONSHIP);
             let source_identifier = parts.first().map_or("", |p| p.trim());
-            // Java `identifiers[1]` would throw on a one-part split; that
+            // The official code indexes part 1 unconditionally; that
             // is unreachable here (the guard above matched a real `->`, and
             // an all-empty split makes the coupling arm error first).
             let destination_identifier = parts.get(1).map_or("", |p| p.trim());
@@ -260,8 +258,8 @@ impl Parser<'_> {
                 }
             }
         } else if expr.starts_with(ELEMENT_TYPE_EQUALS) {
-            // exact-case prefix (the reference checks `toLowerCase()` but
-            // `substring`s with the exact constant)
+            // exact-case prefix (the match lowercases but the
+            // remainder is cut with the exact constant's length)
             items.extend(
                 self.evaluate_element_type_expression(expr, scope)?
                     .into_iter()
@@ -308,7 +306,7 @@ impl Parser<'_> {
                 }
             }
         } else if expr.to_lowercase().starts_with(ELEMENT_GROUP_EQUALS) {
-            // the reference extracts at the `==`, not at the constant
+            // the group name is cut at `==`, not at the constant
             let group_name = &expr[expr.find("==").unwrap_or(0) + 2..];
             for id in self.builder.all_element_ids() {
                 if self.builder.element_group(&id).as_deref() == Some(group_name) {
@@ -367,10 +365,10 @@ impl Parser<'_> {
         Ok(items)
     }
 
-    /// `evaluateElementTypeExpression(expr, context)` — the base parser
-    /// handles all nine kinds (unknown → empty, no throw); the view
-    /// subclasses restrict the whitelist and throw for anything else,
-    /// quoting the RAW (case-preserved) type token.
+    /// `element.type==` — the base dialect handles
+    /// all nine kinds (unknown → empty, no throw); the view dialects
+    /// restrict the whitelist and throw for anything else, quoting the RAW
+    /// (case-preserved) type token.
     fn evaluate_element_type_expression(
         &mut self,
         expr: &str,
@@ -426,7 +424,7 @@ impl Parser<'_> {
         };
         let Some(kind) = kind.filter(|k| allowed.contains(k)) else {
             if scope == ExprScope::Model {
-                // the base parser's `default:` adds nothing (no throw)
+                // the base dialect's catch-all adds nothing (no throw)
                 return Ok(Vec::new());
             }
             return Err(self.stmt_err(format!(
@@ -442,8 +440,8 @@ impl Parser<'_> {
     }
 
     /// The technology filters: containers, then components, deployment
-    /// nodes, infrastructure nodes and container instances (the reference's
-    /// five-stream order); `negate` is `element.technology!=`.
+    /// nodes, infrastructure nodes and container instances — in that
+    /// output order; `negate` is `element.technology!=`.
     fn elements_by_technology(&self, technology: &str, negate: bool) -> Items {
         use oxidizr_core::validate::ElementKind as K;
         let mut out = Items::new();
@@ -467,13 +465,12 @@ impl Parser<'_> {
         out
     }
 
-    /// `hasAllTags(modelItem, tags)` — tag checks fall through to the
-    /// static element of an instance or the linked relationship.
+    /// Whether an item carries ALL the comma-separated tags — tag checks
+    /// fall through to the static element of an instance or the linked
+    /// relationship.
     fn has_all_tags(&self, item: &Mi, tags: &str) -> bool {
-        // Java `split(",")` with a trailing empty removal — but here the
-        // reference uses `String.split(",")`: trailing empties dropped.
-        // Java `split(",")`: trailing empties dropped, an empty tag list
-        // yields one (empty) tag.
+        // Comma split: trailing empty parts are dropped, and an empty tag
+        // list yields one (empty) tag.
         for tag in split_keeping_lead_dropping_trail(tags) {
             let tag = tag.trim();
             let mut has = match item {
@@ -502,7 +499,7 @@ impl Parser<'_> {
         true
     }
 
-    /// `hasProperty(modelItem, name, value)` with the same fall-through.
+    /// Whether an item carries the property — same fall-through.
     fn has_property(&self, item: &Mi, name: &str, value: &str) -> bool {
         let mut has = match item {
             Mi::Element(id) | Mi::Rel(id) => self.builder.item_has_property(id, name, value),
@@ -526,10 +523,10 @@ impl Parser<'_> {
         has
     }
 
-    /// `findAfferentCouplings(element)` — sources pointing AT the element
-    /// (relationship `TreeSet` order). The view subclasses make ONE PASS PER
+    /// Coupling expansion AT the element — sources pointing at it, in
+    /// numeric-id relationship order. The view dialects make ONE PASS PER
     /// ELEMENT CLASS in their declared class order (class-grouped output),
-    /// keeping only that class's matches; the base parser is a single
+    /// keeping only that class's matches; the base dialect is a single
     /// unfiltered pass.
     fn find_afferent_couplings(&self, element: &Id, scope: ExprScope) -> Items {
         use oxidizr_core::validate::ElementKind as K;
@@ -572,7 +569,7 @@ impl Parser<'_> {
         out
     }
 
-    /// `findEfferentCouplings(element)` — destinations the element points
+    /// Coupling expansion FROM the element — destinations it points
     /// AT; same per-class passes as [`Self::find_afferent_couplings`].
     fn find_efferent_couplings(&self, element: &Id, scope: ExprScope) -> Items {
         use oxidizr_core::validate::ElementKind as K;
@@ -616,7 +613,7 @@ impl Parser<'_> {
         out
     }
 
-    /// `parseIdentifier(identifier, context)` — element AND relationship
+    /// Identifier lookup across the element AND relationship
     /// namespaces; errors when neither resolves.
     pub(crate) fn parse_identifier(
         &mut self,
@@ -651,11 +648,10 @@ impl Parser<'_> {
         Ok(items)
     }
 
-    /// `getElements(identifier, context)` — a registered element, expanded
-    /// through `ElementGroup` member sets; EMPTY is not an error. The
-    /// deployment subclass replaces a `SoftwareSystem`/`Container` with ALL
-    /// of its instances — in EVERY environment (the reference streams the
-    /// whole model, it does not filter by the current environment).
+    /// A registered element, expanded through group member
+    /// sets; EMPTY is not an error. The deployment dialect replaces a
+    /// `SoftwareSystem`/`Container` with ALL of its instances — in EVERY
+    /// environment (the current environment does not filter).
     fn get_elements(&self, identifier: &str, scope: ExprScope) -> Vec<Id> {
         use oxidizr_core::validate::ElementKind as K;
         let base = match self.get_element(identifier) {
@@ -718,7 +714,7 @@ impl Parser<'_> {
                 }
                 Some(RegItem::Element(id)) => {
                     out.push(id.clone());
-                    // `StaticStructureElement` only — deployment nodes,
+                    // static-structure elements only — deployment nodes,
                     // infrastructure nodes and instances never fan out.
                     if matches!(
                         self.builder.element_kind(&id),
@@ -775,7 +771,7 @@ impl Parser<'_> {
             })
     }
 
-    /// The current deployment environment name (`findInstancesOf` filter);
+    /// The current deployment environment name for instance expansion;
     /// the top context IS an environment context at every call site.
     fn environment_name(&self) -> &str {
         match self.top() {
@@ -792,8 +788,8 @@ impl Parser<'_> {
     }
 }
 
-/// The `[name]` / `==value` halves of a property expression (reference
-/// `indexOf('[')+1 … indexOf(']')` and `indexOf("==")+2`).
+/// The `[name]` / `==value` halves of a property expression: cut at the
+/// first `[`…`]` pair and the first `==`.
 fn property_pair(expr: &str) -> (String, String) {
     let name = expr[expr.find('[').unwrap_or(0) + 1..expr.find(']').unwrap_or(0)].to_string();
     let value = expr[expr.find("==").unwrap_or(0) + 2..].to_string();

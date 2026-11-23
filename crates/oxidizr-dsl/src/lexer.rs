@@ -1,17 +1,16 @@
-//! Stage 2 of the DSL pipeline (P1-D3): the bug-compatible replication of the
-//! reference `Tokenizer.java`, lifted to carry physical byte spans and trivia so the
-//! result feeds the lossless CST.
+//! Stage 2 of the DSL pipeline: the bug-compatible tokenizer, lifted to carry
+//! physical byte spans and trivia so the result feeds the lossless CST.
 //!
-//! The reference tokenizes the TRIMMED joined logical line with a pure left-fold over
-//! characters (`trim` cannot change the token list: leading/trailing whitespace is
-//! skipped or terminates the open token anyway). We instead walk the untrimmed
-//! physical bytes of the logical line, segment by segment, emitting whitespace /
-//! `\` / newline / BOM bytes as trivia leaves and token-character runs as token
-//! leaves. Tokenizer state (`in_token`, `quoted`, prev-char lookbehind) carries
-//! across segment boundaries because those trivia bytes do not exist in the joined
-//! text the reference folds.
+//! The token list is defined over the TRIMMED joined logical line (`trim`
+//! cannot change it: leading/trailing whitespace is skipped or terminates the
+//! open token anyway). We instead walk the untrimmed physical bytes of the
+//! logical line, segment by segment, emitting whitespace / `\` / newline /
+//! BOM bytes as trivia leaves and token-character runs as token leaves.
+//! Tokenizer state (`in_token`, `quoted`, prev-char lookbehind) carries
+//! across segment boundaries because those trivia bytes do not exist in the
+//! joined text.
 //!
-//! Replicated quirks (verified @ `ad34036`, agents/plan/PROGRESS.md M1 notes):
+//! Replicated quirks, deliberately:
 //!
 //! * Quote characters are STRIPPED from quoted token values; a `"` is "escaped" iff
 //!   the PREVIOUS character of the joined text is `\` (raw lookbehind — the backslash
@@ -21,8 +20,8 @@
 //!   (closes); inside a bare token it is an ordinary character (`a"b` is one token).
 //! * End of line with a token open pushes it: an unterminated quoted token silently
 //!   loses its opening `"` and produces no error at this level.
-//! * Java `Character.isWhitespace` is approximated by ASCII ` \t\n\x0B\f\r`
-//!   ([`compat::is_java_whitespace`]); divergence documented there.
+//! * Whitespace is the ASCII set ` \t\n\x0B\f\r` ([`compat::is_java_whitespace`]);
+//!   Unicode divergences are documented there.
 
 use oxidizr_ast::{NodeKind, TextRange, u32_len};
 
@@ -51,7 +50,7 @@ pub struct Token {
 }
 
 impl Token {
-    /// The token value as the reference `Tokenizer` would return it.
+    /// The token value: its pieces concatenated, quote delimiters excluded.
     #[must_use]
     pub fn value(&self, source: &str) -> String {
         self.pieces
@@ -97,7 +96,7 @@ impl LeafSink {
 struct FoldState {
     in_token: bool,
     quoted: bool,
-    /// Previous character of the JOINED text (reference `line.charAt(i-1)`). Trivia
+    /// Previous character of the JOINED text. Trivia
     /// bytes (continuations, newlines, stripped indent) never update it.
     prev: Option<char>,
     /// Byte where the current leaf part started (includes an opening quote).
@@ -130,9 +129,9 @@ impl FoldState {
         }
     }
 
-    /// Complete the token under construction (reference: closing quote, whitespace
-    /// boundary, or end of line — the reference pushes whatever accumulated, even the
-    /// empty string for `""`).
+    /// Complete the token under construction. A closing quote, a whitespace
+    /// boundary, or end of line pushes whatever accumulated — even the
+    /// empty string for `""`.
     fn finish_token(&mut self, tokens: &mut Vec<Token>) {
         tokens.push(Token {
             quoted: self.quoted,
@@ -189,8 +188,8 @@ pub fn lex_line(source: &str, logical: &Logical) -> LexedLine {
     let mut st = FoldState::new();
     let mut cursor = logical.span.0;
 
-    // The reference joins segments; the fold state carries across the gap bytes,
-    // which are emitted as trivia instead.
+    // Tokenizing joins the segments; the fold state carries across the gap
+    // bytes, which are emitted as trivia instead.
     for seg in &logical.segments {
         trivia_leaves(source, cursor, seg.start, &mut sink);
         cursor = seg.end;
@@ -259,8 +258,8 @@ pub fn lex_line(source: &str, logical: &Logical) -> LexedLine {
         }
     }
 
-    // Reference pushes the open token at end of line (unterminated quoted tokens
-    // lose their opening quote silently — bug-compatible).
+    // An open token is pushed at end of line; unterminated quoted tokens
+    // lose their opening quote silently (deliberate bug-compat).
     if st.in_token {
         st.finish_token(&mut tokens);
     }
@@ -332,7 +331,7 @@ mod tests {
 
     #[test]
     fn comment_after_all_ws_continuation_segments() {
-        // M6-b proptest regression: a `\`-join whose pending segments are
+        // Regression: a `\`-join whose pending segments are
         // whitespace-only — the comment opener lives in a LATER segment, and
         // the leaf tiling must survive (used to start the Comment leaf at the
         // empty first segment and feed `#` to trivia_leaves).
@@ -397,7 +396,7 @@ mod tests {
 
     #[test]
     fn quotes_stripped_escapes_kept() {
-        // Reference: `"` starts a quoted token (stripped); `\"` keeps BOTH chars.
+        // `"` starts a quoted token (quotes stripped); `\"` keeps BOTH chars.
         assert_eq!(vals("\"hello\""), ["hello"]);
         assert_eq!(vals("\"a\\\"b\""), ["a\\\"b"]);
         assert_eq!(vals("\"\""), [""]);
@@ -485,7 +484,7 @@ mod tests {
 
     #[test]
     fn tab_and_control_trim_boundaries() {
-        // Tabs separate tokens (Java isWhitespace); form feed too.
+        // Tabs separate tokens (both tab and form feed are whitespace).
         assert_eq!(vals("a\u{C}b"), ["a", "b"]);
         // Vertical tab, form feed:
         assert_eq!(vals("a\u{B}\u{C}b"), ["a", "b"]);

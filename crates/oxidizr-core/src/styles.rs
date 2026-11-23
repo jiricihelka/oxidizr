@@ -1,36 +1,36 @@
-//! Style resolution (`view/Styles`): the single effective-style computation
-//! (P2-D2, `agents/plan/build/PHASE_2.md`) — exporters and the Phase 3 GUI
-//! render through these functions, never through their own copies.
+//! Style resolution: the single effective-style computation — exporters
+//! and the GUI render through these functions, never through their own
+//! copies.
 //!
-//! Ported from `structurizr-core` `view/Styles.java` at the pin: the
-//! `findElementStyle`/`findRelationshipStyle` pairs, the default styles, the
-//! `ElementStyle`/`RelationshipStyle` `copyFrom` semantics, and
-//! `addStylesFromTheme` (which appends to the NON-serialized `themes` list —
+//! The style-resolution semantics of the official format: the
+//! element/relationship style-lookup pairs, the default styles, the
+//! `ElementStyle`/`RelationshipStyle` copy semantics, and
+//! theme-style loading (which appends to the NON-serialized `themes` list —
 //! theme styles are consulted live at resolution time, never merged into
-//! `elements`/`relationships`). Contract catalog: `EXPORT-PROPERTIES.md` §6–§7.
+//! `elements`/`relationships`).
 
 use crate::model::{Model, Relationship};
 use crate::tags::{relationship_defaults, tag};
 use crate::views::{ColorScheme, ElementStyle, RelationshipStyle, Styles, Theme};
 
-/// `Styles.DEFAULT_BACKGROUND_LIGHT`.
+/// Default light-theme background color.
 pub const DEFAULT_BACKGROUND_LIGHT: &str = "#ffffff";
-/// `Styles.DEFAULT_COLOR_LIGHT`.
+/// Default light-theme foreground color.
 pub const DEFAULT_COLOR_LIGHT: &str = "#444444";
-/// `Styles.DEFAULT_BACKGROUND_DARK`.
+/// Default dark-theme background color.
 pub const DEFAULT_BACKGROUND_DARK: &str = "#111111";
-/// `Styles.DEFAULT_COLOR_DARK`.
+/// Default dark-theme foreground color.
 pub const DEFAULT_COLOR_DARK: &str = "#cccccc";
 
 impl Styles {
-    /// `Styles.addStylesFromTheme` — appends; `find_*` then consults the
+    /// Appends theme styles; `find_*` then consults the
     /// theme's styles BEFORE the workspace styles. Never serialized.
     pub fn add_styles_from_theme(&mut self, theme: Theme) {
         self.themes.push(theme);
     }
 
-    /// `Styles.findElementStyle(String, ColorScheme)`: an empty style for the
-    /// (trimmed) tag, `copyFrom`-stacked over every style whose tag matches —
+    /// The effective style for a tag: an empty style for the
+    /// (trimmed) tag, copy-stacked over every style whose tag matches —
     /// theme styles (add order) first, workspace styles last — accepting a
     /// style when its `colorScheme` is null or equals `color_scheme`.
     /// `None` when nothing matched.
@@ -60,7 +60,7 @@ impl Styles {
         exists.then_some(style)
     }
 
-    /// `Styles.findRelationshipStyle(String, ColorScheme)` —
+    /// The relationship-style twin of
     /// [`Styles::find_element_style`] for relationship styles.
     #[must_use]
     pub fn find_relationship_style(
@@ -92,12 +92,12 @@ impl Styles {
         exists.then_some(style)
     }
 
-    /// `Styles.findElementStyle(Element, ColorScheme)` — the default style
+    /// The effective style for an element — the default style
     /// (`Box`, fontSize 24, `Solid`, opacity 100, metadata+description)
     /// stacked over each tag of the element's FULL tag chain, then the
     /// scheme's background/stroke/color defaults. `tags` is
-    /// `element.getTags()` as CSV (`Tags::serialized_for`); for
-    /// `SoftwareSystemInstance`/`ContainerInstance` the reference prepends the
+    /// The element's effective tags as CSV (`Tags::serialized_for`); for
+    /// `SoftwareSystemInstance`/`ContainerInstance` the official tooling prepends the
     /// parent element's tags — build the chain with [`instance_tag_chain`].
     ///
     /// The result's `tag` is the comma-joined chain of the tags that actually
@@ -116,7 +116,7 @@ impl Styles {
         };
         let mut used = vec![tag::ELEMENT.to_string()];
         for t in tags.split(',') {
-            // `StringUtils.isNullOrEmpty` trims: whitespace-only parts skip.
+            // The blank check trims: whitespace-only parts skip.
             if t.trim().is_empty() {
                 continue;
             }
@@ -132,9 +132,9 @@ impl Styles {
 
         if let Some(background) = style.background.clone() {
             if style.stroke.is_none() {
-                // `Color.decode(background).darker()` formatted `#%06X`.
-                // A decode miss throws in the reference; oxidizr leaves the
-                // stroke unset (deviation note in PROGRESS, pathological
+                // darker-of-background formatted `#%06X`.
+                // A decode miss throws in the official tooling; oxidizr leaves the
+                // stroke unset (documented deviation, pathological
                 // malformed-color input).
                 style.stroke = java_darker_hex(&background);
             }
@@ -163,7 +163,7 @@ impl Styles {
         style
     }
 
-    /// `Styles.findRelationshipStyle(Relationship, ColorScheme)` — the
+    /// The effective style for a relationship — the
     /// default style (thickness 2, `Dashed`+dashed, `Direct`, fontSize 24,
     /// width 200, position 50, opacity 100) stacked over the relationship's
     /// tag chain — linked relationships PREPEND the tags of every linked
@@ -171,8 +171,8 @@ impl Styles {
     /// scheme's color default. `tag` is the matched-tag chain, starting at
     /// `Relationship`.
     ///
-    /// A dangling `linked_relationship_id` breaks the chain (the reference
-    /// NPEs; oxidizr never panics on workspace data).
+    /// A dangling `linked_relationship_id` breaks the chain (the official
+    /// tool crashes there; oxidizr never panics on workspace data).
     #[must_use]
     pub fn relationship_style(
         &self,
@@ -238,20 +238,20 @@ impl Styles {
     }
 }
 
-/// The instance prepending `findElementStyle` does: `ss.getTags() + "," +
-/// tags` (`SoftwareSystemInstance`) / `c.getTags() + "," + tags`
-/// (`ContainerInstance`) — the parent chain FIRST.
+/// The tag-stack the style lookup does for instances: the parent's tags
+/// FIRST, then the instance's own (`SoftwareSystemInstance` → system,
+/// `ContainerInstance` → container).
 #[must_use]
 pub fn instance_tag_chain(parent_tags: &str, instance_tags: &str) -> String {
     format!("{parent_tags},{instance_tags}")
 }
 
-/// `ElementStyle.copyFrom` (`ElementStyle.java` 391–448): numbers/booleans/
+/// The element-style copy: numbers/booleans/
 /// enums copy when non-null, colors and icon only when non-empty, properties
 /// merged in iteration order (`addProperty` = `HashMap.put`). Field order is
-/// the Java method's — it fixes the merged property-map order. Each
-/// `if src.x.is_some()` stays 1:1 with the Java statement: do NOT fold into
-/// `dst.x = src.x.or(dst.x)` (2R R-core-15 keep-marker).
+/// the format's — it fixes the merged property-map order. Each
+/// `if src.x.is_some()` stays 1:1 with the setter semantics: do NOT fold
+/// into `dst.x = src.x.or(dst.x)` (keep-marker).
 fn copy_from_element(dst: &mut ElementStyle, src: &ElementStyle) {
     if src.width.is_some() {
         dst.width = src.width;
@@ -300,9 +300,8 @@ fn copy_from_element(dst: &mut ElementStyle, src: &ElementStyle) {
     }
 }
 
-/// `RelationshipStyle.copyFrom` (`RelationshipStyle.java` 275–327). Same
-/// 1:1 statement shape as [`copy_from_element`] — keep-markers apply (2R
-/// R-core-15).
+/// The relationship-style copy. Same
+/// 1:1 statement shape as [`copy_from_element`] — keep-markers apply.
 fn copy_from_relationship(dst: &mut RelationshipStyle, src: &RelationshipStyle) {
     if src.thickness.is_some() {
         dst.thickness = src.thickness;
@@ -345,39 +344,39 @@ fn copy_from_relationship(dst: &mut RelationshipStyle, src: &RelationshipStyle) 
     }
 }
 
-/// `StringUtils.isNullOrEmpty` (structur-util: trims — whitespace-only IS
-/// empty; `copyFrom`'s guard for the color/icon strings).
+/// The blank check TRIMS — whitespace-only IS
+/// empty; the copy's guard for the color/icon strings).
 fn is_non_empty(value: Option<&str>) -> bool {
     value.is_some_and(|v| !v.trim().is_empty())
 }
 
-/// `String.format("#%06X", 0xFFFFFF & java.awt.Color.decode(s).darker()
-/// .getRGB())` — the unset-stroke default (`Styles.java` 317–321). Decode
-/// accepts Java's `Color.decode` forms (`#hex`, `0xhex`, decimal int); `None`
-/// where the reference throws.
+/// Darker-of-decoded, formatted `#%06X` — the unset-stroke default.
+/// It
+/// accepts the decode forms (`#hex`, `0xhex`, decimal int); `None`
+/// where the official tool throws.
 fn java_darker_hex(s: &str) -> Option<String> {
     let v = java_color_decode(s)?;
     let darker = |c: u32| darker_channel(c) & 0xFF;
-    // The reference formats `#%06X` (upper) but assigns via
-    // `ElementStyle.setStroke`, which lowercases every hex code — net:
-    // lower-case storage (M2-d A/B: `#944a4a`).
+    // The darker-color computation formats `#%06X` (upper) but assigns
+    // through the style setter, which lowercases every hex code — net:
+    // lower-case storage (witness: `#944a4a`).
     Some(format!(
         "#{:06x}",
         (darker((v >> 16) & 0xFF) << 16) | (darker((v >> 8) & 0xFF) << 8) | darker(v & 0xFF)
     ))
 }
 
-/// `java.awt.Color.darker()`: `(int)(channel * 0.7)` — Java multiplies in
+/// The darker-shade op: `(int)(channel * 0.7)` — the official tool multiplies in
 /// IEEE-754 double, so the f64 op IS the contract; the truncation is intended.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn darker_channel(c: u32) -> u32 {
     (f64::from(c) * 0.7) as u32
 }
 
-/// `java.awt.Color.decode(String)` as a packed `0xRRGGBB`, restricted to the
+/// The color decode as a packed `0xRRGGBB`, restricted to the
 /// forms styles can carry (`#rrggbb`, `0xhex`/`0Xhex`, decimal int). The
-/// reference's legacy restart-on-bad-hex-digit and `.`-truncation paths are
-/// unreachable from validated style colors; negatives and malformed values
+/// The legacy restart-on-bad-hex-digit and `.`-truncation paths of the
+/// official decoder are unreachable from validated style colors; negatives
 /// throw there → `None` here.
 fn java_color_decode(s: &str) -> Option<u32> {
     let (digits, radix) = match s
@@ -555,7 +554,7 @@ mod tests {
         assert_eq!(s.font_size, Some(30)); // Element rule survives
         assert_eq!(s.color.as_deref(), Some("#00ff00"));
         assert_eq!(s.stroke.as_deref(), Some("#b20000")); // darker(win bg)
-        // whitespace-only chain parts skip (StringUtils.isNullOrEmpty trims)
+        // whitespace-only chain parts skip (the blank check trims)
         let s = styles.element_style("Element,  ,Person", ColorScheme::Light);
         assert_eq!(s.tag, "Element,Person");
     }
@@ -666,7 +665,7 @@ mod tests {
         assert_eq!(s.thickness, Some(4));
         assert_eq!(s.tag, "Relationship,Base,Linked"); // linked chain PREPENDED
 
-        // Dangling linked id: chain breaks, no panic (reference NPEs).
+        // Dangling linked id: chain breaks, no panic (official tool crashes).
         let dangling = Model::default();
         let s = styles.relationship_style(&linked, &dangling, ColorScheme::Light);
         assert_eq!(s.color.as_deref(), Some("#linked"));

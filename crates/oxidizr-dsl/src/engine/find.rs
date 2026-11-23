@@ -1,5 +1,6 @@
-//! Ports of `FindElementParser`, `FindRelationshipParser`,
-//! `FindElementsParser` and `FindRelationshipsParser` (`ad34036`).
+//! The `!element` / `!elements` / `!relationship` / `!relationships`
+//! finders: resolve an identifier or canonical name (or an expression) to
+//! model items.
 
 use oxidizr_core::Id;
 use oxidizr_core::validate::ElementKind;
@@ -11,8 +12,8 @@ use super::idents::RegItem;
 use super::{Parser, Tokens};
 
 impl Parser<'_> {
-    /// `FindElementParser.parse` — identifier OR canonical name; the
-    /// groupable-context group side effect included.
+    /// Find an element by identifier OR canonical name, including the
+    /// group side effect that applies inside groupable contexts.
     pub(crate) fn find_element(&mut self, tokens: &Tokens) -> Result<(RegItem, String), DslError> {
         const GRAMMAR: &str = "!element <identifier|canonical name>";
         if tokens.has_more_than(1) {
@@ -36,10 +37,9 @@ impl Parser<'_> {
                 "An element identified by \"{s}\" could not be found"
             )));
         };
-        // `context instanceof GroupableDslContext && element instanceof
-        // StaticStructureElement` — instances and custom elements are
-        // excluded (their contexts/element classes are not groupable /
-        // static-structure resp.).
+        // The group only applies inside groupable contexts and to
+        // static-structure elements (person, system, container, component) —
+        // instances and custom elements are excluded.
         if self.top().is_some_and(super::ctx::Ctx::is_groupable)
             && let RegItem::Element(id) = &item
             && matches!(
@@ -58,9 +58,9 @@ impl Parser<'_> {
                 .map(|g| g.name.clone());
             if let Some(name) = group {
                 let id = id.clone();
-                // `setGroup` only — `FindElementParser` never calls
-                // `group.addElement`, so the group's member set is
-                // untouched (unlike the element-definition parsers).
+                // Only the element's group field is set: the finder
+                // never adds the element to the group's member set
+                // (unlike the element-definition statements).
                 let _ = self.builder.set_group(&id, &name);
             }
         }
@@ -71,7 +71,7 @@ impl Parser<'_> {
         Ok((item, canonical))
     }
 
-    /// `FindRelationshipParser.parse`.
+    /// Find a relationship by identifier OR canonical name.
     pub(crate) fn find_relationship(&mut self, tokens: &Tokens) -> Result<(Id, String), DslError> {
         const GRAMMAR: &str = "!relationship <identifier|canonical name>";
         if tokens.has_more_than(1) {
@@ -100,7 +100,7 @@ impl Parser<'_> {
         Ok((id, canonical))
     }
 
-    /// `FindElementsParser.parse` — the element half of an expression.
+    /// `!elements <expression>` — the element half of the expression finder.
     pub(crate) fn find_elements(&mut self, tokens: &Tokens) -> Result<Vec<Id>, DslError> {
         let expression = self.finder_expression(tokens, "!elements <expression>")?;
         let items = self.parse_expression(&expression, super::expr::ExprScope::Model)?;
@@ -119,7 +119,7 @@ impl Parser<'_> {
         Ok(elements)
     }
 
-    /// `FindRelationshipsParser.parse` — the relationship half.
+    /// `!relationships <expression>` — the relationship half.
     pub(crate) fn find_relationships(&mut self, tokens: &Tokens) -> Result<Vec<Id>, DslError> {
         let expression = self.finder_expression(tokens, "!relationships <expression>")?;
         let items = self.parse_expression(&expression, super::expr::ExprScope::Model)?;
@@ -145,9 +145,9 @@ impl Parser<'_> {
                 "Too many tokens, expected: {grammar}"
             )));
         }
-        // `FindElementsParser`/`FindRelationshipsParser` do NOT check
-        // `includes(1)` — a bare `!elements` reaches `tokens.get(1)` and
-        // the JDK throws; the message is reproduced.
+        // No token-count check here, deliberately: a bare `!elements` runs
+        // off the end of the token list and the official tooling's
+        // index-out-of-bounds message is reproduced verbatim.
         if !tokens.includes(1) {
             return Err(DslError::stmt(format!(
                 "Index 1 out of bounds for length {}",

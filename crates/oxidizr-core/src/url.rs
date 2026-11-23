@@ -1,25 +1,25 @@
-//! Port of the reference `com.structurizr.util.Url` (`URI.create(url)` +
-//! `URI.toURL()` validity test).
+//! URL validity checks as the official tooling defines them (a
+//! well-formedness test, never a fetch).
 //!
-//! The reference asks the JVM whether `urlAsString` is a well-formed URI that
-//! carries a protocol `java.net.URL` knows how to handle. The JDK's built-in
+//! The official test asks whether `urlAsString` is a well-formed URI that
+//! carries a protocol with a built-in handler. The built-in
 //! handlers are exactly `http`, `https`, `ftp`, `file` and `jar` — every other
-//! scheme (or a scheme-less URI) throws `MalformedURLException("unknown
-//! protocol")`, so `isUrl` is false for them. URI well-formedness follows
+//! scheme (or a scheme-less URI) fails with the official text "unknown
+//! protocol", so the check is false for them. URI well-formedness follows
 //! RFC 2396: ASCII only, the unreserved/reserved character sets, and
 //! percent-escapes with two hex digits. This module reproduces that decision
-//! with std string checks (the reference NEVER fetches anything); the
-//! approximation is recorded in `agents/plan/PROGRESS.md`.
+//! with std string checks (this NEVER fetches anything); the
+//! approximation is a documented deviation.
 
-/// The protocols `java.net.URL` ships handlers for.
+/// The protocols with built-in handlers.
 const JAVA_URL_PROTOCOLS: [&str; 5] = ["http", "https", "ftp", "file", "jar"];
 
-/// `Url.isUrl`: non-blank, a well-formed (RFC 2396) URI, and a protocol the
-/// JDK can turn into a `URL`.
+/// The URL check: non-blank, a well-formed (RFC 2396) URI, and a protocol
+/// with a built-in handler.
 #[must_use]
 pub fn is_url(url: &str) -> bool {
     if url.trim().is_empty() {
-        // `StringUtils.isNullOrEmpty` trims.
+        // The blank check trims.
         return false;
     }
     let Some((scheme, rest)) = url.split_once(':') else {
@@ -43,7 +43,7 @@ pub fn is_http_url(url: &str) -> bool {
     is_url(url) && url.to_lowercase().starts_with("http://")
 }
 
-/// Java scheme grammar: `[A-Za-z][A-Za-z0-9+.-]*`.
+/// The scheme grammar: `[A-Za-z][A-Za-z0-9+.-]*`.
 fn is_java_scheme(s: &str) -> bool {
     let mut chars = s.chars();
     let Some(first) = chars.next() else {
@@ -61,7 +61,7 @@ fn is_uri_rest(s: &str) -> bool {
     while i < bytes.len() {
         let c = bytes[i];
         if c == b'%' {
-            // Java `URI` validates every escape.
+            // The official URI check validates every escape.
             if i + 2 >= bytes.len()
                 || !bytes[i + 1].is_ascii_hexdigit()
                 || !bytes[i + 2].is_ascii_hexdigit()
@@ -74,7 +74,7 @@ fn is_uri_rest(s: &str) -> bool {
         // unreserved: ALPHA / DIGIT / "-" / "." / "_" / "~"
         // reserved:    ";" | "/" | "?" | ":" | "@" | "&" | "=" | "+" | "$" | ","
         //              | "[" | "]" | "-" | "_" | "." | "!" | "*" | "'" | "(" | ")" | "#"
-        // (non-ASCII is illegal — Java URI is ASCII-only.)
+        // (non-ASCII is illegal — the format is ASCII-only.)
         if !(c.is_ascii_alphanumeric()
             || matches!(
                 c,

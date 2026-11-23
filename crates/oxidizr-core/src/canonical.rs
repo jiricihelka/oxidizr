@@ -1,5 +1,5 @@
-//! Canonical names — `model/CanonicalNameGenerator` (v6 URI-style; the v5-era
-//! `Person[X]` rendering is long gone). Verified @ `ad34036`.
+//! Canonical names — the v6 URI-style scheme (the v5-era
+//! `Person[X]` rendering is long gone).
 //!
 //! Every name part passes through `formatName`: the static separator `.` and the
 //! deployment separator `/` are REMOVED from each part before joining, so
@@ -61,8 +61,8 @@ pub fn deployment_node(environment: &str, chain: &[&str], name: &str) -> String 
 }
 
 /// The deployment-node chain WITHOUT its scheme prefix, reused by
-/// infrastructure nodes and instances (reference
-/// `generate(DeploymentNode).substring("DeploymentNode://".len())`).
+/// infrastructure nodes and instances: the
+/// chain WITHOUT its scheme prefix.
 #[must_use]
 pub fn deployment_node_chain(environment: &str, chain: &[&str]) -> String {
     deployment_node(environment, chain, "")

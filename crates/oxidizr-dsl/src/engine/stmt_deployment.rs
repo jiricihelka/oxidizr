@@ -1,13 +1,13 @@
-//! Chain section: reference `StructurizrDslParser.java` arms at Java lines
+//! Chain section: the official parser arms at official lines
 //! 949–1027 — `deploymentEnvironment` (the name is a DSL-only
 //! [`DeploymentEnvironment`] pseudo, only the nodes put the environment into
 //! the model), the two flat `deploymentGroup` arms (NEITHER pushes a
 //! context), the environment- and node-scope `deploymentNode` arms
-//! (`DeploymentNodeParser`), `infrastructureNode`
-//! (`InfrastructureNodeParser`), `instanceOf` (`InstanceOfParser`),
+//! (the deployment-node parser), `infrastructureNode`
+//! (the infrastructure-node parser), `instanceOf` (the instance-of parser),
 //! `softwareSystemInstance` / `containerInstance`
-//! (`SoftwareSystemInstanceParser` / `ContainerInstanceParser`) and the
-//! `healthCheck` statement (`HealthCheckParser`) inside an instance.
+//! (the software-system-instance parser / the container-instance parser) and the
+//! `healthCheck` statement (the health-check parser) inside an instance.
 //!
 //! [`DeploymentEnvironment`]: super::ctx::DslEnvironment
 
@@ -57,7 +57,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 
     // 957/961: deploymentGroup — flat statements, NO context is ever
     // started (a trailing `{` therefore closes the ENCLOSING context on the
-    // matching `}`, exactly like the reference).
+    // matching `}`, exactly like the official parser).
     if eqi(&first, tok::DEPLOYMENT_GROUP) && (is_env || is_node) {
         return (|| {
             let env_name = match p.top() {
@@ -72,9 +72,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 let uid = p.next_uid();
                 p.register_identifier_element(idr, deployment_group_pseudo(uid, &env, &name), &name)
             } else {
-                // 961: node scope — resolve the references NOW and attach
-                // them to the deployment node (`DeploymentNode
-                // .addDeploymentGroup`).
+                // attach side-effect).
+                // them to the deployment node (the group
+                //.addDeploymentGroup`).
                 let Some(id) = node_id(p) else {
                     return Ok(());
                 };
@@ -109,7 +109,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 _ => return Ok(()),
             };
             if open {
-                // Java pushes a PLAIN context — the group payload belongs to
+                // The official parser pushes a PLAIN context - the group payload belongs to
                 // the NEW node's own children: none.
                 p.start_context(Ctx::DeploymentNode {
                     id: id.clone(),
@@ -159,8 +159,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             let element_identifier = t.get(1);
             let kind = match p.get_element(&element_identifier) {
                 Some(RegItem::Element(id)) => p.builder.element_kind(&id),
-                // DSL pseudo-elements are `Element`s too — they fall into
-                // the same "not a software system or a container" error.
+ // DSL pseudo-elements are `Element`s too — they fall into
+ // the same "not a software system or a container" error.
                 Some(_) => None,
                 None => {
                     return Err(DslError::stmt(format!(
@@ -242,9 +242,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             }
             let name = t.get(1);
             let url = t.get(2);
-            // `HealthCheckParser`: defaults interval 60 s / timeout 0 ms;
-            // interval ≥ 1, timeout ≥ 0, both via `Integer.parseInt` (the
-            // `RuntimeException` range errors pass through the NFE catch).
+ // the health-check parser: defaults interval 60 s / timeout 0 ms;
+ // interval >= 1, timeout >= 0, both integer-parsed (the
+ // wrapper range errors pass through the parse-error catch).
             let mut interval = 60;
             let mut timeout = 0;
             if t.includes(3) {
@@ -289,8 +289,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 // ----------------------------------------------------------------------
 
 /// The node id of a `DeploymentNode` context (`None` only when the chain
-/// guard cannot fire — the arms then become no-ops, like the reference's
-/// `getContext()` never failing).
+/// guard cannot fire — the arms then become no-ops, like the official parser's
+/// the top-context fetch never failing).
 fn node_id(p: &Parser) -> Option<Id> {
     match p.top() {
         Some(Ctx::DeploymentNode { id, .. }) => Some(id.clone()),
@@ -298,21 +298,21 @@ fn node_id(p: &Parser) -> Option<Id> {
     }
 }
 
-/// `DeploymentEnvironmentParser.parse`.
+/// the deployment-environment parser's parse check.
 fn parse_environment(tokens: &Tokens) -> Result<String, DslError> {
     if tokens.has_more_than(1) {
         return Err(DslError::stmt(
             "Too many tokens, expected: deploymentEnvironment <name> {",
         ));
     }
-    // `tokens.size() != 2` — not merely `!includes(1)`.
+    // `tokens.size != 2` — not merely `!includes(1)`.
     if tokens.size() != 2 {
         return Err(DslError::stmt("Expected: deploymentEnvironment <name> {"));
     }
     Ok(tokens.get(1).into_owned())
 }
 
-/// `DeploymentGroupParser.parse` (environment scope).
+/// the deployment-group parser's parse check (environment scope).
 fn parse_group_name(tokens: &Tokens) -> Result<String, DslError> {
     if tokens.has_more_than(1) {
         return Err(DslError::stmt(
@@ -325,7 +325,7 @@ fn parse_group_name(tokens: &Tokens) -> Result<String, DslError> {
     Ok(tokens.get(1).into_owned())
 }
 
-/// `DeploymentGroupParser.parse` (node scope) — same guards, different
+/// the deployment-group parser's parse check (node scope) — same guards, different
 /// grammar text.
 fn parse_node_groups(tokens: &Tokens) -> Result<(), DslError> {
     if tokens.has_more_than(1) {
@@ -341,7 +341,7 @@ fn parse_node_groups(tokens: &Tokens) -> Result<(), DslError> {
     Ok(())
 }
 
-/// `DeploymentNodeParser.parse` — root (`environment`) or child (`parent`).
+/// the deployment-node parser's parse check — root (`environment`) or child (`parent`).
 fn def_deployment_node(
     p: &mut Parser<'_>,
     tokens: &Tokens,
@@ -395,7 +395,7 @@ fn def_deployment_node(
     let tags = arch_tags(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
     // `addProperties` / `addPerspectives` / tags / group — the shared
     // post-creation sequence (`instances` is applied by the caller BEFORE
-    // registration, matching the reference order inside the parser).
+    // registration, matching the official parser order inside the parser).
     p.define_element(&id, &description, &tags, &a)?;
     if tokens.includes(5) {
         // `setInstances` stores the raw value (validated); the node ctor
@@ -408,7 +408,7 @@ fn def_deployment_node(
     Ok(id)
 }
 
-/// `InfrastructureNodeParser.parse`.
+/// the infrastructure-node parser's parse check.
 fn def_infrastructure_node(
     p: &mut Parser<'_>,
     node: &Id,
@@ -451,8 +451,8 @@ fn def_infrastructure_node(
     Ok(id)
 }
 
-/// `SoftwareSystemInstanceParser.parse` (also the `instanceOf` dispatch
-/// target — the reference re-parses the SAME tokens there).
+/// the software-system-instance parser's parse check (also the `instanceOf` dispatch
+/// target — the official parser re-parses the SAME tokens there).
 fn def_ss_instance(p: &mut Parser<'_>, node: &Id, tokens: &Tokens) -> Result<Id, DslError> {
     const GRAMMAR: &str = "softwareSystemInstance <identifier> [deploymentGroups] [tags]";
     if tokens.has_more_than(3) {
@@ -493,7 +493,7 @@ fn def_ss_instance(p: &mut Parser<'_>, node: &Id, tokens: &Tokens) -> Result<Id,
     Ok(id)
 }
 
-/// `ContainerInstanceParser.parse`.
+/// the container-instance parser's parse check.
 fn def_container_instance(p: &mut Parser<'_>, node: &Id, tokens: &Tokens) -> Result<Id, DslError> {
     const GRAMMAR: &str = "containerInstance <identifier> [deploymentGroups] [tags]";
     if tokens.has_more_than(3) {
@@ -534,7 +534,7 @@ fn def_container_instance(p: &mut Parser<'_>, node: &Id, tokens: &Tokens) -> Res
 }
 
 /// The `tags` seed: archetype tags plus the comma-split token
-/// (Java `split` drops trailing empties).
+/// (the official split drops trailing empties).
 fn arch_tags(a: &RelArch, tags_token: Option<String>) -> Vec<String> {
     let mut tags = a.tags.clone();
     if let Some(csv) = tags_token {
@@ -543,7 +543,7 @@ fn arch_tags(a: &RelArch, tags_token: Option<String>) -> Vec<String> {
     tags
 }
 
-/// The `context.hasGroup()` tail shared by the instance parsers:
+/// The `context.hasGroup` tail shared by the instance parsers:
 /// `setGroup` + `group.addElement`. (Nodes and infrastructure nodes get it
 /// via [`Parser::define_element`].)
 fn apply_group(p: &mut Parser<'_>, id: &Id) {
@@ -643,7 +643,7 @@ workspace {
 
     #[test]
     fn hierarchical_identifiers_use_the_environment_prefix() {
-        // Oracle-verified (`deploy-id.dsl` probe): a named environment
+        // verified (`deploy-id.dsl` sample): a named environment
         // prefixes node/instance identifiers (`live.n1`), an anonymous one
         // prefixes with its registration UUID.
         let r = full(
@@ -1004,7 +1004,7 @@ workspace {
         );
         assert_clean(&r);
         let w = &r.workspace;
-        // Java `replicateElementRelationships`: creating instA replicates
+        // The official relationship replication: creating instA replicates
         // nothing (no other instance exists yet); creating instB iterates
         // {instA} and copies the single `a -> b` relationship as
         // instA -> instB — exactly ONE replicated relationship, with a

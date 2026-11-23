@@ -1,31 +1,31 @@
-//! Filtered-view evaluation (P3-D3, P3-V5 verdict 2026-11-19):
+//! Filtered-view evaluation:
 //! [`eval`] decides which base-view content a [`crate::views::FilteredView`]
-//! shows. The reference evaluates `mode` + `tags` CLIENT-SIDE (the JSON only
-//! stores them — our writer matches, and this module is deliberately NOT
-//! wired into it); the semantics here clone the pinned webapp evaluator
-//! (`monorepo ad34036`: `structurizr-diagram.js` `includeOnDiagram`,
-//! `structurizr-workspace.js` `getAllTagsFor*`, `createArrow`):
+//! shows. The official tooling evaluates `mode` + `tags` CLIENT-SIDE
+//! (the JSON only stores them — our writer matches, and this module
+//! is deliberately NOT wired into it); semantics match the official
+//! (include-on-diagram scope expansion, effective tag lookup, arrow
+//! creation):
 //!
 //! * **Include** — keep an item iff ANY filter tag (each trimmed) hits its
 //!   effective tag stack; an EMPTY tag list keeps NOTHING.
 //! * **Exclude** — drop on ANY hit; an empty tag list keeps everything. An
-//!   absent mode takes this branch too (the reference tests
-//!   `mode === "Include"`, everything else behaves as exclude).
+//!   absent mode takes this branch too (the official evaluator tests
+//!   for the literal `Include`; everything else behaves as exclude).
 //! * Effective stacks: element = kind defaults + stored; deployment
 //!   instances ALSO match the linked software-system/container stack; a
 //!   relationship = its defaults + stored, and every `linkedRelationshipId`
 //!   hop can supply the hit too. Filter tags are trimmed before comparing;
 //!   item tags are matched verbatim.
 //! * A relationship survives only when it passes its own filter AND both
-//!   endpoint elements survive (the reference draws arrows only between
+//!   endpoint elements survive (arrows are drawn only between
 //!   rendered boxes).
 //!
-//! Reference crashes on stale content ids (no guard); we resolve to an
+//! The official tooling crashes on stale content ids (no guard); we
 //! empty stack instead — an unresolvable element behaves like an untagged
-//! one, an unresolvable relationship drops (D1: the reference leaves nothing
+//! one, an unresolvable relationship drops (the official tooling leaves
 //! rendered at all there).
 //!
-//! Output preserves the input content order (determinism, P3-D5 style).
+//! Output preserves the input content order (determinism).
 
 use std::collections::HashSet;
 
@@ -60,7 +60,7 @@ enum ElementRef<'m> {
 }
 
 /// Evaluate `mode` + `tags` over `base` view content. `None` mode behaves
-/// as [`FilterMode::Exclude`] (reference: only the literal `Include` takes
+/// as [`FilterMode::Exclude`] (only the literal `Include` takes
 /// the include branch).
 #[must_use]
 pub fn eval(
@@ -72,7 +72,7 @@ pub fn eval(
     let model = &workspace.model;
     let filter = |stack_hit: bool| match mode {
         Some(FilterMode::Include) => stack_hit,
-        // Absent / unknown modes behave like Exclude (reference `else`).
+        // Absent / unknown modes behave like Exclude.
         Some(FilterMode::Exclude) | None => !stack_hit,
     };
 
@@ -94,9 +94,9 @@ pub fn eval(
         };
         let tags_hit = tags.iter().any(|tag| {
             let tag = tag.trim();
-            // Walk the linked-relationship chain (reference
-            // `getAllTagsForRelationship`); a cycle stops at the first
-            // revisit — the reference would loop forever there.
+            // Walk the linked-relationship chain;
+            // a cycle stops at the first
+            // revisit — the official evaluator would loop forever there.
             let mut seen: HashSet<&Id> = HashSet::new();
             let mut current = Some(rel);
             while let Some(r) = current {
@@ -129,7 +129,7 @@ pub fn eval(
 }
 
 /// Whether `tag` hits the element's effective stack (instances: their own
-/// AND the linked static element's — reference `getAllTagsForElement`).
+/// AND the linked static element's).
 fn element_matches(model: &Model, id: &Id, tag: &str) -> bool {
     let Some(found) = resolve(model, id) else {
         return false; // stale id: empty stack (see module docs)
@@ -148,7 +148,7 @@ fn element_matches(model: &Model, id: &Id, tag: &str) -> bool {
     }
 }
 
-/// First element with `id` in hydrate order, with its tag-matching bits.
+/// First element with `id` in validation walk order, with its tag-matching bits.
 fn resolve<'m>(model: &'m Model, id: &Id) -> Option<ElementRef<'m>> {
     use ElementRef::Plain;
     if let Some(ce) = model.custom_elements.iter().find(|ce| &ce.item.id == id) {
@@ -322,7 +322,7 @@ mod tests {
             &tags(&[]),
         );
         assert_eq!(all.element_ids, vec![bank.clone(), alice.clone()]);
-        // An absent mode behaves like Exclude (reference `else` branch).
+        // An absent mode behaves like Exclude.
         let absent = eval(b.workspace(), &content, None, &tags(&[]));
         assert_eq!(absent.element_ids, vec![bank, alice]);
     }

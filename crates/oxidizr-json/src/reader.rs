@@ -1,15 +1,12 @@
-//! JSON → `Workspace` (WRITE-CATALOG §6): a `serde_json::Value` walk with the
-//! reference Jackson leniency matrix — unknown keys ignored
-//! (`FAIL_ON_UNKNOWN_PROPERTIES=false`), unknown enum values → `None`
-//! (`READ_UNKNOWN_ENUM_VALUES_AS_NULL`), empty/absent objects → `None`
-//! (`ACCEPT_EMPTY_STRING_AS_NULL_OBJECT`), scalars coerced to strings exactly
-//! like Jackson's `String` binding — followed by the `hydrate()` equivalent:
-//! the M2 validation catalog (first message throws) and instance-name
-//! derivation from the linked elements.
+//! JSON → `Workspace`: a lenient `serde_json::Value` walk — unknown keys are
+//! ignored, unknown enum values bind `None`, empty/absent objects bind `None`,
+//! and scalars are coerced to strings exactly as the official reader binds
+//! scalars — followed by validation: the first message throws, then instance
+//! names are derived from the linked elements.
 //!
 //! Property maps are read in DOCUMENT order, which becomes insertion order in
 //! [`oxidizr_core::properties::Properties`] — the writer replays that sequence
-//! through the `HashMap` emulator, so read→write is byte-stable (§1).
+//! through the `HashMap` emulator, so read→write is byte-stable.
 
 use std::collections::BTreeMap;
 
@@ -38,15 +35,15 @@ use crate::error::JsonError;
 use crate::writer::id_ord;
 use oxidizr_core::colors;
 
-/// Deserialize a workspace JSON document (§6 leniency, then `hydrate()`).
+/// Deserialize a workspace JSON document (lenient read, then validation).
 pub fn from_slice(bytes: &[u8]) -> Result<Workspace, JsonError> {
     let root: Value = serde_json::from_slice(bytes)?;
     let obj = root
         .as_object()
         .ok_or_else(|| JsonError::Read("the workspace JSON must be an object".to_string()))?;
     let mut workspace = read_workspace(obj)?;
-    // `hydrate()`: the reference validates and throws the FIRST message;
-    // instance names are derived only after the link checks pass.
+    // Validation throws the FIRST message; instance names are derived only
+    // after the link checks pass.
     if let Some(first) = oxidizr_core::validate(&workspace.model, &workspace.views).first() {
         return Err(JsonError::Validation(first.message.clone()));
     }
@@ -55,7 +52,7 @@ pub fn from_slice(bytes: &[u8]) -> Result<Workspace, JsonError> {
 }
 
 // ---------------------------------------------------------------------------
-// Scalar accessors (Jackson binding semantics)
+// Scalar accessors (binding semantics)
 // ---------------------------------------------------------------------------
 
 pub(crate) type Obj<'a> = &'a Map<String, Value>;
@@ -64,10 +61,10 @@ fn read<'a>(o: Obj<'a>, key: &str) -> Option<&'a Value> {
     o.get(key).filter(|v| !v.is_null())
 }
 
-/// A `String` field: any scalar binds (numbers/bools stringify like Jackson's
-/// `asText`); objects/arrays are the hostile-input case and bind as absent.
-/// An empty string binds as `Some("")` — significant for the `NON_NULL`
-/// style fields, byte-invisible for the `NON_EMPTY` ones.
+/// A `String` field: any scalar binds (numbers/bools stringify); objects/
+/// arrays are the hostile-input case and bind as absent.
+/// An empty string binds as `Some("")` — significant for the style fields
+/// that omit only absent values, byte-invisible for the omit-empty ones.
 pub(crate) fn text(o: Obj<'_>, key: &str) -> Option<String> {
     match read(o, key)? {
         Value::String(s) => Some(s.clone()),
@@ -81,9 +78,9 @@ fn id_field(o: Obj<'_>, key: &str) -> Option<Id> {
     text(o, key).map(Id::new)
 }
 
-/// Sentinel for a missing/unparsable id in the tolerant read (the reference
-/// stores `null` there; the validation pass rejects the resulting dangling
-/// links before anything else can observe the sentinel).
+/// Sentinel for a missing/unparsable id in the tolerant read (the official
+/// reader stores `null` there; the validation pass rejects the resulting
+/// dangling links before anything else can observe the sentinel).
 fn no_id() -> Id {
     Id::new(String::new())
 }
@@ -100,9 +97,9 @@ fn int_field(o: Obj<'_>, key: &str, default: i64) -> i64 {
     }
 }
 
-/// An `int` field (`Integer`/primitive binding): a number outside `i32` or an
-/// unparsable string binds the default where Jackson would throw — accepted
-/// hostile-input divergence, kept out of the `as`-cast business.
+/// An `int` field: a number outside `i32` or an unparsable string binds the
+/// default where the official reader would throw — an accepted hostile-input
+/// divergence, kept out of the `as`-cast business.
 fn i32_field(o: Obj<'_>, key: &str, default: i32) -> i32 {
     match read(o, key) {
         Some(Value::Number(n)) => n
@@ -139,9 +136,9 @@ fn str_array(o: Obj<'_>, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// A free-form `properties` map: document order → insertion order (§1).
-/// Null values bind a `null` entry in Java (unrepresentable in the model) —
-/// they are skipped here, a hostile-input-only divergence.
+/// A free-form `properties` map: document order → insertion order. Null
+/// values bind a `null` entry in the official format (unrepresentable in the
+/// model) — they are skipped here, a hostile-input-only divergence.
 fn props(o: Obj<'_>, key: &str) -> Properties {
     read(o, key)
         .and_then(Value::as_object)
@@ -162,15 +159,15 @@ fn tags_field(o: Obj<'_>, key: &str) -> Tags {
     text(o, key).map_or_else(Tags::new, |csv| Tags::from_json_csv(&csv))
 }
 
-/// `yyyy-MM-dd'T'HH:mm:ss'Z'` (the writer's format) or epoch millis, as the
-/// tolerant Jackson `Date` binding; stored as epoch SECONDS.
+/// `yyyy-MM-dd'T'HH:mm:ss'Z'` (the writer's format) or epoch millis, bound
+/// leniently; stored as epoch SECONDS.
 fn date_field(o: Obj<'_>, key: &str) -> Option<i64> {
     match read(o, key)? {
         Value::Number(n) => n.as_i64().map(|millis| millis.div_euclid(1000)),
         Value::String(s) => chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ")
             .map(|dt| dt.and_utc().timestamp())
             .ok()
-            // all-digit strings bind as epoch millis like Jackson's DateDeserializer
+            // all-digit strings bind as epoch millis
             .or_else(|| s.parse::<i64>().ok().map(|millis| millis.div_euclid(1000))),
         _ => None,
     }
@@ -188,7 +185,7 @@ pub(crate) fn objects<'a>(o: Obj<'a>, key: &str) -> Vec<Obj<'a>> {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace root (§2)
+// Workspace root
 // ---------------------------------------------------------------------------
 
 fn read_workspace(o: Obj<'_>) -> Result<Workspace, JsonError> {
@@ -211,8 +208,8 @@ fn read_workspace(o: Obj<'_>) -> Result<Workspace, JsonError> {
     })
 }
 
-/// `WorkspaceConfiguration`: only `scope`, `visibility`, `users` exist in v6
-/// (§2); everything else is read-ignored legacy (`enterprise`, `branding`, …).
+/// `WorkspaceConfiguration`: only `scope`, `visibility`, `users` exist in v6;
+/// everything else is read-ignored legacy (`enterprise`, `branding`, …).
 fn read_workspace_configuration(o: Option<Obj<'_>>) -> oxidizr_core::WorkspaceConfiguration {
     let Some(o) = o else {
         return oxidizr_core::WorkspaceConfiguration::default();
@@ -231,12 +228,12 @@ fn read_workspace_configuration(o: Option<Obj<'_>>) -> oxidizr_core::WorkspaceCo
 }
 
 // ---------------------------------------------------------------------------
-// Model (§2)
+// Model
 // ---------------------------------------------------------------------------
 
 /// Shared `ModelItem` keys (`name`/`tags`/`description`/`url`/`properties`/
-/// `perspectives`); instances pass `named: false` — their `name` is
-/// `@JsonIgnore` and derived after validation (§6).
+/// `perspectives`); instances pass `named: false` — their `name` is never
+/// read from JSON and is derived after validation.
 fn read_item(o: Obj<'_>, named: bool) -> ModelItem {
     ModelItem {
         id: id_field(o, "id").unwrap_or_else(no_id),
@@ -261,13 +258,10 @@ fn read_item(o: Obj<'_>, named: bool) -> ModelItem {
     }
 }
 
-/// Reads an element's nested `relationships[]`: returns the link list
-/// (`Element.setRelationships`; the writer re-sorts) AND the read
-/// relationships themselves. 2R R-mis-07: return-and-flatten replaces the
-/// `&mut Vec<Relationship>` out-param threaded through every model reader —
-/// `read_model` is the single collector again, extended in the exact
-/// traversal order the old pushes followed (so even the stable-sort ties of
-/// the final numeric-id `sort_by` cannot move).
+/// Reads an element's nested `relationships[]`: returns the link list (the
+/// writer re-sorts it) AND the relationships themselves. `read_model` is the
+/// single collector, extended in the exact traversal order below — the final
+/// numeric-id `sort_by` is stable, so even its ties cannot move.
 fn read_relationships(o: Obj<'_>) -> (Vec<Id>, Vec<Relationship>) {
     let mut ids = Vec::new();
     let mut rels = Vec::new();
@@ -299,16 +293,16 @@ fn read_relationships(o: Obj<'_>) -> (Vec<Id>, Vec<Relationship>) {
     (ids, rels)
 }
 
-/// `DeploymentNode.instances` — the reference setter's validation, verbatim
-/// (§6): `Integer.parseInt` first (only `< 1` throws), then on
-/// `NumberFormatException` the `\d*\.\.\d*`, `\d*..N` and `\d*..\*` shapes
-/// (the middle dots in the last two are UNESCAPED regex dots — reproduced
-/// exactly, including backtracking so `"12N"` matches with an empty `\d*`).
+/// `DeploymentNode.instances` validation, reproduced exactly: parse as an int
+/// first (only `< 1` fails), and on failure accept the `\d*\.\.\d*`,
+/// `\d*..N` and `\d*..\*` shapes — the middle dots in the last two are
+/// UNESCAPED regex dots, reproduced exactly, including backtracking so
+/// `"12N"` matches with an empty digit run.
 fn check_instances(s: &str) -> Result<(), &'static str> {
     match s.parse::<i32>() {
-        // Java `Integer.parseInt` accepted: only `< 1` throws. (`parseInt`
-        // also accepts `+` and Unicode digits where Rust does not — an
-        // accepted hostile-input divergence.)
+        // A parseable integer: only `< 1` fails. (The official parser also
+        // accepts `+` and Unicode digits where Rust does not — an accepted
+        // hostile-input divergence.)
         Ok(n) if n < 1 => Err(INSTANCES_MSG),
         Ok(_) => Ok(()),
         Err(_) => check_instances_range(s),
@@ -325,9 +319,9 @@ fn check_instances_range(s: &str) -> Result<(), &'static str> {
         && lo.chars().all(|c| c.is_ascii_digit())
         && hi.chars().all(|c| c.is_ascii_digit())
     {
-        // Java `Integer.parseInt`s both sides; an empty or overflowing side
-        // throws there too (unchecked `NumberFormatException`/
-        // `ArrayIndexOutOfBoundsException` — hostile-input-only divergence).
+        // Both sides must parse as ints; an empty or overflowing side crashes
+        // the official reader — oxidizr reports the range error instead (a
+        // hostile-input-only deviation).
         let (Ok(lo), Ok(hi)) = (lo.parse::<i32>(), hi.parse::<i32>()) else {
             return Err(INSTANCES_MSG);
         };
@@ -338,16 +332,16 @@ fn check_instances_range(s: &str) -> Result<(), &'static str> {
         };
     }
     // `\d*..N` / `\d*..\*` — the middle `..` are UNESCAPED regex dots
-    // (any two non-newline characters); matched in the Java order.
+    // (any two non-newline characters); `N` is tried before `*`.
     if two_star_shape(s, 'N') || two_star_shape(s, '*') {
         return Ok(());
     }
     Err(INSTANCES_MSG)
 }
 
-/// Java `matches("\\d*.." + last + "")`: longest digit run `d`, then exactly
-/// two non-newline chars, then `last` — with backtracking, so a digit may be
-/// consumed by the any-two part (`"12N"` matches with an empty `\d*`).
+/// The `\d*..N` / `\d*..\*` shape: a leading digit run, then exactly two
+/// non-newline chars, then `last` — matched with backtracking, so a digit may
+/// be consumed by the any-two part (`"12N"` matches with an empty digit run).
 fn two_star_shape(s: &str, last: char) -> bool {
     let cs: Vec<char> = s.chars().collect();
     if cs.len() < 3
@@ -361,12 +355,12 @@ fn two_star_shape(s: &str, last: char) -> bool {
     cs.len() - 3 <= digits
 }
 
-/// `healthChecks[]` (`StaticStructureElementInstance` only). `name` and `url`
-/// are REQUIRED non-null values: `HttpHealthCheck.hashCode()` dereferences
-/// both on the very first `HashSet` insert Jackson performs, so a missing or
-/// null key NPEs the reference read (oracle witness 2026-11-14) — oxidizr
-/// rejects it as a value error instead. `interval`/`timeout` default to the
-/// bean's field initializers (0/0; the 60s interval is the DSL parser's).
+/// `healthChecks[]` (software-system and container instances only). `name`
+/// and `url` are REQUIRED non-null values: the official reader crashes on a
+/// missing or null key (the check's hash needs both at first insertion) —
+/// oxidizr rejects it as a value error instead (a documented deviation).
+/// `interval`/`timeout` default to 0/0 (the 60s interval is the DSL parser's
+/// default, not the reader's).
 fn health_checks(o: Obj<'_>) -> Result<Vec<HttpHealthCheck>, JsonError> {
     objects(o, "healthChecks")
         .into_iter()
@@ -380,9 +374,8 @@ fn health_checks(o: Obj<'_>) -> Result<Vec<HttpHealthCheck>, JsonError> {
                 interval: i32_field(h, "interval", 0),
                 timeout: int_field(h, "timeout", 0),
                 url,
-                // `headers` binds (document order; duplicate keys replace);
-                // `TreeMap` sorting only affects the WRITE-time HashMap copy
-                // the writer replays (§2 errata).
+                // `headers` bind as a map (document order; duplicate keys
+                // replace); the sort only feeds the writer's `HashMap` replay.
                 headers: read(h, "headers")
                     .and_then(Value::as_object)
                     .map(|m| {
@@ -398,17 +391,16 @@ fn health_checks(o: Obj<'_>) -> Result<Vec<HttpHealthCheck>, JsonError> {
         .collect()
 }
 
-/// 2R R-mis-07: returns the subtree's collected `relationships[]` beside the
-/// node — children, infrastructure nodes, software-system instances,
-/// container instances, then the node's own, the exact order the old
-/// out-param pushes followed.
+/// Returns the subtree's collected `relationships[]` beside the node, in
+/// traversal order: children, infrastructure nodes, software-system
+/// instances, container instances, then the node's own.
 fn read_node(o: Obj<'_>) -> Result<(DeploymentNode, Vec<Relationship>), JsonError> {
     let instances = match text(o, "instances") {
         Some(s) => {
             check_instances(&s).map_err(|m| JsonError::Read(m.to_string()))?;
             s
         }
-        // The setter is not called when the key is absent — field default.
+        // An absent key keeps the field default.
         None => DEFAULT_INSTANCES.to_string(),
     };
     let mut rels = Vec::new();
@@ -512,10 +504,9 @@ fn read_ci(o: Obj<'_>) -> Result<(ContainerInstance, Vec<Relationship>), JsonErr
     ))
 }
 
-/// Software system with its containers/components leg (extracted from the
-/// `read_model` inline closures for the 2R R-mis-07 return-and-flatten);
-/// collects components' relationships before the container's own, the
-/// containers' before the system's own — the old push order.
+/// Software system with its containers/components leg: collects components'
+/// relationships before the container's own, the containers' before the
+/// system's own — the traversal order.
 fn read_software_system(o: Obj<'_>) -> (SoftwareSystem, Vec<Relationship>) {
     let mut rels = Vec::new();
     let containers = objects(o, "containers")
@@ -591,14 +582,14 @@ fn read_model(o: Option<Obj<'_>>) -> Result<Model, JsonError> {
                 }
             })
             .collect();
-        // `Model.setCustomElements` rebuilds the field as a `TreeSet`, so a
-        // JSON-loaded workspace re-exports custom elements in `ModelItem`
-        // natural order — numeric-id compare, string compare if either id
-        // fails `Integer.parseInt` (2026-11-17 witness: file `[2,1]` re-exports
-        // `[1,2]`). The other element collections are `TreeSet`-ordered too,
-        // but reference-written files already list them that way, so keeping
-        // their file order stays byte-identical; only this collection can
-        // arrive unsorted (fresh reference exports list it reverse-inserted).
+        // A JSON-loaded workspace re-exports custom elements in `ModelItem`
+        // natural order (numeric-id compare, string compare if either id is
+        // not an int) — the official reader rebuilds the set on load, so a
+        // file `[2,1]` re-exports `[1,2]`. The other element collections are
+        // ordered sets too, but files written by the official tooling already
+        // list them that way, so keeping their file order stays
+        // byte-identical; only this collection can arrive unsorted (fresh
+        // official exports list it reverse-inserted).
         out.custom_elements
             .sort_by(|a, b| id_ord(&a.item.id, &b.item.id));
         out.deployment_nodes = objects(o, "deploymentNodes")
@@ -631,16 +622,16 @@ fn read_model(o: Option<Obj<'_>>) -> Result<Model, JsonError> {
             })
             .collect();
     }
-    // `Model.relationships` is a `TreeSet` (`Relationship.compareTo` = numeric
-    // id) — validation message order follows it.
+    // Model relationships are ordered by numeric id — validation message
+    // order follows that order.
     rels.sort_by(|a, b| id_ord(&a.id, &b.id));
     out.relationships = rels;
     Ok(out)
 }
 
-/// Instance names are derived from the linked element (`getName` is
-/// `@JsonIgnore`; after `hydrate()`'s link checks — §6). `validate()` has
-/// already passed, so every link resolves.
+/// Instance names are not stored in JSON: they are derived from the linked
+/// element, after the link checks. `validate()` has already passed, so every
+/// link resolves.
 fn derive_instance_names(workspace: &mut Workspace) {
     fn walk(names: &BTreeMap<&str, &str>, nodes: &mut [DeploymentNode]) {
         for node in nodes {
@@ -674,7 +665,7 @@ fn derive_instance_names(workspace: &mut Workspace) {
 }
 
 // ---------------------------------------------------------------------------
-// Views (§3)
+// Views
 // ---------------------------------------------------------------------------
 
 fn read_view_base(o: Obj<'_>) -> ViewBase {
@@ -727,7 +718,7 @@ fn read_content(o: Obj<'_>) -> Result<ViewContent, JsonError> {
                 height: i32_field(d, "height", 0),
             }),
         // Presence enables layout; `applied`/`implementation`/`seed` are
-        // read-ignored legacy (§6).
+        // read-ignored legacy.
         automatic_layout: read(o, "automaticLayout")
             .and_then(Value::as_object)
             .map(read_automatic_layout)
@@ -735,12 +726,10 @@ fn read_content(o: Obj<'_>) -> Result<ViewContent, JsonError> {
     })
 }
 
-/// The `AutomaticLayout` bean's read defaults are its Java field initializers
-/// (0/0/0/false, `rankDirection` null — oracle probe 2026-11-14; the
+/// The read defaults are 0/0/0/false with `rankDirection` null (the
 /// LeftRight/100/50/50/true values are the DSL parser's, not the reader's).
-/// The one guard is `setRankDirection(null)`: a PRESENT-but-unparsable value
-/// (unknown enum → null under `READ_UNKNOWN_ENUM_VALUES_AS_NULL`) throws;
-/// an absent key never calls the setter.
+/// The one guard: a PRESENT-but-unparsable `rankDirection` (unknown enum
+/// values bind null) is an error; an absent key keeps the default null.
 fn read_automatic_layout(l: Obj<'_>) -> Result<AutomaticLayout, JsonError> {
     let rank_direction = if l.contains_key("rankDirection") {
         Some(
@@ -774,11 +763,10 @@ fn read_animations(o: Obj<'_>) -> Vec<Animation> {
         .collect()
 }
 
-/// Java `Configuration.addTheme`: trim, skip empty; URLs deduplicate,
-/// installed-theme names do not. Which names are "installed" is a
-/// filesystem-dependent reference behavior (the unified app's themes dir) —
-/// oxidizr keeps them (DEVIATIONS D3 tolerance; URLs, the byte-relevant
-/// case, deduplicate exactly).
+/// Theme entries: trim, skip empty; URLs deduplicate, installed-theme names
+/// do not. Which names count as "installed" is filesystem-dependent in the
+/// official tooling — oxidizr keeps them (a documented deviation; URLs, the
+/// byte-relevant case, deduplicate exactly).
 fn add_theme(themes: &mut Vec<String>, theme: &str) {
     let theme = theme.trim();
     if theme.is_empty() {
@@ -794,8 +782,8 @@ fn read_view_configuration(o: Option<Obj<'_>>) -> Result<ViewConfiguration, Json
     let Some(o) = o else {
         return Ok(ViewConfiguration::default());
     };
-    // `theme` (singular string) aliases into `themes[]` (`@JsonSetter`);
-    // Jackson binds keys in DOCUMENT order, addTheme appends.
+    // `theme` (singular string) aliases into `themes[]`; keys bind in
+    // DOCUMENT order and every hit appends.
     let mut themes = Vec::new();
     for (key, value) in o {
         match key.as_str() {
@@ -834,11 +822,11 @@ fn read_view_configuration(o: Option<Obj<'_>>) -> Result<ViewConfiguration, Json
     })
 }
 
-/// Style color fields (`background`/`stroke`/`color`) go through the Java
-/// setter normalization: `#rrggbb` lowercased, HTML names mapped to lowercased
-/// hex, anything else rejected (`"<color> is not a valid hex colour code or
-/// HTML colour name."`). A present-but-null value hits the setter too — the
-/// reference stringifies the null in its message.
+/// Style color fields (`background`/`stroke`/`color`) normalize on read:
+/// `#rrggbb` lowercased, HTML names mapped to lowercased hex, anything else
+/// rejected (`"<color> is not a valid hex colour code or HTML colour name."`
+/// — the official message, verbatim). A present-but-null value is checked
+/// too — its message carries the stringified null.
 fn style_color(o: Obj<'_>, key: &str) -> Result<Option<String>, JsonError> {
     if !o.contains_key(key) {
         return Ok(None);
@@ -851,11 +839,10 @@ fn style_color(o: Obj<'_>, key: &str) -> Result<Option<String>, JsonError> {
     colors::normalize(&color).map(Some).map_err(JsonError::Read)
 }
 
-/// `opt_i32_field` with the `JavaBean` setter clamps applied — Jackson binds
-/// style numbers THROUGH the setters (WRITE-CATALOG §6 "read normalizes"):
-/// `ElementStyle.setStrokeWidth` pins to [1, 10]; `setOpacity` (both styles)
-/// and `RelationshipStyle.setPosition` pin to [0, 100]; null leaves the
-/// field untouched (oracle probes 2026-11-17: `strokeWidth 0` reads back 1).
+/// `opt_i32_field` with the official read-time clamps applied — style numbers
+/// bind through validation: `strokeWidth` pins to [1, 10]; `opacity` (both
+/// styles) and `position` pin to [0, 100]; null leaves the field untouched
+/// (`strokeWidth` 0 reads back 1).
 fn clamped_i32(o: Obj<'_>, key: &str, low: i32, high: i32) -> Option<i32> {
     opt_i32_field(o, key).map(|n| n.clamp(low, high))
 }
@@ -873,14 +860,14 @@ fn read_styles(o: Option<Obj<'_>>) -> Result<Styles, JsonError> {
             .into_iter()
             .map(read_relationship_style)
             .collect::<Result<Vec<RelationshipStyle>, JsonError>>()?,
-        // `Styles.themes` has no JSON representation (no getter/setter).
+        // `Styles.themes` has no JSON representation.
         themes: Vec::new(),
     })
 }
 
-/// One `ElementStyle` bean (workspace `styles.elements[]` and the identical
-/// `theme.json` shape; the setters normalize — see [`clamped_i32`] and
-/// [`style_color`]).
+/// One element style (workspace `styles.elements[]` and the identical
+/// `theme.json` shape; colors and numbers normalize on read — see
+/// [`clamped_i32`] and [`style_color`]).
 pub(crate) fn read_element_style(s: Obj<'_>) -> Result<ElementStyle, JsonError> {
     Ok(ElementStyle {
         tag: text(s, "tag").unwrap_or_default(),
@@ -903,7 +890,7 @@ pub(crate) fn read_element_style(s: Obj<'_>) -> Result<ElementStyle, JsonError> 
     })
 }
 
-/// One `RelationshipStyle` bean (see [`read_element_style`]).
+/// One relationship style (see [`read_element_style`]).
 pub(crate) fn read_relationship_style(s: Obj<'_>) -> Result<RelationshipStyle, JsonError> {
     Ok(RelationshipStyle {
         tag: text(s, "tag").unwrap_or_default(),
@@ -949,9 +936,9 @@ fn read_views(o: Option<Obj<'_>>) -> Result<ViewSet, JsonError> {
         configuration: read_view_configuration(o.get("configuration").and_then(Value::as_object))?,
         ..ViewSet::default()
     };
-    // The legacy `enterpriseContextViews` key REPLACES the landscape list
-    // (`@JsonSetter`); document order decides which key binds last, so walk
-    // the object in order rather than key-by-key.
+    // The legacy `enterpriseContextViews` key REPLACES the landscape list;
+    // document order decides which key binds last, so walk the object in
+    // order rather than key-by-key.
     for (key, value) in o {
         let views = value.as_array();
         let items: Vec<Obj<'_>> = views
@@ -1065,7 +1052,7 @@ fn read_dynamic_view(o: Obj<'_>) -> Result<DynamicView, JsonError> {
         base: read_view_base(o),
         content: read_content(o)?,
         element_id: id_field(o, "elementId"),
-        // `deploymentEnvironment` is read-ignored legacy (§6).
+        // `deploymentEnvironment` is read-ignored legacy.
         deployment_environment: None,
         external_boundaries_visible: bool_field(o, "externalBoundariesVisible", false),
     })
@@ -1111,7 +1098,7 @@ fn read_image_view(o: Obj<'_>) -> ImageView {
 }
 
 // ---------------------------------------------------------------------------
-// Documentation (§4)
+// Documentation
 // ---------------------------------------------------------------------------
 
 fn read_documentation(o: Option<Obj<'_>>) -> Documentation {

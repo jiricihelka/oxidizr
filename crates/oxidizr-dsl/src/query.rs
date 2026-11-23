@@ -1,19 +1,18 @@
-//! `query` evaluator entry (§P4-M3 O-1, F6): the DSL expression grammar
-//! IS the query language (P4-D3, corrected 2026-11-21 — no `Predicate`
-//! type exists; the pinned `ExpressionParser` port in `engine/expr.rs`
-//! is the single evaluator, and this module is its second consumer after
-//! the view `include`/`exclude` statements).
+//! `query` evaluator entry: the DSL expression grammar IS the query
+//! language — the expression evaluator in `engine/expr.rs` is its single
+//! implementation, and this module is its second consumer after the view
+//! `include`/`exclude` statements. There is no separate predicate type.
 //!
-//! The entry evaluates `ExprScope::Model` — the base `ExpressionParser`
-//! domain (identifiers via the `structurizr.dsl.identifier` register,
+//! The entry evaluates `ExprScope::Model` — the base expression grammar
+//! (identifiers via the `structurizr.dsl.identifier` register,
 //! `Tag ==`/`Tag !=`, `Technology ==`/`!=`, `Property ==`, `Type ==`,
 //! `Group ==`, `Parent ==`, `->` coupling, `afferent`/`efferent`,
 //! ` && `/` || ` combinations) — over a LOADED workspace, without
 //! re-parsing any source. The workspace enters through
 //! [`oxidizr_core::WorkspaceBuilder::adopt`] and the identifiers carried
 //! in `structurizr.dsl.identifier` properties register exactly like the
-//! `workspace extends` JSON-base leg (`WorkspaceParser.registerIdentifiers`),
-//! so an expression resolves the same against a `.dsl` and its JSON twin.
+//! `workspace extends` JSON-base leg, so an expression resolves the same
+//! against a `.dsl` and its JSON twin.
 
 use oxidizr_core::configuration::Workspace;
 use oxidizr_core::ids::Id;
@@ -32,20 +31,20 @@ pub struct QueryResult {
     pub relationships: Vec<Id>,
 }
 
-/// Evaluate `expr` over `workspace` (the base `ExpressionParser` domain).
+/// Evaluate `expr` over `workspace` (the base expression grammar).
 ///
-/// The unhandled-expression `default:` arm of the reference base parser
-/// ADDS NOTHING (no throw), so an expression no arm matches evaluates to
-/// an EMPTY result — callers surface zero matches, not an error. The
-/// throwing arms (unknown identifier, `->` with no such element, …)
-/// surface as a statement-level [`DslError`] with the reference message.
+/// The official grammar's catch-all arm ADDS NOTHING (no throw), so an
+/// expression no arm matches evaluates to an EMPTY result — callers surface
+/// zero matches, not an error. The throwing arms (unknown identifier, `->`
+/// with no such element, …) surface as a statement-level [`DslError`] with
+/// the official tooling's message.
 ///
 /// # Errors
 ///
-/// Returns the reference-shaped statement error when a throwing grammar
-/// arm fires (e.g. `The element "x" does not exist`), or when two
-/// elements/relationships carry the same `structurizr.dsl.identifier`
-/// (the register rejects duplicates, mirroring `registerIdentifiers`).
+/// Returns the statement error in the official tooling's shape when a
+/// throwing grammar arm fires (e.g. `The element "x" does not exist`), or
+/// when two elements/relationships carry the same
+/// `structurizr.dsl.identifier` (the register rejects duplicates).
 pub fn run(workspace: &Workspace, expr: &str) -> Result<QueryResult, DslError> {
     // FS/env-free options: the query never reads files or constants.
     let mut parser = Parser::new(ParseOptions::fragment());
@@ -116,21 +115,20 @@ mod tests {
     #[test]
     fn tag_technology_and_type_arms() {
         let w = ws(MODEL);
-        // expression VALUES are bare tokens (reference tests:
-        // `element.tag==Container`) — no quoting in the grammar.
+        // expression VALUES are bare tokens (`element.tag==Container`)
+        // — no quoting in the grammar.
         assert_eq!(
             run(&w, "element.tag==Web").unwrap().elements,
             vec![el_id(&w, "System")]
         );
-        // technology lives on containers (not systems) — the reference's
-        // five-stream technology filter.
+        // technology lives on containers (not systems).
         let api = w.model.software_systems[0].containers[0].item.id.clone();
         assert_eq!(
             run(&w, "element.technology==Spring").unwrap().elements,
             vec![api]
         );
-        // the type token is the ENUM spelling (space-free): the reference
-        // matches the lowercased Java type name (`softwaresystem`).
+        // the type token is the ENUM spelling (space-free): it is matched
+        // against the lowercased type name (`softwaresystem`).
         let systems = run(&w, "element.type==SoftwareSystem").unwrap();
         assert_eq!(systems.elements.len(), 2);
         assert!(
@@ -168,7 +166,7 @@ mod tests {
     #[test]
     fn unmatched_expressions_are_empty_not_errors() {
         let w = ws(MODEL);
-        // base-parser `default:` adds nothing — an unregistered identifier
+        // a no-match adds nothing — an unregistered identifier
         // and a nonsense token both resolve to EMPTY (no throw).
         assert_eq!(run(&w, "nobody").unwrap(), super::QueryResult::default());
         assert_eq!(

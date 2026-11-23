@@ -1,4 +1,4 @@
-//! Chain section: reference `StructurizrDslParser.java` arms at Java lines
+//! Chain section: the official parser arms at official lines
 //! 1029–1196 — the nine view definitions (`custom`, `systemLandscape`,
 //! `systemContext`, `container`, `component`, `dynamic`, `deployment`,
 //! `filtered`, `image`), the `parallel` (`{`) arm inside dynamic views, the
@@ -9,21 +9,21 @@
 //! dynamic-view relationship catch-all and `url`, `theme`/`themes`, and
 //! `terminology` with its seven term arms plus `metadata`.
 //!
-//! Faithful-port quirks recorded in `agents/plan/PROGRESS.md`: view definitions and
-//! `animation`/`terminology` push their context UNCONDITIONALLY (the Java
+//! Faithful-port quirks: view definitions and
+//! `animation`/`terminology` push their context UNCONDITIONALLY (the official parser
 //! chain has no `shouldStartContext` guard there — a view statement without
 //! `{` still swallows following lines until the next `}`), only `filtered`,
 //! `light`/`dark` and the dynamic-relationship block guard on it; the
 //! dynamic catch-all receives the RAW tokens (trailing `{` included, so
-//! `a -> b {` stores `{` as the step description — oracle-verified);
+//! `a -> b {` stores `{` as the step description — verified);
 //! sequence numbers are burned on every successful add even when an
 //! explicit `[order:]` overrides them; `InstalledThemes` is empty in
 //! oxidizr so a `theme` name that is neither a URL nor `default` takes the
 //! file branch; URL/file `theme`, `plantuml`, `mermaid`, `kroki` and
-//! raster/`plantuml <file>` content import arrives in Phase 4 (D11) —
+//! raster/`plantuml <file>` content import arrives in later —
 //! those paths parse and fail with the deferred/import codes; `image
 //! <file>` with an SVG inlines the plain data URI regardless of the color
-//! scheme (the reference `ImageImporter` ignores the scheme for files).
+//! scheme (the official parser `ImageImporter` ignores the scheme for files).
 
 use std::borrow::Cow;
 
@@ -41,7 +41,7 @@ use super::idents::{PseudoKind, RegItem};
 use super::stmt_line::{java_absolute, java_canonical};
 use super::{ColorScheme, Ctx, DslError, Parser, Sec, Stmt, Tokens, tok};
 
-/// Java `StringUtils.isNullOrEmpty` (trims).
+/// The blank check (trims).
 fn is_trim_empty(s: &str) -> bool {
     java_trim(s).is_empty()
 }
@@ -72,7 +72,7 @@ fn net_http() -> DslError {
     )
 }
 
-/// `AbstractViewParser.validateViewKey`.
+/// the abstract-view parser's validate-view-key check.
 fn validate_view_key(key: Cow<'_, str>) -> Result<String, DslError> {
     let valid = !key.is_empty()
         && key
@@ -87,7 +87,7 @@ fn validate_view_key(key: Cow<'_, str>) -> Result<String, DslError> {
     }
 }
 
-/// `View.setDescription` / `setTitle` applied post-create: the reference
+/// `View.setDescription` / `setTitle` applied post-create: the official parser
 /// parsers call the setter only when the token is present (empty quoted
 /// tokens never reach it), and the writer's `NON_EMPTY` omission hides any
 /// residual difference — so an empty value is not stored. `custom` views are
@@ -106,10 +106,10 @@ fn apply_text(p: &mut Parser, view: ViewRef, text: String, title: bool) {
 }
 
 // ---------------------------------------------------------------------------
-// view definitions (Java 1029–1066)
+// view definitions
 // ---------------------------------------------------------------------------
 
-/// `CustomViewParser`.
+/// the custom-view parser.
 fn custom_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "custom [key] [title] [description] {";
     if t.has_more_than(3) {
@@ -131,11 +131,11 @@ fn custom_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
         .builder
         .create_custom_view(&key, None)
         .map_err(|e| DslError::core(&e))?;
-    // `CustomViewParser` defaults title/description to "" and the `CustomView`
+    // the custom-view parser defaults title/description to "" and the `CustomView`
     // constructor stores them VERBATIM — unlike the other view kinds, an empty
     // value IS stored. JSON still omits it (`NON_EMPTY`), but
-    // `CustomView.getName()` = `"Custom View: " + getTitle()` makes the empty
-    // title observable in the plantuml header (M2-d A/B: custom-view-animation).
+    // `CustomView.getName` = `"Custom View: " + getTitle` makes the empty
+    // title observable in the plantuml header (cross-checked: custom-view-animation).
     if let Some(base) = p.builder.view_base_mut(view) {
         base.title = Some(title);
         base.description = Some(description);
@@ -143,7 +143,7 @@ fn custom_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     Ok(view)
 }
 
-/// `SystemLandscapeViewParser`.
+/// the system-landscape-view parser.
 fn landscape_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "systemLandscape [key] [description] {";
     if t.has_more_than(2) {
@@ -165,7 +165,7 @@ fn landscape_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     Ok(view)
 }
 
-/// `SystemContextViewParser` — element resolution BEFORE key validation.
+/// the system-context-view parser — element resolution BEFORE key validation.
 fn context_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "systemContext <software system identifier> [key] [description] {";
     if t.has_more_than(3) {
@@ -197,7 +197,7 @@ fn context_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     Ok(view)
 }
 
-/// `ContainerViewParser`.
+/// the container-view parser.
 fn container_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "container <software system identifier> [key] [description] {";
     if t.has_more_than(3) {
@@ -229,7 +229,7 @@ fn container_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     Ok(view)
 }
 
-/// `ComponentViewParser`.
+/// the component-view parser.
 fn component_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "component <container identifier> [key] [description] {";
     if t.has_more_than(3) {
@@ -261,7 +261,7 @@ fn component_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     Ok(view)
 }
 
-/// `getElement` + `instanceof` pair: the `missing` text when the lookup
+/// the lookup + kind-check pair: the `missing` text when the lookup
 /// fails, the `not_a` text (with `%s` for the identifier) for a kind
 /// mismatch — pseudo-elements fail the kind gate, not the lookup.
 fn resolve_kind(
@@ -278,7 +278,7 @@ fn resolve_kind(
     }
 }
 
-/// `DynamicViewParser`.
+/// the dynamic-view parser.
 fn dynamic_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str =
         "dynamic <*|software system identifier|container identifier> [key] [description] {";
@@ -327,8 +327,8 @@ fn dynamic_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     Ok(view)
 }
 
-/// `DeploymentViewParser` — the environment token resolves through a
-/// registered `DeploymentEnvironment` pseudo (Java `getElement` + name),
+/// the deployment-view parser — the environment token resolves through a
+/// registered environment pseudo (the official lookup by name),
 /// else it is the environment name itself.
 fn deployment_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "deployment <*|software system identifier> <environment> [key] [description] {";
@@ -388,7 +388,7 @@ fn deployment_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
             .builder
             .create_deployment_view(&environment, &key)
             .map_err(|e| DslError::core(&e))?;
-        // `view.setSoftwareSystem(...)` — the parser sets the scope.
+        // The parser sets the deployment view scope.
         if let ViewRef::Deployment(i) = view
             && let Some(dv) = p.builder.views_mut().deployment_views.get_mut(i)
         {
@@ -400,9 +400,9 @@ fn deployment_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     Ok(view)
 }
 
-/// `FilteredViewParser`. Tags split on `,` keeping LEADING empty parts
-/// (`StringUtils.isNullOrEmpty` TRIMS, so a `" "` tag is skipped too); the
-/// Java `HashSet` order is not portable — insertion order, deduped (D8).
+/// the filtered-view parser. Tags split on `,` keeping LEADING empty parts
+/// (the blank check TRIMS, so a `" "` tag is skipped too); the
+/// the official hash-set order is not portable — insertion order, deduped.
 fn filtered_view(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "filtered <baseKey> <include|exclude> <tags> [key] [description]";
     if t.has_more_than(5) {
@@ -480,9 +480,9 @@ fn eqi_exclude(s: &str) -> bool {
     super::eqi(s, "exclude")
 }
 
-/// `ImageViewParser`. A pseudo-element (e.g. a `deploymentEnvironment`
-/// identifier) never resolves as an image-view scope in the reference
-/// (oracle-verified): the `does not exist` text (erratum, agents/plan/PROGRESS.md).
+/// the image-view parser. A pseudo-element (e.g. a `deploymentEnvironment`
+/// identifier) never resolves as an image-view scope in the official parser
+/// (verified): the `does not exist` text (erratum, a documented deviation).
 fn image_view_def(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
     const G: &str = "image <*|element identifier> [key] {";
     if t.has_more_than(2) {
@@ -514,15 +514,15 @@ fn image_view_def(p: &mut Parser, t: &Tokens) -> Result<ViewRef, DslError> {
 }
 
 // ---------------------------------------------------------------------------
-// view content (Java 1067–1110) — custom, static, deployment
+// view content — custom, static, deployment
 // ---------------------------------------------------------------------------
 
 const WILDCARD: &str = "*";
 const WILDCARD_RELUCTANT: &str = "*?";
 const ELEMENT_WILDCARD: &str = "element==*";
 
-/// `ModelViewContentParser.addElementToView` ladders: `Ok(false)` from the
-/// core add is the swallowed `ElementNotPermittedInViewException`.
+/// the model-view-content parser's add-element-to-view check ladders: `Ok(false)` from the
+/// core add is the swallowed the element-not-permitted rejection.
 fn add_element_ignoring_not_permitted(
     p: &mut Parser,
     view: ViewRef,
@@ -537,7 +537,7 @@ fn add_element_ignoring_not_permitted(
 /// The deployment-view sibling of [`add_element_ignoring_not_permitted`]:
 /// dispatches to the kind-matched `DeploymentView.add` overload (ancestor
 /// chain incl.) inside the same per-item
-/// `catch (ElementNotPermittedInViewException) { // ignore }`.
+/// `catch (the element-not-permitted rejection) { // ignore }`.
 fn add_deployment_element_ignoring_not_permitted(
     p: &mut Parser,
     view: ViewRef,
@@ -549,7 +549,7 @@ fn add_deployment_element_ignoring_not_permitted(
     }
 }
 
-/// `StringUtils.isNullOrEmpty(identifier)` — the add-ladder error fires on
+/// The blank check on `identifier` — the add-ladder error fires on
 /// the identifier path only (expressions pass `null`).
 fn cannot_add(identifier: Option<&str>) -> Option<DslError> {
     identifier.filter(|i| !is_trim_empty(i)).map(|i| {
@@ -722,12 +722,12 @@ fn add_deployment_item(
                     | ElementKind::ContainerInstance,
                 ) => {
                     // The kind-matched `DeploymentView.add` overload — incl.
-                    // the parent-`DeploymentNode` chain walk (M2-d A/B).
+                    // the parent deployment-node chain walk (cross-checked).
                     add_deployment_element_ignoring_not_permitted(p, view, &id)?;
                 }
                 Some(ElementKind::SoftwareSystem | ElementKind::Container) => {
                     // Instances of the static element in the view's
-                    // environment. Reference: the `forEach(view::add)` sits
+                    // environment. Officially, the `forEach(view::add)` sits
                     // INSIDE the per-item catch — the first rejection aborts
                     // the rest of the loop.
                     let env = deployment_environment(p, view);
@@ -995,7 +995,7 @@ fn deployment_animation_step(
         ));
     }
     // `DeploymentView.addAnimation(instances, infrastructureNodes)` —
-    // instances first, then infrastructure nodes.
+    // The animation add takes
     instances.extend(infra);
     p.builder
         .view_add_animation_step(view, &instances)
@@ -1033,12 +1033,12 @@ fn custom_animation_step(
 }
 
 // ---------------------------------------------------------------------------
-// autoLayout / default / title / description (Java 1111–1127)
+// autoLayout / default / title / description
 // ---------------------------------------------------------------------------
 
-/// `AutoLayoutParser` over the RAW tokens (the trailing `{` is parsed as a
-/// rank direction — reference behavior), after the `ModelViewDslContext`
-/// cast the driver arm performs via `getContext`.
+/// the auto-layout parser over the RAW tokens (the trailing `{` is parsed as a
+/// rank direction — official behavior), after the `model-view context`
+/// cast the driver arm performs via the top-context fetch.
 fn auto_layout(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     const G: &str =
         "autoLayout [rankDirection] [rankSeparation] [nodeSeparation] [edgeSeparation] [vertices]";
@@ -1099,7 +1099,7 @@ fn auto_layout(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     Ok(())
 }
 
-/// `ViewParser.parseTitle` / `parseDescription` over RAW tokens.
+/// the view parser's parse-title check / `parseDescription` over RAW tokens.
 fn view_text(p: &mut Parser, tokens: &Tokens, title: bool) -> Result<(), DslError> {
     let grammar = if title {
         "title <title>"
@@ -1124,11 +1124,11 @@ fn view_text(p: &mut Parser, tokens: &Tokens, title: bool) -> Result<(), DslErro
 }
 
 // ---------------------------------------------------------------------------
-// image view content (Java 1128–1149)
+// image view content
 // ---------------------------------------------------------------------------
 
-/// Shared tail of `plantuml`/`mermaid`: URL branches are refused (D5), a
-/// file that exists inlines via a JVM importer — deferred to Phase 4 (D11).
+/// Shared tail of `plantuml`/`mermaid`: URL branches are refused, a
+/// file that exists inlines via a official importer — deferred to later.
 fn diagram_file_or_url(p: &mut Parser, source: &str, keyword: &str) -> Result<(), DslError> {
     if is_https_url(source) {
         return Err(net_https());
@@ -1146,7 +1146,7 @@ fn diagram_file_or_url(p: &mut Parser, source: &str, keyword: &str) -> Result<()
             java_absolute(&file)
         )));
     }
-    // `context.setDslPortable(false)` — after the existence check.
+    // `context.portability off` — after the existence check.
     if let Some(frame) = p.frame_portable.last_mut() {
         *frame = false;
     }
@@ -1156,14 +1156,14 @@ fn diagram_file_or_url(p: &mut Parser, source: &str, keyword: &str) -> Result<()
 }
 
 fn diagram_view_key(p: &Parser, source: &str) -> bool {
-    // `getViewWithKey(source) instanceof ModelView` — filtered and image
+    // the view-by-key model-view check — filtered and image
     // views fall through to the URL/file branch.
     p.builder
         .view_ref_of_key(source)
         .is_some_and(|v| !matches!(v, ViewRef::Filtered(_) | ViewRef::Image(_)))
 }
 
-/// `ImageViewContentParser.parsePlantUML` / `parseMermaid`.
+/// the image-view-content parser's parse-plant-u-m-l check / `parseMermaid`.
 fn plantuml_or_mermaid(p: &mut Parser, tokens: &Tokens, keyword: &str) -> Result<(), DslError> {
     let grammar = format!("{keyword} <source|file|url|viewKey>");
     if !tokens.includes(1) {
@@ -1186,7 +1186,7 @@ fn plantuml_or_mermaid(p: &mut Parser, tokens: &Tokens, keyword: &str) -> Result
     diagram_file_or_url(p, &source, keyword)
 }
 
-/// `ImageViewContentParser.parseKroki` (no viewKey branch).
+/// the image-view-content parser's parse-kroki check (no viewKey branch).
 fn kroki(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     const G: &str = "kroki <format> <source|file|url>";
     if !tokens.includes(2) {
@@ -1202,13 +1202,13 @@ fn kroki(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     diagram_file_or_url(p, &source, "kroki")
 }
 
-/// `ImageViewContentParser.parseImage`. An SVG inlines as the PLAIN
-/// content data URI regardless of the color scheme (the reference
-/// `ImageImporter.importDiagram(view, file, ...)` ignores the scheme);
-/// raster formats need the JVM image codec (D10-analog); other files get
+/// the image-view-content parser's parse-image check. An SVG inlines as the PLAIN
+/// content data URI regardless of the color scheme (the official parser
+/// `ImageImporter.importDiagram(view, file,...)` ignores the scheme);
+/// raster formats need the official image codec (the same deviation family); other files get
 /// the `ImageUtils` texts.
 // False positive: the name is explicitly lower-cased below (mirrors the
-// reference `name.toLowerCase().endsWith(...)`).
+// the official lowercase suffix check).
 #[allow(clippy::case_sensitive_file_extension_comparisons)]
 fn image_content(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), DslError> {
     const G: &str = "image <file|url>";
@@ -1235,7 +1235,7 @@ fn image_content(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), D
             java_absolute(&file)
         )));
     }
-    // `setDslPortable(false)` — before the ImageUtils checks.
+    // portability off — before the ImageUtils checks.
     if let Some(frame) = p.frame_portable.last_mut() {
         *frame = false;
     }
@@ -1281,15 +1281,15 @@ fn image_content(p: &mut Parser, view: ViewRef, tokens: &Tokens) -> Result<(), D
 }
 
 // ---------------------------------------------------------------------------
-// dynamic view content (Java 1150–1162)
+// dynamic view content
 // ---------------------------------------------------------------------------
 
 fn dynamic_step(p: &mut Parser, raw: &Tokens, view: ViewRef, open: bool) -> Result<(), DslError> {
     const G1: &str = "[order:] <identifier> -> <identifier> [description] [technology]";
     const G2: &str = "[order:] <identifier> [description]";
-    // Java mutates the driver's token list; the port's answer is a borrowed
+    // the official parser mutates the driver's token list; the port's answer is a borrowed
     // view with a drop-prefix offset instead of the old deep clone (2R
-    // R-dsl-01; the trailing `{` stays, and `open` was computed from it
+    // the trailing `{` stays, and `open` was computed from it
     // before).
     let mut rest = raw.raw_tokens();
     let mut order = String::new();
@@ -1339,8 +1339,8 @@ fn dynamic_step(p: &mut Parser, raw: &Tokens, view: ViewRef, open: bool) -> Resu
             Err(e) => return Err(DslError::core(&e)),
         }
     } else {
-        // Relationship-identifier form. `tokens.get(0)` on the stripped
-        // list — the JDK IOOBE text for a line that is only `<order>:`.
+        // Relationship-identifier form. token `0` on the stripped
+        // list — the official index-out-of-bounds text for a line that is only `<order>:`.
         if tokens.is_empty() {
             return Err(DslError::stmt("Index 0 out of bounds for length 0"));
         }
@@ -1371,7 +1371,7 @@ fn dynamic_step(p: &mut Parser, raw: &Tokens, view: ViewRef, open: bool) -> Resu
             Err(e) => return Err(DslError::core(&e)),
         }
     };
-    // `if (!StringUtils.isNullOrEmpty(order)) setOrder(order)` — the
+    // The order is set only when non-blank — the
     // sequence number was burned either way.
     if !is_trim_empty(&order)
         && let Some(rv) = p.relationship_view_mut(view, &rel_id)
@@ -1420,15 +1420,15 @@ fn dynamic_element(p: &Parser, identifier: &str, source: bool) -> Result<Id, Dsl
 }
 
 // ---------------------------------------------------------------------------
-// theme / themes (Java 1163–1168)
+// theme / themes
 // ---------------------------------------------------------------------------
 
 const DEFAULT_THEME_URL: &str = "https://static.structurizr.com/themes/default/theme.json";
 
-/// `ThemeParser.addTheme` — branch order: `default` → URL mapping, then the
+/// the theme parser's add-theme check — branch order: `default` → URL mapping, then the
 /// installed-name branch (`InstalledThemes`, registry injected by the
-/// pipeline pre-parse, M1-d), then URL, then the FILE form. The file branch
-/// inlines styles via `ThemeUtils` — Phase 4 (D11). Without an injected
+/// pipeline pre-parse, verified), then URL, then the FILE form. The file branch
+/// inlines styles via `ThemeUtils` — later. Without an injected
 /// registry the installed branch is inert (fragment parses, library use).
 fn add_theme(p: &mut Parser, theme_token: String) -> Result<(), DslError> {
     let mut theme = theme_token;
@@ -1459,11 +1459,11 @@ fn add_theme(p: &mut Parser, theme_token: String) -> Result<(), DslError> {
         }
         return Ok(());
     }
-    // FILE_SYSTEM branch — `setDslPortable(false)` BEFORE the exists check.
+    // FILE_SYSTEM branch — portability off BEFORE the exists check.
     if let Some(frame) = p.frame_portable.last_mut() {
         *frame = false;
     }
-    // `dslFile.getParentFile()` — a fragment parse NPEs in the reference
+    // the file parent - a fragment parse crashes in the official parser
     // (resolve_icon precedent).
     let Some(dir) = p.current_dir() else {
         return Err(DslError::stmt("NullPointerException"));
@@ -1507,10 +1507,10 @@ fn themes(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
 }
 
 // ---------------------------------------------------------------------------
-// terminology (Java 1169–1196)
+// terminology
 // ---------------------------------------------------------------------------
 
-/// `TerminologyParser` term arms — Expected check, then set the field.
+/// the terminology parser term arms — Expected check, then set the field.
 fn term(
     p: &mut Parser,
     tokens: &Tokens,
@@ -1528,7 +1528,7 @@ fn term(
     Ok(())
 }
 
-/// `TerminologyParser.parseMetadataSymbols` — `LinkedHashMap` order in the
+/// the terminology parser's parse-metadata-symbols check — insertion order in the
 /// error grammar; the value is lowercased BEFORE the lookup.
 fn metadata_symbols(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     const MAP: [(&str, MetadataSymbols); 6] = [
@@ -1908,9 +1908,9 @@ fn view_arm(
     }
 }
 
-/// The `light`/`dark` arms: the reference mutates the SAME context object
+/// The `light`/`dark` arms: the official parser mutates the SAME context object
 /// and pushes it — mutate the top frame's scheme, then push a clone (a pop
-/// of the clone leaves the mutated scheme on the outer frame, as in Java).
+/// of the clone leaves the mutated scheme on the outer frame, as the official parser does).
 fn retheme(p: &mut Parser, view: ViewRef, scheme: Option<ColorScheme>) {
     if let Some(Ctx::ImageView { color_scheme, .. }) = p.stack.last_mut() {
         *color_scheme = scheme;
@@ -2370,10 +2370,10 @@ mod tests {
             model,
         );
         assert_clean(&r);
-        // `exclude s` removes only the instance — Java
-        // `DeploymentView.remove(SoftwareSystemInstance)` has no ancestor
+        // `exclude s` removes only the instance - the official
+        // instance-removal path has no ancestor
         // leg, so the parent node `include` added via the ancestor walk
-        // STAYS (oracle-witnessed 2026-11-17: ref view keeps the node id).
+        // STAYS (verified: the official view keeps the node id).
         let ids: Vec<&str> = r.workspace.views.deployment_views[0]
             .content
             .elements
@@ -2409,7 +2409,7 @@ mod tests {
         assert_eq!(rels[0].order.as_deref(), Some("5"));
         assert_eq!(rels[1].order.as_deref(), Some("2"));
 
-        // `{` is consumed as the description (reference quirk) — oracle:
+        // `{` is consumed as the description (official quirk) — verified:
         // description "{"
         let r = views(
             "    dynamic sys {\n        user -> web {\n            url \"https://x\"\n        }\n    }",
@@ -2465,7 +2465,7 @@ mod tests {
         );
         assert_clean(&r);
         let rels = &r.workspace.views.dynamic_views[0].content.relationships;
-        // Reference quirk: `endParallelSequence(!relationships)` DISCARDS
+        // Official quirk: ending the parallel sequence DISCARDS
         // the child counter when the block added steps, so the next
         // top-level step reuses the number after the pre-block counter.
         assert_eq!(
@@ -2545,7 +2545,7 @@ mod tests {
             "Too many tokens, expected: autoLayout [rankDirection] [rankSeparation] [nodeSeparation] [edgeSeparation] [vertices]"
         );
 
-        // filtered context → ModelViewDslContext cast failure
+        // filtered context → model-view context cast failure
         let r = views(
             "    systemLandscape base {\n    }\n    filtered base include t f {\n        autoLayout\n    }",
         );
@@ -2614,7 +2614,7 @@ mod tests {
 
     #[test]
     fn theme_installed_name_branch() {
-        // M1-d (P2-D3): with an injected registry, an installed name takes
+        // verified : with an injected registry, an installed name takes
         // the `InstalledThemes.isInstalled` branch — stored verbatim (trim,
         // NO dedup: `Configuration.addTheme`'s installed branch just adds),
         // never reaching the FILE branch.
@@ -2633,8 +2633,8 @@ mod tests {
             ["mine".to_string(), "mine".to_string()]
         );
 
-        // Not in the registry → FILE branch (fragment ⇒ reference NPE, the
-        // P1 `themes_arm_and_missing_file` path).
+        // Not in the registry → FILE branch (fragment ⇒ official crash, the
+        // `themes_arm_and_missing_file` test path).
         let opts = ParseOptions {
             installed_themes: Some(InstalledThemes::new(|_| false)),
             ..ParseOptions::fragment()
@@ -2795,7 +2795,7 @@ mod tests {
             "    image * x {\n        light {\n            image oxz-none.svg\n        }\n    }",
         );
         // the inner content fails (file missing relative to CWD-less
-        // fragment parse → NullPointerException per resolve_icon precedent)
+        // fragment parse → crash per resolve_icon precedent)
         assert_eq!(first_error(&r), "NullPointerException");
     }
 
@@ -2812,7 +2812,7 @@ mod tests {
         assert_eq!(t.component.as_deref(), Some("Module"));
         assert_eq!(t.deployment_node.as_deref(), Some("Server"));
         assert_eq!(t.infrastructure_node.as_deref(), Some("Service"));
-        // Java stores `tokens.get(1)` verbatim — no too-many check, so the
+        // the official parser stores token `1` verbatim — no too-many check, so the
         // unquoted second word is dropped (`Connects to` → `Connects`).
         assert_eq!(t.relationship.as_deref(), Some("Connects"));
         assert_eq!(

@@ -1,7 +1,7 @@
-//! `fmt` — the canonical formatter over the lossless CST (P1-D7).
+//! `fmt` — the canonical formatter over the lossless CST.
 //!
 //! Prints one formatted line per logical line of [`crate::cst::build`], so the
-//! token stream per logical line is preserved exactly and the reference parse
+//! token stream per logical line is preserved exactly and the official parser parse
 //! loop (which sees only logical lines) reproduces the same workspace:
 //! `parse(fmt(x)) == parse(x)`. Canonical style: [`INDENT`]-per-brace-depth,
 //! one statement per line, blank-line runs compacted to at most one, whole-line
@@ -12,13 +12,13 @@
 //! re-printed): `/* … */` block-comment regions after the opener line, `"""`
 //! text-block raw regions, and the dropped EOF tail.
 //!
-//! Two line-end guards mirror the reference `preProcessLines` (verified @
-//! `ad34036`): a rendered line whose content would END with `\` or `"""` gets
+//! Two line-end guards mirror the official preprocessing:
+//! a rendered line whose content would END with `\` or `"""` gets
 //! one protective space (printed bare, the re-parse would see a continuation /
 //! text-block opener the original did not, swallowing following lines); and a
 //! content-final `\r` (only reachable inside a quoted value at EOF) is doubled,
 //! so it cannot fuse with the emitted LF into a `\r\n` terminator. Trailing
-//! whitespace is otherwise dropped — the reference splits on `\r?\n`, so a CR
+//! whitespace is otherwise dropped — the official parser splits on `\r?\n`, so a CR
 //! before `\n` is a delimiter, never content, and terminators print as LF.
 //!
 //! The formatter never validates: the lexer is infallible, so any source
@@ -30,11 +30,11 @@ use oxidizr_ast::{Cst, Node, NodeKind};
 use crate::compat;
 use crate::preprocess::{self, Logical};
 
-/// Canonical indentation unit — 4 spaces, matching the reference docs' examples
-/// (single source of truth for `fmt`; P1-D7).
+/// Canonical indentation unit — 4 spaces, matching the official parser docs' examples
+/// (single source of truth for `fmt`).
 pub const INDENT: &str = "    ";
 
-/// Reformat DSL source to the canonical style. Invariants (P1-D7, tested in
+/// Reformat DSL source to the canonical style. Invariants (tested in
 /// `tests/m6_fmt.rs`): `parse(fmt(x))` builds the identical workspace to
 /// `parse(x)`; `fmt(fmt(x)) == fmt(x)`.
 #[must_use]
@@ -48,7 +48,7 @@ pub fn format(source: &str) -> String {
     // The CST line nodes correspond 1:1 (in order) to the logical lines the
     // CST was built from; the cursor pairs each code line with its `Logical`
     // so the printer can tell in-segment whitespace (real gaps) from
-    // between-segment gap whitespace (indent the reference `stripLeading`
+    // between-segment gap whitespace (indent the official parser `stripLeading`
     // dropped at continuation joins).
     let logicals = preprocess::preprocess(source);
     let mut cursor = 0_usize;
@@ -92,10 +92,10 @@ pub fn format(source: &str) -> String {
                     if shown == 0 && code.body.starts_with('\u{FEFF}') {
                         // Line-START guard (mirrors the line-end guards): a
                         // BOM-led token re-indented to column 0 would sit at
-                        // byte 0 of the rendered line, where the reference
+                        // byte 0 of the rendered line, where the official parser
                         // parse loop strips it (and re-print drops it) —
                         // `fmt` would not be idempotent. A protective space
-                        // keeps byte 0 a space; the reference `trim` never
+                        // keeps byte 0 a space; the official parser `trim` never
                         // reaches the BOM, so the token survives re-parses.
                         out.push(' ');
                     }
@@ -103,7 +103,7 @@ pub fn format(source: &str) -> String {
                     out.push_str(&code.tail_ws);
                     if code.needs_nl {
                         // A content-final `\r` must not fuse with the emitted LF
-                        // into a `\r\n` terminator (the reference `split("\\r?\\n")`
+                        // into a `\r\n` terminator (the official parser `split("\\r?\\n")`
                         // would drop it from the line) — double it: `X\r` + `\r\n`
                         // re-splits to content `X\r`.
                         if code.body.ends_with('\r') && code.tail_ws.is_empty() {
@@ -115,7 +115,7 @@ pub fn format(source: &str) -> String {
                 depth = depth.saturating_add(code.opens).saturating_sub(code.closes);
                 wrote_any = true;
             }
-            // The dropped EOF tail: verbatim (the reference never parses it).
+            // The dropped EOF tail: verbatim (the official parser never parses it).
             NodeKind::DroppedTail => {
                 flush_blank(&mut out, &mut blank_pending);
                 out.push_str(cst.text(line));
@@ -145,13 +145,13 @@ fn flush_blank(out: &mut String, pending: &mut bool) {
     }
 }
 
-/// Java `trim` semantics for the trailing end: strip chars `≤ ' '`.
+/// Trailing-end trim semantics: strip chars `≤ ' '`.
 fn trim_java_end(s: &str) -> &str {
     s.trim_end_matches(|c: char| c <= ' ')
 }
 
-/// Would re-printing `s` without its trailing whitespace open a reference
-/// line-join (`endsWith("\\")`) or text-block (`endsWith("\"\"\"")`) that the
+/// Would re-printing `s` without its trailing whitespace open a line-join
+/// (`"\\\\"` suffix) or text-block (`\"\"\"\"\` suffix) that the
 /// original did not have? Then the trailing whitespace must be kept verbatim.
 fn ends_in_magic(s: &str) -> bool {
     s.ends_with('\\') || s.ends_with("\"\"\"")
@@ -189,7 +189,7 @@ fn code_line<'a>(cst: &'a Cst, line: &Node, logical: &Logical) -> CodeLine<'a> {
                 // Whitespace inside a segment is real gap whitespace (it joins
                 // into the logical line, mid-chain indents included). Only
                 // between-segment gap whitespace after a terminator is the
-                // joiner line's indent the reference `stripLeading`s away — no
+                // joiner line's indent the official parser `stripLeading`s away — no
                 // gap may be printed there, or a fused token would split.
                 let start = leaf.range.start as usize;
                 let end = leaf.range.end as usize;
@@ -211,7 +211,7 @@ fn code_line<'a>(cst: &'a Cst, line: &Node, logical: &Logical) -> CodeLine<'a> {
                     trailing_ws.push_str(cst.text(leaf));
                 }
             }
-            // BOM vanishes (the reference strips it); continuation and newline
+            // BOM vanishes (the official parser strips it); continuation and newline
             // trivia join — no space is inserted across them, so a token split
             // by a `\`-continuation stays one token.
             NodeKind::TokenBare | NodeKind::TokenQuoted | NodeKind::Comment => {
@@ -226,7 +226,7 @@ fn code_line<'a>(cst: &'a Cst, line: &Node, logical: &Logical) -> CodeLine<'a> {
                 trailing_ws.clear();
             }
             NodeKind::TextBlockRaw => raw = Some(cst.text(leaf)),
-            // Every other leaf is trivia: BOM (the reference strips it),
+            // Every other leaf is trivia: BOM (the official parser strips it),
             // continuation and newline (the join leaves no trace), terminators.
             _ => {}
         }
@@ -271,7 +271,7 @@ fn code_line<'a>(cst: &'a Cst, line: &Node, logical: &Logical) -> CodeLine<'a> {
         None => {
             if body.ends_with('\\') {
                 // The value cannot be re-parsed from one physical line — the
-                // reference would always re-join the trailing `\` (it only
+                // the official parser would always re-join the trailing `\` (it only
                 // survived in x because a comment-guarded joiner stopped the
                 // chain). Print the logical line's ORIGINAL bytes verbatim:
                 // the same join replays, reproducing x exactly.
@@ -309,7 +309,7 @@ fn code_line<'a>(cst: &'a Cst, line: &Node, logical: &Logical) -> CodeLine<'a> {
 }
 
 /// Render one token chunk: the text to print, plus `Some(true)`/`Some(false)`
-/// when the token VALUE is `{`/`}` (the reference tokenizer strips quotes
+/// when the token VALUE is `{`/`}` (the official tokenizer strips quotes
 /// before its scope checks, so `"{"` opens a context too).
 fn render_chunk(chunk: &str) -> (&str, Option<bool>) {
     let text = unquote_value(chunk).unwrap_or(chunk);
@@ -325,7 +325,7 @@ fn render_chunk(chunk: &str) -> (&str, Option<bool>) {
 /// terminated by a real closing quote, non-empty, whitespace-free, no `"`
 /// inside (the value keeps its escape backslashes verbatim, so a bare `"`
 /// could not be re-escaped byte-exactly), not ending in `\` (it would eat the
-/// closing quote on re-read), and not touching the reference's line-level
+/// closing quote on re-read), and not touching the official parser's line-level
 /// patterns (`#`/`//` comment, `/* … */` region) from any position.
 /// `${VAR}` is deliberately fine bare — substitution ignores quoting.
 fn unquote_value(chunk: &str) -> Option<&str> {
@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn bom_led_token_gets_a_protective_space() {
-        // §P4T T-5 fuzz find (dsl_fmt crash): a BOM AFTER the indent survives
+        // fuzz find (dsl_fmt crash): a BOM AFTER the indent survives
         // `strip_bom` (which fires at the physical line's byte 0) and re-prints
         // as a token at column 0 — where the NEXT pass's strip eats it, so
         // `fmt` was not idempotent. The guard: one protective space, the
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn continuations_join_without_traces() {
-        // The reference join strips the continuation line's indent, so both
+        // The official join strips the continuation line's indent, so both
         // tokens fuse — and the fused values are safe bare.
         let src = "name foo\\\nbar\ndesc \"a\\\n  b\"\n";
         let once = format(src);
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn magic_ending_lines_guarded() {
-        // `a"""  ` must NOT become a text-block opener → protective space.
+        // `a""" ` must NOT become a text-block opener → protective space.
         let src = "desc a\"\"\"  \n";
         let once = format(src);
         assert_eq!(once, "desc a\"\"\" \n");
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn backslash_ending_body_prints_verbatim() {
-        // `b\  ` survived x only because trailing spaces hid the endsWith;
+        // `b\ ` survived x only because trailing spaces hid the endsWith;
         // re-printing `b\` bare would join. Verbatim bytes replay exactly.
         let src = "next b\\  \nlast\n";
         assert_eq!(format(src), src);
@@ -537,8 +537,8 @@ mod tests {
 
     #[test]
     fn backslash_joined_comment_line() {
-        // `\` + `# c`: the reference joins to a comment line (the `\`-line's
-        // segment is empty) — a lex_comment tiling regression (M6-b proptest).
+        // `\` + `# c`: the official parser joins to a comment line (the `\`-line's
+        // segment is empty) — a lex_comment tiling regression (caught by proptest).
         assert_eq!(format("\\\n# c"), "# c\n");
         assert_eq!(format("   \\\n\t# c\n"), "# c\n");
     }
@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     fn quoted_braces_count_depth_and_unquote() {
-        // The reference strips quotes before its scope checks — `"{"` opens a
+        // The official parser strips quotes before its scope checks — `"{"` opens a
         // context there too, so the formatter indents after it likewise.
         let src = "a \"{\" \nb\n\"}\"\n";
         assert_eq!(format(src), "a {\n    b\n}\n");

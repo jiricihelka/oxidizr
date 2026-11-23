@@ -1,22 +1,19 @@
-//! Validation catalog — a transcription of the reference load-time checks
-//! `Workspace.hydrate()` = `Model.hydrate()` then `ViewSet.hydrate(model)`
-//! (verified @ `ad34036`; fixture expectations:
-//! `structurizr-client` `WorkspaceRulesValidationTests`, workspaces in
+//! Validation catalog — the load-time checks the official tooling runs:
+//! model rules first, then view rules (fixture expectations: workspaces in
 //! `testdata/validation/`).
 //!
-//! Deviations (D1): the reference throws `WorkspaceValidationException` on the
-//! FIRST violation; we collect ALL of them but keep the rule ORDER identical,
-//! so the first diagnostic always matches the reference message. Two reference
-//! NPE paths (null relationship description / missing relationship endpoints)
+//! Deviation: the official tooling rejects the workspace on
+//! the FIRST violation; we collect ALL of them but keep the rule ORDER identical,
+//! so the first diagnostic always matches the official message. Two official
+//! crash paths (null relationship description / missing relationship endpoints)
 //! are reported as diagnostics instead of crashing.
 //!
-//! When MULTIPLE violations exist the reference's exact winner depends on
-//! Java `TreeSet` iteration order; with a single violation (all fixtures) our
-//! first message is byte-identical to the reference exception.
+//! When MULTIPLE violations exist the official exact winner depends on
+//! sorted-set iteration order; with a single violation (all fixtures) our
+//! first message is byte-identical to the official exception.
 
-// The catalog is a line-by-line transcription of `Model.hydrate` +
-// `ViewSet.hydrate`; splitting the two rule walkers across functions would
-// scatter the reference's check ORDER, which is the load-bearing property.
+// The catalog keeps model rules then view rules; splitting the two rule
+// walkers across functions would scatter the check ORDER — the load-bearing
 #![allow(clippy::too_many_lines)]
 
 use std::collections::{HashMap, HashSet};
@@ -25,15 +22,15 @@ use crate::ids::Id;
 use crate::model::{DeploymentNode, Model};
 use crate::views::{View, ViewSet};
 
-/// One catalog violation. `message` matches the reference exception text.
+/// One catalog violation. `message` matches the official exception text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationError {
-    /// Reference-shaped message (first one matches the thrown exception).
+    /// Official-style message (the first matches the thrown text).
     pub message: String,
 }
 
-/// Validate a whole workspace, reference hydrate order (model first, views
-/// second). Collects all violations (D1).
+/// Validate a whole workspace, official order (model first, views
+/// second). Collects all violations.
 #[must_use]
 pub fn validate(workspace_model: &Model, views: &ViewSet) -> Vec<ValidationError> {
     let mut out = Vec::new();
@@ -46,7 +43,7 @@ fn err(out: &mut Vec<ValidationError>, message: String) {
     out.push(ValidationError { message });
 }
 
-/// All elements, flattened, in hydrate walk order: custom elements, people,
+/// All elements, flattened, in validation walk order: custom elements, people,
 /// systems (+containers+components), deployment tree (node, its instances and
 /// infrastructure nodes, then children), returned with kind labels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,7 +59,7 @@ pub enum ElementKind {
     ContainerInstance,
 }
 
-/// Flatten the model into `(id, kind, name)` triples in hydrate order.
+/// Flatten the model into `(id, kind, name)` triples in validation order.
 #[must_use]
 pub fn flattened(model: &Model) -> Vec<(Id, ElementKind, String)> {
     let mut out = Vec::new();
@@ -135,7 +132,7 @@ fn flatten_node(node: &DeploymentNode, out: &mut Vec<(Id, ElementKind, String)>)
     }
 }
 
-/// Model-level checks (`Model.hydrate`): id uniqueness, instance links,
+/// Model-level checks: id uniqueness, instance links,
 /// name uniqueness, relationship description uniqueness, linked ids.
 pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
     // 1. Unique ids across BOTH element and relationship spaces
@@ -165,8 +162,8 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
     }
     for r in &model.relationships {
         if ids.insert(&r.id, "relationship").is_some() {
-            // Reference: "The relationship <toString> has a non-unique ID of N."
-            // (`toString` is source ---[desc]---> destination; D1 form).
+            // Official text: "The relationship <item> has a non-unique ID of N."
+            // (`source ---[desc]---> destination` rendering).
             err(
                 out,
                 format!(
@@ -180,7 +177,7 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
         }
     }
 
-    // 2. Instance static links (`hydrateDeploymentNode`).
+    // 2. Instance static links.
     let element_kinds: HashMap<&Id, ElementKind> = flattened_ids(model)
         .into_iter()
         .map(|(id, k, _)| (id, k))
@@ -273,7 +270,7 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
     }
 
     // 4. Relationship description uniqueness per source element: pairs
-    // (destination, description) — reference `checkDescriptionIsUnique`.
+    // (destination, description) — the official uniqueness rule.
     let names: HashMap<&Id, String> = flattened_ids(model)
         .into_iter()
         .map(|(id, _, name)| (id, name.to_string()))
@@ -291,7 +288,7 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
             .count();
         if same != 1 {
             let description = r.description.as_deref().unwrap_or("");
-            // Reference NPEs on a null description here; D1 reports the
+            // The official tool crashes on a null description here; we report the
             // violation with the empty description instead.
             if let (Some(source_name), Some(destination_name)) =
                 (names.get(&r.source), names.get(&r.destination))
@@ -324,9 +321,9 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
     }
 }
 
-/// Flatten the model into borrowed `(id, kind, name)` triples in hydrate
+/// Flatten the model into borrowed `(id, kind, name)` triples in validation
 /// order — same walk as [`flattened`] without cloning any Id/name (the
-/// gate-path fast twin; 2R R-core-03).
+/// gate-path fast twin).
 #[must_use]
 pub(crate) fn flattened_ids(model: &Model) -> Vec<(&Id, ElementKind, &str)> {
     fn walk<'m>(n: &'m DeploymentNode, out: &mut Vec<(&'m Id, ElementKind, &'m str)>) {
@@ -370,9 +367,9 @@ pub(crate) fn flattened_ids(model: &Model) -> Vec<(&Id, ElementKind, &str)> {
     out
 }
 
-/// Best-effort item name for the non-unique-id message (the reference prints
+/// Best-effort item name for the non-unique-id message (the official tooling prints
 /// the canonical name; a collision makes that ambiguous, so the bare name of
-/// the offending (first-seen) element is close enough — D1 diagnostics).
+/// the offending (first-seen) element is close enough).
 fn non_unique_name(id: &Id, model: &Model) -> String {
     flattened_ids(model)
         .into_iter()
@@ -443,7 +440,7 @@ fn check_child_node_names(node: &DeploymentNode, out: &mut Vec<ValidationError>)
     }
 }
 
-/// View-level checks (`ViewSet.hydrate`), reference order.
+/// View-level checks, official order.
 pub fn validate_views(model: &Model, views: &ViewSet, out: &mut Vec<ValidationError>) {
     let element_kinds: HashMap<&Id, ElementKind> = flattened_ids(model)
         .into_iter()
@@ -451,7 +448,7 @@ pub fn validate_views(model: &Model, views: &ViewSet, out: &mut Vec<ValidationEr
         .collect();
     let rel_ids: HashSet<&Id> = model.relationships.iter().map(|r| &r.id).collect();
 
-    // 1. View-key uniqueness, walked in the reference TreeSet order:
+    // 1. View-key uniqueness, walked in the official order:
     // (order asc, key case-insensitive).
     let mut ordered: Vec<View<'_>> = views.all_views();
     ordered.sort_by(|a, b| {
@@ -471,8 +468,8 @@ pub fn validate_views(model: &Model, views: &ViewSet, out: &mut Vec<ValidationEr
 
     // (per-view-type link checks use `missing_element` below)
 
-    // 2..8 per view type, reference order, checking links then entry arrays
-    // (`hydrateView`).
+    // 2..8 per view type, official order, checking links then entry arrays
+    // per type.
     for v in views.all_views() {
         let key = v.key();
         match v {
@@ -582,8 +579,8 @@ pub fn validate_views(model: &Model, views: &ViewSet, out: &mut Vec<ValidationEr
     }
 }
 
-/// `ViewSet.hydrate` per-view link error: the associated element id is absent
-/// (or of the wrong kind — the reference reports the same message).
+/// Per-view link error: the associated element id is absent
+/// (or of the wrong kind — the official tool reports the same message).
 fn missing_element(
     out: &mut Vec<ValidationError>,
     kind_label: &str,

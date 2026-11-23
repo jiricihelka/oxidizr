@@ -1,14 +1,14 @@
-//! Chain section: reference `StructurizrDslParser.java` arms at Java lines
+//! Chain section: the official parser arms at official lines
 //! 350–611 — `-/>` removal, the four relationship-statement arms, the
 //! `!element(s)`/`!relationship(s)` finders, the element-definition arms
 //! (`element`/`person`/`softwareSystem`/`container`/`component`), the
 //! `!components` reject, the `enterprise` removal throw and the five
 //! `group` arms. The `tags`/`tag` arms (612+) live in [`super::stmt_props`].
 //!
-//! Every arm annotation is the Java line number; the arm ORDER here is the
-//! compatibility contract (mirrors the reference `else if` chain exactly).
+//! Every arm annotation is the official parser line number; the arm ORDER here is the
+//! compatibility contract (mirrors the official parser `else if` chain exactly).
 //! Chain guards read the RAW tokens (including a trailing `{`); the parser
-//! ports receive `withoutContextStartToken()`.
+//! ports receive `withoutContextStartToken`.
 
 use oxidizr_core::Id;
 use oxidizr_core::validate::ElementKind;
@@ -42,12 +42,12 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     if raw.size() >= 4 && raw.raw_token(1) == tok::NO_RELATIONSHIP && open && is_env {
         return (|| {
             let (_removed, first_linked) = p.no_relationship(&t)?;
-            // HashSet order is not portable; first-removal order stands in
-            // (agents/plan/PROGRESS.md). The reference reads the linked
+            // Hash-set order is not portable; first-removal order stands in
+            // (a documented deviation). The official parser reads the linked
             // (static) relationship off the removed object — which still
             // answers after `Model.remove` — so `no_relationship` captures
             // its id mid-loop; a post-removal model lookup would be blind
-            // (M2-d A/B: no-relationship lost the inherited description and
+            // (cross-checked: no-relationship lost the inherited description and
             // technology).
             let Some(linked) = first_linked else {
                 return Err(DslError::stmt(
@@ -109,9 +109,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 409: implicit relationship inside an `!elements` fan-out. Reference
-    // quirk: the archetype is read from `tokens.get(1)` (the destination),
-    // NOT `tokens.get(0)` — replicated.
+    // Implicit relationship inside an `!elements` fan-out. Official
+    // quirk: the archetype is read from token `1` (the destination),
+    // NOT token `0` — replicated.
     if raw.size() >= 2 && p.is_relationship_keyword_or_archetype(&raw.get(0)) && is_elements {
         return (|| {
             let arch = p.get_archetype(tok::RELATIONSHIP, &raw.get(1));
@@ -154,11 +154,11 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 (RegItem::Relationship(rid), canonical)
             };
 
-            // Context ladder (`modelItem instanceof …`); ElementGroup and
-            // CustomElement contexts are NOT pushed. The DSL-package
-            // `DeploymentEnvironment extends Element` shim is reachable
-            // through a finder (`de = deploymentEnvironment "X"` registers
-            // it) and opens a FRESH `DeploymentEnvironmentDslContext(name)`.
+ // Context ladder (`modelItem is-a …`); ElementGroup and
+ // CustomElement contexts are NOT pushed. The DSL-package
+ // `DeploymentEnvironment extends Element` shim is reachable
+ // through a finder (`de = deploymentEnvironment "X"` registers
+ // it) and opens a FRESH `deployment-environment context(name)`.
             let push = match &item {
                 RegItem::Element(eid) => match p.builder.element_kind(eid) {
                     Some(ElementKind::Person) => Some(Ctx::Person { id: eid.clone() }),
@@ -202,9 +202,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             {
                 p.start_context(ctx);
             }
-            // The finder registers ONLY when an identifier was given
-            // (`!StringUtils.isNullOrEmpty(identifier)` — chain line 457,
-            // unlike the element-definition arms which register always).
+ // The finder registers ONLY when an identifier was given
+ // (a blank-check gate on the identifier — the register arm,
+ // unlike the element-definition arms which register always).
             if idr.is_some_and(|i| !i.is_empty()) {
                 match &item {
                     RegItem::Element(_) | RegItem::Pseudo { .. } => {
@@ -329,7 +329,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 534: !components (JVM component finder) — rejected. The strategy
+    // 534: !components (the official tooling component finder) — rejected. The strategy
     // arms (540+) are unreachable because the context is never pushed.
     if eqi(&first, tok::COMPONENT_FINDER) && is_container {
         return Sec::Err(DslError::coded(
@@ -348,10 +348,10 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     }
 
     // 581/587/594/601/607: the five `group "Name" {` arms — model, system,
-    // container, environment and deployment-node scopes. `GroupParser`
-    // ignores the archetype, so no archetype lookup happens (`getArchetype`
-    // in the other arms only feeds parsing; a group's would be a Java
-    // throwaway). The arms match on the CONTEXT CLASS alone — no `hasGroup`
+    // container, environment and deployment-node scopes. the group parser
+    // ignores the archetype, so no archetype lookup happens (the lookup
+    // in the other arms only feeds parsing; a group's would be an unused
+    // lookup). The arms match on the CONTEXT KIND alone - no `hasGroup`
     // requirement; an existing group only changes how the NAME is built.
     if p.is_element_keyword_or_archetype(&first, tok::GROUP)
         && (is_model || is_system || is_container || is_env || is_node)
@@ -367,9 +367,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 uid,
                 name: name.clone(),
             };
-            // startContext BEFORE registerIdentifier (reference order).
+            // context-open BEFORE identifier registration (official order).
             p.start_group_context(&top, group);
-            // `group.setParent(softwareSystem/container)` — only the system
+            // The group's parent link (system/container) - only the system
             // and container arms set a parent (hierarchical-identifier
             // prefix source).
             let parent_id = match &top {
@@ -385,8 +385,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     Sec::No
 }
 
-/// `GroupParser.parseContext`. With a parent group the name is joined as
-/// `parent.getName() + separator + name` — the separator comes from the
+/// the group parser's parse-context check. With a parent group the name is joined as
+/// `parent.getName + separator + name` — the separator comes from the
 /// `structurizr.groupSeparator` model property, whose absence is the
 /// nested-group error.
 fn parse_group(
@@ -427,9 +427,9 @@ fn parse_group(
     }
 }
 
-/// The name token of the four element parsers, in the reference's order:
+/// The name token of the four element parsers, in the official parser's order:
 /// `hasMoreThan` first, then `includes(NAME_INDEX)`, then the blank-name
-/// guard — the reference reaches the name through `getXxxWithName`, which
+/// guard — the official parser reaches the name through `getXxxWithName`, which
 /// throws for null/whitespace names (before the duplicate guard).
 fn name_token(
     tokens: &Tokens,
@@ -452,8 +452,8 @@ fn name_token(
     Ok(name.into_owned())
 }
 
-/// The parser tag list: `new ArrayList<>(archetype.getTags())` plus
-/// `addAll(token.split(","))` when the tags token is present — the
+/// The parser tag list: `new ArrayList<>(archetype.getTags)` plus
+/// The comma-split token is added when the tags token is present - the
 /// archetype tags apply UNCONDITIONALLY (the Elements-variant
 /// REPLACEMENT lives in `rel.rs`).
 fn tags_from(arch: &RelArch, token: Option<String>) -> Vec<String> {
@@ -464,7 +464,7 @@ fn tags_from(arch: &RelArch, token: Option<String>) -> Vec<String> {
     tags
 }
 
-/// `PersonParser`/`SoftwareSystemParser.parse` + the shared post-creation
+/// the person parser/the software-system parser's parse check + the shared post-creation
 /// sequence (description, tags, properties, perspectives, group).
 fn def_person_system(p: &mut Parser<'_>, tokens: &Tokens, system: bool) -> Result<Id, DslError> {
     let (kind, grammar, blank) = if system {
@@ -489,7 +489,7 @@ fn def_person_system(p: &mut Parser<'_>, tokens: &Tokens, system: bool) -> Resul
         a.description.clone()
     };
     let tags = tags_from(&a, tokens.includes(3).then(|| tokens.get(3).into_owned()));
-    // `isExtendingWorkspace()` — on a base workspace, reuse the element with
+    // `isExtendingWorkspace` — on a base workspace, reuse the element with
     // this EXACT name instead of adding (the add would hit the
     // duplicate-name error); description/tags below then layer onto it.
     let existing = if p.extending_workspace {
@@ -523,7 +523,7 @@ fn def_person_system(p: &mut Parser<'_>, tokens: &Tokens, system: bool) -> Resul
     Ok(eid)
 }
 
-/// `ContainerParser.parse`.
+/// the container parser's parse check.
 fn def_container(p: &mut Parser<'_>, system: &Id, tokens: &Tokens) -> Result<Id, DslError> {
     const GRAMMAR: &str = "container <name> [description] [technology] [tags]";
     let name = name_token(tokens, GRAMMAR, 4, "A container name must be provided.")?;
@@ -540,7 +540,7 @@ fn def_container(p: &mut Parser<'_>, system: &Id, tokens: &Tokens) -> Result<Id,
         a.technology.clone()
     };
     let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
-    // ContainerParser reuse on extends (`getContainerWithName`).
+    // Container reuse on extends (official get-or-create-by-name).
     let existing = p
         .extending_workspace
         .then(|| {
@@ -568,7 +568,7 @@ fn def_container(p: &mut Parser<'_>, system: &Id, tokens: &Tokens) -> Result<Id,
     Ok(eid)
 }
 
-/// `ComponentParser.parse`.
+/// the component parser's parse check.
 fn def_component(p: &mut Parser<'_>, container: &Id, tokens: &Tokens) -> Result<Id, DslError> {
     const GRAMMAR: &str = "component <name> [description] [technology] [tags]";
     let name = name_token(tokens, GRAMMAR, 4, "A component name must be provided.")?;
@@ -585,7 +585,7 @@ fn def_component(p: &mut Parser<'_>, container: &Id, tokens: &Tokens) -> Result<
         a.technology.clone()
     };
     let tags = tags_from(&a, tokens.includes(4).then(|| tokens.get(4).into_owned()));
-    // ComponentParser reuse on extends (`getComponentWithName`).
+    // Component reuse on extends (official get-or-create-by-name).
     let existing = p
         .extending_workspace
         .then(|| {
@@ -614,7 +614,7 @@ fn def_component(p: &mut Parser<'_>, container: &Id, tokens: &Tokens) -> Result<
     Ok(eid)
 }
 
-/// `CustomElementParser.parse` — metadata slot, no technology, NO
+/// the custom-element parser's parse check — metadata slot, no technology, NO
 /// properties/perspectives, `setGroup` WITHOUT `group.addElement`.
 fn def_custom_element(p: &mut Parser<'_>, tokens: &Tokens) -> Result<Id, DslError> {
     const GRAMMAR: &str = "element <name> [metadata] [description] [tags]";
@@ -662,7 +662,7 @@ mod tests {
     use crate::engine::parse_dsl;
 
     /// Parse `dsl` as a complete `model { … }` scope. The scope arms are a
-    /// later section, so the harness seeds a `ModelDslContext` on the stack
+    /// later section, so the harness seeds a `model context` on the stack
     /// and feeds the body as raw lines through the chain.
     fn in_model(dsl: &str) -> super::super::ParseResult {
         let mut p = Parser::new(ParseOptions::fragment());
@@ -755,7 +755,7 @@ enterprise "E"
                 "Expected: softwareSystem <name> [description] [tags]",
                 // `container` outside a system context falls through to the
                 // catch-all, which lists the TOP context's (Model) permitted
-                // tokens — reference `getPermittedTokens()` order.
+                // tokens - official permitted-token order.
                 "Unexpected tokens (expected: archetypes, !identifiers, group, person, softwareSystem, deploymentEnvironment, element, ->)",
                 "The enterprise keyword was previously deprecated, and has now been removed - please use group instead (https://docs.structurizr.com/dsl/language#group)",
                 "!ref was previously deprecated, and has now been removed - please use !element or !relationship instead",
@@ -809,7 +809,7 @@ out = person "Out"
     fn nested_group_requires_the_separator_property() {
         // A group inside a group is a NESTED group: the top context already
         // carries a group, so `structurizr.groupSeparator` is required.
-        // The failing `group "Inner" {` records a diagnostic and (D1)
+        // The failing `group "Inner" {` records a diagnostic and
         // truncates to its entry height; the lone `}` closes the outer group.
         let r = in_model(
             r#"
@@ -891,7 +891,7 @@ rel = a -> b "X" {
 this -> b "Nope"
 "#,
         );
-        // `rel {` opens a RelationshipDslContext (closed by `}`); `this` at
+        // `rel {` opens a relationship context (closed by `}`); `this` at
         // model scope has no element context ⇒ the endpoint lookup fails.
         assert_eq!(
             errors(&r),
@@ -976,11 +976,11 @@ s = softwareSystem "S" {
 
     #[test]
     fn find_element_opens_deployment_environment_context() {
-        // Reference `deployment-environment-empty.dsl`
-        // (`test_EmptyDeploymentEnvironment`): the DSL-package
-        // `DeploymentEnvironment extends Element` shim registers under the
+        // The `deployment-environment-empty.dsl` corpus sample:
+        // the DSL-package
+        // deployment-environment pseudo-element registers under the
         // `de =` identifier, and `!element de {` opens a FRESH
-        // `DeploymentEnvironmentDslContext(name)` — so `deploymentNode`
+        // `deployment-environment context(name)` — so `deploymentNode`
         // statements are legal inside the block.
         let r = in_model(
             "    de = deploymentEnvironment \"DeploymentEnvironment\"\n    !element de {\n        dn = deploymentNode \"DeploymentNode\"\n    }\n",

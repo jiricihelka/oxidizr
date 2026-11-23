@@ -1,11 +1,10 @@
-//! Literal values of `StructurizrDslTokens` (and the `DslContext` brace
-//! tokens). String constants, compared `equalsIgnoreCase` unless the caller
-//! says otherwise — keep the call sites honest about which comparison Java
-//! used (`equals` vs `equalsIgnoreCase`).
+//! Literal values of the DSL token table (including the context brace
+//! tokens). String constants, compared case-insensitively unless the caller
+//! says otherwise — each call site must use the comparison the official
+//! grammar uses there (exact string equality vs case-insensitive equality).
 //!
-//! The table is complete: constants the M4 chain sections don't read yet
-//! are consumed by the M5 directive/M6 style arms, so dead code here is
-//! expected.
+//! The table is complete: tokens no parser section reads yet (directive and
+//! style arms do) are kept here, so dead code is expected.
 #![allow(dead_code)]
 
 pub const CONTEXT_START: &str = "{";

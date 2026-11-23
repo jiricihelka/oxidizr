@@ -1,14 +1,13 @@
-//! View content operations — the `com.structurizr.view` add/remove port that
-//! backs the DSL `include`/`exclude`/`animation`/dynamic-step statements.
+//! View content operations — the add/remove behaviour that backs the DSL
+//! `include`/`exclude`/`animation`/dynamic-step statements.
 //!
-//! Every rule here mirrors the pinned reference (`ad34036`):
-//! `ModelView.addElement/addRelationships/removeElement`, the per-subclass
-//! `checkElementCanBeAdded` gates and their `ElementNotPermittedInViewException`
-//! texts, `DeploymentView`'s instance-cascading add, `StaticView.addAnimation`,
-//! and `DynamicView.addRelationshipViaElements` (including the reverse lookup
-//! that produces `response: true`). The DSL content parsers CATCH the
-//! [`CoreError::ElementNotPermittedInView`] variant, exactly like the Java
-//! `catch (ElementNotPermittedInViewException e)` blocks do.
+//! Every rule here mirrors the official tooling: the container-view element
+//! and relationship gates and their "is not permitted in this view" texts,
+//! the deployment view's instance-cascading add, the static view's animation
+//! append, and the dynamic view's relationship step (including the reverse
+//! lookup that produces `response: true`). The DSL content parsers CATCH the
+//! [`CoreError::ElementNotPermittedInView`] variant, exactly like the
+//! official tooling's matching catch blocks do.
 
 // Same convention as `builder.rs`: failure modes are enumerated by the shared
 // [`CoreError`] enum rather than repeated per method.
@@ -48,7 +47,7 @@ pub enum ViewRef {
     Custom(usize),
 }
 
-/// Kind-set filters used by `addNearestNeighbours(element, Class)`.
+/// Kind-set filters for nearest-neighbour adds.
 #[derive(Clone, Copy)]
 enum KindFilter {
     Custom,
@@ -62,7 +61,7 @@ impl WorkspaceBuilder {
     // ------------------------------------------------------------------
 
     /// The content of any model-view kind (`Filtered`/`Image` have none —
-    /// the reference has no `ModelView` object for them).
+    /// they hold no view content).
     #[must_use]
     pub fn content_ref(&self, view: ViewRef) -> Option<&crate::views::ViewContent> {
         let views = &self.workspace().views;
@@ -103,8 +102,8 @@ impl WorkspaceBuilder {
 
     /// Mutable model-view content as an error value: [`CoreError::NoViewContent`]
     /// when the slot carries none (image/filtered view, or — theoretically —
-    /// a stale slot), replacing the 2R-era `expect_content` panic helper
-    /// (R-core-07, charter: no panics in library code).
+    /// a stale slot), replacing the old `expect_content` panic helper
+    /// (charter: no panics in library code).
     fn model_content_mut(
         &mut self,
         view: ViewRef,
@@ -137,7 +136,7 @@ impl WorkspaceBuilder {
     }
 
     /// The software-system scope of a model view, when it has one
-    /// (`ModelView.getSoftwareSystem` / `CustomView`'s optional scope).
+    /// (a scoped system on the model-view kinds, plus `CustomView`'s optional scope).
     fn view_scope_system(&self, view: ViewRef) -> Option<Id> {
         let views = &self.workspace().views;
         match view {
@@ -191,8 +190,8 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// Whether a dynamic view is deployment-scoped (`deploymentEnvironment !=
-    /// null` ⇒ `checkElementCanBeAdded` is a no-op in the reference).
+    /// Whether a dynamic view is deployment-scoped (it has an environment
+    /// ⇒ its element gate is a no-op, so anything can be added).
     fn dynamic_is_deployment(&self, view: ViewRef) -> bool {
         matches!(view, ViewRef::Dynamic(i) if self
             .workspace()
@@ -215,14 +214,14 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `ModelView.isElementInView`.
+    /// Whether the view already includes this element.
     #[must_use]
     pub(crate) fn view_contains_element(&self, view: ViewRef, element: &Id) -> bool {
         self.content_ref(view)
             .is_some_and(|c| c.elements.iter().any(|e| &e.id == element))
     }
 
-    /// `ModelView.isRelationshipInView`.
+    /// Whether the view already includes this relationship.
     #[must_use]
     pub fn view_contains_relationship(&self, view: ViewRef, relationship: &Id) -> bool {
         self.content_ref(view)
@@ -238,14 +237,16 @@ impl WorkspaceBuilder {
     }
 
     // ------------------------------------------------------------------
-    // gates (per-subclass `checkElementCanBeAdded`)
+    // gates (per-view-kind element checks)
     // ------------------------------------------------------------------
 
-    /// `ModelView.checkElementCanBeAdded` plus every per-subclass override
-    /// (`SystemLandscapeView`/`SystemContextView`/`ContainerView`/
-    /// `ComponentView`/`DeploymentView`), dispatched on the view kind. One
-    /// fn per reference override keeps the port 1:1 with the Java
-    /// subclasses, hence the length.
+    /// The element gate for a view, dispatched on the view kind: a landscape
+    /// view takes people and systems only, a context view takes the scoped
+    /// system with its people/system/containers, a container view is scoped
+    /// to one system (containers of it, plus components of those), a
+    /// component view to one container, and a deployment view follows the
+    /// environment/scope rules. One fn per view kind's rules, hence the
+    /// length.
     #[allow(clippy::too_many_lines)]
     fn check_element_can_be_added(&self, view: ViewRef, element: &Id) -> Result<(), CoreError> {
         let kind = self
@@ -410,7 +411,7 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `DynamicView.checkElementCanBeAdded`.
+    /// The dynamic view's element gate.
     fn check_dynamic_can_be_added(
         &self,
         view: ViewRef,
@@ -423,8 +424,7 @@ impl WorkspaceBuilder {
             .map(|i| i.name.clone())
             .unwrap_or_default();
         if self.dynamic_is_deployment(view) {
-            // Reference: `else { // todo }` — deployment-scoped dynamic views
-            // accept everything.
+            // Deployment-scoped dynamic views accept everything.
             return Ok(());
         }
         if kind == ElementKind::CustomElement {
@@ -449,8 +449,7 @@ impl WorkspaceBuilder {
         let scope_kind = scope.as_ref().and_then(|s| self.element_kind(s));
         // Pair the scope with its kind: `scope_kind` is derived from `scope`,
         // so a `Some` kind always implies a `Some` scope — the branches used
-        // to split the pair and re-join it with `clone().expect("checked")`
-        // (2R R-core-07).
+        // to split the pair and re-join it with `clone().expect("checked")`.
         let scoped = scope_kind.map(|k| (scope.as_ref(), k));
         if let Some((Some(scope), ElementKind::SoftwareSystem)) = scoped {
             if element == scope {
@@ -491,7 +490,7 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `ModelView.checkParentAndChildrenHaveNotAlreadyBeenAdded`.
+    /// A parent and its children may not both be in one view.
     fn check_parent_and_children(&self, view: ViewRef, element: &Id) -> Result<(), CoreError> {
         let name = self
             .item(element)
@@ -523,8 +522,8 @@ impl WorkspaceBuilder {
 
     /// The `environment` of a deployment element. Recursive pre-order over
     /// the node tree checking node → infrastructure/ssi/ci → children — the
-    /// exact visit order of the old `flatten_nodes` scan, without building
-    /// (and cloning) the inherited-group vectors nobody reads (2R R-core-10).
+    /// exact visit order of a full flatten scan, without building (and
+    /// cloning) the inherited-group vectors nobody reads.
     #[must_use]
     pub fn element_environment(&self, id: &Id) -> Option<String> {
         fn find<'a>(nodes: &'a [DeploymentNode], id: &Id) -> Option<&'a str> {
@@ -580,7 +579,7 @@ impl WorkspaceBuilder {
     }
 
     /// For a container instance: the software system its container belongs
-    /// to (`ContainerInstance.getContainer().getSoftwareSystem()`).
+    /// to (container → owning system).
     fn instance_container_system(&self, id: &Id) -> Option<Id> {
         let container = self.instance_static_element(id)?;
         self.element_parent(&container)
@@ -590,7 +589,7 @@ impl WorkspaceBuilder {
     // add / remove
     // ------------------------------------------------------------------
 
-    /// `ModelView.addElement(element, addRelationships)`.
+    /// Add an element to a view (with the optional relationship cascade).
     pub fn view_add_element(
         &mut self,
         view: ViewRef,
@@ -618,7 +617,7 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `ModelView.addRelationships(element)`: every relationship whose ends
+    /// The add-element cascade: every relationship whose ends
     /// are BOTH in the view now gets a relationship view.
     fn view_add_relationships_for(&mut self, view: ViewRef, element: &Id) -> Result<(), CoreError> {
         let in_view = self.view_element_ids(view);
@@ -664,8 +663,8 @@ impl WorkspaceBuilder {
         Ok(true)
     }
 
-    /// `ModelView.removeElement` — plus `DeploymentView.remove(DeploymentNode)`'s
-    /// cascade through the node subtree.
+    /// Remove an element — for a deployment node, with the subtree
+    /// cascade.
     pub fn view_remove_element(&mut self, view: ViewRef, element: &Id) -> Result<(), CoreError> {
         if view_scope_is_context_system(self, view, element) {
             return Err(CoreError::ElementCannotBeRemoved {
@@ -703,14 +702,14 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `ModelView.remove(relationship)`.
+    /// Remove a relationship from the view.
     pub fn view_remove_relationship(&mut self, view: ViewRef, relationship: &Id) {
         if let Some(content) = self.content_mut(view) {
             content.relationships.retain(|r| &r.id != relationship);
         }
     }
 
-    /// `ModelView.removeRelationshipsNotConnectedToElements`.
+    /// Drop relationship views no longer connected to the kept elements.
     pub fn view_remove_relationships_not_connected(&mut self, view: ViewRef, keep: &[Id]) {
         let connected: Vec<Id> = self
             .workspace()
@@ -729,10 +728,10 @@ impl WorkspaceBuilder {
     // default elements
     // ------------------------------------------------------------------
 
-    /// `addDefaultElements(boolean greedy)` per view type. `*` maps to
+    /// Add-the-default-elements per view type. `*` maps to
     /// greedy; `*?` to non-greedy (which prunes relationships back to the
     /// scoped elements).
-    #[allow(clippy::too_many_lines)] // one arm per reference `addDefaultElements`
+    #[allow(clippy::too_many_lines)] // one arm per view kind's default-elements rule
     pub fn view_add_default_elements(
         &mut self,
         view: ViewRef,
@@ -858,9 +857,10 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `ModelView.addNearestNeighbours`: add `element`, then everything it is
+    /// Add `element`, then everything it is
     /// directly coupled to (either direction) whose kind passes the filter;
-    /// not-permitted additions are silently ignored (Java prints to stdout).
+    /// not-permitted additions are silently ignored (the official tooling
+    /// prints a warning to stdout).
     fn add_nearest_neighbours(&mut self, view: ViewRef, element: &Id, filter: KindFilter) {
         if self.view_add_element(view, element, true).is_err() {
             return;
@@ -868,7 +868,7 @@ impl WorkspaceBuilder {
         // Snapshot only the ids that pass the filter (in relationship order)
         // rather than every endpoint pair — `view_add_element` never touches
         // `model.relationships`, so collect-then-add is behaviour-identical
-        // to the old clone-the-table-then-scan (2R R-core-05).
+        // to a full endpoint scan.
         let to_add: Vec<Id> = self
             .workspace()
             .model
@@ -898,8 +898,8 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `DeploymentView.addAllDeploymentNodes` + the node-cascading
-    /// `add(DeploymentNode)`.
+    /// All deployment nodes of the environment, each with its
+    /// subtree cascade.
     fn add_all_deployment_nodes(&mut self, view: ViewRef) -> Result<(), CoreError> {
         let env = self.deployment_environment(view);
         let tops: Vec<Id> = self
@@ -916,7 +916,7 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `DeploymentView.addElementInstancesAndDeploymentNodesAndInfrastructureNodes`:
+    /// The node subtree cascade:
     /// software system instances, then (scope-filtered) container instances,
     /// then infrastructure nodes, then children recursively; the node itself
     /// joins only when the subtree holds anything, and the public
@@ -948,7 +948,7 @@ impl WorkspaceBuilder {
         let scope = self.view_scope_system(view);
         let mut has = false;
         for i in ss_instances {
-            // Java: `catch (ElementNotPermittedInViewException)` — skip.
+            // An element this view kind rejects is skipped.
             if self.view_add_element(view, &i, true).is_ok() {
                 has = true;
             }
@@ -963,7 +963,7 @@ impl WorkspaceBuilder {
             }
         }
         for i in infra {
-            // Reference: infrastructure nodes are added UNGUARDED — a
+            // Infrastructure nodes are added UNGUARDED — a
             // rejected add propagates out of the whole cascade (the DSL
             // content parsers catch it there).
             self.view_add_element(view, &i, true)?;
@@ -978,7 +978,7 @@ impl WorkspaceBuilder {
         Ok(has)
     }
 
-    /// The public `DeploymentView.add(DeploymentNode)`: the cascade, then the
+    /// The public node add: the subtree cascade, then the
     /// ancestor chain.
     fn deployment_view_add_node_top(&mut self, view: ViewRef, node: &Id) -> Result<(), CoreError> {
         if !self.deployment_view_add_node(view, node)? {
@@ -992,15 +992,12 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// The `DeploymentView.add` overload the DSL content parser picks for the
-    /// element's kind (`DeploymentViewContentParser.addModelItemToView`):
-    /// deployment nodes cascade their subtree, then walk up the ancestor
-    /// chain (`DeploymentView.add(DeploymentNode)`); infrastructure nodes and
-    /// static-element instances add themselves, then walk the same chain
-    /// (`addElement(el, true)` + `while (parent != null) addElement(parent)`);
-    /// custom elements just add. Other kinds fall through to
-    /// `view_add_element`, whose `checkElementCanBeAdded` rejects them exactly
-    /// like the reference.
+    /// The deployment-view add rules the DSL content parser picks for the
+    /// element's kind: deployment nodes cascade their subtree, then walk up
+    /// the ancestor chain; infrastructure nodes and static-element instances
+    /// add themselves, then walk the same chain; custom elements just add.
+    /// Other kinds fall through to `view_add_element`, whose element gate
+    /// rejects them with the same messages the official tooling uses.
     pub fn view_add_deployment_element(
         &mut self,
         view: ViewRef,
@@ -1027,25 +1024,23 @@ impl WorkspaceBuilder {
     }
 
     // ------------------------------------------------------------------
-    // default views (`ViewSet.createDefaultViews`)
+    // default views
     // ------------------------------------------------------------------
 
-    /// `ViewSet.createDefaultViews` (`ViewSet` 1191-1264, pinned `ad34036`):
-    /// the app-layer generation `AbstractCommand.loadWorkspace` runs when the
-    /// model is non-empty but the view set is empty — the pipeline applies it
-    /// where the reference's shared load tail sits (M1-e-B). Mirrors the
-    /// reference exactly: one landscape view; per software system (stable
-    /// sort by Java UTF-16 name order) a context view, plus a container view
-    /// with `enableAutomaticLayout(TopBottom)` when the system has
-    /// containers, plus a component view per name-sorted container that has
-    /// components; then per deployment environment (deduped first-seen from
-    /// the top-level nodes, then sorted) one scoped deployment view per
-    /// software system holding container instances in the environment
-    /// (name-sorted), or one unscoped view when the environment holds only
-    /// infrastructure nodes. The `Err` arms are the reference's unguarded
-    /// throws (duplicate keys / not-permitted adds) — unreachable on the
-    /// empty view set this factory is called with, but propagated so a
-    /// surprise fails the load like the reference's abort.
+    /// The default-view generation the official load path runs when the model
+    /// is non-empty but the view set is empty, applied at the same point of
+    /// oxidizr's load pipeline. Mirrors the official tooling exactly: one
+    /// landscape view; per software system (stable sort by UTF-16 name order)
+    /// a context view, plus a container view with automatic layout
+    /// (`TopBottom`) when the system has containers, plus a component view
+    /// per name-sorted container that has components; then per deployment
+    /// environment (deduped first-seen from the top-level nodes, then sorted)
+    /// one scoped deployment view per software system holding container
+    /// instances in the environment (name-sorted), or one unscoped view when
+    /// the environment holds only infrastructure nodes. The `Err` arms are
+    /// the official tooling's unguarded failures (duplicate keys /
+    /// not-permitted adds) — unreachable on the empty view set this factory
+    /// is called with, but propagated so a surprise fails the load.
     pub fn create_default_views(&mut self) -> Result<(), CoreError> {
         self.create_default_landscape_view()?;
         self.create_default_system_views()?;
@@ -1053,17 +1048,18 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `createDefaultViews` landscape leg: a single System Landscape view
-    /// with all people and software systems.
+    /// The landscape leg of [`Self::create_default_views`]: a single System
+    /// Landscape view with all people and software systems.
     fn create_default_landscape_view(&mut self) -> Result<(), CoreError> {
         let landscape = self.create_landscape_view("")?;
         self.view_add_default_elements(landscape, true)
     }
 
-    /// `createDefaultViews` system leg: per software system (Java name
-    /// order) a context view, plus a container view and component views.
+    /// The system leg of [`Self::create_default_views`]: per software system
+    /// (UTF-16 name order) a context view, plus a container view and
+    /// component views.
     fn create_default_system_views(&mut self) -> Result<(), CoreError> {
-        // per software system (Java name order): a context view, plus a
+        // per software system (UTF-16 name order): a context view, plus a
         // container view and component views
         let mut systems: Vec<SystemPlan> = self
             .workspace()
@@ -1118,11 +1114,11 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `createDefaultViews` deployment leg: one scoped deployment view per
-    /// environment (deduped first-seen from the top-level nodes, then
-    /// sorted) and software system holding container instances in the
-    /// environment (name-sorted), or one unscoped view when the environment
-    /// holds only infrastructure nodes.
+    /// The deployment leg of [`Self::create_default_views`]: one scoped
+    /// deployment view per environment (deduped first-seen from the top-level
+    /// nodes, then sorted) and software system holding container instances in
+    /// the environment (name-sorted), or one unscoped view when the
+    /// environment holds only infrastructure nodes.
     fn create_default_deployment_views(&mut self) -> Result<(), CoreError> {
         // deployment views for each environment and software system pair:
         // plan from the (still unmutated) model, then create
@@ -1179,8 +1175,8 @@ impl WorkspaceBuilder {
                 for (system_id, _) in systems_in_env {
                     let view = self.create_deployment_view(&environment, "")?;
                     if let ViewRef::Deployment(index) = view {
-                        // `createDeploymentView(softwareSystem, ...)`: the
-                        // scope must be set BEFORE `addDefaultElements` (the
+                        // The scoped deployment-view creation: the
+                        // scope must be set BEFORE the default-elements add (the
                         // instance-cascading add filters on it).
                         self.workspace_mut().views.deployment_views[index].software_system_id =
                             Some(system_id);
@@ -1196,10 +1192,10 @@ impl WorkspaceBuilder {
     // animation steps
     // ------------------------------------------------------------------
 
-    /// `StaticView/CustomView/DeploymentView.addAnimation`: elements must be
-    /// in the view and not already revealed by an earlier step; a
-    /// relationship joins the step when exactly one of its ends is revealed
-    /// now (the other having been revealed earlier).
+    /// The animation-step add rule: elements must be in the view and not
+    /// already revealed by an earlier step; a relationship joins the step
+    /// when exactly one of its ends is revealed now (the other having been
+    /// revealed earlier).
     pub fn view_add_animation_step(
         &mut self,
         view: ViewRef,
@@ -1222,7 +1218,7 @@ impl WorkspaceBuilder {
                     previous.push(s);
                     this_step.push(id.clone());
                     if deployment {
-                        // `DeploymentView.addAnimationStep` reveals the
+                        // Deployment-view animation steps reveal the
                         // element's deployment-node ancestors too.
                         let mut parent = self.element_parent(id);
                         while let Some(p) = parent {
@@ -1259,10 +1255,9 @@ impl WorkspaceBuilder {
 
     /// The relationship ids revealed by one animation step: a view
     /// relationship-view joins when exactly one of its model endpoints is in
-    /// this step and the other was revealed by an earlier one — the id
-    /// spellings of Java's `AnimationStep.getRelationships` (the add-side
-    /// rule is cited on [`Self::view_add_animation_step`]). Empty for a view
-    /// without content. Undocumented before 2R R-core-15.
+    /// this step and the other was revealed by an earlier one (same id
+    /// spellings as the stored step; the add-side rule is cited on
+    /// [`Self::view_add_animation_step`]). Empty for a view without content.
     fn animation_step_relationships(
         &self,
         view: ViewRef,
@@ -1282,8 +1277,7 @@ impl WorkspaceBuilder {
                         let src_now = this_step.contains(&model.source);
                         let dst_now = this_step.contains(&model.destination);
                         // membership by `&str` — `previous` holds the id
-                        // spellings, so no per-comparison String is needed
-                        // (2R R-core-04).
+                        // spellings, so no per-comparison String is needed.
                         let src_prev = previous.iter().any(|p| p == model.source.as_str());
                         let dst_prev = previous.iter().any(|p| p == model.destination.as_str());
                         (src_now && dst_prev) || (src_prev && dst_now)
@@ -1298,13 +1292,12 @@ impl WorkspaceBuilder {
     // dynamic view steps
     // ------------------------------------------------------------------
 
-    /// `DynamicView.add(relationship, description)` — the
-    /// `<relationshipIdentifier> [description]` step form. The step number
-    /// (`order`) comes from the DSL engine's `SequenceNumber` mirror.
+    /// The `<relationshipIdentifier> [description]` step form. The step
+    /// number (`order`) comes from the DSL engine's sequence counter.
     ///
-    /// Every successful add INSERTS: the reference `TreeSet` is keyed by
-    /// `getId() + "/" + getOrder()` (`RelationshipView.compareTo`), so a
-    /// re-add with a fresh sequence order is a NEW entry — duplicate
+    /// Every successful add INSERTS: the step set is keyed by
+    /// `id + "/" + order`, so a re-add with a fresh sequence order is a
+    /// NEW entry — duplicate
     /// relationship ids inside one dynamic view are the whole point of the
     /// step form. The `description` is stored verbatim (the DSL parser
     /// passes `""` when absent; the JSON writer omits empties).
@@ -1341,7 +1334,7 @@ impl WorkspaceBuilder {
         Ok(relationship.clone())
     }
 
-    /// `DynamicView.addRelationshipViaElements` — the
+    /// The
     /// `a -> b [description] [technology]` step form. The model relationship
     /// must exist: with no technology the lookup prefers the relationship
     /// whose (normalized) description equals the given one and falls back to
@@ -1349,7 +1342,7 @@ impl WorkspaceBuilder {
     /// technology match. A reverse relationship ALREADY IN THE VIEW is added
     /// as `response: true`; otherwise [`CoreError::DynamicRelationshipMissing`].
     /// Like [`Self::dynamic_add_relationship`] every successful add INSERTS
-    /// (the reference `TreeSet` is keyed by id AND order), and the resolved
+    /// (the step set is keyed by id AND order), and the resolved
     /// relationship id is returned.
     pub fn dynamic_add_element_pair(
         &mut self,
@@ -1363,16 +1356,16 @@ impl WorkspaceBuilder {
         self.check_element_can_be_added(view, source)?;
         self.check_element_can_be_added(view, destination)?;
         // All lookups complete before the first mutation below, so they run
-        // on a shared borrow of the relationship arena — the pre-2R shape
-        // projected every relationship (incl. description/technology
-        // Strings) into a `Vec<RelInfo>` snapshot (R-core-05).
+        // on a shared borrow of the relationship arena — no need to project
+        // every relationship (incl. description/technology Strings) into a
+        // snapshot Vec first.
         let (rel_id, response) = {
             let rels = &self.workspace().model.relationships;
-            // Forward lookup (reference order): no technology →
-            // `getEfferentRelationshipWith(dest, description)` — an EXACT
+            // Forward lookup: no technology →
+            // the description-matched efferent lookup — an EXACT
             // normalized-description match ("" matches ""!) — falling back
             // to any efferent source→destination relationship; with a
-            // technology the reference loops WITHOUT break, so the LAST
+            // technology the loop runs WITHOUT break, so the LAST
             // tech match wins.
             let forward = if technology.is_empty() {
                 find_rel(rels, source, destination, Some(description), "")
@@ -1457,8 +1450,8 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `ImageView.hasContent()` — any of the three content fields is
-    /// non-blank (`StringUtils.isNullOrEmpty` TRIMS, so `" "` is empty).
+    /// Whether an image view has content: any of the three content fields is
+    /// non-blank (the blank check TRIMS, so `" "` is empty).
     #[must_use]
     pub fn image_has_content(&self, view: ViewRef) -> bool {
         let ViewRef::Image(i) = view else {
@@ -1573,7 +1566,7 @@ fn find_rel(
         .map(|r| r.id.clone())
 }
 
-/// Technology-filtered lookup with the reference's no-break loop: the LAST
+/// Technology-filtered lookup with a no-break loop: the LAST
 /// source→destination relationship with exactly this technology wins.
 fn find_rel_last(
     rels: &[crate::model::Relationship],
@@ -1591,8 +1584,8 @@ fn find_rel_last(
         .map(|r| r.id.clone())
 }
 
-/// `View.addRelationship` insertion without the in-view check (callers
-/// checked); dedupes by relationship id like the reference `TreeSet`.
+/// Relationship insertion without the in-view check (callers checked);
+/// dedupes by relationship id.
 fn upsert_relationship_view(content: &mut crate::views::ViewContent, relationship: Id) {
     if !content.relationships.iter().any(|r| r.id == relationship) {
         content.relationships.push(RelationshipView {
@@ -1610,8 +1603,7 @@ fn upsert_relationship_view(content: &mut crate::views::ViewContent, relationshi
     }
 }
 
-/// `SystemContextView.canBeRemoved`: the scoped system is the only element
-/// the reference refuses to remove.
+/// A context view refuses to remove every element except its scoped system.
 fn view_scope_is_context_system(builder: &WorkspaceBuilder, view: ViewRef, element: &Id) -> bool {
     matches!(view, ViewRef::Context(i)
         if builder
@@ -1622,7 +1614,7 @@ fn view_scope_is_context_system(builder: &WorkspaceBuilder, view: ViewRef, eleme
             .is_some_and(|v| v.software_system_id == *element))
 }
 
-/// `DeploymentView.remove(DeploymentNode)` cascade order: instances,
+/// Node removal cascade order: instances,
 /// infrastructure nodes, children (recursive), then the node itself.
 fn collect_deployment_subtree(builder: &WorkspaceBuilder, node: &Id, out: &mut Vec<Id>) {
     let Some(n) = builder.node_ref(node) else {
@@ -1644,19 +1636,16 @@ fn collect_deployment_subtree(builder: &WorkspaceBuilder, node: &Id, out: &mut V
     out.push(node.clone());
 }
 
-/// Java `String.compareTo`: UTF-16 code-unit order (`Comparator.comparing
-/// (Element::getName)` / `String::compareTo` in `createDefaultViews`) —
+/// Name comparison in UTF-16 code-unit order —
 /// differs from Rust's UTF-8 byte order where supplementary characters
 /// compare against `U+E000..U+FFFF` (same precedent as `views::style_cmp`).
 fn java_cmp_str(a: &str, b: &str) -> std::cmp::Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
 }
 
-/// `ViewSet.createDefaultViews`' `getContainerInstances` recursion, mapping
-/// each container instance to its owning software system and keeping the
-/// first-seen order (the reference dedupes the system list as it walks; the
-/// result is name-sorted afterwards anyway, but stable-sort ties follow the
-/// reference's traversal).
+/// Default-views helper: maps each container instance to its owning
+/// software system, keeping first-seen order (the list is name-sorted
+/// afterwards anyway; stable-sort ties follow this traversal).
 fn collect_instance_systems(
     node: &crate::model::DeploymentNode,
     owner: &HashMap<Id, SystemRef>,
@@ -1674,8 +1663,8 @@ fn collect_instance_systems(
     }
 }
 
-/// The `createDefaultViews` infrastructure probe (`model.getElements().
-/// anyMatch(instanceof InfrastructureNode && environment equals)`) over one
+/// The default-views infrastructure probe (any infrastructure node with a
+/// matching environment) over one
 /// top-level node's subtree; infrastructure nodes inherit the environment.
 fn has_infrastructure_in_subtree(node: &crate::model::DeploymentNode, environment: &str) -> bool {
     node.infrastructure_nodes
@@ -1689,7 +1678,7 @@ fn has_infrastructure_in_subtree(node: &crate::model::DeploymentNode, environmen
 
 #[cfg(test)]
 mod tests {
-    // dense element fixtures mirror the reference's one-letter DSL test names
+    // dense element fixtures use one-letter names on purpose
     #![allow(clippy::many_single_char_names)]
 
     use super::ViewRef;
@@ -1715,7 +1704,7 @@ mod tests {
         let z = b.add_software_system("B", None, None).unwrap();
         b.add_relationship(&a, &z, Some("Uses".into()), Some("HTTP".into()), None)
             .unwrap();
-        // SAME description, different technology -> duplicate (Element.has).
+        // SAME description, different technology -> duplicate.
         assert_eq!(
             b.add_relationship(&a, &z, Some("Uses".into()), Some("FTP".into()), None),
             Err(crate::CoreError::DuplicateRelationship {
@@ -1758,7 +1747,7 @@ mod tests {
         let base = b
             .add_relationship(&c1, &c2, Some("Uses".into()), Some("HTTP".into()), None)
             .unwrap();
-        // Reference loop order: (c1,s2) created before (s1,c2), then (s1,s2).
+        // Implied-relationship order: (c1,s2) created before (s1,c2), then (s1,s2).
         let implied = b
             .workspace()
             .model
@@ -2083,8 +2072,8 @@ mod tests {
             "A relationship between S and P does not exist in model."
         );
         // once "Uses" itself is in the view the reverse step resolves to it;
-        // every successful add INSERTS (the reference TreeSet is keyed by
-        // id AND order, so the response step becomes its own entry).
+        // every successful add INSERTS (the step set is keyed by id AND
+        // order, so the response step becomes its own entry).
         b.dynamic_add_relationship(v, &uses, "", "3").unwrap();
         b.dynamic_add_element_pair(v, &s, "", "", &p, "4").unwrap();
         {
@@ -2136,7 +2125,7 @@ mod tests {
                     .into()
             ))
         );
-        // the scope's own container IS allowed (reference behavior)
+        // the scope's own container IS allowed (official behavior)
         b.add_relationship(&c, &s2, Some("Uses".into()), None, None)
             .unwrap();
         b.dynamic_add_element_pair(v, &c, "", "", &s2, "1").unwrap();
@@ -2145,7 +2134,7 @@ mod tests {
 
     #[test]
     fn create_default_views_mirrors_reference_legs() {
-        // M1-e-B (`ViewSet.createDefaultViews`): name-sorted systems drive
+        // Default-view creation: name-sorted systems drive
         // context/container/component views; environments (UTF-16 sorted)
         // drive scoped deployment views, infrastructure-only environments
         // an unscoped one.

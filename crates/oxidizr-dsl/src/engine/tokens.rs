@@ -1,19 +1,19 @@
-//! Port of the reference `Tokens` wrapper (the `Tokenizer` lives in
-//! [`crate::lexer`]). Every `get(i)` re-applies the reference's two
-//! un-escape passes — `\"` → `"` then `\n` → newline, in that order, on the
-//! result of the first (erratum 26).
+//! Raw token-list wrapper with index helpers matching the official
+//! tooling's semantics exactly (the tokenizer itself lives in
+//! [`crate::lexer`]). Every `get(i)` re-applies the two un-escape passes —
+//! `\"` → `"` then `\n` → newline, in that order, the second applied to the
+//! result of the first.
 //!
-//! Since 2R R-dsl-01 the backing list is a [`Cow`] slice: `Stmt` owns the
-//! real `Vec`, while trimmed views (`without_context_start_token`, the
-//! driver's drop-prefix slices) borrow instead of deep-copying — the
-//! reference passes the same `Tokens` reference to every `else if`, which
-//! the owned-only port paid for with ~12 full token-list copies per logical
-//! line.
+//! The backing list is a [`Cow`] slice: `Stmt` owns the real `Vec`, while
+//! trimmed views (`without_context_start_token`, the driver's drop-prefix
+//! slices) borrow instead of deep-copying — the same token list is handed to
+//! every dispatch branch, which an owned-only shape would pay for with ~12
+//! full token-list copies per logical line.
 
 use std::borrow::Cow;
 
-/// `Tokens.java`: a raw token list (already `${}`-substituted) with index
-/// helpers matching the Java semantics exactly.
+/// A raw token list (already `${}`-substituted) with index helpers that
+/// match the official tooling's semantics exactly.
 #[derive(Debug, Clone)]
 pub struct Tokens<'a> {
     raw: Cow<'a, [String]>,
@@ -36,15 +36,15 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// The reference's two un-escape passes on one raw token — factored out
+    /// The two un-escape passes on one raw token — factored out
     /// of [`Self::get`] for callers holding a bare `&str`.
-    /// Java: replaceAll("\\\\\"", "\"") then replaceAll("\\\\n", "\n"):
-    /// literal backslash-quote first, then literal backslash-n.
+    /// Literal backslash-quote is replaced first, then literal backslash-n,
+    /// each pass applied to the result of the previous.
     #[must_use]
     pub fn unescape(raw: &str) -> Cow<'_, str> {
         // Fast path: without a backslash neither pattern can match, so both
         // passes are no-ops. With any backslash run BOTH replaces, keeping
-        // the erratum-26 order untouched.
+        // the pass order untouched.
         if raw.contains('\\') {
             Cow::Owned(raw.replace(r#"\""#, "\"").replace(r"\n", "\n"))
         } else {
@@ -52,25 +52,24 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// `get(index)` — unescaped view of the raw token. Borrowed whenever the
-    /// token carries no escape (2R R-dsl-02: the old shape allocated two
-    /// `String`s per read on a path read several times per logical line).
+    /// Unescaped view of the token at `index`. Borrowed whenever the token
+    /// carries no escape — this path is read several times per logical line,
+    /// so per-read allocation would show up.
     #[must_use]
     pub fn get(&self, index: usize) -> Cow<'_, str> {
         Tokens::unescape(&self.raw[index])
     }
 
-    /// Java `tokens.get(i).equals(other)` — the compare-only sites, without
-    /// materializing the unescaped view (2R R-dsl-02).
+    /// Exact string comparison of the token at `index` against `other`,
+    /// without materializing the unescaped view (hot path).
     #[must_use]
     pub fn eq_at(&self, index: usize, other: &str) -> bool {
         Tokens::unescape(&self.raw[index]) == other
     }
 
     /// Raw (still escaped) token — used only by the dispatch chain tests and
-    /// `without_context_start_token`, which Java compares RAW (`tokens
-    /// .get(size-1)` is the unescaped view; the brace token has no escapes,
-    /// so both agree).
+    /// `without_context_start_token`, which compare token text RAW.
+    /// The brace token has no escapes, so raw and unescaped views agree.
     #[must_use]
     pub fn raw_token(&self, index: usize) -> &str {
         &self.raw[index]
@@ -82,7 +81,7 @@ impl<'a> Tokens<'a> {
         &self.raw
     }
 
-    /// `size()`.
+    /// `size`.
     #[must_use]
     pub fn size(&self) -> usize {
         self.raw.len()
@@ -106,15 +105,15 @@ impl<'a> Tokens<'a> {
         self.includes(index + 1)
     }
 
-    /// The last token (unescaped view), if any — `tokens.get(size()-1)`.
+    /// The last token (unescaped view), if any.
     #[must_use]
     pub fn last(&self) -> Option<Cow<'_, str>> {
         self.raw.last().map(|t| Tokens::unescape(t))
     }
 
-    /// `withoutContextStartToken()` — drop a trailing `{` (compared with
-    /// `equals`, i.e. case-sensitive). Borrowed view either way; the old
-    /// `self.clone()` fallback deep-copied every token of every line.
+    /// Drop a trailing `{` (compared with exact, case-sensitive equality).
+    /// Borrowed view either way — a clone fallback would deep-copy every
+    /// token of every line.
     #[must_use]
     pub fn without_context_start_token(&self) -> Tokens<'_> {
         if self.raw.last().is_some_and(|t| t == "{") {

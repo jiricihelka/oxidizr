@@ -1,12 +1,12 @@
-//! Engine error type: the reference `StructurizrDslParserException` shape
+//! Engine error type: the official tooling's error-message shape
 //! (`message at line N of /abs/path: trimmed line`) wrapped in an OXZ code.
 //!
-//! The reference aborts the whole parse at the first failure; oxidizr keeps the
-//! message text byte-identical but records diagnostics and recovers to the next
-//! logical line (D1). `Display` renders the reference message alone — the
-//! location fields are structured extras the CLI renders itself (D1 freedom:
-//! the reference embeds them IN the message, we keep them separate so the
-//! text stays comparable).
+//! The official tooling aborts the whole parse at the first failure; oxidizr
+//! keeps the message text byte-identical but records diagnostics and recovers
+//! to the next logical line. `Display` renders the bare message alone — the
+//! location fields are structured extras the CLI renders itself: the official
+//! format embeds them IN the message, we keep them separate so the text
+//! stays comparable.
 
 use std::fmt::{self, Write as _};
 
@@ -15,29 +15,29 @@ use oxidizr_diag::Code;
 use oxidizr_diag::codes;
 
 /// A rejected statement (or a fatal parse condition such as an unclosed
-/// block). Equality is on all fields, so tests pin the full reference text.
+/// block). Equality is on all fields, so tests pin the full official text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DslError {
     /// Stable OXZ code.
     pub code: Code,
-    /// Reference message WITHOUT the ` at line …` suffix (which the reference
-    /// appends by stripping a single trailing `.` from the message).
+    /// The official message WITHOUT the ` at line …` suffix (the official
+    /// format appends that suffix after stripping a single trailing `.`).
     pub message: String,
     /// Absolute path of the file being parsed, when the input was a file
-    /// (the reference prints `of <path>` only when `dslFile.isFile()`).
+    /// (the official format prints `of <path>` only for a real file).
     pub file: Option<String>,
-    /// 1-based logical line the reference would have reported.
+    /// 1-based logical line as the official tooling would have reported it.
     pub line: Option<u32>,
-    /// The offending logical line, trimmed (reference `line.trim()`).
+    /// The offending logical line, trimmed.
     pub source_line: Option<String>,
-    /// The failure is fatal for the whole FILE (reference: thrown in
-    /// `preProcessLines`, before any line is processed) — the parse loop
-    /// stops instead of recovering to the next line.
+    /// The failure is fatal for the whole FILE: the official tooling throws
+    /// it during preprocessing, before any line is processed — the parse
+    /// loop stops instead of recovering to the next line.
     pub fatal_file: bool,
 }
 
 impl DslError {
-    /// Statement rejection: reference message as-is, code `OXZ-2002`.
+    /// Statement rejection: official message as-is, code `OXZ-2002`.
     pub fn stmt(message: impl Into<String>) -> Self {
         DslError {
             code: codes::STATEMENT,
@@ -49,7 +49,7 @@ impl DslError {
         }
     }
 
-    /// Unknown/misplaced token: the reference `Unexpected tokens (expected: …)`
+    /// Unknown/misplaced token: the official `Unexpected tokens (expected: …)`
     /// family, code `OXZ-2001`.
     pub fn unexpected(message: impl Into<String>) -> Self {
         DslError {
@@ -63,7 +63,7 @@ impl DslError {
     }
 
     /// Statement rejection with an explicit OXZ code (the deferred-import
-    /// and JVM-only families, D7/D8/OXZ-5001/5002).
+    /// and the official tooling-only families, `OXZ-5001`/`OXZ-5002`).
     pub fn coded(code: Code, message: impl Into<String>) -> Self {
         DslError {
             code,
@@ -76,13 +76,13 @@ impl DslError {
     }
 
     /// A builder failure surfaced as a statement error (the `CoreError`
-    /// `Display` text is the reference message by construction).
+    /// `Display` text is the official message by construction).
     #[must_use]
     pub fn core(err: &CoreError) -> Self {
         DslError::stmt(err.to_string())
     }
 
-    /// Attach the reference location triple.
+    /// Attach the location triple (file, line, trimmed source line).
     #[must_use]
     pub fn at(
         mut self,
@@ -96,13 +96,13 @@ impl DslError {
         self
     }
 
-    /// The full reference exception message:
+    /// The full exception text in the official format:
     /// `<msg minus trailing dot> at line <N> of <path>: <trimmed line>`.
-    /// Parts the reference would omit (no file, no line) are omitted here.
+    /// Parts the official format omits (no file, no line) are omitted here.
     #[must_use]
     pub fn reference_text(&self) -> String {
         let mut out = String::new();
-        // Java: `message.endsWith(".") ? substring(0, len-1) : message`
+        // A single trailing `.` is stripped before the location suffix.
         let msg = self.message.strip_suffix('.').unwrap_or(&self.message);
         out.push_str(msg);
         if let Some(line) = self.line {

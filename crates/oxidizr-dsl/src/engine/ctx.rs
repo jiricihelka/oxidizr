@@ -1,12 +1,12 @@
-//! Port of the reference `DslContext` class hierarchy as a data enum.
+//! Port of the official parser `context` class hierarchy as a data enum.
 //!
-//! The reference parser keeps a stack of context objects; statement dispatch
-//! guards on `inContext(FooDslContext.class)` — which is
-//! `clazz.isAssignableFrom(stack.peek().getClass())`, a TOP-OF-STACK `is-a`
+//! The official parser keeps a stack of context objects; statement dispatch
+//! guards on an in-context test — a class check on
+//! the top frame only — a TOP-OF-STACK `is-a`
 //! test, never a stack search. Here the stack is `Vec<Ctx>` and the guards
-//! are [`Ctx::is_*`] predicates mirroring the Java class hierarchy — that
+//! are [`Ctx::is_*`] predicates mirroring the official class hierarchy — that
 //! hierarchy IS the compatibility contract, so each predicate is annotated
-//! with the Java superclass chain it reproduces (verified @ `ad34036`).
+//! with the superclass chain it reproduces.
 //!
 //! Payloads are owned values (element ids, view refs, names, builder-side
 //! indices), never borrows: the dispatch chain repeatedly reads a context
@@ -17,22 +17,22 @@ use oxidizr_core::{Id, ViewRef};
 
 /// An `ElementGroup`: the DSL pseudo-element whose (separator-joined) name
 /// is what grouped elements' `group` property stores. The `uid` identifies
-/// the ONE Java group object shared by the registered pseudo-element and
+/// the ONE group object shared by the registered pseudo-element and
 /// every context frame built over the `group` block — expression finders
 /// expand it via its live member set (see [`Parser::group_add_member`]).
 ///
 /// [`Parser::group_add_member`]: super::Parser::group_add_member
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DslGroup {
-    /// Fresh per `group` statement (the Java object identity).
+    /// Fresh per `group` statement (object identity).
     pub uid: u64,
-    /// The full, separator-joined group name (`ElementGroup.getName()`).
+    /// The full, separator-joined group name (`ElementGroup.getName`).
     pub name: String,
 }
 
 /// A `deploymentEnvironment` — a DSL-only object (`DeploymentEnvironment`
 /// never enters the model). Contexts hold a FRESH instance, exactly like
-/// `DeploymentEnvironmentDslContext(String)`, which is why identifier
+/// `deployment-environment context(String)`, which is why identifier
 /// lookups through a context environment never resolve (the `"null."`
 /// hierarchical-identifier quirk).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,71 +41,71 @@ pub struct DslEnvironment {
     pub name: String,
 }
 
-/// One frame of the context stack (a `DslContext` subclass instance).
+/// One frame of the context stack (a `context` subclass instance).
 #[derive(Debug, Clone)]
 pub enum Ctx {
-    /// `WorkspaceDslContext`.
+    /// `workspace context`.
     Workspace,
-    /// `CommentDslContext` (a `/* … */` block spanning lines).
+    /// `comment context` (a `/* … */` block spanning lines).
     Comment,
 
     // ---- model scope -----------------------------------------------------
-    /// `ModelDslContext` — `group` set when started as `group "X" {`.
+    /// `model context` — `group` set when started as `group "X" {`.
     Model { group: Option<DslGroup> },
-    /// `ArchetypesDslContext`.
+    /// `archetypes context`.
     Archetypes,
-    /// `*ElementArchetypeDslContext` — `kind` is the archetype type token
+    /// `*element-archetype context` — `kind` is the archetype type token
     /// (`person`, `softwareSystem`, `element`, `container`, `component`,
     /// `deploymentNode`, `infrastructureNode`); `idx` indexes the parser's
     /// archetype list.
     ElementArchetype { kind: String, idx: usize },
-    /// `RelationshipArchetypeDslContext`.
+    /// `relationship-archetype context`.
     RelationshipArchetype { idx: usize },
 
-    /// `PersonDslContext`.
+    /// `person context`.
     Person { id: Id },
-    /// `CustomElementDslContext`.
+    /// `custom-element context`.
     CustomElement { id: Id },
-    /// `SoftwareSystemDslContext` — also pushed for `group "X" {` inside a
-    /// system (the Java class re-use), carrying the group payload.
+    /// `software-system context` — also pushed for `group "X" {` inside a
+    /// system (official class re-use), carrying the group payload.
     SoftwareSystem { id: Id, group: Option<DslGroup> },
-    /// `ContainerDslContext` — also pushed for `group "X" {` inside a
+    /// `container context` — also pushed for `group "X" {` inside a
     /// container scope.
     Container { id: Id, group: Option<DslGroup> },
-    /// `ComponentDslContext`.
+    /// `component context`.
     Component { id: Id },
-    /// `RelationshipDslContext` (single-relationship `{ … }` block).
+    /// `relationship context` (single-relationship `{ … }` block).
     Rel { id: Id },
 
-    /// `ElementsDslContext` (a `!elements` finder block or fan-out).
+    /// `elements context` (a `!elements` finder block or fan-out).
     Elements {
-        /// The found element ids (insertion-ordered `LinkedHashSet`).
+        /// The found element ids (insertion-ordered).
         items: Vec<Id>,
     },
-    /// `RelationshipsDslContext` (a `!relationships` block or a
+    /// `relationships context` (a `!relationships` block or a
     /// multi-relationship fan-out statement's context).
     Relationships { items: Vec<Id> },
 
     // ---- deployment ------------------------------------------------------
-    /// `DeploymentEnvironmentDslContext`.
+    /// `deployment-environment context`.
     Environment {
         env: DslEnvironment,
         group: Option<DslGroup>,
     },
-    /// `DeploymentNodeDslContext` — also pushed for `deploymentGroup "X" {`
-    /// inside a node (`GroupParser` semantics apply to node groups too).
+    /// `deployment-node context` — also pushed for `deploymentGroup "X" {`
+    /// inside a node (the same group semantics apply to node groups too).
     DeploymentNode { id: Id, group: Option<DslGroup> },
-    /// `InfrastructureNodeDslContext`.
+    /// `infrastructure-node context`.
     InfrastructureNode { id: Id },
-    /// `SoftwareSystemInstanceDslContext`.
+    /// `software-system-instance context`.
     SsInstance { id: Id },
-    /// `ContainerInstanceDslContext`.
+    /// `container-instance context`.
     ContainerInstance { id: Id },
-    /// `NoRelationshipInDeploymentEnvironmentDslContext` — a SUBCLASS of
-    /// `DeploymentEnvironmentDslContext` (so all environment guards hold
+    /// `no-relationship-in-deployment-environment context` — a SUBCLASS of
+    /// `deployment-environment context` (so all environment guards hold
     /// inside it); carries the static (linked) relationship the removed
     /// instance relationships were based on, so `a -> b` inside the block
-    /// re-adds them, and the enclosing group (`super(parent.getGroup())`).
+    /// re-adds them, and the enclosing group (`super(parent.getGroup)`).
     NoRelInEnv {
         /// The environment name.
         environment: String,
@@ -116,67 +116,67 @@ pub enum Ctx {
     },
 
     // ---- views -----------------------------------------------------------
-    /// `ViewsDslContext`.
+    /// `views context`.
     Views,
-    /// `SystemLandscapeViewDslContext`.
+    /// `system-landscape-view context`.
     LandscapeView { view: ViewRef },
-    /// `SystemContextViewDslContext`.
+    /// `system-context-view context`.
     ContextView { view: ViewRef },
-    /// `ContainerViewDslContext`.
+    /// `container-view context`.
     ContainerView { view: ViewRef },
-    /// `ComponentViewDslContext`.
+    /// `component-view context`.
     ComponentView { view: ViewRef },
-    /// `FilteredViewDslContext` — NOT a `ModelViewDslContext` (the Java quirk
+    /// `filtered-view context` — NOT a `model-view context` (the official quirk
     /// that makes `autolayout` inside it the cast failure).
     FilteredView { view: ViewRef },
-    /// `DynamicViewDslContext`.
+    /// `dynamic-view context`.
     DynamicView { view: ViewRef },
-    /// `DynamicViewParallelSequenceDslContext` (a `{` block inside a dynamic
-    /// view). `has_relationships` is set by `hasRelationships(true)` when a
-    /// relationship statement is parsed inside the sequence; `end()` calls
-    /// `view.endParallelSequence(!has_relationships)`.
+    /// `dynamic-view-parallel-sequence context` (a `{` block inside a dynamic
+    /// view). `has_relationships` is set when a
+    /// relationship statement is parsed inside the sequence; context close
+    /// ends the parallel sequence with the flag inverted.
     DynamicParallel {
         view: ViewRef,
         has_relationships: bool,
     },
     /// `DynamicViewRelationshipContext` (a `->` block inside a dynamic view).
-    /// Extends `DslContext` DIRECTLY — it is NOT a view context.
+    /// Extends `context` DIRECTLY — it is NOT a view context.
     DynamicRel { view: ViewRef, rel: Id },
-    /// `DeploymentViewDslContext`.
+    /// `deployment-view context`.
     DeploymentView { view: ViewRef },
-    /// `CustomViewDslContext`.
+    /// `custom-view context`.
     CustomView { view: ViewRef },
-    /// `ImageViewDslContext` — `light`/`dark` re-push the SAME context with a
+    /// `image-view context` — `light`/`dark` re-push the SAME context with a
     /// color scheme, so the scheme is payload, not a subclass.
     ImageView {
         view: ViewRef,
         color_scheme: Option<ColorScheme>,
     },
-    /// `StaticViewAnimationDslContext` — extends `DslContext` (NOT a view).
+    /// `static-view-animation context` — extends `context` (NOT a view).
     StaticViewAnimation { view: ViewRef },
-    /// `DeploymentViewAnimationDslContext` — extends `DslContext`.
+    /// `deployment-view-animation context` — extends `context`.
     DeploymentViewAnimation { view: ViewRef },
-    /// `CustomViewAnimationDslContext` — extends `DslContext`.
+    /// `custom-view-animation context` — extends `context`.
     CustomViewAnimation { view: ViewRef },
 
     // ---- styles ----------------------------------------------------------
-    /// `StylesDslContext` — `light`/`dark` re-push with the scheme.
+    /// `styles context` — `light`/`dark` re-push with the scheme.
     Styles { color_scheme: Option<ColorScheme> },
-    /// `ElementStyleDslContext` — `idx` indexes the builder's element-style
+    /// `element-style context` — `idx` indexes the builder's element-style
     /// list (`views.configuration.styles.element_styles`).
     ElementStyle { idx: usize },
-    /// `RelationshipStyleDslContext`.
+    /// `relationship-style context`.
     RelationshipStyle { idx: usize },
 
     // ---- configuration / terminology / documentation --------------------
-    /// `TerminologyDslContext`.
+    /// `terminology context`.
     Terminology,
-    /// `ConfigurationDslContext`.
+    /// `configuration context`.
     Configuration,
-    /// `UsersDslContext`.
+    /// `users context`.
     Users,
-    /// `DocumentationDslContext` (`!docs {`). The payload feeds the
-    /// P4-M2 importer at context close (`end()`): path token, resolved
+    /// `documentation context` (`!docs {`). The payload feeds the
+    /// importer at context close: path token, resolved
     /// importer FQN, and the `exclude` tokens.
     Documentation {
         holder: Holder,
@@ -184,8 +184,8 @@ pub enum Ctx {
         fqn: String,
         excludes: Vec<String>,
     },
-    /// `DecisionsDslContext` (`!adrs`/`!decisions {`). Same payload as
-    /// [`Ctx::Documentation`] — the `end()` shape is identical.
+    /// `decisions context` (`!adrs`/`!decisions {`). Same payload as
+    /// [`Ctx::Documentation`] — the `end` shape is identical.
     Decisions {
         holder: Holder,
         path: String,
@@ -194,39 +194,39 @@ pub enum Ctx {
     },
 
     // ---- property / perspective containers ------------------------------
-    /// `PropertiesDslContext` over the property holders its `name value`
+    /// `properties context` over the property holders its `name value`
     /// catch-all applies to.
     Properties { holders: Vec<Holder> },
-    /// `PerspectivesDslContext` over its perspectives holders.
+    /// `perspectives context` over its perspectives holders.
     Perspectives { holders: Vec<Holder> },
-    /// `PerspectiveDslContext` — the staged perspective; `end()` attaches it
+    /// `perspective context` — the staged perspective; close attaches it
     /// to the enclosing [`Ctx::Perspectives`] holders.
     Perspective { def: Perspective },
 }
 
-/// `ImageViewDslContext` / `StylesDslContext` color scheme payload — the
+/// `image-view context` / `styles context` color scheme payload — the
 /// core enum itself (styles carry it as `colorScheme` in JSON).
 pub use oxidizr_core::views::ColorScheme;
 
 /// What a `properties { … }` / `perspectives { … }` / `!docs` statement
-/// attaches to — the `PropertyHolder` / `PerspectivesHolder` /
-/// `DocumentationOwner` targets of the reference context constructors.
+/// attaches to — the property / perspectives /
+/// documentation-owner targets of the official parser context constructors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Holder {
     /// Workspace properties (`workspace`, `configuration { properties … }`
-    /// — the `ConfigurationDslContext` arm passes the WORKSPACE).
+    /// — the `configuration context` arm passes the WORKSPACE).
     Workspace,
     /// Model properties (`model { properties … }`).
     Model,
     /// Any model item (element, relationship, instance, node, …).
     Item(Id),
-    /// Every item of a fan-out (`ModelItemsDslContext` over `!elements` /
+    /// Every item of a fan-out (`model-items context` over `!elements` /
     /// `!relationships` / multi-relationship blocks).
     Items(Vec<Id>),
-    /// An archetype (`ArchetypeDslContext` is a `PropertyHolder` +
-    /// `PerspectivesHolder`).
+    /// An archetype (`archetype context` is a property +
+    /// perspectives holder).
     Archetype { idx: usize },
-    /// A view (`ViewDslContext` → view properties).
+    /// A view (`view context` → view properties).
     View(ViewRef),
     /// A dynamic-view relationship statement (`RelationshipView` props).
     DynamicRel { view: ViewRef, rel: Id },
@@ -239,13 +239,13 @@ pub enum Holder {
 }
 
 impl Ctx {
-    /// `getPermittedTokens()` — feeds the catch-all
+    /// `getPermittedTokens` — feeds the catch-all
     /// `Unexpected tokens (expected: a, b, …)` message (joined `", "` minus
     /// the trailing separator; an empty list produces bare `Unexpected
-    /// tokens`). Order and content verified verbatim against the reference
-    /// classes @ `ad34036`.
+    /// tokens`). Order and content verified verbatim against the official parser
+    /// classes verbatim.
     #[must_use]
-    #[allow(clippy::too_many_lines)] // per-context tables mirror the reference classes 1:1
+    #[allow(clippy::too_many_lines)] // per-context tables mirror the official classes 1:1
     #[allow(clippy::match_same_arms)] // empty permitted-lists are per-class facts
     pub fn permitted_tokens(&self) -> Vec<&'static str> {
         use super::tok as t;
@@ -275,7 +275,7 @@ impl Ctx {
             ],
             Ctx::Archetypes => vec![],
             // Element-archetype permitted lists differ per subclass; they
-            // are assembled by `ArchetypeParser` guards, not by these
+            // are assembled by the archetype-parser guards, not by these
             // token lists (the lists below mirror each subclass).
             Ctx::ElementArchetype { kind, .. } => match kind.as_str() {
                 // PersonArchetype / SoftwareSystemArchetype: no technology.
@@ -513,7 +513,7 @@ impl Ctx {
                 t::ELEMENT_STYLE_DESCRIPTION,
                 t::PROPERTIES,
             ],
-            // Java's `RelationshipStyleDslContext` list omits
+            // The official `relationship-style context` list omits
             // `dashed`/`jump`/`metadata`/`description` even though the
             // chain has arms for them — the list is catch-all-message
             // material only, reproduced exactly.
@@ -550,7 +550,7 @@ impl Ctx {
     }
 
     /// The joined form used in the `Unexpected tokens (expected: …)` message.
-    /// `None` means the reference prints bare `Unexpected tokens`.
+    /// `None` means the official parser prints bare `Unexpected tokens`.
     #[must_use]
     pub fn permitted_tokens_message(&self) -> Option<String> {
         let tokens = self.permitted_tokens();
@@ -565,26 +565,26 @@ impl Ctx {
     }
 
     // ------------------------------------------------------------------
-    // is-a guards (Java superclass chains annotated per predicate)
+    // is-a guards (official superclass chains annotated per predicate)
     // ------------------------------------------------------------------
 
-    /// `ModelItemDslContext`: element contexts, the single-relationship
+    /// `model-item context`: element contexts, the single-relationship
     /// context, and both archetype context families
-    /// (`ArchetypeDslContext implements` the same interface surface used
+    /// (`archetype context implements` the same interface surface used
     /// by the dispatch guards).
     #[must_use]
     pub fn is_model_item(&self) -> bool {
-        // `ModelItemDslContext` subclasses: the element hierarchy and
-        // `RelationshipDslContext` (archetype contexts extend `DslContext`
+        // `model-item context` subclasses: the element hierarchy and
+        // `relationship context` (archetype contexts extend `context`
         // directly — their `tags`/`properties`/`perspectives` arms are the
-        // separate `ArchetypeDslContext` arms further down the chain).
+        // separate `archetype context` arms further down the chain).
         self.is_element() || matches!(self, Ctx::Rel { .. })
     }
 
-    /// `ElementDslContext` = Person | `CustomElement` | `SoftwareSystem` |
+    /// `element context` = Person | `CustomElement` | `SoftwareSystem` |
     /// Container | Component | `DeploymentNode` | `InfrastructureNode` |
     /// `SoftwareSystemInstance` | `ContainerInstance` (all through
-    /// `GroupableElementDslContext` / `StaticStructureElementInstanceDslContext`).
+    /// `groupable-element context` / `static-structure-element-instance context`).
     #[must_use]
     pub fn is_element(&self) -> bool {
         matches!(
@@ -601,21 +601,21 @@ impl Ctx {
         )
     }
 
-    /// `StaticStructureElementInstanceDslContext`.
-    #[allow(dead_code)] // Java parity surface: the port's arms inline this guard.
+    /// `static-structure-element-instance context`.
+    #[allow(dead_code)] // Official-parity surface: the port's arms inline this guard.
     #[must_use]
     pub fn is_instance(&self) -> bool {
         matches!(self, Ctx::SsInstance { .. } | Ctx::ContainerInstance { .. })
     }
 
-    /// `ModelItemsDslContext` (`!elements` / `!relationships` families).
+    /// `model-items context` (`!elements` / `!relationships` families).
     #[must_use]
     pub fn is_model_items(&self) -> bool {
         matches!(self, Ctx::Elements { .. } | Ctx::Relationships { .. })
     }
 
-    /// `ArchetypeDslContext` (element + relationship archetypes).
-    #[allow(dead_code)] // Java parity surface: the port's arms inline this guard.
+    /// `archetype context` (element + relationship archetypes).
+    #[allow(dead_code)] // Official-parity surface: the port's arms inline this guard.
     #[must_use]
     pub fn is_archetype(&self) -> bool {
         matches!(
@@ -624,9 +624,9 @@ impl Ctx {
         )
     }
 
-    /// `GroupableDslContext`: every `GroupableElementDslContext` subclass
-    /// plus `ModelDslContext`, `DeploymentEnvironmentDslContext` and its
-    /// subclass `NoRelationshipInDeploymentEnvironmentDslContext`.
+    /// `groupable context`: every `groupable-element context` subclass
+    /// plus `model context`, `deployment-environment context` and its
+    /// subclass `no-relationship-in-deployment-environment context`.
     #[must_use]
     pub fn is_groupable(&self) -> bool {
         self.is_element()
@@ -636,11 +636,11 @@ impl Ctx {
             )
     }
 
-    /// `isGroup(context)` in the dispatch chain: `hasGroup()` — true only
+    /// The group check in the dispatch chain: true only
     /// for the five context classes whose constructors take a group
     /// payload (`Model`, `SoftwareSystem`, `Container`, `DeploymentNode`,
     /// `DeploymentEnvironment` — and `NoRelInEnv`, which inherits its
-    /// parent environment's group via `super(parent.getGroup())`).
+    /// parent environment's group via `super(parent.getGroup)`).
     #[must_use]
     pub fn group_payload(&self) -> Option<&DslGroup> {
         match self {
@@ -654,16 +654,16 @@ impl Ctx {
         }
     }
 
-    /// `inContext(DeploymentEnvironmentDslContext.class)` — true for
-    /// `NoRelationshipInDeploymentEnvironmentDslContext` too (subclass).
+    /// `inContext(deployment-environment context.class)` — true for
+    /// `no-relationship-in-deployment-environment context` too (subclass).
     #[must_use]
     pub fn is_environment(&self) -> bool {
         matches!(self, Ctx::Environment { .. } | Ctx::NoRelInEnv { .. })
     }
 
     /// The environment name carried by an environment context —
-    /// `getEnvironment().getName()`, the key for the name-based
-    /// `findIdentifier(new DeploymentEnvironment(name))` lookups.
+    /// the environment name — the key for the name-based
+    /// identifier lookups.
     #[must_use]
     pub fn env_name(&self) -> Option<&str> {
         match self {
@@ -673,7 +673,7 @@ impl Ctx {
         }
     }
 
-    /// `ModelViewDslContext`: landscape/context/container/component/dynamic/
+    /// `model-view context`: landscape/context/container/component/dynamic/
     /// parallel/deployment/custom — NOT filtered, NOT image.
     #[must_use]
     pub fn is_model_view(&self) -> bool {
@@ -690,7 +690,7 @@ impl Ctx {
         )
     }
 
-    /// `StaticViewDslContext` (landscape/context/container/component).
+    /// `static-view context` (landscape/context/container/component).
     #[must_use]
     pub fn is_static_view(&self) -> bool {
         matches!(
@@ -702,9 +702,9 @@ impl Ctx {
         )
     }
 
-    /// `ViewDslContext`: every `*ViewDslContext` incl. filtered and image —
+    /// `view context`: every `*view context` incl. filtered and image —
     /// but NOT `DynamicViewRelationshipContext`, NOT the animation
-    /// contexts (all extend `DslContext` directly).
+    /// contexts (all extend `context` directly).
     #[must_use]
     pub fn is_view(&self) -> bool {
         self.is_model_view() || matches!(self, Ctx::FilteredView { .. } | Ctx::ImageView { .. })
@@ -727,10 +727,10 @@ impl Ctx {
         }
     }
 
-    /// `ModelItemDslContext.getModelItem()` — the item payload of the
-    /// element hierarchy PLUS `RelationshipDslContext`. (Distinct from
-    /// [`Ctx::item_id`], which models the narrower `ElementDslContext
-    /// .getElement()` used by the hierarchical-identifier walk.)
+    /// `model-item context.getModelItem` — the item payload of the
+    /// element hierarchy PLUS `relationship context`. (Distinct from
+    /// [`Ctx::item_id`], which models the narrower `element context
+    ///.getElement` used by the hierarchical-identifier walk.)
     #[must_use]
     pub fn model_item_id(&self) -> Option<&Id> {
         match self {
@@ -763,11 +763,11 @@ impl Ctx {
     }
 
     /// The `Holder` a `properties`/`perspectives`/`!docs` statement on THIS
-    /// (top) context attaches to, per the reference context-constructor
+    /// (top) context attaches to, per the official parser context-constructor
     /// call at each dispatch arm. `None` when the context is not a holder.
     #[must_use]
     #[allow(clippy::match_same_arms)] // holder kinds collapse identically by design
-    #[allow(dead_code)] // Java parity surface: `DslContext.getHolder()`.
+    #[allow(dead_code)] // Official-parity surface (the context holder getter).
     pub fn holder(&self) -> Option<Holder> {
         match self {
             Ctx::Workspace => Some(Holder::Workspace),

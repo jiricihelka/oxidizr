@@ -1,23 +1,23 @@
-//! Stage 3 (M1 half) of the DSL pipeline: assemble the lossless [`Cst`] from logical
-//! lines, replicating the reference parse loop's line-level checks IN ORDER
-//! (`StructurizrDslParser.parse`, verified @ `ad34036`):
+//! Stage 3 of the DSL pipeline: assemble the lossless [`Cst`] from logical
+//! lines. The official tooling's parse loop runs its line-level checks IN
+//! ORDER, and the order is reproduced exactly:
 //!
-//! 1. `EMPTY_LINE_PATTERN` → blank line (never reaches the comment machine);
-//! 2. `COMMENT_PATTERN` → whole-line `//`/`#` comment (same);
-//! 3. tokenize, then the block-comment state machine on the TRIMMED joined line
-//!    and the FIRST token (after `x =` assignment stripping). The check order is
-//!    load-bearing: a whole-line `/* … */` neither opens nor closes a region (so
-//!    it does NOT close one that is open); a line whose first token starts with
-//!    `/*` opens a region, closed by the next line whose trimmed text ends with
-//!    `*/`. Hence `x = /* */` opens a region its own `*/` cannot close, and a
-//!    `*/` on a `//`-comment line never closes (check 2 ate that line).
+//! * an all-whitespace line → blank line (never reaches the comment machine);
+//! * a whole-line `//`/`#` comment (same);
+//! * tokenize, then the block-comment state machine on the TRIMMED joined line
+//!   and the FIRST token (after `x =` assignment stripping). The check order is
+//!   load-bearing: a whole-line `/* … */` neither opens nor closes a region (so
+//!   it does NOT close one that is open); a line whose first token starts with
+//!   `/*` opens a region, closed by the next line whose trimmed text ends with
+//!   `*/`. Hence `x = /* */` opens a region its own `*/` cannot close, and a
+//!   `*/` on a `//`-comment line never closes (check 2 ate that line).
 //!
 //! Unclosed `/*` swallows to EOF. The first-token test uses the RAW token value —
-//! `${VAR}` substitution lands with the parser (M4) and can only change this
-//! decision for values expanding to `/*`, which no fixture relies on.
+//! `${VAR}` substitution lands with the parser and can only change this decision
+//! for values expanding to `/*`, which no fixture relies on.
 //!
-//! The dropped EOF tail never reaches the reference's machine (its buffer was
-//! discarded), so it is marked [`NodeKind::DroppedTail`] outside any region.
+//! The dropped EOF tail never reaches these checks (its buffer is discarded),
+//! so it is marked [`NodeKind::DroppedTail`] outside any region.
 
 use std::rc::Rc;
 
@@ -28,7 +28,7 @@ use crate::lexer::{self, LexedLine};
 use crate::preprocess::{Logical, preprocess};
 
 /// Byte-offset line index for mapping offsets to 1-based (line, char-column)
-/// positions — diagnostics (D1 spans) and snapshot stability.
+/// positions — diagnostics spans and snapshot stability.
 #[derive(Debug, Clone)]
 pub struct LineIndex {
     /// Byte offset of each line's first character (index 0 is always `0`).
@@ -71,15 +71,15 @@ pub fn build(source: &str) -> Cst {
 
     for logical in &logicals {
         if logical.dropped {
-            // The reference never parses the EOF tail; close any region it swallowed
+            // The EOF tail is never parsed; close any region it swallowed
             // first (the region simply ends at EOF), then cover the bytes.
             close_region(&mut children, &mut region);
             children.push(line_node(source, logical, NodeKind::DroppedTail));
             continue;
         }
 
-        // A text-block line joins to `prefix + "\"${placeholder}\""` in the reference
-        // — never blank, never comment-like — so it outranks the blank/comment checks
+        // A text-block line joins to `prefix + "\"${placeholder}\""` — never
+        // blank, never comment-like — so it outranks the blank/comment checks
         // (its joined PREFIX alone may well be whitespace-only).
         if logical.text_block.is_none() && logical.is_empty_line(source) {
             // (1) blank: no state change, not even inside a region.
@@ -135,8 +135,8 @@ pub fn build(source: &str) -> Cst {
     Cst::new(Rc::from(source), root)
 }
 
-/// The reference's `firstToken`: `tokens.get(0)` after the `x = …` assignment-strip
-/// (`identifier = tokens.get(0); tokens = tokens.subList(2, …)`).
+/// The first token of the STATEMENT: `identifier = rest` is treated as
+/// starting at token index 2 (after the `=`), everything else at index 0.
 fn first_token_value(lexed: &LexedLine, source: &str) -> String {
     let idx = if lexed.tokens.len() >= 3 && lexed.tokens[1].value(source) == "=" {
         2
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn assignment_stripping_exposes_the_comment_token() {
-        // `x = /* */` → check (3a) fails (line starts with `x`), so firstToken after
+        // `x = /* */` → check (3a) fails (line starts with `x`), so the first token after
         // strip is `/*` → region opens; the same line's trailing `*/` cannot close it
         // (check order), `next` is swallowed, line `*/` finally closes.
         let src = "x = /* */\nnext\n*/\nafter\n";

@@ -1,19 +1,16 @@
-//! Chain section: reference `StructurizrDslParser.java` arms at Java lines
-//! 1197–1339 — the `configuration` scope (with the `ConfigurationParser`
-//! `scope`/`visibility` statements and the `users` scope plus its
-//! ANY-token role catch-all), the four `!docs` scopes and their `exclude`
-//! statement, the four `!adrs`/`!decisions` scopes and their `exclude`, the
-//! removed `!constant` keyword, `!const`/`!var` (the reference
-//! `NameValueParser` — substitution itself lives in the parse loop), and
-//! `!identifiers <flat|hierarchical>`.
+//! Chain section: the `configuration` scope (with its `scope`/`visibility`
+//! statements and the `users` scope plus its ANY-token role catch-all), the
+//! four `!docs` scopes and their `exclude` statement, the four
+//! `!adrs`/`!decisions` scopes and their `exclude`, the removed `!constant`
+//! keyword, `!const`/`!var` (substitution itself lives in the parse loop),
+//! and `!identifiers <flat|hierarchical>`.
 //!
-//! P4-M2: `!docs`/`!adrs` ship — the arms capture the path token, the
-//! importer FQN (alias-mapped for `!adrs`) and the `exclude` tokens into
-//! the pushed context; `DocumentationDslContext.end()` /
-//! `DecisionsDslContext.end()` run the import when the context ends
-//! ([`Parser::end_context`] → `run_import`). The `DOCUMENTATION`/`DECISIONS`
-//! features are always enabled (V-3), so the reference's
-//! `FeatureNotEnabledException` branches are unreachable here.
+//! `!docs`/`!adrs` capture the path token, the importer FQN (alias-mapped
+//! for `!adrs`) and the `exclude` tokens into the pushed context; the import
+//! runs when the documentation/decisions context ends
+//! ([`Parser::end_context`] → `run_import`). Documentation and decisions
+//! support is always enabled here, so the official tooling's "feature not
+//! enabled" branches are unreachable.
 
 use oxidizr_core::WorkspaceScope;
 
@@ -34,14 +31,14 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let is_docs = p.in_ctx(|c| matches!(c, Ctx::Documentation { .. }));
     let is_decisions = p.in_ctx(|c| matches!(c, Ctx::Decisions { .. }));
 
-    // 1196: configuration { — the reference starts the context
-    // UNCONDITIONALLY (no `shouldStartContext` gate).
+    // configuration { — the official tooling starts the context
+    // UNCONDITIONALLY (no `should_start_context` gate).
     if eqi(&first, tok::CONFIGURATION) && is_workspace {
         p.start_context(Ctx::Configuration);
         return Sec::Handled;
     }
 
-    // 1199/1202: ConfigurationParser (RAW tokens).
+    // scope / visibility inside configuration { (RAW tokens).
     if eqi(&first, tok::SCOPE) && is_config {
         return parse_scope(p, raw).into();
     }
@@ -49,20 +46,20 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         return parse_visibility(p, raw).into();
     }
 
-    // 1205: users { — also an unconditional context start.
+    // users { — also an unconditional context start.
     if eqi(&first, tok::USERS) && is_config {
         p.start_context(Ctx::Users);
         return Sec::Handled;
     }
 
-    // 1208: the users-role catch-all — ANY token inside `users {`.
+    // The users-role catch-all — ANY token inside `users {`.
     if is_users {
         return user_role(p, raw).into();
     }
 
-    // 1210–1258: !docs <path> [importer] — workspace / softwareSystem /
+    // !docs <path> [importer] — workspace / softwareSystem /
     // container / component scopes; the single-line form ends the context
-    // immediately, which is where the deferred import error surfaces (D7).
+    // immediately, which is where the deferred import error surfaces.
     if eqi(&first, tok::DOCS) {
         if let Some(holder) = docs_holder(p) {
             return docs_arm(p, &t, open, holder).into();
@@ -72,7 +69,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         return parse_exclude(p, raw).into();
     }
 
-    // 1259–1330: !adrs / !decisions <path> [type|importer].
+    // !adrs / !decisions <path> [type|importer].
     if (eqi(&first, tok::ADRS) || eqi(&first, tok::DECISIONS)) && docs_holder(p).is_some() {
         return decisions_arm(p, &t, open, docs_holder_expect(p)).into();
     }
@@ -80,15 +77,15 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         return parse_exclude(p, raw).into();
     }
 
-    // 1331: !constant — removed keyword, context-independent throw.
+    // !constant — removed keyword, context-independent throw.
     if eqi(&first, tok::CONSTANT) {
         return Sec::Err(DslError::stmt(
             "!constant was previously deprecated, and has now been removed - please use !const or !var instead",
         ));
     }
 
-    // 1333/1336: !const / !var <name> <value> (`NameValueParser` + the
-    // parser's `addConstant`/`addVariable` duplicate rules).
+    // !const / !var <name> <value>, with the constant/variable
+    // duplicate-name rules.
     if eqi(&first, tok::CONST) {
         return (|| {
             let (name, value) = name_value(raw)?;
@@ -133,7 +130,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 1339: !identifiers <flat|hierarchical> — workspace or model scope.
+    // !identifiers <flat|hierarchical> — workspace or model scope.
     if eqi(&first, tok::IDENTIFIERS) && (is_workspace || is_model) {
         return identifier_scope(p, raw).into();
     }
@@ -145,8 +142,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 // helpers
 // ----------------------------------------------------------------------
 
-/// `ConfigurationParser.parseScope` (RAW tokens; the error text embeds the
-/// LOWERCASED value — Java lowercases before comparing).
+/// The `scope` statement (RAW tokens; the error text embeds the LOWERCASED
+/// value — it is lowercased before comparing).
 fn parse_scope(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if tokens.has_more_than(1) {
         return Err(DslError::stmt(
@@ -173,7 +170,7 @@ fn parse_scope(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     Ok(())
 }
 
-/// `ConfigurationParser.parseVisibility`.
+/// The `visibility` statement.
 fn parse_visibility(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if tokens.has_more_than(1) {
         return Err(DslError::stmt(
@@ -196,7 +193,7 @@ fn parse_visibility(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     Ok(())
 }
 
-/// `UserRoleParser.parse` — `<username> <read|write>`.
+/// The user-role statement: `<username> <read|write>`.
 fn user_role(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if tokens.has_more_than(1) {
         return Err(DslError::stmt(
@@ -215,7 +212,7 @@ fn user_role(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     } else {
         return Err(DslError::stmt("The role should be \"read\" or \"write\""));
     };
-    // `User` ctor `IllegalArgumentException` → parser exception text.
+    // An empty username is rejected by the model, with its own message.
     if username.trim().is_empty() {
         return Err(DslError::stmt("A username must be specified."));
     }
@@ -223,7 +220,7 @@ fn user_role(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     Ok(())
 }
 
-/// The `DocumentationOwner` the reference's `!docs`/`!adrs` arms accept:
+/// The documentation owner the `!docs`/`!adrs` arms accept:
 /// workspace, software system, container or component context.
 fn docs_holder(p: &Parser) -> Option<Holder> {
     match p.top() {
@@ -240,10 +237,9 @@ fn docs_holder_expect(p: &Parser) -> Holder {
     docs_holder(p).expect("guard checked")
 }
 
-/// The four `!docs` arms: `DocsParser.parse` validates
-/// `!docs <path> [importer-fqn]`, the context is pushed (non-portable —
-/// `setDslPortable(false)`), and the reference ends it right away for the
-/// single-line form — which is exactly where the P4-M2 import runs.
+/// The four `!docs` arms: validate `!docs <path> [importer-fqn]`, push the
+/// context, mark the DSL non-portable, and end the context right away for
+/// the single-line form — which is exactly where the import runs.
 fn docs_arm(p: &mut Parser, tokens: &Tokens, open: bool, holder: Holder) -> Result<(), DslError> {
     if tokens.has_more_than(2) {
         return Err(DslError::stmt(
@@ -253,8 +249,8 @@ fn docs_arm(p: &mut Parser, tokens: &Tokens, open: bool, holder: Holder) -> Resu
     if !tokens.includes(1) {
         return Err(DslError::stmt("Expected: !docs <path> <fqn>"));
     }
-    // `DocsParser`: path = token 1, FQN = token 2, else the default
-    // `DefaultDocumentationImporter`.
+    // path = token 1, importer FQN = token 2, else the default
+    // documentation importer.
     let path = tokens.get(1).into_owned();
     let fqn = if tokens.includes(2) {
         tokens.get(2).into_owned()
@@ -273,8 +269,8 @@ fn docs_arm(p: &mut Parser, tokens: &Tokens, open: bool, holder: Holder) -> Resu
     if open { Ok(()) } else { p.end_context() }
 }
 
-/// The four `!adrs`/`!decisions` arms — `DecisionsParser.parse` shares the
-/// `!docs <path> [type|fqn]` grammar shape (its error text always says
+/// The four `!adrs`/`!decisions` arms — they share the
+/// `!docs <path> [type|fqn]` grammar shape (the error text always says
 /// `!decisions`, even for the `!adrs` token).
 fn decisions_arm(
     p: &mut Parser,
@@ -290,8 +286,8 @@ fn decisions_arm(
     if !tokens.includes(1) {
         return Err(DslError::stmt("Expected: !decisions <path> <type|fqn>"));
     }
-    // `DecisionsParser`: `DECISION_IMPORTERS.getOrDefault(token, token)`
-    // (case-SENSITIVE aliases), default = the `adrtools` entry.
+    // Alias-mapped importer: case-SENSITIVE alias lookup, unknown names
+    // pass through, default = the `adrtools` importer.
     let path = tokens.get(1).into_owned();
     let fqn = if tokens.includes(2) {
         oxidizr_import::decision_importer_fqn(&tokens.get(2))
@@ -310,10 +306,9 @@ fn decisions_arm(
     if open { Ok(()) } else { p.end_context() }
 }
 
-/// `DocsParser.parseExclude` / `DecisionsParser.parseExclude` — EVERY
-/// token after the keyword joins the context's exclude set (the empty
-/// check — `"A regex must be provided."` — is an `exclude()` behavior,
-/// surfaced at `end()` alongside the import).
+/// The `exclude` statement: EVERY token after the keyword joins the
+/// context's exclude set. The empty-entry check (`"A regex must be
+/// provided."`) is a context-end behavior, surfaced alongside the import.
 fn parse_exclude(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if !tokens.includes(1) {
         return Err(DslError::stmt(
@@ -333,8 +328,8 @@ fn parse_exclude(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     Ok(())
 }
 
-/// `NameValueParser.parse` — grammar text embeds the KEYWORD token as
-/// written; name must FULLY match `[a-zA-Z0-9-_.]+` (Java `matches`).
+/// The `!const`/`!var` grammar: the error text embeds the KEYWORD token as
+/// written; the name must FULLY match `[a-zA-Z0-9-_.]+`.
 fn name_value(tokens: &Tokens) -> Result<(String, String), DslError> {
     let keyword = tokens.get(0);
     if tokens.has_more_than(2) {
@@ -360,7 +355,7 @@ fn name_value(tokens: &Tokens) -> Result<(String, String), DslError> {
     Ok((name.into_owned(), tokens.get(2).into_owned()))
 }
 
-/// `IdentifierScopeParser.parse` — workspace or model scope (RAW tokens).
+/// The `!identifiers` statement — workspace or model scope (RAW tokens).
 fn identifier_scope(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     if tokens.has_more_than(1) {
         return Err(DslError::stmt(

@@ -1,29 +1,28 @@
-//! `oxidizr-json` — the JSON contract (P1-D5 amended, P1-D6).
+//! `oxidizr-json` — the JSON contract.
 //!
-//! The serde-derive route turned out to be unable to reproduce the reference's
-//! byte order (see the P1-D5 amendment in `agents/plan/build/PHASE_1.md`): Jackson
-//! writes POJO keys alphabetically at every level, applies per-field
-//! `NON_EMPTY`/`NON_NULL` inclusion, sorts `TreeSet`-backed arrays, orders
-//! free-form `properties` maps in Java `HashMap` bucket order, and computes
-//! view `name` values on the fly. So this crate hand-rolls the two directions:
+//! The standard derive route cannot reproduce the workspace JSON byte order:
+//! the official format writes object keys alphabetically at every level,
+//! omits empty/null values, sorts set-backed arrays, orders free-form
+//! `properties` maps in Java `HashMap` bucket order, and computes view
+//! `name` values on the fly. So this crate hand-rolls the two directions:
 //!
 //! - [`to_vec`] builds a `printer::Json` tree with FINAL key order and
-//!   omissions already decided per `agents/plan/build/WRITE-CATALOG.md` (the §-cites
-//!   in `writer.rs`), then renders it with the Jackson pretty-printer
-//!   emulation (`printer.rs`, `"key" : value`, 2-space indent, no trailing
-//!   newline).
+//!   omissions already decided per writer, then renders it with the
+//!   pretty-printer shape the official tooling uses (`printer.rs`,
+//!   `"key" : value`, 2-space indent, no trailing newline).
 //! - [`from_slice`] walks a `serde_json::Value` (document-order maps via the
-//!   `preserve_order` feature) applying the §6 leniency matrix, then runs the
-//!   M2 validation catalog exactly like the reference `hydrate()`.
+//!   `preserve_order` feature) applying the documented leniency matrix, then
+//!   runs the validation catalog, failing with the official tooling's first
+//!   message.
 //!
-//! The byte witness for both directions is `testdata/golden/` (Category A
-//! byte-diff tests); the reader tolerates everything the reference reader
-//! tolerates and rejects with the reference's first `hydrate()` message.
+//! The byte witness for both directions is `testdata/golden/` (byte-diff
+//! tests); the reader tolerates everything the official reader tolerates and
+//! rejects with its first validation message.
 
 pub mod error;
-// Public for the C4-PlantUML tags section (Phase 2 M3): the tags-section
-// maps iterate in Java `HashMap<String, Style>` order, the same contract the
-// JSON writer pins here.
+// Public for the C4-PlantUML tags section: the tags-section maps iterate in
+// Java `HashMap<String, Style>` order, the same contract the JSON writer
+// pins here.
 pub mod javahash;
 pub mod keep;
 mod printer;
@@ -37,8 +36,8 @@ pub use theme::{theme_from_slice, theme_to_vec, theme_write};
 
 use oxidizr_core::Workspace;
 
-/// Serialize to the reference's exact JSON bytes (Jackson pretty, no
-/// trailing newline — WRITE-CATALOG §0).
+/// Serialize to the official tooling's exact JSON bytes (pretty shape, no
+/// trailing newline).
 ///
 /// # Errors
 ///
@@ -49,15 +48,15 @@ pub fn to_vec(workspace: &Workspace) -> Result<Vec<u8>, JsonError> {
     writer::to_vec(workspace)
 }
 
-/// Deserialize a workspace JSON document (WRITE-CATALOG §6 leniency, then
-/// `hydrate()`-equivalent validation).
+/// Deserialize a workspace JSON document (the official reader's leniency,
+/// then model/view validation).
 ///
 /// # Errors
 ///
 /// [`JsonError::Parse`] for malformed JSON, [`JsonError::Read`] for
 /// structurally invalid values (e.g. a non-numeric `instances` spec),
-/// [`JsonError::Validation`] when the reference `hydrate()` would reject the
-/// workspace (the first validation message is carried verbatim).
+/// [`JsonError::Validation`] when validation would reject the
+/// workspace (the first message is the official tooling's, verbatim).
 pub fn from_slice(bytes: &[u8]) -> Result<Workspace, JsonError> {
     reader::from_slice(bytes)
 }

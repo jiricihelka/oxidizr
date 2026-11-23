@@ -1,14 +1,14 @@
-//! The checked workspace accumulator (`P1-D4`): `WorkspaceBuilder` mirrors the
-//! reference `Model.add*` / `ViewSet.add*` API surface with Rust `Result`s —
-//! the DSL builder (M4) drives this, the JSON reader (M3) constructs the model
-//! directly and only shares [`mod@crate::validate`].
+//! The checked workspace accumulator: `WorkspaceBuilder` mirrors the
+//! official add-API surface with Rust `Result`s — the DSL builder drives
+//! this, the JSON reader constructs the model directly and only shares
+//! [`mod@crate::validate`].
 //!
-//! Ids: one shared sequential counter (Locked), allocated at creation time
-//! exactly like `Model.addRelationship`/`addElementToInternalStructures`;
+//! Ids: one shared sequential counter, allocated at creation time
+//! inside the add operations;
 //! `found` bumps it for externally-assigned ids.
 
-// The reference `Model`/`ViewSet` add-APIs are throw-based (they raise
-// `IllegalArgumentException` on duplicate names/keys); every failure mode
+// The official add-APIs are throw-based (they raise on duplicate
+// names/keys; oxidizr errors as values — every failure mode
 // here is enumerated by the shared [`CoreError`] enum instead of repeated
 // as per-method `# Errors`/`# Panics` sections.
 #![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
@@ -29,13 +29,13 @@ use crate::views::{
     SystemContextView, SystemLandscapeView, ViewBase, ViewContent, ViewSet,
 };
 
-/// The `Model.ImpliedRelationshipsStrategy` variants the DSL can select
+/// The implied-relationship strategies the DSL can select
 /// (`!impliedRelationships true|false|<fqcn>`); `Default` creates nothing and
 /// is what the JSON load path uses (the strategy is a DSL-workspace default,
-/// `WorkspaceParser.parse`).
+/// applied by the DSL parser).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ImpliedRelationshipsStrategy {
-    /// Reference `DefaultImpliedRelationshipsStrategy` — no implied
+    /// The default strategy — no implied
     /// relationships.
     #[default]
     Default,
@@ -80,7 +80,7 @@ fn collect_deployment_ids(n: &crate::model::DeploymentNode, out: &mut Vec<Id>) {
 }
 
 impl WorkspaceBuilder {
-    /// A workspace with reference parser defaults (`name` "Name" / description
+    /// A workspace with parser defaults (`name` "Name" / description
     /// "Description" are applied by the DSL layer, not here; JSON defaults the
     /// id to 0).
     #[must_use]
@@ -99,8 +99,8 @@ impl WorkspaceBuilder {
     }
 
     /// The current implied-relationships strategy.
-    // Java parity surface (strategy getter/setter pair); no in-workspace
-    // consumer yet — kept per 2R R-core-06, not dead code to delete.
+    // Official-parity surface (strategy getter/setter pair); no in-workspace
+    // consumer yet — kept deliberately, not dead code to delete.
     #[allow(dead_code)]
     #[must_use]
     pub const fn implied_strategy(&self) -> ImpliedRelationshipsStrategy {
@@ -125,12 +125,12 @@ impl WorkspaceBuilder {
         &mut self.workspace
     }
 
-    /// The `Documentable` documentation of one DSL holder — the seam the
-    /// `!docs`/`!adrs` importers append to (P4-M2, `IMPORT-DOCS-ADRS.md`;
-    /// the reference contexts hold the `Documentable` directly).
+    /// The documentation of one DSL holder — the seam the
+    /// `!docs`/`!adrs` importers append to (the official contexts hold
+    /// the documentation object directly).
     /// `None` id ⇒ the workspace; `Some` ⇒ the software system / container
     /// / component with that id (persons and relationships are not
-    /// `Documentable` in the reference — no arm matches them).
+    /// documented in the official model — no arm matches them).
     pub fn documentation_mut(
         &mut self,
         id: Option<&Id>,
@@ -159,22 +159,19 @@ impl WorkspaceBuilder {
     }
 
     /// Register an externally assigned id (JSON load / `!identifiers` import).
-    // Java parity surface (`IdGeneratorStrategy#found`); `adopt` seeds the
-    // counter directly, and no other consumer exists — kept per 2R
-    // R-core-06.
+    // Official-parity surface (external-id registration); no other consumer
+    // exists — kept deliberately.
     #[allow(dead_code)]
     pub fn found(&mut self, id: &Id) {
         self.id_gen.found(id);
     }
 
     /// Adopt a pre-built workspace as the one under construction
-    /// (`workspace extends` — `PHASE_1.md` §M5-a, mirrors reference
-    /// `WorkspaceParser.parse`, which REPLACES the workspace object; later
-    /// statements layer over the base). Every element and relationship id of
-    /// the base is replayed through [`Self::found`] — the reference seeds its
-    /// id counter inside `Model.add` on every add, JSON loads included
-    /// (`Model.java:274/286` @`ad34036`) — so subsequent [`Self::alloc_id`]
-    /// continues after the base's highest id. Implied-relationship strategy
+    /// (`workspace extends`) — the base REPLACES the workspace object under
+    /// construction; later statements layer over it. Every element and
+    /// relationship id of the base is replayed through [`Self::found`] — the
+    /// loaders seed the id counter on every add, JSON loads included — so
+    /// subsequent [`Self::alloc_id`] continues after the base's highest id. Implied-relationship strategy
     /// and all other builder state stay as set; the DSL layer applies its
     /// workspace default after adoption.
     pub fn adopt(&mut self, workspace: Workspace) {
@@ -205,8 +202,8 @@ impl WorkspaceBuilder {
     }
 
     /// Set the numeric workspace id (JSON `id`).
-    // Java parity surface (`Workspace#setId`); the JSON reader assigns
-    // `workspace.id` through `adopt` instead — kept per 2R R-core-06.
+    // Official-parity surface; the JSON reader assigns
+    // `workspace.id` through `adopt` instead — kept deliberately.
     #[allow(dead_code)]
     pub fn set_workspace_id(&mut self, id: i64) {
         self.workspace.id = id;
@@ -240,7 +237,7 @@ impl WorkspaceBuilder {
         self.workspace.configuration.scope = Some(scope);
     }
 
-    /// `scope none` — reference `setScope(null)` (`ConfigurationParser`).
+    /// `scope none` — clears the scope.
     pub fn clear_scope(&mut self) {
         self.workspace.configuration.scope = None;
     }
@@ -250,8 +247,8 @@ impl WorkspaceBuilder {
         self.workspace.configuration.visibility = Some(visibility);
     }
 
-    /// `users { … }` role statements — `WorkspaceConfiguration.addUser`:
-    /// the reference `TreeSet<User>` is ordered by username and silently
+    /// `users { … }` role statements: the official user set is ordered
+    /// by username and silently
     /// KEEPS THE FIRST user for a repeated (exact-string) username.
     pub fn add_user(&mut self, username: &str, role: Role) {
         if !self
@@ -273,8 +270,8 @@ impl WorkspaceBuilder {
         self.workspace.properties.insert(name.into(), value.into());
     }
 
-    /// Drop a top-level property (`DslUtils.clearDsl` — `workspace extends`
-    /// discards the base's retained `structurizr.dsl`).
+    /// Drop a top-level property (`workspace extends` discards the base's
+    /// retained `structurizr.dsl`).
     pub fn remove_property(&mut self, name: &str) {
         self.workspace.properties.remove(name);
     }
@@ -325,11 +322,11 @@ impl WorkspaceBuilder {
 
     /// `element "Name" ["metadata"] ["Desc"] ["Tags"]` — custom element.
     ///
-    /// The reference stores fresh DSL custom elements in REVERSE creation
-    /// order (2026-11-17 oracle witness: `A`..`F` export as `F`..`A`, and
+    /// Fresh DSL custom elements are stored in REVERSE creation
+    /// order (witness: `A`..`F` export as `F`..`A`, and
     /// `Zulu`,`Alpha` as `Alpha`,`Zulu` — reverse insertion, not id sort,
-    /// which the JSON-import path proves by re-sorting ascending through
-    /// `Model.setCustomElements`' `TreeSet` rebuild). JSON export is stored
+    /// (the JSON-import path re-sorts ascending on load).
+    /// JSON export is stored
     /// order, so insertion goes at the FRONT.
     pub fn add_custom_element(
         &mut self,
@@ -365,9 +362,9 @@ impl WorkspaceBuilder {
         check_name(name)?;
         // One walk for the kind guard + duplicate-name check; the push
         // re-lookup surfaces the same `WrongElementKind` error instead of
-        // the old `expect("checked above")` panic (2R R-core-07 — nothing
+        // the old `expect("checked above")` panic — nothing
         // changes the model between the two lookups, so the error arm is
-        // unreachable; reference: Model.addContainer).
+        // unreachable in practice).
         let duplicate = {
             let s = self
                 .system_ref(system)
@@ -411,8 +408,7 @@ impl WorkspaceBuilder {
         tags_csv: Option<&str>,
     ) -> Result<Id, CoreError> {
         check_name(name)?;
-        // Same single-walk guard + error-valued re-lookup as `add_container`
-        // (2R R-core-07).
+        // Same single-walk guard + error-valued re-lookup as `add_container`.
         let duplicate = {
             let c = self
                 .container_ref(container)
@@ -490,7 +486,7 @@ impl WorkspaceBuilder {
             let p = self
                 .node_mut(parent)
                 .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: parent.clone() })?;
-            // `Model.addDeploymentNode(parent, …): the child name must be
+            // The official add rule: the child name must be
             // unique among the parent's child nodes AND infrastructure nodes.
             if p.children.iter().any(|c| c.item.name == name)
                 || p.infrastructure_nodes.iter().any(|i| i.item.name == name)
@@ -506,7 +502,7 @@ impl WorkspaceBuilder {
         let id = item.id.clone();
         // Re-lookup surfaces the same `DeploymentNodeNotFound` the guard
         // above raises — the old `expect("just found")` panic is gone
-        // (2R R-core-07; nothing mutates the model between the lookups).
+        // (nothing mutates the model between the lookups).
         self.node_mut(parent)
             .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: parent.clone() })?
             .children
@@ -528,7 +524,7 @@ impl WorkspaceBuilder {
             let parent = self
                 .node_ref(node)
                 .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?;
-            // `Model.addInfrastructureNode`: the name must be unique among the
+            // The official add rule: the name must be unique among the
             // parent's CHILD NODES and INFRASTRUCTURE NODES alike.
             if parent.children.iter().any(|c| c.item.name == name)
                 || parent
@@ -545,7 +541,7 @@ impl WorkspaceBuilder {
         };
         let item = self.new_item(name, description, tags_csv);
         let id = item.id.clone();
-        // Error-valued re-lookup, as in `add_container` (2R R-core-07).
+        // Error-valued re-lookup, as in `add_container`.
         self.node_mut(node)
             .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?
             .infrastructure_nodes
@@ -573,10 +569,10 @@ impl WorkspaceBuilder {
                 expected: "software system",
             });
         }
-        // Reference: the instance NAME is derived (getElement().getName(),
-        // @JsonIgnore — never serialized); we mirror it for diagnostics.
+        // The instance NAME is derived (never serialized in the format);
+        // we mirror it for diagnostics.
         // `is_system` above guarantees the lookup; error-valued, not a panic
-        // (2R R-core-07 — same error the guard raises).
+        // (same error the guard raises).
         let name = self.item(system).map(|i| i.name.clone()).ok_or_else(|| {
             CoreError::WrongElementKind {
                 id: system.clone(),
@@ -589,8 +585,8 @@ impl WorkspaceBuilder {
         let node = self
             .node_mut(node)
             .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?;
-        // `Model.addSoftwareSystemInstance`: instanceId counts instances of the
-        // SAME system within this node (1-based: reference starts at 1).
+        // instanceId counts instances of the
+        // SAME system within this node (1-based).
         let instance_id = node
             .software_system_instances
             .iter()
@@ -628,8 +624,7 @@ impl WorkspaceBuilder {
                 expected: "container",
             });
         }
-        // As in `add_software_system_instance`: guarded lookup, error-valued
-        // (2R R-core-07).
+        // As in `add_software_system_instance`: guarded lookup, error-valued.
         let name = self
             .item(container)
             .map(|i| i.name.clone())
@@ -643,7 +638,7 @@ impl WorkspaceBuilder {
         let node = self
             .node_mut(node)
             .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?;
-        // Same per-node per-container 1-based count as `Model.addContainerInstance`.
+        // Per-node per-container 1-based instance count.
         let instance_id = node
             .container_instances
             .iter()
@@ -675,7 +670,7 @@ impl WorkspaceBuilder {
             .node_mut(node)
             .ok_or_else(|| CoreError::DeploymentNodeNotFound { id: node.clone() })?;
         if name.trim().is_empty() {
-            // `StringUtils.isNullOrEmpty` trims.
+            // The blank check trims.
             return Err(CoreError::DeploymentGroupNameRequired);
         }
         if !node.deployment_groups.iter().any(|g| g == name) {
@@ -684,10 +679,9 @@ impl WorkspaceBuilder {
         Ok(())
     }
 
-    /// `healthCheck <name> <url> [interval] [timeout]` — Java
-    /// `StaticStructureElementInstance.addHealthCheck`: validation and its
-    /// messages mirror the reference; the check lands on the instance's list
-    /// verbatim (`HttpHealthCheck`'s ctor stores name/url untrimmed).
+    /// `healthCheck <name> <url> [interval] [timeout]`: validation and
+    /// its messages match the official tooling; the check lands on the
+    /// instance's list verbatim (name/url stored untrimmed).
     pub fn add_health_check(
         &mut self,
         instance: &Id,
@@ -765,11 +759,11 @@ impl WorkspaceBuilder {
     /// `[id = ]a -> b ["Description"] ["Technology"] ["Tags"]` (or the typed
     /// `a.uses(b, …)` DSL forms, all funnel here).
     ///
-    /// Mirrors `Model.addRelationship`: parent/child pairs are rejected,
+    /// The official add contract: parent/child pairs are rejected,
     /// an efferent source→destination relationship with the same
-    /// (normalized) description is a duplicate (`Element.has`), and the
+    /// (normalized) description is a duplicate, and the
     /// configured [`ImpliedRelationshipsStrategy`] runs for static↔static
-    /// pairs exactly like the reference.
+    /// pairs exactly like the official tooling.
     pub fn add_relationship(
         &mut self,
         source: &Id,
@@ -789,7 +783,7 @@ impl WorkspaceBuilder {
         if self.is_child_of(source, destination) || self.is_child_of(destination, source) {
             return Err(CoreError::ParentChildRelationship);
         }
-        // `Element.has(Relationship)`: same destination AND same description
+        // Duplicate check: same destination AND same description
         // (technology is NOT part of the check).
         if self.has_efferent(source, destination, description.as_deref().unwrap_or("")) {
             return Err(CoreError::DuplicateRelationship {
@@ -799,14 +793,14 @@ impl WorkspaceBuilder {
         }
         let mut tags = Tags::new();
         if let Some(csv) = tags_csv {
-            // reference DSL: `addTags(tags.split(","))` — TRIMMED adds (unlike
-            // JSON's setTags).
+            // DSL tags arrive TRIMMED (unlike
+            // the JSON CSV path).
             for t in java_split_csv(csv) {
                 tags.add(t);
             }
         }
         let id = self.insert_relationship(source, destination, description, technology, tags, None);
-        // `Model.addRelationship`: the strategy runs only when BOTH ends are
+        // The strategy runs only when BOTH ends are
         // static-structure-ish (custom/person/system/container/component).
         if self.implied_strategy != ImpliedRelationshipsStrategy::Default
             && is_implied_kind(self.element_kind(source))
@@ -818,9 +812,9 @@ impl WorkspaceBuilder {
     }
 
     /// Raw relationship insert (shared id counter, `source.relationships`
-    /// index) — the `Model.addRelationship(relationship)` internals without
+    /// index) — the raw insert without
     /// the guards; used by the implied and replication paths, which pre-check
-    /// duplicates exactly like the reference does.
+    /// duplicates exactly like the official tooling.
     pub(crate) fn insert_relationship(
         &mut self,
         source: &Id,
@@ -853,11 +847,11 @@ impl WorkspaceBuilder {
     /// `AbstractImpliedRelationshipsStrategy` ancestor walk: for every
     /// (source-ancestor, destination-ancestor) pair allowed by
     /// `impliedRelationshipIsAllowed`, create the implied copy unless the
-    /// strategy's efferent check says otherwise. Order matches the reference
+    /// strategy's efferent check says otherwise. Order matches the official
     /// loops (outer: source chain; inner: destination chain reset per step).
     fn create_implied_relationships(&mut self, base_id: &Id) {
         // The base was inserted by the caller moments ago; if it were not
-        // there, there is nothing to imply (2R R-core-07: no panic).
+        // there, there is nothing to imply (no panic).
         let Some(base) = self.relationship(base_id) else {
             return;
         };
@@ -904,7 +898,7 @@ impl WorkspaceBuilder {
             && !self.is_child_of(destination, source)
     }
 
-    /// Reference `Model.replicateElementRelationships`: when a
+    /// Replication rule: when a
     /// software-system/container instance joins the model, replicate matching
     /// static-model relationships between every instance in the SAME
     /// environment and deployment group. Replicated relationships carry EMPTY
@@ -913,7 +907,7 @@ impl WorkspaceBuilder {
         let Some((my_static, my_env, my_groups)) = self.instance_profile(instance_id) else {
             return;
         };
-        // Java iterates a TreeSet ordered by numeric id == insertion order.
+        // Official iteration is ordered by numeric id == insertion order.
         let others: Vec<(Id, Id, String, Vec<String>)> = self
             .all_instances()
             .into_iter()
@@ -932,8 +926,8 @@ impl WorkspaceBuilder {
                 .collect();
             for base_id in fwd_ids {
                 // `base_id` was just collected from the same arena; if it
-                // were gone there would be nothing to replicate (2R
-                // R-core-07: control flow, not a panic).
+                // were gone there would be nothing to replicate (control flow,
+                // not a panic).
                 let Some((desc, tech)) = self
                     .relationship(&base_id)
                     .map(|b| (b.description.clone(), b.technology.clone()))
@@ -963,8 +957,8 @@ impl WorkspaceBuilder {
                 .collect();
             for base_id in rev_ids {
                 // `base_id` was just collected from the same arena; if it
-                // were gone there would be nothing to replicate (2R
-                // R-core-07: control flow, not a panic).
+                // were gone there would be nothing to replicate (control flow,
+                // not a panic).
                 let Some((desc, tech)) = self
                     .relationship(&base_id)
                     .map(|b| (b.description.clone(), b.technology.clone()))
@@ -1037,8 +1031,8 @@ impl WorkspaceBuilder {
         out
     }
 
-    /// Reference `Element.getEfferentRelationshipWith(destination, "")`
-    /// existence check (`description` normalized to `""` on both sides).
+    /// Whether an efferent relationship to `destination` exists
+    /// (`description` normalized to `""` on both sides).
     pub(crate) fn has_efferent(&self, source: &Id, destination: &Id, description: &str) -> bool {
         self.workspace.model.relationships.iter().any(|r| {
             &r.source == source
@@ -1047,7 +1041,7 @@ impl WorkspaceBuilder {
         })
     }
 
-    /// Reference `Element.hasEfferentRelationshipWith(destination)` (any
+    /// Whether an efferent relationship to `destination` exists (any
     /// description).
     pub(crate) fn has_any_efferent(&self, source: &Id, destination: &Id) -> bool {
         self.workspace
@@ -1057,7 +1051,7 @@ impl WorkspaceBuilder {
             .any(|r| &r.source == source && &r.destination == destination)
     }
 
-    /// Reference `Model.isChildOf`: is `e1` a (strict) descendant of `e2`?
+    /// Is `e1` a (strict) descendant of `e2`?
     /// Persons have no lineage.
     pub(crate) fn is_child_of(&self, e1: &Id, e2: &Id) -> bool {
         if self.element_kind(e1) == Some(ElementKind::Person)
@@ -1075,7 +1069,7 @@ impl WorkspaceBuilder {
         false
     }
 
-    /// The structural parent of an element (`Element.getParent()`):
+    /// The structural parent of an element:
     /// container→system, component→container, deployment elements→their node
     /// or parent node; people/systems/custom elements have none.
     #[must_use]
@@ -1094,7 +1088,7 @@ impl WorkspaceBuilder {
         node_parent(&model.deployment_nodes, id)
     }
 
-    /// The reference `Element.getCanonicalName()` for the common kinds
+    /// The canonical name for the common kinds
     /// (deployment-element canonical names are irrelevant for the errors that
     /// carry these).
     #[must_use]
@@ -1127,10 +1121,10 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `element.getRelationships()` — efferent relationship ids in model
+    /// Efferent relationship ids in model
     /// (insertion) order.
-    // Java parity surface (`Element#getRelationships` read side); the port's
-    // consumers use the efferent CHECKS instead — kept per 2R R-core-06.
+    // Official-parity surface (the read-side relationship list); consumers
+    // use the efferent CHECKS instead — kept deliberately.
     #[allow(dead_code)]
     #[must_use]
     pub fn efferent_relationships(&self, id: &Id) -> Vec<Id> {
@@ -1143,7 +1137,7 @@ impl WorkspaceBuilder {
             .collect()
     }
 
-    /// Every model element id in `Model.getElements()` iteration order
+    /// Every model element id in official iteration order
     /// (people, software systems with their containers/components, custom
     /// elements, then the deployment tree). Used by the DSL canonical-name
     /// lookups and the `include *` / expression finders.
@@ -1157,7 +1151,7 @@ impl WorkspaceBuilder {
         ids
     }
 
-    /// `Model.getElementWithCanonicalName(canonicalName)`.
+    /// The element id whose canonical name matches exactly.
     #[must_use]
     pub fn element_with_canonical_name(&self, canonical_name: &str) -> Option<Id> {
         self.all_element_ids()
@@ -1165,7 +1159,7 @@ impl WorkspaceBuilder {
             .find(|id| self.canonical_name_full(id).as_deref() == Some(canonical_name))
     }
 
-    /// `Model.getRelationshipWithCanonicalName(canonicalName)`.
+    /// The relationship id whose canonical name matches exactly.
     #[must_use]
     pub fn relationship_with_canonical_name(&self, canonical_name: &str) -> Option<Id> {
         self.workspace
@@ -1176,7 +1170,7 @@ impl WorkspaceBuilder {
             .map(|r| r.id.clone())
     }
 
-    /// The full `Element.getCanonicalName()` for any element (deployment
+    /// The full canonical name of any element (deployment
     /// nodes, infrastructure nodes and instances included), via
     /// `CanonicalNameGenerator`. `None` for a non-element id.
     #[must_use]
@@ -1226,7 +1220,7 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `Relationship.getCanonicalName()` (`CanonicalNameGenerator`).
+    /// The canonical name of a relationship (see [`mod@crate::canonical`]).
     #[must_use]
     pub fn relationship_canonical_name(&self, id: &Id) -> Option<String> {
         let r = self.relationship(id)?;
@@ -1239,7 +1233,7 @@ impl WorkspaceBuilder {
         ))
     }
 
-    /// `Element.getTechnology()` for containers, components, deployment
+    /// The technology of containers, components, deployment
     /// nodes, infrastructure nodes and container instances (which report
     /// their STATIC container's technology); `""` when unset or the kind has
     /// no technology.
@@ -1259,8 +1253,8 @@ impl WorkspaceBuilder {
             }
         }
         // The walk already carries a found value in its `Option<T>` return
-        // channel — the pre-2R shape stashed it into a captured `out`
-        // holder with `Some(())` stop-signals (R-core-08).
+        // channel — stashing it into a captured `out`
+        // holder with stop-signals was wasted machinery.
         self.walk_nodes_search(&mut |node, _ancestors| {
             if &node.item.id == id {
                 return Some(node.technology.clone().unwrap_or_default());
@@ -1285,8 +1279,8 @@ impl WorkspaceBuilder {
     }
 
     /// `Relationship.getTechnology()` (empty string when unset).
-    // Java parity surface (`Relationship#getTechnology`); the exporters read
-    // the model field directly — kept per 2R R-core-06.
+    // Official-parity surface (the relationship technology getter); the
+    // exporters read the model field directly — kept deliberately.
     #[allow(dead_code)]
     #[must_use]
     pub fn relationship_technology(&self, id: &Id) -> String {
@@ -1302,7 +1296,7 @@ impl WorkspaceBuilder {
             .and_then(|r| r.linked_relationship_id.clone())
     }
 
-    /// `Element.getGroup()` — the group name for any groupable element.
+    /// The group name for any groupable element.
     #[must_use]
     pub fn element_group(&self, id: &Id) -> Option<String> {
         let model = &self.workspace.model;
@@ -1347,8 +1341,8 @@ impl WorkspaceBuilder {
         (self.element_kind(id) == Some(ElementKind::Container)).then(|| id.clone())
     }
 
-    /// `Model.getRelationships()` iteration order: the reference stores
-    /// relationships in a `TreeSet` ordered by `ModelItem.compareTo` —
+    /// Relationship iteration order: the official model stores
+    /// relationships ordered by the item comparator —
     /// ascending numeric id (see `id_sort_key`).
     #[must_use]
     pub fn all_relationship_ids(&self) -> Vec<Id> {
@@ -1363,7 +1357,7 @@ impl WorkspaceBuilder {
         ids
     }
 
-    /// `ModelItem.hasTag(tag)` — `getTagsAsSet().contains(tag)`: derived
+    /// Whether `tag` is an EFFECTIVE tag of the item: derived
     /// defaults for the item's kind, then the stored tags.
     #[must_use]
     pub fn item_has_tag(&self, id: &Id, tag: &str) -> bool {
@@ -1385,7 +1379,7 @@ impl WorkspaceBuilder {
         false
     }
 
-    /// `ModelItem.hasProperty(name, value)` for an element or relationship.
+    /// Whether an element or relationship carries `name=value`.
     #[must_use]
     pub fn item_has_property(&self, id: &Id, name: &str, value: &str) -> bool {
         if let Some(item) = self.item(id) {
@@ -1395,10 +1389,10 @@ impl WorkspaceBuilder {
             .is_some_and(|r| r.properties.get(name) == Some(value))
     }
 
-    /// The default tags of an element id's kind (`ModelItem.getDefaultTags()`);
+    /// The default tags of an element id's kind;
     /// empty for a relationship or unknown id.
-    // Java parity surface (`ModelItem#getDefaultTags`); the JSON reader
-    // computes defaults from kind directly — kept per 2R R-core-06.
+    // Official-parity surface (the derived-default-tags accessor); the JSON
+    // reader computes defaults from kind directly — kept deliberately.
     #[allow(dead_code)]
     #[must_use]
     pub fn element_tag_defaults(&self, id: &Id) -> &'static [&'static str] {
@@ -1407,16 +1401,16 @@ impl WorkspaceBuilder {
         })
     }
 
-    /// `Relationship.getInteractionStyle()` (never set from the DSL).
+    /// The interaction style of a relationship (never set from the DSL).
     #[must_use]
     pub fn relationship_style(&self, id: &Id) -> Option<crate::tags::InteractionStyle> {
         self.relationship(id).and_then(|r| r.interaction_style)
     }
 
-    /// `AbstractRelationshipParser.createRelationship` — the DSL relationship
-    /// entry point, in EXACT reference order: kind dispatch (`uses(...)`
-    /// overload selection), then the `Model.addRelationship` parent/child
-    /// guard, then the null-result duplicate check (`Element.has`, i.e.
+    /// The DSL relationship
+    /// entry point, in EXACT official order: kind dispatch (`uses(...)`
+    /// overload selection), then the parent/child
+    /// guard, then the null-result duplicate check (destination AND
     /// destination + description).  The returned id carries
     /// `linkedRelationshipId = None` — explicit DSL relationships are never
     /// linked (only implied / replicated ones are).
@@ -1436,8 +1430,8 @@ impl WorkspaceBuilder {
         if self.is_child_of(source, destination) || self.is_child_of(destination, source) {
             return Err(CoreError::ParentChildRelationship);
         }
-        // Core `Element.has`: the add returns null only when destination AND
-        // description match. The reference parser's any-description
+        // The official add returns null only when destination AND
+        // description match. The official parser's any-description
         // `hasEfferentRelationshipWith` check only adorns the message inside
         // the `relationship == null` branch — same pair, different
         // description ADDS fine.
@@ -1459,10 +1453,9 @@ impl WorkspaceBuilder {
         Ok(id)
     }
 
-    /// The `createRelationship` instanceof dispatch (class hierarchy @
-    /// `ad34036`): `CustomElement` on either side, a static-structure pair,
-    /// or the deployment chain node→node, node→infra, infra→deployment-
-    /// element, instance→infra.
+    /// The permitted relationship-kind dispatch: `CustomElement` on either
+    /// side, a static-structure pair, or the deployment chain node→node,
+    /// node→infra, infra→deployment-element, instance→infra.
     #[must_use]
     fn permitted_dsl_pair(&self, source: &Id, destination: &Id) -> bool {
         use ElementKind as K;
@@ -1493,12 +1486,12 @@ impl WorkspaceBuilder {
         )
     }
 
-    /// The implied-relationships hook (`Model.addRelationship`), shared by
+    /// The implied-relationships hook, shared by
     /// [`WorkspaceBuilder::add_relationship`] and
     /// [`WorkspaceBuilder::dsl_uses`].
     fn maybe_create_implied(&mut self, id: &Id) {
         // The relationship was inserted moments before every call site; if
-        // it were missing there is nothing to hook (2R R-core-07).
+        // it were missing there is nothing to hook.
         let Some((source, destination)) = self
             .relationship(id)
             .map(|r| (r.source.clone(), r.destination.clone()))
@@ -1513,7 +1506,7 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `Element.getEfferentRelationshipWith(destination)` — the first
+    /// The first
     /// outgoing relationship to `destination` (any description).
     #[must_use]
     pub fn efferent_to(&self, source: &Id, destination: &Id) -> Option<Id> {
@@ -1526,7 +1519,7 @@ impl WorkspaceBuilder {
     }
 
     /// Add already-split tag parts to an element or relationship with the
-    /// reference `addTags(String[])` semantics (trim, first position kept).
+    /// official semantics (trim, first position kept).
     pub fn add_tag_parts(&mut self, id: &Id, parts: &[String]) {
         if let Some(item) = self.item_mut(id) {
             for t in parts {
@@ -1541,7 +1534,7 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `Element.getEfferentRelationshipWith(destination, description)`.
+    /// The first efferent to `destination` with exactly `description`.
     #[must_use]
     pub fn efferent_to_with_description(
         &self,
@@ -1573,7 +1566,7 @@ impl WorkspaceBuilder {
         ))
     }
 
-    /// `Model.getRelationship(id)` — the relationship's own id (existence check).
+    /// The relationship's own id (existence check).
     #[must_use]
     pub fn has_relationship(&self, id: &Id) -> bool {
         self.workspace
@@ -1600,8 +1593,8 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `AbstractRelationshipParser.findSoftwareSystemInstances(system, env)`:
-    /// all software-system instances of `system` in `env`, in element order.
+    /// Instance lookup for the deployment relationship arms:
+    /// All software-system instances of `system` in `env`, in element order.
     #[must_use]
     pub fn find_software_system_instances(&self, system: &Id, env: &str) -> Vec<Id> {
         let mut out = Vec::new();
@@ -1617,7 +1610,7 @@ impl WorkspaceBuilder {
         out
     }
 
-    /// `AbstractRelationshipParser.findContainerInstances(container, env)`.
+    /// All container instances of `container` in `env`, in element order.
     #[must_use]
     pub fn find_container_instances(&self, container: &Id, env: &str) -> Vec<Id> {
         let mut out = Vec::new();
@@ -1647,9 +1640,8 @@ impl WorkspaceBuilder {
         out
     }
 
-    /// Every instance of a static element in ANY environment (reference
-    /// `DeploymentViewExpressionParser.getElements`, which streams ALL
-    /// model elements through `instanceof` + `equals` without consulting
+    /// Every instance of a static element in ANY environment (the official
+    /// stream matches by type and equality alone,
     /// the deployment environment).
     #[must_use]
     pub fn all_instances_of(&self, element: &Id) -> Vec<Id> {
@@ -1663,7 +1655,7 @@ impl WorkspaceBuilder {
         out
     }
 
-    /// `Element.getParent()` for a static-structure-element instance (its
+    /// The parent of a static-structure-element instance (its
     /// deployment node). Used by `!element`'s group assignment (which only
     /// fires for `StaticStructureElement`, so never for instances).
     #[must_use]
@@ -1749,7 +1741,7 @@ impl WorkspaceBuilder {
         })
     }
 
-    /// The reference `generate(DeploymentNode).substring("DeploymentNode://")`
+    /// For a node:
     /// for a node: `ENV/A/…/nodeName` (env + ancestors + own name).
     fn node_chain_of(node: &DeploymentNode, ancestors: &[String]) -> String {
         let chain: Vec<&str> = ancestors
@@ -1867,9 +1859,9 @@ impl WorkspaceBuilder {
 
     /// Attach a perspective to an element or relationship by id.
     pub fn add_perspective(&mut self, id: &Id, perspective: Perspective) -> Result<(), CoreError> {
-        // `ModelItem.addPerspective(Perspective)` / the relationship and
-        // instance equivalents — the OBJECT path: duplicate-name guard only
-        // (the empty-name guard lives in the 3-arg `addPerspective`, which
+        // Perspectives, object path — element, relationship and
+        // instance equivalents — duplicate-name guard only
+        // (the empty-name guard lives in the name-based add, which
         // the DSL inline/archetype-application paths run before calling
         // this).
         let duplicate = if let Some(item) = self.item_mut(id) {
@@ -1945,7 +1937,7 @@ impl WorkspaceBuilder {
     }
 
     /// `technology <technology>` for relationships — the
-    /// `RelationshipsParser` fan-out arm (reference `Relationship.setTechnology`).
+    /// fan-out arm.
     pub fn set_relationship_technology(
         &mut self,
         id: &Id,
@@ -1959,7 +1951,7 @@ impl WorkspaceBuilder {
     }
 
     /// `instances <number|range>` — `DeploymentNode.setInstances`: the
-    /// reference stores the RAW string (numbers and ranges alike), no
+    /// the format stores the RAW string (numbers and ranges alike), no
     /// validation.
     pub fn set_instances(&mut self, id: &Id, instances: &str) -> Result<(), CoreError> {
         match self.element_mut(id) {
@@ -1971,10 +1963,9 @@ impl WorkspaceBuilder {
         }
     }
 
-    /// `tags "a,b"` — ADD tags (reference `addTags`, trimmed, first position).
-    // Java parity surface (`ModelItem#addTags`); the DSL statement uses
-    // `add_tag_parts` (reference `addTags(String…)` varargs) — kept per 2R
-    // R-core-06.
+    /// `tags "a,b"` — ADD tags (trimmed, first position).
+    // Official-parity surface (the add-tags entry); the DSL statement uses
+    // `add_tag_parts` (the varargs form) — kept per the parity surface,
     #[allow(dead_code)]
     pub fn add_tags(&mut self, id: &Id, csv: &str) -> Result<(), CoreError> {
         if let Some(item) = self.item_mut(id) {
@@ -2016,7 +2007,7 @@ impl WorkspaceBuilder {
     // ------------------------------------------------------------------
     //
     // Content operations for these live in [`crate::viewops`] (the
-    // `ModelView`/`StaticView`/`DynamicView`/`DeploymentView` port).
+    // view-content operations for the model-view kinds).
 
     /// Create a system landscape view.
     pub fn create_landscape_view(&mut self, key: &str) -> Result<ViewRef, CoreError> {
@@ -2027,7 +2018,7 @@ impl WorkspaceBuilder {
             .push(SystemLandscapeView {
                 base,
                 content: ViewContent::default(),
-                // Java field initializer: `enterpriseBoundaryVisible = true`.
+                // The format default is `enterpriseBoundaryVisible = true`.
                 enterprise_boundary_visible: true,
                 animations: Vec::new(),
             });
@@ -2036,8 +2027,8 @@ impl WorkspaceBuilder {
         ))
     }
 
-    /// Create a system context view scoped to `system`. Like the reference
-    /// `SystemContextView` constructor, the scoped system is added to the
+    /// Create a system context view scoped to `system`. Like the official
+    /// constructor, the scoped system is added to the
     /// view immediately (with its relationships).
     pub fn create_context_view(&mut self, system: &Id, key: &str) -> Result<ViewRef, CoreError> {
         if !self.is_system(system) {
@@ -2054,7 +2045,7 @@ impl WorkspaceBuilder {
                 base,
                 content: ViewContent::default(),
                 software_system_id: system.clone(),
-                // Java field initializer: `enterpriseBoundaryVisible = true`.
+                // The format default is `enterpriseBoundaryVisible = true`.
                 enterprise_boundary_visible: true,
                 animations: Vec::new(),
             });
@@ -2157,7 +2148,7 @@ impl WorkspaceBuilder {
     }
 
     /// Create a filtered view over `base_key` (existence checked by
-    /// [`mod@crate::validate`], as in the reference hydrate step).
+    /// [`mod@crate::validate`], as in the official validation step).
     pub fn create_filtered_view(
         &mut self,
         base_key: &str,
@@ -2213,12 +2204,12 @@ impl WorkspaceBuilder {
         Ok(ViewRef::Custom(self.workspace.views.custom_views.len() - 1))
     }
 
-    /// Build a view base applying the reference `ViewSet` rules: an empty key
-    /// triggers `generateViewKey(prefix)` = `<Prefix>-<counter:000>` scanning
+    /// Build a view base applying the official view-set rules: an empty key
+    /// triggers key generation: `<Prefix>-<counter:000>` scanning
     /// from 1 (marks `generatedKey`); a given key must be unique across ALL
     /// views; `order` = max existing order + 1 across the whole view set.
-    /// The view set is walked ONCE (2R R-core-11 — the old shape rebuilt and
-    /// rescanned `all_views()` per key-candidate; behaviour is identical).
+    /// The view set is walked ONCE (rebuilding and rescanning `all_views()`
+    /// per key-candidate was wasted work; behaviour is identical).
     fn new_view_base(&mut self, key: &str, prefix: &str) -> Result<ViewBase, CoreError> {
         let views = self.workspace.views.all_views();
         let order = views
@@ -2242,7 +2233,7 @@ impl WorkspaceBuilder {
         Ok(base)
     }
 
-    /// `ViewSet.generateViewKey`: `DecimalFormat("000")` scan from 1 over a
+    /// Generated view key: 3-digit zero-padded scan from 1 over a
     /// once-collected key set.
     fn generate_view_key(views: &[crate::views::View<'_>], prefix: &str) -> String {
         let taken: std::collections::HashSet<&str> = views.iter().map(|v| v.key()).collect();
@@ -2278,10 +2269,9 @@ impl WorkspaceBuilder {
         item
     }
 
-    /// `Model.addPerson`/`addSoftwareSystem`/`addCustomElement` duplicate
-    /// guard — verified @ `ad34036`: the lookup (`getPersonWithName`, …)
-    /// covers ONLY the same kind, so a person and a software system MAY
-    /// share a name (all three methods throw the same text).
+    /// Top-level duplicate-name guard: the same-name lookup covers ONLY
+    /// the same kind, so a person and a software system MAY share a name
+    /// (all three add paths throw the same text).
     fn check_top_level_name(
         &self,
         name: &str,
@@ -2393,8 +2383,7 @@ impl WorkspaceBuilder {
     }
 
     /// Borrow a model relationship by id — the read-side twin of
-    /// [`Self::relationship_mut`]; hand-rolled at ~15 call sites before
-    /// 2R R-core-09.
+    /// [`Self::relationship_mut`] (was hand-rolled at ~15 call sites).
     #[must_use]
     pub(crate) fn relationship(&self, id: &Id) -> Option<&Relationship> {
         self.workspace
@@ -2584,8 +2573,8 @@ pub enum ElementMut<'a> {
 }
 
 impl ElementMut<'_> {
-    /// Set the group — every element kind is groupable (`GroupableElement` is
-    /// in all inheritance chains, deployment elements included).
+    /// Set the group — every element kind is groupable
+    /// (deployment elements included).
     pub fn set_group(&mut self, group: Option<String>) {
         match self {
             ElementMut::Person(p) => p.group = group,
@@ -2600,7 +2589,7 @@ impl ElementMut<'_> {
         }
     }
 
-    /// `GroupableElement.getGroup()` — the stored group name.
+    /// The stored group name.
     #[must_use]
     pub fn group(&self) -> Option<&str> {
         match self {
@@ -2635,17 +2624,17 @@ impl ElementMut<'_> {
     }
 }
 
-/// DSL convention: the reference passes `""` for omitted positional args, and
-/// empty descriptions are stored as null (`NON_EMPTY` on write).
+/// DSL convention: omitted positional args arrive as `""`, and empty
+/// descriptions are stored as null (omitted on write).
 fn filter_default(value: Option<String>) -> Option<String> {
     value.filter(|v| !v.is_empty())
 }
 
-/// Java `String.split(",")` (limit 0): an EMPTY input yields `[""]`;
-/// otherwise all TRAILING empty parts are dropped (leading/middle empties
-/// survive, and `","` splits to the empty array). Tag parts are then added
-/// via [`crate::tags::Tags::add`] which trims — so `tags "a, ,"` stores
-/// `["a", ""]` exactly like the reference.
+/// The format's CSV split (limit-0 semantics): an EMPTY input yields
+/// `[""]`; otherwise all TRAILING empty parts are dropped (leading/middle
+/// empties survive, and `","` splits to the empty array). Tag parts are
+/// then added via [`crate::tags::Tags::add`] which trims — so
+/// `tags "a, ,"` stores `["a", ""]` exactly like the official tooling.
 pub(crate) fn java_split_csv(s: &str) -> Vec<&str> {
     if s.is_empty() {
         return vec![""];
@@ -2658,8 +2647,8 @@ pub(crate) fn java_split_csv(s: &str) -> Vec<&str> {
     parts[..end].to_vec()
 }
 
-/// Model id ordering matching Java's `Model.getElements()` /
-/// `getRelationships()` iteration: ids come from one sequential counter, so
+/// Model id ordering:
+/// ids come from one sequential counter, so
 /// creation order is ascending numeric id order. Non-numeric ids (JSON
 /// loads) sort last, lexicographically.
 pub(crate) fn id_sort_key(s: &str) -> (u64, String) {
@@ -2669,8 +2658,8 @@ pub(crate) fn id_sort_key(s: &str) -> (u64, String) {
     }
 }
 
-/// Kinds eligible for implied relationships (`Model.addRelationship`'s
-/// `instanceof` guard).
+/// Kinds eligible for implied relationships (the
+/// kind guard).
 fn is_implied_kind(kind: Option<ElementKind>) -> bool {
     matches!(
         kind,
@@ -2711,7 +2700,7 @@ fn walk_nodes<'a>(
 }
 
 /// `DeploymentNode` tree search for the node PARENT of `id` (the parent of a
-/// top-level node is `None`, like `Element.getParent()`).
+/// top-level node is `None`).
 fn node_parent(nodes: &[DeploymentNode], id: &Id) -> Option<Id> {
     for n in nodes {
         if n.children.iter().any(|c| &c.item.id == id)
@@ -2923,7 +2912,7 @@ mod tests {
 
     #[test]
     fn dsl_uses_gates_duplicates_on_destination_plus_description() {
-        // `AbstractRelationshipParser.createRelationship` + `Element.has`:
+        // The DSL relationship add and the core duplicate check:
         // the duplicate throw fires only when the core add returns null —
         // same destination AND same description. Same pair with a different
         // description ADDS (`filteredviews.dsl`,
@@ -2950,8 +2939,7 @@ mod tests {
 
     #[test]
     fn top_level_names_are_per_kind_namespaces() {
-        // Verified @ ad34036: `Model.addPerson`/`addSoftwareSystem`/
-        // `addCustomElement` each guard ONLY against a same-kind collision
+        // Each top-level add guards ONLY against a same-kind collision
         // (getPersonWithName, …), all throwing the same text.
         let mut b = WorkspaceBuilder::new();
         b.add_software_system("Dup", None, None).unwrap();
@@ -3020,9 +3008,9 @@ mod tests {
 
     #[test]
     fn adopt_replaces_workspace_and_seeds_id_counter() {
-        // M5-a (`workspace extends`): the base becomes the workspace under
-        // construction and its ids seed the counter (reference `Model.add`
-        // calls found() on every add, JSON loads included).
+        // `workspace extends`: the base becomes the workspace under
+        // construction and its ids seed the counter (the loaders seed it on
+        // every add, JSON loads included).
         let mut base = WorkspaceBuilder::new();
         base.set_workspace_name("Base");
         let user = base.add_person("User", None, None).unwrap();

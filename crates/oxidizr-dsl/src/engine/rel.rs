@@ -1,8 +1,7 @@
-//! Ports of `ExplicitRelationshipParser`, `ImplicitRelationshipParser` and
-//! `NoRelationshipParser` (`ad34036`). Sets are insertion-ordered `Vec`s —
-//! the portable stand-in for the reference `HashSet`/`LinkedHashSet`
-//! (see `agents/plan/PROGRESS.md`); the creation loops keep the Java
-//! source×destination nesting order.
+//! Explicit (`a -> b`), implicit (`-> b`) and removed (`a -/> b`)
+//! relationship statements. Sets are insertion-ordered `Vec`s — the portable
+//! stand-in for the official tooling's hash sets — and the creation loops
+//! keep the source×destination nesting order.
 
 use oxidizr_core::{Id, validate::ElementKind};
 
@@ -20,7 +19,7 @@ type PosTexts = (Option<String>, Option<String>, Option<String>);
 pub(crate) struct RelArch {
     pub description: String,
     pub technology: String,
-    /// `CustomElementArchetype` metadata (empty for the other kinds).
+    /// Custom-element archetype metadata (empty for the other kinds).
     pub metadata: String,
     pub tags: Vec<String>,
     pub properties: Vec<(String, String)>,
@@ -28,7 +27,7 @@ pub(crate) struct RelArch {
 }
 
 impl Parser<'_> {
-    /// Snapshot of `archetype_list[idx]` for the parser ports.
+    /// Snapshot of `archetype_list[idx]` for the statement handlers.
     pub(crate) fn arch_snapshot(&self, idx: usize) -> RelArch {
         let a = &self.archetype_list[idx];
         RelArch {
@@ -42,7 +41,7 @@ impl Parser<'_> {
     }
 }
 
-/// `createRelationship` + the archetype property/perspective side effects.
+/// Relationship creation + the archetype property/perspective side effects.
 /// The returned id carries no `linkedRelationshipId` — explicit DSL
 /// relationships are never linked.
 impl Parser<'_> {
@@ -59,17 +58,16 @@ impl Parser<'_> {
             .builder
             .dsl_uses(source, destination, description, technology)
             .map_err(|e| DslError::core(&e))?;
-        // `createRelationship` passes the tags to `uses(...)`; the core
-        // `dsl_uses` creates the relationship with an empty tag set, the
-        // archetype + statement tags land right after (addTags semantics).
+        // The core `dsl_uses` creates the relationship with an empty tag
+        // set; the archetype + statement tags land right after
+        // (add-tags semantics).
         self.builder.add_tag_parts(&id, tags);
         for (name, value) in &arch.properties {
             let _ = self.builder.add_item_property(&id, name, value);
         }
         for p in &arch.perspectives {
-            // `relationship.addPerspectives(...)` delegates to the 3-arg
-            // `addPerspective`, which rejects blank names first
-            // (`Perspective.setName`), then the duplicate guard.
+            // Adding perspectives rejects blank names first,
+            // then applies the duplicate guard.
             if p.name.trim().is_empty() {
                 return Err(DslError::core(
                     &oxidizr_core::CoreError::PerspectiveNameRequired,
@@ -82,9 +80,9 @@ impl Parser<'_> {
         Ok(id)
     }
 
-    /// Positional token extraction shared by the two parsers; every parser
-    /// validates "too many"/"expected" BEFORE reading any token, exactly
-    /// like the reference.
+    /// Positional token extraction shared by the statement kinds; every
+    /// statement validates "too many"/"expected" BEFORE reading any token,
+    /// exactly like the official tooling.
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::unused_self)] // method symmetry with the other guards
     fn positional(
@@ -116,7 +114,7 @@ impl Parser<'_> {
         Ok((description, technology, tags))
     }
 
-    /// `ExplicitRelationshipParser.findElement` — `context.getElement` plus
+    /// Endpoint lookup: registered identifier plus
     /// the `this` fallback, active ONLY when the top context is an element
     /// context and no identifier named `this` resolves.
     fn explicit_endpoint(&mut self, identifier: &str) -> Option<Id> {
@@ -131,8 +129,7 @@ impl Parser<'_> {
         None
     }
 
-    /// The environment / deployment-node context's environment name
-    /// (`ExplicitRelationshipParser.parse`).
+    /// The environment / deployment-node context's environment name.
     fn rel_environment(&self) -> Option<String> {
         match self.top()? {
             Ctx::Environment { env, .. } => Some(env.name.clone()),
@@ -142,10 +139,10 @@ impl Parser<'_> {
         }
     }
 
-    /// `AbstractRelationshipParser.findSoftwareSystemInstances` /
-    /// `findContainerInstances` — the static-structure fan-out used by the
+    /// The static-structure fan-out used by the
     /// explicit (env/node contexts) and implicit (infrastructure-node
-    /// source) parsers. Non-instances pass through unchanged.
+    /// source) statements: a software system / container resolves to its
+    /// instances in the environment. Non-instances pass through unchanged.
     fn fan_out(&self, element: &Id, env: &str) -> Vec<Id> {
         match self.builder.element_kind(element) {
             Some(ElementKind::SoftwareSystem) => {
@@ -156,7 +153,7 @@ impl Parser<'_> {
         }
     }
 
-    /// `ExplicitRelationshipParser.parse(DslContext, …)` — the Model /
+    /// The `->` statement — the Model /
     /// environment / element-context arm.
     pub(crate) fn explicit_rel(
         &mut self,
@@ -175,10 +172,10 @@ impl Parser<'_> {
             .explicit_endpoint(&destination_id)
             .ok_or_else(|| missing_endpoint("destination", &destination_id))?;
 
-        // Archetype defaults; inside a `NoRelationshipInDeploymentEnvironment`
-        // context the LINKED relationship's values take over when the
-        // statement omits them (the `DslContext` variant only — the
-        // `ElementsDslContext` variant has no such fallback).
+        // Archetype defaults; inside a no-relationship environment context
+        // the LINKED relationship's values take over when the statement
+        // omits them (the single-context variant only — the elements
+        // fan-out variant has no such fallback).
         let a = &self.archetype_list[arch_idx];
         let (has_desc, has_tech) = (desc.is_some(), tech.is_some());
         let mut description = desc.or_else(|| Some(a.description.clone()));
@@ -229,7 +226,7 @@ impl Parser<'_> {
         }
     }
 
-    /// `ExplicitRelationshipParser.parse(ElementsDslContext, …)` — the
+    /// The `->` statement in an elements context — the
     /// fan-out variant (`this` = every context element; tags from the
     /// token REPLACE the archetype tags).
     pub(crate) fn explicit_rel_elements(
@@ -244,7 +241,7 @@ impl Parser<'_> {
             _ => Vec::new(),
         };
 
-        // `findElements`: a registered identifier wins; otherwise `this`
+        // Endpoint lookup: a registered identifier wins; otherwise `this`
         // fans out to the context elements; otherwise the EMPTY set (the
         // caller throws with source/destination wording).
         let find = |p: &mut Parser<'_>, id: &str| -> Vec<Id> {
@@ -295,7 +292,7 @@ impl Parser<'_> {
         Ok(out)
     }
 
-    /// `ImplicitRelationshipParser.parse(ElementDslContext, …)` — the
+    /// The `-> b` statement inside an element context — the
     /// source is the TOP context's element; only an infrastructure-node
     /// source fans the destination out to environment instances.
     pub(crate) fn implicit_rel(
@@ -356,10 +353,10 @@ impl Parser<'_> {
         )?])
     }
 
-    /// `ImplicitRelationshipParser.parse(ElementsDslContext, …)` — every
+    /// The `-> b` statement in an elements context — every
     /// context element becomes a source (the chain arm reads the archetype
-    /// from `tokens.get(1)` — a reference quirk replicated at the call
-    /// site; tags from a token REPLACE the archetype tags).
+    /// from token `1` — the official tooling's quirk, replicated at
+    /// the call site; tags from a token REPLACE the archetype tags).
     pub(crate) fn implicit_rel_elements(
         &mut self,
         tokens: &Tokens,
@@ -406,20 +403,18 @@ impl Parser<'_> {
         Ok(out)
     }
 
-    /// `NoRelationshipParser.parse` — removes the LINKED instance
+    /// The `-/>` statement — removes the LINKED instance
     /// relationships between the two endpoints in the environment and
     /// returns them (first removal first) together with the LINKED id of
-    /// the FIRST removal. Java reads `getLinkedRelationshipId()` off the
-    /// removed object, which still answers after `Model.remove` leaves the
-    /// object alive; a model lookup AFTER removal is blind, so the id must
-    /// be captured mid-loop (M2-d A/B: `no-relationship` lost the inherited
-    /// description/technology).
+    /// the FIRST removal. That id lives on the removed object itself: a
+    /// model lookup AFTER removal is blind, so it must be captured
+    /// mid-loop (an early implementation lost the inherited
+    /// description/technology here).
     ///
-    /// Erratum: the reference `do { … } while (relationship != null)`
-    /// spins forever when the first found match is NOT linked
-    /// (`linkedRelationshipId == null`); this port removes every linked
-    /// match and stops — the closest terminating behavior (recorded in
-    /// `agents/plan/DSL-ERRATA.md`).
+    /// Trap: the official tooling loops forever when the first found match
+    /// is NOT linked (`linkedRelationshipId == null`); oxidizr removes
+    /// every linked match and stops — the closest terminating behavior
+    /// (a documented deviation).
     pub(crate) fn no_relationship(
         &mut self,
         tokens: &Tokens,
@@ -468,7 +463,7 @@ impl Parser<'_> {
                     };
                     let Some(rel) = found else { break };
                     let Some(linked) = self.builder.linked_relationship_id(&rel) else {
-                        break; // un-linked match: the Java do-while hangs here
+                        break; // un-linked match: the official loop hangs here
                     };
                     if first_linked.is_none() {
                         first_linked = Some(linked);
@@ -491,10 +486,10 @@ impl Parser<'_> {
         Ok((removed, first_linked))
     }
 
-    /// `NoRelationshipParser` endpoint resolution: a software system /
+    /// `-/>` endpoint resolution: a software system /
     /// container fans out to its environment instances; a static-structure
-    /// instance is itself; anything else is the reference's "not valid"
-    /// throw. `what` selects the message's source/destination word.
+    /// instance is itself; anything else is the official tooling's "not
+    /// valid" throw. `what` selects the message's source/destination word.
     fn no_rel_endpoints(
         &self,
         element: &Id,
@@ -518,7 +513,7 @@ impl Parser<'_> {
 }
 
 /// `The source element "x" does not exist` / `The destination element "x"
-/// does not exist` — the exact wording of the two relationship parsers.
+/// does not exist` — the exact wording the official tooling reports.
 fn missing_endpoint(what: &str, identifier: &str) -> DslError {
     DslError::stmt(format!(
         "The {what} element \"{identifier}\" does not exist"

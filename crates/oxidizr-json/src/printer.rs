@@ -1,19 +1,19 @@
-//! Jackson `DefaultPrettyPrinter` byte emulation (`WRITE-CATALOG` §0),
-//! verified against the goldens (separator `" : "`, 2-space indent, LF,
+//! The pretty JSON byte shape the official tooling writes (separator
+//! `" : "`, 2-space indent, LF,
 //! `{ }` / `[ ]`, inline SCALAR arrays, expanded object arrays, no trailing
-//! newline).
+//! newline; witnessed by the goldens).
 
 use crate::javahash;
 use oxidizr_core::properties::Properties;
 
 /// A JSON value in output-ready shape. Objects carry their entries in FINAL
-/// key order (the caller sorts: alphabetical for POJOs — Jackson
-/// `SORT_PROPERTIES_ALPHABETICALLY` — `HashMap` order for `properties`);
-/// omissions (`NON_EMPTY` etc.) are applied by the caller, so everything
+/// key order (the caller sorts: alphabetical for model objects,
+/// `HashMap` order for `properties`);
+/// omissions (empty/null elision) are applied by the caller, so everything
 /// present here serializes.
 #[derive(Debug, Clone)]
 pub enum Json {
-    /// String (escaped at emit time, Jackson rules).
+    /// String (escaped at emit time, the writer's own rules).
     Str(String),
     /// int/i64 render.
     Num(i64),
@@ -29,8 +29,8 @@ pub enum Json {
 }
 
 impl Json {
-    /// Build an object, dropping `None` entries (the `NON_EMPTY`/`NON_NULL`
-    /// omission already decided by the caller).
+    /// Build an object, dropping `None` entries (the empty/absent omission
+    /// already decided by the caller).
     pub fn obj(entries: Vec<(&'static str, Option<Json>)>) -> Json {
         Json::Obj(
             entries
@@ -51,7 +51,7 @@ impl Json {
         )
     }
 
-    /// `NON_EMPTY` string field: `None`/empty → omitted.
+    /// String field that omits when empty: `None`/empty → omitted.
     pub fn text(s: &str) -> Option<Json> {
         if s.is_empty() {
             None
@@ -60,17 +60,17 @@ impl Json {
         }
     }
 
-    /// Optional `NON_EMPTY` string field.
+    /// Optional string field, omitted when empty.
     pub fn opt_text(s: Option<&str>) -> Option<Json> {
         s.and_then(Json::text)
     }
 
-    /// A `string[]` written with reference set/array semantics.
+    /// A `string[]` written with the format's set/array semantics.
     pub fn str_array(items: &[String]) -> Json {
         Json::Arr(items.iter().map(|s| Json::Str(s.clone())).collect())
     }
 
-    /// Free-form `properties` map in Java `HashMap` order (V-11).
+    /// Free-form `properties` map in Java `HashMap` order.
     pub fn props(props: &Properties) -> Option<Json> {
         if props.is_empty() {
             return None;
@@ -84,7 +84,7 @@ impl Json {
     }
 }
 
-/// Serialize to the reference's pretty JSON bytes (no trailing newline).
+/// Serialize to the official pretty JSON bytes (no trailing newline).
 #[must_use]
 pub fn to_bytes(root: &Json) -> Vec<u8> {
     let mut out = Vec::with_capacity(8 * 1024);
@@ -125,13 +125,12 @@ fn emit(value: &Json, depth: usize, out: &mut Vec<u8>) {
                 out.extend_from_slice(b"[ ]");
                 return;
             }
-            // Jackson `DefaultPrettyPrinter` writes EVERY array the same way:
+            // The pretty printer writes EVERY array the same way:
             // `[ ` … items joined inline with `, ` … ` ]`. Scalars fit one
             // line (`[ "a", "b" ]`); object arrays only LOOK expanded
             // (`[ {` … `}, {` … `} ]`) because each element `Obj` renders
-            // multi-line at `depth` itself. 2R R-mis-06: the old shape
-            // branched on `matches!(items[0], Json::Obj(_))` into two
-            // byte-identical loops (verified under the goldens) — collapsed.
+            // multi-line at `depth` itself (the two shapes are
+            // byte-identical — one loop suffices).
             out.extend_from_slice(b"[ ");
             for (i, item) in items.iter().enumerate() {
                 if i > 0 {
@@ -148,7 +147,7 @@ fn pad(depth: usize, out: &mut Vec<u8>) {
     out.extend_from_slice(&[b' '; 2].repeat(depth));
 }
 
-/// Jackson `JsonStringEncoder` escaping: `"`, `\`, and the named controls;
+/// The writer's string escaping: `"`, `\`, and the named controls;
 /// other `< 0x20` as `\u00XX` (UPPERCASE hex); everything else — including
 /// `/`, DEL and all non-ASCII — passes through raw UTF-8.
 fn escape_into(s: &str, out: &mut Vec<u8>) {
@@ -188,11 +187,11 @@ mod tests {
     fn escaping_matches_jackson_defaults() {
         assert_eq!(esc("a\"b\\c"), "\"a\\\"b\\\\c\"");
         assert_eq!(esc("tab\there\nnl"), "\"tab\\there\\nnl\"");
-        // Named controls, not \u, for the five Jackson names:
+        // Named controls, not \u, for the five named escapes:
         assert_eq!(esc("\u{08}\u{0C}\u{0D}"), "\"\\b\\f\\r\"");
         // Other controls: uppercase hex.
         assert_eq!(esc("\u{1}\u{1F}"), "\"\\u0001\\u001F\"");
-        // Pass-throughs (Jackson does NOT escape these by default):
+        // Pass-throughs (NOT escaped by default):
         assert_eq!(esc("a/b\u{7F}é漢😀"), "\"a/b\u{7F}é漢😀\"");
     }
 
@@ -222,7 +221,7 @@ mod tests {
             ("themes", Some(Json::str_array(&["a".into(), "b".into()]))),
         ]);
         // Entries are written in GIVEN order (the caller applies the key
-        // sort), with Jackson's `,`-after-each-entry and `" : "` separator:
+        // sort), with the `,`-after-each-entry and `" : "` separator:
         let expect = "{\n  \"id\" : \"1\",\n  \"elements\" : [ {\n    \"x\" : 0,\n    \"y\" : 7\n  } ],\n  \"themes\" : [ \"a\", \"b\" ]\n}";
         assert_eq!(String::from_utf8(to_bytes(&j)).unwrap(), expect);
     }

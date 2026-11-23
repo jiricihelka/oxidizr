@@ -1,16 +1,15 @@
-//! Chain section: reference `StructurizrDslParser.java` arms at Java lines
-//! 612–741 — the `tags`/`tag`/`description`/`technology`/`instances`/`url`
-//! property statements, the ten `properties` scope arms and the
-//! `PropertyParser` catch-all, the `perspectives` arms with the inline and
-//! block forms of `perspective`, the `value`/`description`/`url` statements
-//! inside a perspective block, `group` as a COMPONENT property, the
-//! `workspace` scope arm, `impliedRelationships` on/off, and the
+//! Chain section: the `tags`/`tag`/`description`/`technology`/`instances`/`url`
+//! property statements, the ten `properties` scope arms and their
+//! catch-all, the `perspectives` arms with the inline and block forms of
+//! `perspective`, the `value`/`description`/`url` statements inside a
+//! perspective block, `group` as a COMPONENT property, the `workspace`
+//! scope arm, `impliedRelationships` on/off, and the
 //! `name`/`description`/`model` statements at workspace scope.
 //!
-//! Arm order mirrors the reference `else if` chain exactly. These property
-//! parsers all receive the RAW tokens (a trailing `{` becomes a tag part, a
-//! property value, or an error, depending on the arm) — the reference calls
-//! them with `tokens`, never `withoutContextStartToken()`.
+//! Arm order mirrors the official dispatch chain exactly. These property
+//! statements all read the RAW tokens (a trailing `{` becomes a tag part, a
+//! property value, or an error, depending on the arm) — the brace-dropping
+//! view is never used here.
 
 use oxidizr_core::builder::ImpliedRelationshipsStrategy;
 use oxidizr_core::model::Perspective;
@@ -25,12 +24,11 @@ use super::{Parser, Sec, Stmt, eqi, java_split_str, tok};
 pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let first = stmt.first();
     let raw = &stmt.tokens;
-    // Guards — "top of stack" checks (`inContext`); `!isGroup` is the
-    // reference `isGroup(getContext())`: the TOP groupable context carrying
-    // a group payload. Fresh `p.top()` reads (2R R-dsl-06): the reference
-    // re-reads `getContext()` per `else if`, and every arm that mutates the
-    // stack also returns, so each guard observes the same context the old
-    // whole-`Ctx` prelude clone snapshotted.
+    // Guards — "top of stack" checks; `no_group` means the TOP groupable
+    // context carries no group payload. Fresh `p.top` reads: the official
+    // chain re-reads the current context per branch, and every arm that
+    // mutates the stack also returns, so each guard observes the same
+    // context the old whole-`Ctx` prelude clone snapshotted.
     let no_group = p.top().is_some_and(|c| c.group_payload().is_none());
     let is_item_ng = p.top().is_some_and(super::ctx::Ctx::is_model_item) && no_group;
     let is_element_ng = p.top().is_some_and(Ctx::is_element) && no_group;
@@ -38,7 +36,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     let is_elements = matches!(p.top(), Some(Ctx::Elements { .. }));
     let is_workspace_ctx = matches!(p.top(), Some(Ctx::Workspace));
 
-    // 612/615: `tags <tags> [tags]` (`tag` is an alias) — a single model
+    // `tags <tags> [tags]` (`tag` is an alias) — a single model
     // item, or every item of a fan-out context.
     if (eqi(&first, tok::TAGS) || eqi(&first, tok::TAG)) && (is_item_ng || is_items) {
         return (|| {
@@ -46,8 +44,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             if !raw.includes(1) {
                 return Err(DslError::stmt("Expected: tags <tags> [tags]"));
             }
-            // `parseTags` iterates EVERY remaining raw token (a trailing
-            // `{` becomes a tag part) and splits each on commas.
+            // EVERY remaining raw token becomes tag material (a trailing
+            // `{` becomes a tag part) and each is split on commas.
             let mut parts: Vec<String> = Vec::new();
             for i in 1..raw.size() {
                 parts.extend(
@@ -64,7 +62,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 618/621: `description <description>` on an element or element fan-out.
+    // `description <description>` on an element or element fan-out.
     if eqi(&first, tok::DESCRIPTION) && (is_element_ng || is_elements) {
         return (|| {
             let targets = targets(p)?;
@@ -80,14 +78,14 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 624–639: `technology <technology>` — six context arms in chain order
+    // `technology <technology>` — six context arms in chain order
     // (container and component only when their context carries NO group).
     if eqi(&first, tok::TECHNOLOGY) {
         let single = match p.top() {
             Some(Ctx::Container { group, .. }) if group.is_none() => true,
-            // The reference's `!hasGroup()` guard is vacuous for components
-            // — no DSL path ever pushes a `ComponentDslContext` carrying a
-            // group (`group` is a component PROPERTY, arm 695).
+            // The no-group guard is vacuous for components
+            // — no DSL path ever pushes a component context carrying a
+            // group (`group` is a component PROPERTY only).
             Some(
                 Ctx::Component { .. } | Ctx::DeploymentNode { .. } | Ctx::InfrastructureNode { .. },
             ) => true,
@@ -100,7 +98,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 match p.top() {
                     Some(Ctx::Elements { items }) => {
                         let items = items.clone();
-                        // `ElementsParser.parseTechnology` — only the four
+                        // In a fan-out, only the four
                         // kinds with a technology field are set; the others
                         // are silently skipped.
                         for id in items {
@@ -121,7 +119,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                     }
                     Some(Ctx::Relationships { items }) => {
                         let items = items.clone();
-                        // `RelationshipsParser.parseTechnology` — only
+                        // In a relationships fan-out — only
                         // relationships between two instances are set.
                         let is_instance = |kind: Option<ElementKind>| {
                             matches!(
@@ -171,9 +169,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         // statement may yet hit a later arm or the catch-all).
     }
 
-    // 642: `instances <number|range>` on a deployment node (the reference
-    // stores the RAW string — `DeploymentNode.setInstances` does not
-    // validate).
+    // `instances <number|range>` on a deployment node — the
+    // official tooling stores the RAW string with no validation.
     if eqi(&first, tok::INSTANCES) && matches!(p.top(), Some(Ctx::DeploymentNode { .. })) {
         return (|| {
             let id = item_id(p)?;
@@ -185,7 +182,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 645/648: `url <url>` — model item or fan-out.
+    // `url <url>` — model item or fan-out.
     if eqi(&first, tok::URL) && (is_item_ng || is_items) {
         return (|| {
             let targets = targets(p)?;
@@ -201,8 +198,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 651–669: `properties` — ten context arms, each pushing a
-    // `PropertiesDslContext` OVER ITS HOLDER(S). The push is UNCONDITIONAL
+    // `properties` — ten context arms, each pushing a
+    // properties context OVER ITS HOLDER(S). The push is UNCONDITIONAL
     // (`{` is neither required nor optional — extra tokens are ignored, a
     // missing `{` still opens the context).
     if eqi(&first, tok::PROPERTIES) {
@@ -214,8 +211,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         }
     }
 
-    // 671: inside a properties block ANY statement is a `<name> <value>`
-    // pair (`PropertyParser` over the RAW tokens).
+    // Inside a properties block ANY statement is a `<name> <value>`
+    // pair, read over the RAW tokens.
     if let Some(Ctx::Properties { holders }) = p.top() {
         let holders = holders.clone();
         return (|| {
@@ -235,7 +232,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 673/676: `perspectives` — push over the item/fan-out holders
+    // `perspectives` — push over the item/fan-out holders
     // (unconditional push, as for `properties`).
     if eqi(&first, tok::PERSPECTIVES) && (is_item_ng || is_items) {
         return (|| {
@@ -243,9 +240,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 .into_iter()
                 .map(Holder::Item)
                 .collect::<Vec<_>>();
-            // A fan-out is ONE `Items` holder — `ModelItemsParser`-style
-            // (`getContext().getModelItems()`), matching the reference's
-            // `PerspectivesDslContext(items)` (a list, applied per item).
+            // A fan-out is ONE `Items` holder covering every
+            // item (the list is applied per item), not one holder per item.
             let holders = match p.top() {
                 Some(Ctx::Elements { items } | Ctx::Relationships { items }) => {
                     vec![Holder::Items(items.clone())]
@@ -258,19 +254,19 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 679: `perspective <name> {` — a NAMED perspective block; requires the
+    // `perspective <name> {` — a NAMED perspective block; requires the
     // brace AND exactly three RAW tokens, else the statement falls through
     // to the inline form below (`perspective X Y` defines a perspective
-    // CALLED "perspective" — the reference quirk).
+    // CALLED "perspective" — the official tooling's quirk, preserved).
     if eqi(&first, tok::PERSPECTIVE)
         && matches!(p.top(), Some(Ctx::Perspectives { .. }))
         && Parser::should_start_context(raw)
         && raw.size() == 3
     {
         p.start_context(Ctx::Perspective {
-            // `PerspectiveParser.parse(tokens)` — `new Perspective(name)`
-            // (the one-arg ctor performs NO name validation; the block
-            // close adds via the OBJECT path, which only duplicate-checks).
+            // The one-argument perspective constructor performs NO name
+            // validation; the block close adds via the OBJECT path, which
+            // only duplicate-checks.
             def: Perspective {
                 name: raw.get(1).into_owned(),
                 description: None,
@@ -281,8 +277,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         return Sec::Handled;
     }
 
-    // 683: inside a perspectives block, `<name> <description> [value]`
-    // defines a perspective inline (`PerspectiveParser.parse(context, …)`).
+    // Inside a perspectives block, `<name> <description> [value]`
+    // defines a perspective inline.
     if let Some(Ctx::Perspectives { holders }) = p.top() {
         let holders = holders.clone();
         return (|| {
@@ -301,8 +297,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
             } else {
                 String::default()
             };
-            // The 3-arg `addPerspective` runs the name through
-            // `Perspective.setName` BEFORE any holder is touched.
+            // Adding a perspective validates the name (blank is
+            // rejected) BEFORE any holder is touched.
             if name.trim().is_empty() {
                 return Err(DslError::core(&CoreError::PerspectiveNameRequired));
             }
@@ -319,7 +315,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 686–692: `value`/`description`/`url` statements inside a perspective
+    // `value`/`description`/`url` statements inside a perspective
     // block (plain setters — empty strings land as-is).
     if matches!(p.top(), Some(Ctx::Perspective { .. })) {
         let field = if eqi(&first, tok::PERSPECTIVE_VALUE) {
@@ -353,8 +349,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         }
     }
 
-    // 695: `group <name>` — a component PROPERTY (`GroupParser
-    // .parseProperty`, RAW tokens: a trailing `{` is "Too many tokens").
+    // `group <name>` — a component PROPERTY, read over RAW
+    // tokens: a trailing `{` is "Too many tokens".
     // An existing group makes this a NESTED group: the separator property
     // joins `existing + separator + name`.
     if eqi(&first, tok::GROUP) && matches!(p.top(), Some(Ctx::Component { .. })) {
@@ -397,7 +393,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 698: `workspace [name] [description]` / `workspace extends …` —
+    // `workspace [name] [description]` / `workspace extends …` —
     // only on an EMPTY context stack, and only once.
     if eqi(&first, tok::WORKSPACE) && p.stack.is_empty() {
         return (|| {
@@ -406,20 +402,21 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                     "Multiple workspaces are not permitted in a DSL definition",
                 ));
             }
-            // `WorkspaceParser.parse(tokens.withoutContextStartToken())`.
+ // The workspace statement reads tokens with any trailing `{`
+ // dropped.
             let w = raw.without_context_start_token();
             if w.has_more_than(2) {
                 return Err(DslError::stmt(
                     "Too many tokens, expected: workspace [name] [description] or workspace extends <file|url>",
                 ));
             }
-            // `new Workspace("Name", "Description")` — the parser defaults
-            // the DSL layer applies (core keeps them unset for JSON).
+ // Default name/description — the DSL layer applies
+ // them (core keeps them unset for JSON).
             p.builder.set_workspace_name("Name");
             p.builder.set_workspace_description("Description");
             if w.includes(1) {
                 let source = w.get(1);
-                // `EXTENDS_TOKEN.equals(firstToken)` — CASE-SENSITIVE.
+ // `extends` is compared CASE-SENSITIVELY.
                 if source == tok::EXTENDS {
                     if !w.includes(2) {
                         return Err(DslError::stmt("Expected: workspace extends <file|url>"));
@@ -433,14 +430,14 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                     }
                 }
             }
-            // `StructurizrDslParser` line 719: captured AFTER the workspace
-            // statement, read when contexts start (line 1493).
+ // Captured AFTER the workspace statement,
+ // read later when contexts start.
             let model = &p.builder.workspace().model;
             p.extending_workspace = !model.people.is_empty()
                 || !model.software_systems.is_empty()
                 || !model.deployment_nodes.is_empty();
-            // `WorkspaceParser.parse` tail: DSL workspaces get the
-            // UnlessAnyRelationshipExists strategy unconditionally.
+ // DSL workspaces get the
+ // UnlessAnyRelationshipExists strategy unconditionally.
             p.builder
                 .set_implied_strategy(ImpliedRelationshipsStrategy::UnlessAnyRelationshipExists);
             p.have_workspace = true;
@@ -451,8 +448,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 725: `impliedRelationships`/`!impliedRelationships <true|false|fqcn>`
-    // — any context (`getContext()` on an empty stack throws first).
+    // `impliedRelationships`/`!impliedRelationships <true|false|fqcn>`
+    // — any context; on an empty stack the missing context fails first.
     if eqi(&first, tok::IMPLIED_RELATIONSHIPS) || eqi(&first, &tok::IMPLIED_RELATIONSHIPS[1..]) {
         return (|| {
             if p.top().is_none() {
@@ -480,10 +477,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 );
                 return Ok(());
             }
-            // The three built-in strategy classes load natively; anything
-            // else needs the JVM (`ClassNotFoundException` equivalent —
-            // D2 lists `!impliedRelationships <fqcn>` as a JVM-only
-            // reject, and the reference message is the CNFE text).
+ // The three built-in strategy names load natively; any other
+ // FQCN needs the official tooling's plugin loader — a plugin-only reject, and the official
+ // tooling's class-not-found text is the message.
             let strategy = match &*option {
                 "com.structurizr.model.DefaultImpliedRelationshipsStrategy" => {
                     ImpliedRelationshipsStrategy::Default
@@ -507,7 +503,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 728: `name <name>` at workspace scope.
+    // `name <name>` at workspace scope.
     if eqi(&first, tok::NAME) && is_workspace_ctx {
         return (|| {
             one_token(raw, "name <name>")?;
@@ -517,7 +513,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 731: `description <description>` at workspace scope.
+    // `description <description>` at workspace scope.
     if eqi(&first, tok::DESCRIPTION) && is_workspace_ctx {
         return (|| {
             one_token(raw, "description <description>")?;
@@ -527,7 +523,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         .into();
     }
 
-    // 734: `model { … }` at workspace scope — once only; the push is
+    // `model { … }` at workspace scope — once only; the push is
     // unconditional (no `{` needed).
     if eqi(&first, tok::MODEL) && is_workspace_ctx {
         return (|| {
@@ -546,8 +542,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     Sec::No
 }
 
-/// Which perspective field a statement inside a `PerspectiveDslContext`
-/// sets (the three chain arms 686–692).
+/// Which perspective field a statement inside a perspective block
+/// sets.
 enum PerspectiveField {
     Value,
     Description,
@@ -555,7 +551,7 @@ enum PerspectiveField {
 }
 
 /// The single target (model item) of the top context —
-/// `ModelItemDslContext.getModelItem()` (elements AND relationships).
+/// elements AND relationships alike.
 fn item_id(p: &Parser<'_>) -> Result<Id, DslError> {
     p.top()
         .and_then(Ctx::model_item_id)
@@ -572,8 +568,8 @@ fn targets(p: &Parser<'_>) -> Result<Vec<Id>, DslError> {
     }
 }
 
-/// The two-grammar-token guard of the `parseXxx(context, tokens)` methods:
-/// `hasMoreThan(1)` then `includes(1)`, over the RAW tokens.
+/// The standard two-grammar-token guard used by the single-value
+/// statements: `has_more_than(1)` then `includes(1)`, over the RAW tokens.
 fn one_token(raw: &super::Tokens, grammar: &str) -> Result<(), DslError> {
     if raw.has_more_than(1) {
         return Err(DslError::stmt(format!(
@@ -586,11 +582,11 @@ fn one_token(raw: &super::Tokens, grammar: &str) -> Result<(), DslError> {
     Ok(())
 }
 
-/// The holder of the ten `properties` scope arms (chain lines 651–669) —
-/// `PropertiesDslContext` over one holder (`ModelItemsDslContext` passes
-/// its whole list). The `ConfigurationDslContext` arm holds the WORKSPACE
-/// (`getWorkspace()`), and `ViewsDslContext` the view-set configuration.
-#[allow(clippy::match_same_arms)] // Configuration/ViewsDslContext holders collapse identically
+/// The holder of the ten `properties` scope arms — a properties
+/// context over one holder (the fan-out contexts pass their whole list).
+/// The configuration arm holds the WORKSPACE, and the views arm the
+/// view-set configuration.
+#[allow(clippy::match_same_arms)] // the Configuration and Views holders collapse identically
 fn properties_holder(top: &Ctx) -> Option<Holder> {
     match top {
         Ctx::Workspace => Some(Holder::Workspace),
@@ -603,8 +599,8 @@ fn properties_holder(top: &Ctx) -> Option<Holder> {
             Some(Holder::Items(items.clone()))
         }
         Ctx::Views => Some(Holder::ViewSet),
-        // `ViewDslContext` and ALL its subclasses (`DynamicParallel` is a
-        // `DynamicViewDslContext` subclass in the reference hierarchy) …
+        // All view contexts, including the parallel-dynamic
+        // variant (a kind of dynamic view) …
         Ctx::LandscapeView { view }
         | Ctx::ContextView { view }
         | Ctx::ContainerView { view }
@@ -615,8 +611,8 @@ fn properties_holder(top: &Ctx) -> Option<Holder> {
         | Ctx::DeploymentView { view }
         | Ctx::CustomView { view }
         | Ctx::ImageView { view, .. } => Some(Holder::View(*view)),
-        // … but NOT `DynamicViewRelationshipContext`, whose own arm
-        // (667) holds the RELATIONSHIP VIEW.
+        // … but NOT the dynamic-relationship context,
+        // whose own arm holds the RELATIONSHIP VIEW.
         Ctx::DynamicRel { view, rel } => Some(Holder::DynamicRel {
             view: *view,
             rel: rel.clone(),
@@ -635,7 +631,7 @@ mod tests {
     use super::*;
 
     /// Whole-file harness: the `workspace`/`model` scope arms need the real
-    /// entry (empty starting stack, `parse(String, File)` semantics).
+    /// entry from an empty starting stack.
     fn full(dsl: &str) -> ParseResult {
         parse_dsl(dsl, ParseOptions::fragment()).expect("parse")
     }
@@ -693,8 +689,8 @@ s2 = softwareSystem "S2" "keep" "TagA"
 
     #[test]
     fn rel_block_accepts_tags_url_not_description() {
-        // `RelationshipDslContext` permits tags/url/properties/perspectives
-        // only — `description` has no RelationshipDslContext arm.
+        // A relationship block permits tags/url/properties/
+        // perspectives only — `description` has no arm there.
         let r = in_model(
             r#"
 a = softwareSystem "A"
@@ -889,7 +885,7 @@ s = softwareSystem "S" {
         assert_eq!(ps[1].value.as_deref(), Some("M"));
         assert_eq!(ps[1].url.as_deref(), Some("http://d"));
         // `perspective Q "no brace"` falls to the inline parser: the name is
-        // the FIRST token — literally "perspective" (reference quirk).
+        // the FIRST token — literally "perspective" (official quirk, kept).
         assert_eq!(ps[2].name, "perspective");
         assert_eq!(ps[2].description.as_deref(), Some("Q"));
         assert_eq!(ps[2].value.as_deref(), Some("no brace"));
@@ -950,7 +946,7 @@ s = softwareSystem "S" {
             vec![
                 "Expected: value <value>",
                 "Too many tokens, expected: url <url>",
-                // `PerspectiveDslContext` permits description and value only.
+                // The perspective block permits description and value only.
                 "Unexpected tokens (expected: description, value)",
             ]
         );
@@ -1043,7 +1039,7 @@ workspace "My W" "My D" {
 
         let r = full("workspace \"A\" {\n}\nworkspace \"B\" {\n}\n");
         // The failed second `workspace` pushes no context, so its closing
-        // `}` lands on an EMPTY stack — `endContext()` throws.
+        // `}` lands on an EMPTY stack — `endContext` throws.
         assert_eq!(
             errors(&r),
             vec![
@@ -1072,9 +1068,9 @@ workspace "My W" "My D" {
 
     #[test]
     fn workspace_extends_needs_a_source_and_skips_without_a_file() {
-        // `context.getFile() == null` (fragment parse) skips the file branch
-        // entirely — the reference keeps the fresh "Name"/"Description"
-        // workspace, no error, no portability change.
+        // The fragment parse has no file: the file branch is skipped
+        // entirely — the fresh "Name"/"Description" workspace
+        // stands, no error, no portability change.
         let r = full("workspace extends base.dsl {\n}\n");
         assert_clean(&r);
         assert_eq!(r.workspace.name.as_deref(), Some("Name"));
@@ -1091,8 +1087,8 @@ workspace "My W" "My D" {
 
     #[test]
     fn implied_relationships_toggle() {
-        // `AbstractImpliedRelationshipsStrategy` propagates UP the parent
-        // chains: `p -> c` additionally creates `p -> s` when the DSL
+        // The default implied-relationships strategy propagates UP the
+        // parent chains: `p -> c` additionally creates `p -> s` when the DSL
         // workspace default (UnlessAnyRelationshipExists) is active.
         let base = r#"
 workspace {
@@ -1135,8 +1131,8 @@ workspace {
 
     #[test]
     fn implied_relationships_on_empty_stack() {
-        // `getContext()` is evaluated BEFORE the parser runs (Java argument
-        // evaluation) — an empty stack fails with the context error.
+        // The current context is resolved BEFORE the statement runs —
+        // an empty stack fails with the context error.
         let r = full("!impliedRelationships true\n");
         assert_eq!(errors(&r), vec!["Unexpected end of context"]);
     }

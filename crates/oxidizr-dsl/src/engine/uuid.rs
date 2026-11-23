@@ -1,12 +1,11 @@
-//! Dependency-free UUID v4 strings (the two reference uses of
-//! `UUID.randomUUID()` in the DSL pipeline: anonymous identifier registration
-//! and text-block constant names).
+//! Dependency-free UUID v4 strings — the shapes the DSL pipeline needs when
+//! it generates ids: anonymous identifier registration and text-block
+//! constant names.
 //!
 //! The VALUES are volatile — elements registered without a DSL identifier get
 //! `structurizr.dsl.identifier: <uuid>` properties whose exact bytes can never
-//! be golden-compared against the reference (that is why `--strip-volatile`
-//! exists, `agents/plan/ADDITIONAL_FEATURES.md` F-). Only the FORMAT is pinned:
-//! lowercase hex, `xxxxxxxx-xxxx-4xxx-y[89ab]xxx-xxxxxxxxxxxx`.
+//! be golden-compared (that is why `--strip-volatile` exists). Only the FORMAT
+//! is pinned: lowercase hex, `xxxxxxxx-xxxx-4xxx-y[89ab]xxx-xxxxxxxxxxxx`.
 //!
 //! Non-cryptographic (xorshift64* over a nanos+counter seed): std-only per the
 //! portability rule, and nothing here needs entropy an adversary can't guess.
@@ -26,7 +25,7 @@ fn next_random() -> u64 {
             .map_or(0, |d| d.as_nanos() as u64);
         let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
         // Mix in the address of a stack local for cross-process spread
-        // (the reference's process-unique randomness is equally unmodelled).
+        // (the official tooling's process-unique randomness is unmodelled too).
         let local = 0_u8;
         let addr = std::ptr::from_ref(&local) as u64;
         nanos ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ addr.rotate_left(17)
@@ -43,8 +42,8 @@ fn next_random() -> u64 {
     x.wrapping_mul(0x2545_F491_4F6C_DD1F)
 }
 
-/// A fresh UUID v4 string (lowercase, hyphenated) — the shape Java's
-/// `UUID.randomUUID().toString()` produces.
+/// A fresh UUID v4 string (lowercase, hyphenated) — the shape the official
+/// tooling's generated ids have.
 #[must_use]
 pub fn uuid_v4() -> String {
     let hi = next_random();
@@ -73,7 +72,7 @@ pub fn uuid_v4() -> String {
     out
 }
 
-/// Reference `IdentifiersRegister` UUID probe:
+/// Identifier-register UUID shape:
 /// `[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`.
 #[must_use]
 pub fn looks_like_uuid(s: &str) -> bool {

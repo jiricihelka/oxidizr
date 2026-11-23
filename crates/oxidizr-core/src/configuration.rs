@@ -4,14 +4,13 @@
 //! v6.2.4 truth: `WorkspaceConfiguration` is `{scope?, visibility?, users?}` —
 //! the `branding`/`styles`/`terminology` blocks seen inside a *top-level*
 //! `configuration` in v5-era JSONs are read-IGNORED (the live styles home is
-//! `views.configuration`); `users` is legacy but DOES round-trip (package-
-//! private `setUsers` — Jackson setter visibility is `ANY`).
+//! `views.configuration`); `users` is legacy but DOES round-trip (the
+//! official reader binds even package-private setters).
 
-/// Workspace scope (`configuration/WorkspaceScope`, drives
-/// `WorkspaceScopeValidatorFactory`). Java has exactly these two constants —
-/// "undefined" is represented by `None`, not an enum value (verified @
-/// `ad34036`; JSON names are the Java constant names, `Jackson` default
-/// enum serialization).
+/// Workspace scope;
+/// the official model has exactly two constants —
+/// "undefined" is represented by `None`, not an enum value; the JSON names
+/// are the constant names as the official serializer writes them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceScope {
     /// `"Landscape"` — landscape-scope validator.
@@ -42,7 +41,7 @@ impl WorkspaceScope {
     }
 }
 
-/// Workspace visibility (`configuration/Visibility`; JSON = Java names).
+/// Workspace visibility (JSON = the official constant names).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
     /// `"Private"`.
@@ -103,16 +102,15 @@ impl Role {
     }
 }
 
-/// A legacy `configuration.users` entry (`configuration/User`); the reference
-/// keeps a `TreeSet` ordered by `username` (`User.compareTo`). Round-trips in
-/// both directions: `setUsers` is package-private, which Jackson sees (default
-/// setter visibility is `ANY` — proven by `setTags`/oracle probe 2026-11-14).
+/// A legacy `configuration.users` entry; the format keeps these ordered by
+/// `username`. Round-trips in both directions: the official reader binds
+/// even the package-private setter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct User {
     /// Username.
     pub username: String,
     /// Access role — nullable bean field (unknown/absent JSON `role` binds
-    /// null; the reference writer then omits the key — probe 2026-11-14).
+    /// null; the writer then omits the key).
     pub role: Option<Role>,
 }
 

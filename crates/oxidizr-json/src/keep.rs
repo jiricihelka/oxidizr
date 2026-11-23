@@ -1,12 +1,12 @@
-//! `--keep-unknown` superset-preserving JSON→JSON round-trip (D3).
+//! `--keep-unknown` superset-preserving JSON→JSON round-trip.
 //!
-//! The default path drops every member the reference drops (byte parity,
-//! `WRITE-CATALOG` §6). The opt-in path here instead *pairs* the input
+//! The default path drops every member the official tooling drops (byte
+//! parity). The opt-in path here instead *pairs* the input
 //! document with the workspace's writable `Json` tree and re-appends every
 //! input member the tree does not carry — unknown AND known-legacy fields
 //! (`enterprise`, `location`, `lastModifiedDate*`, `revision`, …) — verbatim
-//! after the known keys, alphabetical (the `#[serde(flatten)] BTreeMap`
-//! shape §P1-D5 sanctions for this mode; output is intentionally
+//! after the known keys, alphabetical (flat
+//! `BTreeMap` shape for this mode; output is intentionally
 //! non-parity).
 //!
 //! Pairing rules: objects pair by member name; arrays pair elements by
@@ -22,9 +22,9 @@ use crate::error::JsonError;
 use crate::printer::{self, Json};
 use crate::writer;
 
-/// Read (parity parse + `hydrate()` validation) and write with unknown /
+/// Read (parity parse + validation) and write with unknown /
 /// legacy members preserved verbatim. Bytes in, bytes out; the CLI wires it
-/// to `json2json --keep-unknown` (P1-D8).
+/// to `json2json --keep-unknown`.
 ///
 /// # Errors
 ///
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(roundtrip_keep_unknown(&canonical).unwrap(), canonical);
     }
 
-    /// D3's superset rule also keeps members the `NON_EMPTY` writer omits
+    /// The superset rule also keeps members the parity writer omits
     /// (an empty `description`) - appended after the known keys, and
     /// stable under repetition.
     #[test]
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn identity_pairing_follows_resorted_arrays() {
-        // Writer people order is the TreeSet (name-ci); extras declared on
+        // Writer people order is the sorted set (name-ci); extras declared on
         // "B" must land on "B", not on position 0 ("A").
         let input = BASE.replacen(
             "\"id\" : \"2\",\n      \"name\" : \"B\"",

@@ -1,16 +1,16 @@
-//! Chain section: reference `StructurizrDslParser.java` arms at Java lines
+//! Chain section: the official parser arms at official lines
 //! 742–948 — the `archetypes` scope (the nine archetype-definition arms and
 //! the archetype property statements `metadata`/`description`/`technology`/
 //! `tag`/`tags` plus the archetype `properties`/`perspectives` pushes), the
 //! `views` scope with its duplicate guard, the `styles`/`light`/`dark`
 //! scopes, and the `element <tag>` / `relationship <tag>` style blocks with
-//! all their property statements (`ElementStyleParser` /
-//! `RelationshipStyleParser`). `theme`/`themes` sit at 1164/1167 and belong
+//! all their property statements (the element-style parser /
+//! the relationship-style parser). `theme`/`themes` sit at 1164/1167 and belong
 //! to `stmt_views`.
 //!
-//! Arm order mirrors the reference `else if` chain exactly. The definition
+//! Arm order mirrors the official parser `else if` chain exactly. The definition
 //! statements (`element <tag>`, `relationship <tag>`) read
-//! `withoutContextStartToken()`; every property statement inside a block
+//! `withoutContextStartToken`; every property statement inside a block
 //! reads the RAW tokens.
 
 use oxidizr_core::views::{ColorScheme, ElementStyle, IconPosition, LineStyle, Routing, Shape};
@@ -35,7 +35,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     }
 
     // 745–814: the nine archetype-definition arms, in chain order. The
-    // archetype NAME comes from the `id = ` prefix; `firstToken` is both the
+    // archetype NAME comes from the `id = ` prefix; the first token is both the
     // parent lookup (extend) and, for the keyword spelling, a miss (empty
     // throwaway parent). GROUP has NO context form — a `{` after a group
     // archetype opens nothing.
@@ -73,10 +73,10 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     }
 
     // 816–845: archetype property statements. `metadata` is
-    // CustomElementArchetypeDslContext-only; `technology` covers the kinds
+    // custom-element-archetype context-only; `technology` covers the kinds
     // that HAVE one (plus relationship archetypes); `tag`/`tags` hit the
     // archetype LIST (the element `tags` arms in `stmt_props` exclude
-    // archetype contexts, mirroring the reference class guards).
+    // archetype contexts, mirroring the official parser class guards).
     if let Some(idx) = p.top().and_then(archetype_idx) {
         if eqi(&first, tok::METADATA)
             && matches!(
@@ -118,9 +118,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         if eqi(&first, tok::TAG) {
             return (|| {
                 let value = one_token(p, raw, "tag <tag>")?;
-                // `Archetype.addTags(String...)` with ONE vararg — the value
+                // The archetype tag add with ONE vararg - the value
                 // is TRIMMED but NOT split on commas, and an empty tag lands
-                // in the LinkedHashSet (`tag.trim()` is added unconditionally).
+                // in the ordered set (the trimmed tag is added unconditionally).
                 Parser::add_archetype_tag(&mut p.archetype_list[idx], &value);
                 Ok(())
             })()
@@ -131,8 +131,8 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
                 if !raw.includes(1) {
                     return Err(DslError::stmt("Expected: tags <tags> [tags]"));
                 }
-                // `ArchetypeParser.parseTags`: each token is
-                // `addTags(tags.split(","))` — comma-split (trailing empties
+                // the archetype parser's parse-tags check: each token is
+                // The tag add takes the comma-split token (trailing empties
                 // dropped), each part trimmed, empties kept.
                 for i in 1..raw.size() {
                     Parser::add_archetype_tags(&mut p.archetype_list[idx], &raw.get(i));
@@ -215,9 +215,9 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
 
     if let Some(Ctx::ElementStyle { idx }) = p.top() {
         let idx = *idx;
-        // background/colour/stroke go through the Java setters' colour
+        // background/colour/stroke go through the official parser setters' colour
         // normalization (`Color`): `#rrggbb` lowercased, HTML names mapped to
-        // hex, anything else a statement error (T4 oracle-verified 2026-11-17
+        // hex, anything else a statement error ( verified
         // — the DSL importer calls the same validation JSON hydration does).
         // The `colour` and `color` chain arms share `parseColour`, so the
         // grammar text always says `colour`.
@@ -359,7 +359,7 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
         }
         if eqi(&first, tok::ELEMENT_STYLE_DESCRIPTION) {
             return (|| {
-                // The reference grammar text literally says `<true|false>`.
+                // The official grammar text literally says `<true|false>`.
                 let value = one_token(p, raw, "description <true|false>")?;
                 if let Some(s) = element_style_mut(p, idx) {
                     s.description = Some(tri_bool(&value, "Description")?);
@@ -596,7 +596,7 @@ fn define_archetype(
     idx
 }
 
-/// The `ArchetypeDslContext` payload index (element and relationship
+/// The `archetype context` payload index (element and relationship
 /// archetype contexts alike).
 fn archetype_idx(ctx: &Ctx) -> Option<usize> {
     match ctx {
@@ -620,7 +620,7 @@ fn one_token(_p: &Parser<'_>, raw: &Tokens, grammar: &str) -> Result<String, Dsl
 }
 
 /// The enum-valued statements: same two guards with the enum list already
-/// substituted into the grammar (`tokens.get(1)` is read by the caller).
+/// substituted into the grammar (token `1` is read by the caller).
 fn one_grammar(_p: &Parser<'_>, raw: &Tokens, keyword: &str, list: &str) -> Result<(), DslError> {
     if raw.has_more_than(1) {
         return Err(DslError::stmt(format!(
@@ -633,7 +633,7 @@ fn one_grammar(_p: &Parser<'_>, raw: &Tokens, keyword: &str, list: &str) -> Resu
     Ok(())
 }
 
-/// `"true"`/`"false"` case-insensitively; the reference message prefixes
+/// `"true"`/`"false"` case-insensitively; the official message prefixes
 /// with the field name (`Metadata must be true or false`).
 fn tri_bool(value: &str, field: &str) -> Result<bool, DslError> {
     if eqi(value, "true") {
@@ -650,17 +650,17 @@ fn java_int(value: &str) -> Option<i32> {
     crate::compat::java_parse_int(value)
 }
 
-/// Style colour statements run the `Color` setter normalization the Java DSL
-/// importer also applies (T4 oracle-verified 2026-11-17 — the same validation
+/// Style colour statements run the `Color` setter normalization the official parser DSL
+/// importer also applies ( verified — the same validation
 /// JSON hydration does): `#rrggbb` lowercased, HTML name mapped to hex, else
-/// the reference `IllegalArgumentException` text as a statement error.
+/// the official rejection text as a statement error.
 fn style_color(value: &str) -> Result<String, DslError> {
     oxidizr_core::colors::normalize(value)
         .map_err(|msg| DslError::stmt(msg.trim_end_matches('.').to_owned()))
 }
 
-/// `ElementStyleParser.parseElementStyle` / `RelationshipStyleParser`
-/// front matter: too-many / blank-tag / expected guards, in Java order.
+/// the element-style parser's parse-element-style check / the relationship-style parser
+/// front matter: too-many / blank-tag / expected guards, in official order.
 fn style_tag(t: &Tokens, keyword: &str) -> Result<String, DslError> {
     let grammar = format!("{keyword} <tag> {{");
     if t.has_more_than(1) {
@@ -671,7 +671,7 @@ fn style_tag(t: &Tokens, keyword: &str) -> Result<String, DslError> {
     if t.includes(1) {
         let tag = t.get(1);
         if tag.trim().is_empty() {
-            // `StringUtils.isNullOrEmpty` trims.
+            // The blank check trims.
             return Err(DslError::stmt("A tag must be specified"));
         }
         Ok(tag.into_owned())
@@ -705,9 +705,9 @@ fn relationship_style_mut<'a>(
 }
 
 /// `Styles.getElementStyle(tag, scheme)` … `addElementStyle(tag, scheme)` —
-/// reuse the style with the SAME tag and SAME scheme (a scheme-less `styles`
+/// The style get-or-add by (tag, scheme) -
 /// block and a `light`/`dark` one are different objects). New styles enter at
-/// their `compareTo` position (the reference `TreeSet`, §5).
+/// their sorted position (the official ordered sets).
 fn get_or_add_element_style(p: &mut Parser<'_>, tag: &str, scheme: Option<ColorScheme>) -> usize {
     let styles = &mut p.builder.views_mut().configuration.styles;
     if let Some(i) = styles
@@ -744,13 +744,13 @@ fn get_or_add_relationship_style(
     })
 }
 
-/// `ElementStyleParser.parseIcon` (see D10 for the raster-file rejection):
+/// the element-style parser's parse-icon check (raster files are rejected):
 /// data URIs and URLs are stored verbatim after validation; SVG files are
 /// embedded as raw-bytes base64 (`dslPortable=false`); raster files are
-/// rejected because the reference embeds its `ImageIO` re-encode, not the
+/// rejected because the official parser embeds its image re-encode, not the
 /// file bytes.
 // False positive: the name is explicitly lower-cased below (mirrors the
-// reference `name.toLowerCase().endsWith(...)`).
+// the official lowercase suffix check).
 #[allow(clippy::case_sensitive_file_extension_comparisons)]
 fn resolve_icon(p: &mut Parser<'_>, path: &str) -> Result<String, DslError> {
     if path.starts_with("data:image/") {
@@ -768,13 +768,13 @@ fn resolve_icon(p: &mut Parser<'_>, path: &str) -> Result<String, DslError> {
         return Ok(path.to_string());
     }
     // `Url.isHttpsUrl`/`isHttpUrl` — the core `Url` port (`URI.create(..)`
-    // + JDK protocol handlers, never fetching); the reference stores the
+    // + URL protocol handlers, never fetching); the official parser stores the
     // URL verbatim, so no `--allow-net` is involved.
     if oxidizr_core::url::is_https_url(path) || oxidizr_core::url::is_http_url(path) {
         return Ok(path.to_string());
     }
     // FILE_SYSTEM branch: relative to the DSL file's parent. A fragment
-    // parse (no file) NPEs in the reference — its `getSimpleName()` text.
+    // parse (no file) throws the official null-pointer message.
     let Some(dir) = p.current_dir() else {
         return Err(DslError::stmt("NullPointerException"));
     };
@@ -783,7 +783,7 @@ fn resolve_icon(p: &mut Parser<'_>, path: &str) -> Result<String, DslError> {
         return Err(DslError::stmt(format!("{path} does not exist")));
     };
     if !meta.is_file() {
-        // Reference quirk: a DIRECTORY also reports `does not exist`.
+        // Official quirk: a DIRECTORY also reports `does not exist`.
         return Err(DslError::stmt(format!("{path} does not exist")));
     }
     let name = file
@@ -793,7 +793,7 @@ fn resolve_icon(p: &mut Parser<'_>, path: &str) -> Result<String, DslError> {
     if lower_name.ends_with(".svg") {
         let bytes =
             std::fs::read(&file).map_err(|_| DslError::stmt(format!("{path} does not exist")))?;
-        // `context.setDslPortable(false)` — file-system content.
+        // `context.portability off` — file-system content.
         if let Some(frame) = p.frame_portable.last_mut() {
             *frame = false;
         }
@@ -819,7 +819,7 @@ fn resolve_icon(p: &mut Parser<'_>, path: &str) -> Result<String, DslError> {
     )))
 }
 
-/// `Shape.values()` order — the grammar string and the lowercase lookups.
+/// `Shape.values` order — the grammar string and the lowercase lookups.
 const SHAPE_NAMES: &[(&str, Shape)] = &[
     ("box", Shape::Box),
     ("roundedbox", Shape::RoundedBox),
@@ -842,17 +842,17 @@ const SHAPE_NAMES: &[(&str, Shape)] = &[
     ("component", Shape::Component),
 ];
 
-/// The enum `toString()` concatenation in the shape error text.
+/// The enum-name concatenation in the shape error text.
 const SHAPE_GRAMMAR: &str = "Box|RoundedBox|Circle|Ellipse|Hexagon|Diamond|Cylinder|Bucket|Pipe|Person|Robot|Folder|WebBrowser|Window|Terminal|Shell|MobileDevicePortrait|MobileDeviceLandscape|Component";
 
-/// `Border.values()` (Java order: Solid, Dashed, Dotted).
+/// Border options (official order: Solid, Dashed, Dotted).
 const BORDER_NAMES: &[(&str, LineStyle)] = &[
     ("solid", LineStyle::Solid),
     ("dashed", LineStyle::Dashed),
     ("dotted", LineStyle::Dotted),
 ];
 
-/// `LineStyle.values()` (Java order: Dashed, Dotted, Solid — the error-list
+/// Line-style options (official order: Dashed, Dotted, Solid - the error-list
 /// text is hardcoded `<solid|dashed|dotted>`).
 const LINE_STYLE_NAMES: &[(&str, LineStyle)] = &[
     ("dashed", LineStyle::Dashed),
@@ -860,7 +860,7 @@ const LINE_STYLE_NAMES: &[(&str, LineStyle)] = &[
     ("solid", LineStyle::Solid),
 ];
 
-/// `Routing.values()` (Java order: Direct, Curved, Orthogonal — the error
+/// Routing options (official order: Direct, Curved, Orthogonal - the error
 /// text lists `<direct|orthogonal|curved>`).
 const ROUTING_NAMES: &[(&str, Routing)] = &[
     ("direct", Routing::Direct),
@@ -868,7 +868,7 @@ const ROUTING_NAMES: &[(&str, Routing)] = &[
     ("orthogonal", Routing::Orthogonal),
 ];
 
-/// `IconPosition.values()` (Java order: Top, Bottom, Left).
+/// Icon-position options (official order: Top, Bottom, Left).
 const ICON_POSITION_NAMES: &[(&str, IconPosition)] = &[
     ("top", IconPosition::Top),
     ("bottom", IconPosition::Bottom),
@@ -1037,7 +1037,7 @@ workspace {
             errors(&r),
             vec![
                 // `technology` has no person-archetype arm — catch-all with
-                // the PersonArchetypeDslContext list.
+                // the person-archetype context list.
                 "Unexpected tokens (expected: description, tag, tags, properties, perspectives)",
                 "Too many tokens, expected: description <description>",
                 "Expected: tag <tag>",
@@ -1097,7 +1097,7 @@ workspace {
         assert_eq!(st.width, Some(-3), "width is NOT clamped");
         assert_eq!(st.height, Some(40));
         assert_eq!(st.font_size, Some(0), "fontSize is NOT clamped");
-        // `Color` setter normalization (T4 oracle-verified): names map to hex.
+        // `Color` setter normalization ( verified): names map to hex.
         assert_eq!(st.color.as_deref(), Some("#ffffff"));
         assert_eq!(st.metadata, Some(true));
         assert_eq!(st.description, Some(false));
@@ -1176,7 +1176,7 @@ workspace {
             Some("#444444"),
             "the second scheme-less `element T` REUSES and overwrites"
         );
-        // `TreeSet` order: null scheme first, then `"scheme/tag"` UTF-16 —
+        // Name order: null scheme first, then `"scheme/tag"` UTF-16 -
         // so `Dark/T` precedes `Light/T`.
         assert_eq!(s.element_styles[1].color_scheme, Some(ColorScheme::Dark));
         assert_eq!(s.element_styles[1].stroke.as_deref(), Some("#333333"));
@@ -1186,7 +1186,7 @@ workspace {
 
     #[test]
     fn styles_storage_is_sorted_like_the_reference_treeset() {
-        // Reference `Styles` fields are `TreeSet`s: DSL declaration order is
+        // The official style sets are name-ordered: DSL declaration order is
         // replaced by `AbstractStyle.compareTo` (null scheme first, then tag;
         // both-scheme compares `"scheme/tag"`).
         let r = styles(
@@ -1343,7 +1343,7 @@ workspace {
                 "Thickness must be a positive integer",
                 "Dashed must be true or false",
                 "Jump must be true or false",
-                // Java's RelationshipStyleDslContext token list (note: no
+                // The official relationship-style context token list (note: no
                 // dashed/jump/metadata/description despite the chain arms).
                 "Unexpected tokens (expected: thickness, color, colour, style, \
                  routing, fontSize, width, position, opacity, properties)",
@@ -1396,9 +1396,9 @@ workspace {
 
     #[test]
     fn icon_fragment_file_reference_npes() {
-        // A fragment has no `dslFile` — Java NPEs in
-        // `context.getFile().getParent()` and the chain's catch renders
-        // `getSimpleName()`.
+        // A fragment has no file - the official parser throws in
+        // its file-parent lookup fails and the chain's catch renders
+        // the pinned `NullPointerException` text.
         let r = styles("      element T {\n        icon \"logo.svg\"\n      }\n");
         assert_eq!(errors(&r), vec!["NullPointerException"]);
     }
@@ -1435,7 +1435,7 @@ workspace {
             "icon <file> clears dslPortable, dropping the source property"
         );
 
-        // D10: raster files are rejected (the reference embeds its ImageIO
+        // Raster files are rejected (the official parser embeds its image
         // re-encode, which pure Rust std cannot reproduce).
         let (_, err) = parse("oxz-logo.png");
         let (message, code) = err.expect("png rejected");
@@ -1443,7 +1443,7 @@ workspace {
         assert!(message.contains("D10"), "message names D10: {message}");
 
         // Non-image file: the `guessContentTypeFromName` miss, canonical
-        // path, trailing period (the reference's IAE text).
+        // path, trailing period (the official parser's IAE text).
         let (_, err) = parse("oxz-notes.txt");
         let (message, _) = err.expect("txt rejected");
         assert!(

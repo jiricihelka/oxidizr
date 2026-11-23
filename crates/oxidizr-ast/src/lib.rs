@@ -1,9 +1,9 @@
 //! `oxidizr-ast` — the DSL concrete syntax tree: kind-tagged nodes with children,
 //! trivia (comments/whitespace preserved for `fmt`) and spans. The losslessness
-//! invariant (`Cst` leaf text reconstructs the source byte-for-byte, P1-D3) is defined
+//! invariant (`Cst` leaf text reconstructs the source byte-for-byte) is defined
 //! here and exercised by `oxidizr-dsl`.
 //!
-//! LSP (P4) consumes this crate + `oxidizr-diag` without pulling in the parser.
+//! The LSP consumes this crate + `oxidizr-diag` without pulling in the parser.
 //!
 //! Shape: an owned tree ([`Node`]) over a source buffer the caller keeps alive
 //! separately (nodes address it with [`TextRange`] byte offsets, `u32` — DSL files
@@ -52,23 +52,23 @@ pub fn u32_len(len: usize) -> u32 {
 }
 
 /// Node taxonomy. Leaves carry no children; composites group leaves for the parser
-/// and formatter. Kinds added by the M4 parser (statements, scopes) extend this enum.
+/// and formatter. The parser's statement and scope kinds extend this enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeKind {
     /// Tree root; spans the whole source.
     Root,
-    /// One reference "logical line" (after `\`-continuation joins and text-block
+    /// One "logical line" (after `\`-continuation joins and text-block
     /// folding); may cover several physical lines.
     LogicalLine,
-    /// A logical line matching the reference `EMPTY_LINE_PATTERN` (blank).
+    /// A blank logical line (empty or whitespace-only).
     BlankLine,
-    /// A logical line matching the reference `COMMENT_PATTERN` (whole-line `//`/`#`).
+    /// A whole-line comment logical line (`//` or `#`).
     CommentLine,
-    /// A `/* … */` region per the reference parse-loop state machine: one whole-line
+    /// A `/* … */` region as the parse loop records it: one whole-line
     /// comment, or the line that opens the region through the line that closes it.
     BlockComment,
     /// The silently-dropped EOF tail (unfinished continuation / unterminated text
-    /// block): covered for losslessness, never parsed (the reference discards it).
+    /// block): covered for losslessness, never parsed.
     DroppedTail,
     /// Run of spaces/tabs (indentation and inter-token gaps).
     Whitespace,
@@ -79,7 +79,7 @@ pub enum NodeKind {
     /// The trailing `\` of a continued line (trivia: it vanishes from the logical
     /// line but must survive `text()`).
     Continuation,
-    /// A UTF-8 BOM (`U+FEFF`) the reference strips at parse time (trivia).
+    /// A UTF-8 BOM (`U+FEFF`), stripped at parse time (trivia).
     Bom,
     /// A bare token (unquoted, whitespace-delimited).
     TokenBare,
@@ -134,7 +134,7 @@ impl Node {
 }
 
 /// A lossless CST over `source`. Shared via `Rc` (single-threaded clones are cheap;
-/// Send/Sync not needed pre-LSP — revisit at P4 if the LSP needs cross-thread moves).
+/// the current consumers never move a tree across threads).
 #[derive(Debug, Clone)]
 pub struct Cst {
     /// Full source text.

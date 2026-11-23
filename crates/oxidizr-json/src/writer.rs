@@ -1,11 +1,9 @@
-//! `Workspace` → the reference's exact JSON bytes (P1-D5 amended, P1-D6).
+//! `Workspace` → the JSON bytes the official tooling writes, byte-for-byte.
 //!
-//! Every rule here cites `agents/plan/build/WRITE-CATALOG.md` (sections §-quoted
-//! below); the byte witness is `testdata/golden/m3-order.json`. The writer
-//! builds a `printer::Json` tree with FINAL key order and omissions already
-//! decided (Jackson `SORT_PROPERTIES_ALPHABETICALLY` + `NON_EMPTY`-family
-//! per-field inclusion), then renders it with the Jackson pretty-printer
-//! emulation.
+//! The byte witness is `testdata/golden/m3-order.json`. The writer builds a
+//! `printer::Json` tree with FINAL key order and omissions already decided
+//! (alphabetical keys + per-field empty-value omission rules),
+//! then renders it with the pretty-printer emulation.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -30,29 +28,29 @@ use oxidizr_core::views::{
 use crate::error::JsonError;
 use crate::printer::{self, Json};
 
-/// Serialize to the reference's exact bytes (no trailing newline, §0).
+/// Serialize to the official tooling's exact bytes (no trailing newline).
 pub fn to_vec(workspace: &Workspace) -> Result<Vec<u8>, JsonError> {
     Ok(printer::to_bytes(&to_tree(workspace)?))
 }
 
 /// The writable `Json` tree behind [`to_vec`], exposed for the
-/// `--keep-unknown` overlay (`keep.rs`, D3). Parity output is unaffected.
+/// `--keep-unknown` overlay (`keep.rs`). Parity output is unaffected.
 pub(crate) fn to_tree(workspace: &Workspace) -> Result<Json, JsonError> {
     let ctx = Ctx::new(workspace);
     ctx.workspace(workspace)
 }
 
 // ---------------------------------------------------------------------------
-// Java ordering comparators (§5)
+// Ordering comparators
 // ---------------------------------------------------------------------------
 
-/// `String.compareTo`: UTF-16 code-unit lexicographic order (differs from
-/// Rust byte order only for supplementary vs U+E000-class characters).
+/// UTF-16 code-unit lexicographic order (differs from Rust byte order only
+/// for supplementary vs U+E000-class characters).
 pub(crate) fn java_ord(a: &str, b: &str) -> Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
 }
 
-/// `String.compareToIgnoreCase`: UTF-16 units lowercased pairwise.
+/// Case-insensitive UTF-16 order: units lowercased pairwise.
 fn java_ord_ci(lhs: &str, rhs: &str) -> Ordering {
     let mut lu = lhs.encode_utf16();
     let mut ru = rhs.encode_utf16();
@@ -69,9 +67,8 @@ fn java_ord_ci(lhs: &str, rhs: &str) -> Ordering {
     }
 }
 
-/// Java `Character.toLowerCase(char)` for BMP units (surrogates unchanged);
-/// view keys are ASCII in practice — the approximation only reorders exotic
-/// keys.
+/// Lowercase for BMP units (surrogates unchanged); view keys are ASCII in
+/// practice — the approximation only reorders exotic keys.
 fn lower_unit(u: u16) -> u16 {
     match char::from_u32(u32::from(u)) {
         Some(c) => match c.to_lowercase().next() {
@@ -82,8 +79,8 @@ fn lower_unit(u: u16) -> u16 {
     }
 }
 
-/// `ModelItem.compareTo` (numeric id when both parse as Java ints, else
-/// UTF-16 text); `Id`'s cached numeric view implements the same parse rule.
+/// Element-id order: numeric when both ids parse as 32-bit integers, else
+/// UTF-16 text; `Id`'s cached numeric view implements the same parse rule.
 pub(crate) fn id_ord(a: &Id, b: &Id) -> Ordering {
     match (a.as_num(), b.as_num()) {
         (Some(x), Some(y)) => x.cmp(&y),
@@ -91,22 +88,17 @@ pub(crate) fn id_ord(a: &Id, b: &Id) -> Ordering {
     }
 }
 
-/// `(order, key-ignore-case)` — the `View.compareTo` `TreeSet` order (§5).
+/// `(order, key-ignore-case)` — the official view-set order.
 fn view_cmp(a: View<'_>, b: View<'_>) -> Ordering {
     a.order()
         .cmp(&b.order())
         .then(java_ord_ci(a.key(), b.key()))
 }
 
-/// Render a `TreeSet`-serialized list: sorted copy, `None` when empty
-/// (`NON_EMPTY`).
+/// Render a sorted-set list: sorted copy, omitted when empty.
 ///
-/// 2R R-mis-09: the infallible form — the old single `Result` shape forced
-/// every caller to answer an error that cannot happen (13 sites muted it
-/// with `.unwrap_or(None)`, and the `software_system`/`container` legs'
-/// `Result` proved phantom too — dropping those wrappers cascaded
-/// `model()` infallible); the legs that resolve model references (the
-/// view bodies) and dates (`decision`) live in [`try_set_list`].
+/// The infallible form — the legs that can fail (view bodies resolving model
+/// references, and dates in `decision`) live in [`try_set_list`].
 fn set_list<T, F, R>(items: &[T], mut cmp: F, mut render: R) -> Option<Json>
 where
     F: FnMut(&T, &T) -> Ordering,
@@ -120,7 +112,7 @@ where
     Some(Json::Arr(sorted.iter().map(|item| render(item)).collect()))
 }
 
-/// [`set_list`] for the genuinely fallible renderers (2R R-mis-09 split).
+/// [`set_list`] for the genuinely fallible renderers.
 fn try_set_list<T, F, R>(items: &[T], mut cmp: F, mut render: R) -> Result<Option<Json>, JsonError>
 where
     F: FnMut(&T, &T) -> Ordering,
@@ -138,13 +130,11 @@ where
         .map(|arr| Some(Json::Arr(arr)))
 }
 
-/// Render a stored-order list, `None` when empty (`NON_EMPTY`). Styles keep
-/// their loaded order: the reference JSON reader field-binds `Styles.elements`
-/// (no setter — the `TreeSet` is replaced, document order survives), while the
-/// DSL path adds into the `TreeSet` and the engine inserts sorted (§5, P2
-/// oracle probes 2026-11-17).
+/// Render a stored-order list, omitted when empty. Styles keep
+/// their loaded order: a JSON load replaces the collection wholesale, so
+/// document order survives, while the DSL path inserts already sorted.
 ///
-/// Infallible like [`set_list`] (2R R-mis-09).
+/// Infallible like [`set_list`].
 fn list<T, R>(items: &[T], mut render: R) -> Option<Json>
 where
     R: FnMut(&T) -> Json,
@@ -155,7 +145,7 @@ where
     Some(Json::Arr(items.iter().map(&mut render).collect()))
 }
 
-/// A `TreeSet<String>` array (UTF-16 order), `None` when empty.
+/// A sorted string set (UTF-16 order), `None` when empty.
 fn sorted_str_set(items: &[String]) -> Option<Json> {
     if items.is_empty() {
         return None;
@@ -170,8 +160,8 @@ fn sorted_str_set(items: &[String]) -> Option<Json> {
     ))
 }
 
-/// Insert `entry` into an alphabetically-sorted key list (`String.compareTo`
-/// order — the key tables of WRITE-CATALOG §2/§3).
+/// Insert `entry` into an alphabetically-sorted key list (UTF-16 code-unit
+/// order — the format's alphabetical key tables).
 fn insert_sorted(
     entries: &mut Vec<(&'static str, Option<Json>)>,
     entry: (&'static str, Option<Json>),
@@ -182,13 +172,13 @@ fn insert_sorted(
     entries.insert(pos, entry);
 }
 
-/// `NON_NULL` string: a `Some` value is written even when empty (style fields
-/// carry `@JsonInclude(NON_NULL)`, V-2 note).
+/// A string written whenever present: a `Some` value is emitted even when
+/// empty (style fields omit only absent values, not empty ones).
 pub(crate) fn opt_nnn(s: Option<&str>) -> Option<Json> {
     s.map(|t| Json::Str(t.to_string()))
 }
 
-/// `yyyy-MM-dd'T'HH:mm:ss'Z'` UTC (`SimpleDateFormat` on the mapper, §0).
+/// `yyyy-MM-dd'T'HH:mm:ss'Z'` UTC.
 fn opt_date(secs: Option<i64>) -> Result<Option<Json>, JsonError> {
     let Some(secs) = secs else { return Ok(None) };
     Ok(Some(Json::Str(date_str(secs)?)))
@@ -207,7 +197,7 @@ fn missing(what: &str, id: &Id) -> JsonError {
 }
 
 // ---------------------------------------------------------------------------
-// Lookups (computed view names §3.1, relationship arena)
+// Lookups (computed view names, relationship arena)
 // ---------------------------------------------------------------------------
 
 struct ElemRef<'a> {
@@ -223,8 +213,8 @@ struct Ctx<'a> {
     rels: HashMap<&'a str, &'a Relationship>,
 }
 
-/// Walk every element: item, `is_container`, static parent id (hydrate walk
-/// order — the writer only needs the resulting maps).
+/// Walk every element: item, `is_container`, static parent id (the writer
+/// only needs the resulting maps, not the walk order).
 fn visit_items<'a>(model: &'a Model, f: &mut impl FnMut(&'a ModelItem, bool, Option<&'a Id>)) {
     for e in &model.custom_elements {
         f(&e.item, false, None);
@@ -320,8 +310,7 @@ impl<'a> Ctx<'a> {
             .ok_or_else(|| missing("element", id))
     }
 
-    /// The computed `name` of a view (§3.1 — every formula mirrors the Java
-    /// `getName()` override verbatim).
+    /// The computed `name` of a view — every formula is reproduced verbatim.
     fn view_name(&self, v: View<'a>) -> Result<String, JsonError> {
         Ok(match v {
             View::Landscape(_) => "System Landscape View".to_string(),
@@ -367,8 +356,9 @@ impl<'a> Ctx<'a> {
                 None => format!("Deployment View: {}", x.environment),
             },
             View::Filtered(x) => {
-                // `"Filtered: " + baseView.getName()`; the reference NPEs on
-                // a missing base during export — we return a clean error.
+                // `"Filtered: " + base view name`; the official tooling
+                // crashes on a missing base during export — oxidizr returns
+                // a clean error (a documented deviation).
                 let base = self
                     .views_by_key
                     .get(x.base_view_key.as_str())
@@ -380,8 +370,8 @@ impl<'a> Ctx<'a> {
                     })?;
                 format!("Filtered: {}", self.view_name(*base)?)
             }
-            // `"Custom View: " + getTitle()` — Java string concatenation of
-            // null yields the literal "null" (bug-compatible, §3.1).
+            // `"Custom View: " + title` — a null title concatenates as the
+            // literal "null" (bug-compatible).
             View::Custom(x) => {
                 format!("Custom View: {}", x.base.title.as_deref().unwrap_or("null"))
             }
@@ -399,7 +389,7 @@ impl<'a> Ctx<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace root (§2)
+// Workspace root
 // ---------------------------------------------------------------------------
 
 impl Ctx<'_> {
@@ -431,7 +421,7 @@ impl Ctx<'_> {
     }
 }
 
-/// `users` is a `TreeSet` by username (`User.compareTo`).
+/// `users` is a sorted set by username.
 fn workspace_configuration(config: &WorkspaceConfiguration) -> Json {
     let users = set_list(
         &config.users,
@@ -457,12 +447,12 @@ fn workspace_configuration(config: &WorkspaceConfiguration) -> Json {
 }
 
 // ---------------------------------------------------------------------------
-// Model (§2)
+// Model
 // ---------------------------------------------------------------------------
 
-/// The shared `DeploymentElementInstance` fields of the two instance beans
+/// The shared deployment-instance fields of the two instance types
 /// (`SoftwareSystemInstance`/`ContainerInstance`), borrowed for
-/// `deployment_instance_tail` (2R R-mis-02).
+/// `deployment_instance_tail`.
 struct InstanceTail<'a> {
     environment: &'a str,
     groups: &'a [String],
@@ -474,15 +464,15 @@ struct InstanceTail<'a> {
 impl Ctx<'_> {
     fn model(&self, model: &Model) -> Json {
         // Alphabetical: customElements, deploymentNodes, people, properties,
-        // softwareSystems (§2).
+        // softwareSystems.
         Json::obj(vec![
             (
                 "customElements",
-                // STORED order, not sorted: the reference writes the raw
-                // `customElements` collection — fresh DSL workspaces store it
-                // reverse-inserted (B,A witness 2026-11-17) while JSON imports
-                // re-sort ascending in the reader (`setCustomElements` TreeSet
-                // rebuild), which together explain every observed order.
+                // STORED order, not sorted: the official tooling writes the
+                // raw `customElements` collection — fresh DSL workspaces
+                // store it reverse-inserted while JSON imports re-sort
+                // ascending in the reader (the loaded set is rebuilt sorted),
+                // which together explain every observed order.
                 list(&model.custom_elements, |e| self.custom_element(e)),
             ),
             (
@@ -513,8 +503,8 @@ impl Ctx<'_> {
         ])
     }
 
-    /// `ModelItem` + `Element` shared keys (alphabetical, §2). `kind`
-    /// supplies the derived default tag stack (Locked, `tags.rs`).
+    /// `ModelItem` + element shared keys (alphabetical). `kind` supplies the
+    /// derived default tag stack (`tags.rs`).
     fn item_entries(
         &self,
         item: &ModelItem,
@@ -639,7 +629,7 @@ impl Ctx<'_> {
                 ),
             ),
         );
-        // `instances` is a Java String; NON_EMPTY hides "", default "1".
+        // `instances` is a string field; empty hides, default "1".
         insert_sorted(&mut entries, ("instances", Json::text(&n.instances)));
         insert_sorted(
             &mut entries,
@@ -681,8 +671,8 @@ impl Ctx<'_> {
         Json::from_entries(&entries)
     }
 
-    /// Instances: shared keys MINUS `name` (getName `@JsonIgnore`, §2) plus
-    /// the static link; `instanceId` is an int, always written.
+    /// Instances: shared keys MINUS `name` (never serialized) plus the
+    /// static link; `instanceId` is an int, always written.
     fn ssi(&self, i: &SoftwareSystemInstance) -> Json {
         let mut entries = self.instance_entries(&i.item, &i.relationships);
         insert_sorted(
@@ -739,10 +729,8 @@ impl Ctx<'_> {
         ]
     }
 
-    /// The five shared `DeploymentElementInstance` keys. 2R R-mis-02: one
-    /// borrowed [`InstanceTail`] replaces the six-args-plus-out-vec shape
-    /// (with its unrationaled `too_many_arguments` allow) — the entries
-    /// RETURN for the callers' `insert_sorted` fold.
+    /// The five shared deployment-instance keys, RETURNED for the callers'
+    /// `insert_sorted` fold (borrowed [`InstanceTail`]).
     fn deployment_instance_tail(tail: &InstanceTail<'_>) -> [(&'static str, Option<Json>); 5] {
         [
             ("deploymentGroups", sorted_str_set(tail.groups)),
@@ -753,7 +741,7 @@ impl Ctx<'_> {
         ]
     }
 
-    /// Nested `relationships[]` (`TreeSet` numeric order, §2/§5).
+    /// Nested `relationships[]` (numeric-id set order).
     fn relationships(&self, ids: &[Id]) -> Option<Json> {
         if ids.is_empty() {
             return None;
@@ -769,7 +757,7 @@ impl Ctx<'_> {
 
 fn relationship(r: &Relationship) -> Json {
     // Linked (implied / instance-replicated) rels carry NO default tags
-    // (§2, `relationship_defaults`).
+    // (`relationship_defaults`).
     let defaults = relationship_defaults(r.linked_relationship_id.is_some(), r.interaction_style);
     Json::obj(vec![
         ("description", Json::opt_text(r.description.as_deref())),
@@ -798,7 +786,7 @@ fn relationship(r: &Relationship) -> Json {
     ])
 }
 
-/// `TreeSet` by name (§2).
+/// Sorted by name.
 fn perspectives(items: &[Perspective]) -> Option<Json> {
     set_list(
         items,
@@ -814,11 +802,9 @@ fn perspectives(items: &[Perspective]) -> Option<Json> {
     )
 }
 
-/// `TreeSet` by name then url (`HttpHealthCheck.compareTo`); `headers` keys go
-/// through `getHeaders()`' `new HashMap<>(TreeMap)` copy, so Jackson emits
-/// them in `HashMap` BUCKET order replayed from the UTF-16-sorted insertion
-/// sequence (§2 errata, oracle probe 2026-11-14: `{"X-A","X-B"}` writes as
-/// `X-B`, `X-A`); `interval`/`timeout` are primitives — always written (§2).
+/// Sorted by name, then url; `headers` are emitted in `HashMap` BUCKET order
+/// replayed from the UTF-16-sorted insertion sequence (`{"X-A","X-B"}` writes
+/// as `X-B`, `X-A`); `interval`/`timeout` are plain numbers — always written.
 fn health_checks(items: &[HttpHealthCheck]) -> Option<Json> {
     set_list(
         items,
@@ -857,21 +843,20 @@ fn health_checks(items: &[HttpHealthCheck]) -> Option<Json> {
 }
 
 // ---------------------------------------------------------------------------
-// Documentation (§4)
+// Documentation
 // ---------------------------------------------------------------------------
 
 fn documentation(doc: &Documentation) -> Json {
-    // Sections/decisions/images keep DEFINITION order (`ArrayList`, §4) —
-    // the `Equal` comparator keeps the stable sort a no-op.
+    // Sections/decisions/images keep DEFINITION order — the `Equal`
+    // comparator keeps the stable sort a no-op.
     Json::obj(vec![
         (
             "decisions",
             // `decision` is `documentation`'s only fallible renderer
-            // (out-of-range epoch seconds in `date_str`): the old
-            // `.unwrap_or(None)` DROPS the whole `decisions` key where a
-            // `?` would fail the write — pathological input, no golden
-            // coverage, and 2R forbids a behavior change, so the swallow
-            // is kept, honestly spelled (2R R-mis-09).
+            // (out-of-range epoch seconds in `date_str`): the error is
+            // swallowed, so a failure DROPS the whole `decisions` key where
+            // a `?` would fail the write — pathological input, no golden
+            // coverage, and the behavior is kept, honestly spelled.
             try_set_list(&doc.decisions, |_, _| Ordering::Equal, decision)
                 .ok()
                 .flatten(),
@@ -912,7 +897,7 @@ fn section(s: &Section) -> Json {
             s.format.map(|f| Json::Str(f.as_str().to_string())),
         ),
         ("order", Some(Json::Num(i64::from(s.order)))),
-        // `@JsonInclude(ALWAYS)` back-compat getter: always written, "" (§4).
+        // Back-compat field: always written, `""` even when unset.
         ("title", Some(Json::Str(String::new()))),
     ])
 }
@@ -946,7 +931,7 @@ fn link(l: &Link) -> Json {
 }
 
 // ---------------------------------------------------------------------------
-// Views (§3)
+// Views
 // ---------------------------------------------------------------------------
 
 impl Ctx<'_> {
@@ -1048,10 +1033,10 @@ impl Ctx<'_> {
                     .map(|m| Json::Str(m.as_str().to_string())),
             ),
             ("properties", Json::props(&config.properties)),
-            // The `styles` and `terminology` beans are never "empty" (§0).
+            // The `styles` and `terminology` beans are never "empty".
             ("styles", Some(styles(&config.styles))),
             ("terminology", Some(terminology(&config.terminology))),
-            // Insertion order (`List<String>`, §3/§5).
+            // Insertion order (plain list, no set semantics).
             (
                 "themes",
                 (!config.themes.is_empty()).then(|| Json::str_array(&config.themes)),
@@ -1065,8 +1050,8 @@ impl Ctx<'_> {
         ])
     }
 
-    /// The seven `View`-base entries every kind writes (§3: `name` computed,
-    /// `order` primitive-always, `generatedKey` `NON_DEFAULT`).
+    /// The seven `View`-base entries every kind writes: `name` computed,
+    /// `order` always written, `generatedKey` `NON_DEFAULT`.
     fn view_base(base: &ViewBase, name: &str) -> Vec<(&'static str, Option<Json>)> {
         vec![
             ("description", Json::opt_text(base.description.as_deref())),
@@ -1082,8 +1067,8 @@ impl Ctx<'_> {
         ]
     }
 
-    /// The `ModelView` content entries (§3), merged alphabetically.
-    /// `dynamic` switches `relationships` to the `DynamicView` accessor order.
+    /// The view content entries, merged alphabetically. `dynamic` switches
+    /// `relationships` to the `DynamicView` accessor order.
     fn view_content(
         entries: &mut Vec<(&'static str, Option<Json>)>,
         content: &ViewContent,
@@ -1119,7 +1104,7 @@ impl Ctx<'_> {
         if steps.is_empty() {
             return None;
         }
-        // Steps keep insertion order; id sets are TreeSet<String> UTF-16 (§5).
+        // Steps keep insertion order; the id sets are UTF-16-ordered.
         Some(Json::Arr(
             steps
                 .iter()
@@ -1235,7 +1220,7 @@ impl Ctx<'_> {
                     .map(|i| Json::Str(i.as_str().to_string())),
             ),
         );
-        // `deploymentEnvironment` is invisible in JSON (§3) — never written.
+        // `deploymentEnvironment` is invisible in JSON — never written.
         insert_sorted(
             &mut entries,
             (
@@ -1328,7 +1313,7 @@ impl Ctx<'_> {
 }
 
 fn automatic_layout(layout: AutomaticLayout) -> Json {
-    // Presence enables layout; all five fields are primitives (always) (§3).
+    // Presence enables layout; all five fields are plain values (always).
     Json::obj(vec![
         (
             "edgeSeparation",
@@ -1359,7 +1344,7 @@ fn dimensions(d: Dimensions) -> Json {
     ])
 }
 
-/// `elements[]`: numeric-id order (§5); `x`/`y` primitive-always (§3).
+/// `elements[]`: numeric-id order; `x`/`y` primitive-always.
 fn element_views(items: &[ElementView]) -> Option<Json> {
     set_list(
         items,
@@ -1375,19 +1360,18 @@ fn element_views(items: &[ElementView]) -> Option<Json> {
 }
 
 /// `relationships[]`: text `id + "/" + order` order; a null order
-/// concatenates as the literal `"null"` (§5).
+/// concatenates as the literal `"null"`.
 fn relationship_views(items: &[RelationshipView]) -> Option<Json> {
     let mut sorted = rv_sort_keys(items);
     sorted.sort_by(|a, b| java_ord(&a.id_order, &b.id_order));
     relationship_view_array(&sorted)
 }
 
-/// Dynamic views: Jackson serializes `DynamicView.getRelationships()`, which
-/// re-sorts the `TreeSet` list by numeric `order` (`Double.parseDouble`)
-/// when EVERY order is numeric, else by `order` text (2026-11-17 witness:
+/// Dynamic views: the relationship list re-sorts by numeric `order`
+/// when EVERY order is numeric, else by `order` text (witness:
 /// `parallel1` → `7/1, 9/2, 10/3, 11/3`). A missing order joins the string
-/// branch as `""` where the reference NPEs (JSON import of a dynamic view
-/// without orders) - oxidizr never crashes on it.
+/// branch as `""` where the official tool crashes (JSON import of a dynamic
+/// view without orders) — oxidizr never crashes on it.
 fn dynamic_relationship_views(items: &[RelationshipView]) -> Option<Json> {
     let mut sorted = rv_sort_keys(items);
     sorted.sort_by(|a, b| java_ord(&a.id_order, &b.id_order));
@@ -1403,14 +1387,14 @@ fn dynamic_relationship_views(items: &[RelationshipView]) -> Option<Json> {
     relationship_view_array(&sorted)
 }
 
-/// Sort keys precomputed ONCE per item (2R R-mis-03: the old comparator
-/// built two `format!` strings — and re-parsed the `f64` — PER COMPARISON;
-/// `sort_by` is stable, so hoisting the keys preserves the exact order,
-/// witness `7/1, 9/2, 10/3, 11/3`). 2R R-mis-03 also retired the
-/// `dynamic: bool` parameter: the two callers above ARE the two legs.
+/// Sort keys precomputed ONCE per item — building the `format!` strings and
+/// re-parsing the `f64` per comparison is wasted work; `sort_by` is stable,
+/// so hoisting the keys preserves the exact order (witness
+/// `7/1, 9/2, 10/3, 11/3`). There is no `dynamic: bool` parameter: the two
+/// callers above ARE the two legs.
 struct RvSortKey<'a> {
     rv: &'a RelationshipView,
-    /// `id + "/" + order` — a `None` order concatenates as `"null"` (§5).
+    /// `id + "/" + order` — a `None` order concatenates as `"null"`.
     id_order: String,
     /// `order` text (`None` as `""`).
     order: &'a str,
@@ -1447,7 +1431,7 @@ fn relationship_view(r: &RelationshipView) -> Json {
         ("order", Json::opt_text(r.order.as_deref())),
         ("position", r.position.map(|p| Json::Num(i64::from(p)))),
         ("properties", Json::props(&r.properties)),
-        // `response` is a NON_NULL Boolean — `false` IS written (V-2).
+        // `response` is omitted only when absent — an explicit `false` IS written.
         ("response", r.response.map(Json::Bool)),
         (
             "routing",
@@ -1487,8 +1471,8 @@ fn styles(styles: &Styles) -> Json {
     ])
 }
 
-/// Element-style fields are `@JsonInclude(NON_NULL)` — a SET value is
-/// written even when `0`/`false`/`""` (V-2 note).
+/// Element-style fields omit only when absent — a SET value is
+/// written even when `0`/`false`/`""`.
 fn element_style(s: &ElementStyle) -> Json {
     Json::obj(vec![
         ("background", opt_nnn(s.background.as_deref())),
@@ -1550,7 +1534,7 @@ fn relationship_style(s: &RelationshipStyle) -> Json {
 }
 
 fn terminology(t: &Terminology) -> Json {
-    // Alphabetical keys; ""-defaulted NON_EMPTY strings hide (§0).
+    // Alphabetical keys; empty strings are omitted.
     Json::obj(vec![
         ("code", Json::opt_text(t.code.as_deref())),
         ("component", Json::opt_text(t.component.as_deref())),

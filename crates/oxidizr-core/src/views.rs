@@ -2,19 +2,17 @@
 //! per-view element/relationship entry views, automatic layout, and the view
 //! configuration (styles / themes / terminology).
 //!
-//! v6 shape notes (verified @ `ad34036`; several `agents/plan/JSON-FORMAT.md` "verify"
-//! items resolved here): views have NO `background`; `ElementView` is exactly
-//! `{id,x,y}` with `x`/`y` primitive ints — ALWAYS serialized (V-2,
-//! WRITE-CATALOG §3); included/excluded lists are GONE (the entry arrays ARE
-//! the content); `ImageView` extends `View` (not `ModelView`); animations exist
+//! Shape notes (library 6.2.4): views have NO `background`; `ElementView` is exactly
+//! `{id,x,y}` with `x`/`y` primitive ints — ALWAYS serialized; included/excluded lists are GONE (the entry arrays ARE
+//! the content); `ImageView` is a plain view (no entry arrays); animations exist
 //! on the four static views + `DeploymentView` + `CustomView` (NOT on
-//! `DynamicView`); `FilteredView.tags` is a `TreeSet<String>` (UTF-16
-//! alphabetical on write — WRITE-CATALOG §5).
+//! `DynamicView`); `FilteredView.tags` is a set (UTF-16
+//! alphabetical on write).
 
 use crate::ids::Id;
 
-/// Common fields of every view (`view/View`). `order` is a reference `int`
-/// (views are TreeSet-ordered by `(order, key-case-insensitive)`).
+/// Common fields of every view. `order` is an int in the format
+/// (views are ordered by `(order, key-case-insensitive)`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewBase {
     /// View key (`"SystemLandscape-001"`, unique workspace-wide).
@@ -25,10 +23,9 @@ pub struct ViewBase {
     pub title: Option<String>,
     /// Optional description.
     pub description: Option<String>,
-    /// Auto-generated key (`generatedKey`; reference primitive `boolean` with
-    /// `NON_DEFAULT` inclusion — written only when `true`; read sets it via the
-    /// package-private setter, which Jackson sees — default setter visibility
-    /// is `ANY`, so JSON→JSON round-trips it).
+    /// Auto-generated key (`generatedKey`) — a primitive flag written only
+    /// when `true`; the official reader binds the package-private setter, so
+    /// JSON→JSON round-trips it.
     pub generated_key: bool,
     /// Free-form properties.
     pub properties: crate::properties::Properties,
@@ -49,7 +46,7 @@ impl ViewBase {
     }
 }
 
-/// The entry-arrays part shared by all `ModelView` subclasses.
+/// The entry-arrays part shared by all model-view kinds.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ViewContent {
     /// Element views: the inclusion list AND geometry.
@@ -72,9 +69,9 @@ pub struct SystemLandscapeView {
     /// Entries + layout.
     pub content: ViewContent,
     /// JSON `enterpriseBoundaryVisible` (primitive bool — ALWAYS written;
-    /// reference default `true`).
+    /// the format default is `true`).
     pub enterprise_boundary_visible: bool,
-    /// Animation steps (`StaticView implements AnimatedView`).
+    /// Animation steps.
     pub animations: Vec<Animation>,
 }
 
@@ -88,7 +85,7 @@ pub struct SystemContextView {
     /// Scoped software system (JSON `softwareSystemId`).
     pub software_system_id: Id,
     /// JSON `enterpriseBoundaryVisible` (primitive bool — ALWAYS written;
-    /// reference default `true`).
+    /// the format default is `true`).
     pub enterprise_boundary_visible: bool,
     /// Animation steps.
     pub animations: Vec<Animation>,
@@ -104,7 +101,7 @@ pub struct ContainerView {
     /// Scoped software system (JSON `softwareSystemId`).
     pub software_system_id: Id,
     /// JSON `externalSoftwareSystemBoundariesVisible` (primitive bool —
-    /// ALWAYS written; reference default `false`).
+    /// ALWAYS written; the format default is `false`).
     pub external_software_system_boundaries_visible: bool,
     /// Animation steps.
     pub animations: Vec<Animation>,
@@ -120,15 +117,15 @@ pub struct ComponentView {
     /// Scoped container (JSON `containerId`).
     pub container_id: Id,
     /// JSON `externalContainerBoundariesVisible` (primitive bool — ALWAYS
-    /// written; reference default `false`).
+    /// written; the format default is `false`).
     pub external_container_boundaries_visible: bool,
     /// Animation steps.
     pub animations: Vec<Animation>,
 }
 
-/// A dynamic view (`view/DynamicView`). The entry arrays are ORDERED
-/// (`RelationshipView.order` numbers the steps). `DynamicView` extends
-/// `ModelView` but NOT `AnimatedView` — no animations.
+/// A dynamic view. The entry arrays are ORDERED
+/// (`RelationshipView.order` numbers the steps). A dynamic view has
+/// no animations (unlike the static and deployment views).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DynamicView {
     /// Common fields.
@@ -137,10 +134,9 @@ pub struct DynamicView {
     pub content: ViewContent,
     /// Scope element, if any (JSON `elementId`).
     pub element_id: Option<Id>,
-    /// Deployment-scope dynamic views. The reference keeps this field PRIVATE
-    /// with no Jackson accessors — invisible in JSON in BOTH directions
-    /// (WRITE-CATALOG §3); it exists for the DSL only and is never
-    /// (de)serialized.
+    /// Deployment-scope dynamic views. The format keeps this field PRIVATE —
+    /// invisible in JSON in BOTH directions; it exists for the DSL only and
+    /// is never (de)serialized.
     pub deployment_environment: Option<String>,
     /// JSON `externalBoundariesVisible` (primitive bool — ALWAYS written).
     pub external_boundaries_visible: bool,
@@ -161,9 +157,9 @@ pub struct DeploymentView {
     pub animations: Vec<Animation>,
 }
 
-/// A custom view (`view/CustomView`) — the target of DSL `image { … }` blocks
-/// too (they produce `ImageView`s; `customViews` exist in Java but not the
-/// `OpenAPI` schema).
+/// A custom view — the target of DSL `image { … }` blocks
+/// too (they produce `ImageView`s; custom views exist in the format but
+/// not the `OpenAPI` schema).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomView {
     /// Common fields.
@@ -172,7 +168,7 @@ pub struct CustomView {
     pub content: ViewContent,
     /// Animation steps.
     pub animations: Vec<Animation>,
-    /// Optional software-system scope (`ModelView.softwareSystemId` — the
+    /// Optional software-system scope (`softwareSystemId` — the
     /// public getter makes it visible in JSON when set).
     pub software_system_id: Option<Id>,
 }
@@ -184,11 +180,11 @@ pub struct FilteredView {
     pub base: ViewBase,
     /// The base view key (JSON `baseViewKey`).
     pub base_view_key: String,
-    /// Include/exclude — nullable bean field: the reference omits the key
-    /// when the JSON input carried an unknown/absent mode (probe 2026-11-14).
+    /// Include/exclude — nullable field: the official writer omits the key
+    /// when the JSON input carried an unknown/absent mode.
     pub mode: Option<FilterMode>,
-    /// Filter terms (serialized as the JSON `tags` ARRAY; reference stores a
-    /// `TreeSet`, i.e. alphabetical on write).
+    /// Filter terms (serialized as the JSON `tags` ARRAY, sorted
+    /// alphabetically on write).
     pub tags: Vec<String>,
 }
 
@@ -201,17 +197,17 @@ pub struct ImageView {
     pub element_id: Option<Id>,
     /// Diagram content.
     pub content: Option<String>,
-    /// Light-mode content (`contentLight`, Java-only ★).
+    /// Light-mode content (`contentLight`, ★ not in the `OpenAPI` schema).
     pub content_light: Option<String>,
-    /// Dark-mode content (`contentDark`, Java-only ★).
+    /// Dark-mode content (`contentDark`, ★ not in the `OpenAPI` schema).
     pub content_dark: Option<String>,
     /// Content type (e.g. `PlantUML`, `Mermaid`).
     pub content_type: Option<String>,
 }
 
-/// One included element (JSON `elements[]` entry). `x`/`y` are reference
-/// primitive ints: NEVER "empty" under `NON_EMPTY`, so they are ALWAYS
-/// written, including the `0`/`0` pair (V-2 resolved — WRITE-CATALOG §3).
+/// One included element (JSON `elements[]` entry). `x`/`y` are
+/// primitive ints in the format: never treated as empty, so they are
+/// ALWAYS written, including the `0`/`0` pair.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElementView {
     /// Referenced element id.
@@ -230,12 +226,12 @@ pub struct RelationshipView {
     pub id: Id,
     /// Optional description override.
     pub description: Option<String>,
-    /// Optional URL (Java-only ★).
+    /// Optional URL (★ not in the `OpenAPI` schema).
     pub url: Option<String>,
-    /// Dynamic-step order number (reference stores it as a STRING).
+    /// Dynamic-step order number (stored as a STRING in the format).
     pub order: Option<String>,
-    /// Async response marker (`response`; `Boolean` with `NON_NULL`
-    /// inclusion — `false` IS written).
+    /// Async response marker (`response`) — omitted only when absent,
+    /// `false` IS written.
     pub response: Option<bool>,
     /// Free-form properties.
     pub properties: crate::properties::Properties,
@@ -259,7 +255,7 @@ pub struct Vertex {
 }
 
 /// An animation step (`view/Animation`): ids are stored as STRINGS and the
-/// reference keeps them in `TreeSet`s (lexicographic on write — M3 catalog).
+/// the official tooling keeps them sorted (lexicographic on write).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Animation {
     /// Step number.
@@ -271,12 +267,12 @@ pub struct Animation {
 }
 
 /// Automatic layout request (`view/AutomaticLayout`); presence enables layout.
-/// Defaults verified from the reference constants.
+/// Defaults match the official constants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutomaticLayout {
     /// Rank direction — nullable bean field: the JSON reader stores `None`
-    /// when the key is absent (then the writer omits it; the reference
-    /// `setRankDirection` throws when the key is present but unparsable).
+    /// when the key is absent (then the writer omits it; the official
+    /// reader throws when the key is present but unparsable).
     pub rank_direction: Option<RankDirection>,
     /// Rank separation (default 100).
     pub rank_separation: i32,
@@ -409,7 +405,7 @@ pub enum PaperSize {
 }
 
 impl PaperSize {
-    /// JSON spelling — the Java constant names (`A6_Portrait` … `Slide_16_10`).
+    /// JSON spelling — the official constant names (`A6_Portrait` … `Slide_16_10`).
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -470,20 +466,19 @@ impl PaperSize {
 }
 
 /// Implements `as_str`/`parse` for enums whose JSON name IS the variant name
-/// (Rust variants mirror the Java constant names exactly — JSON enum values
-/// are the Java names, verified `ad34036`).
+/// (Rust variants mirror the official JSON enum names exactly).
 macro_rules! json_names {
     ($($ty:ident { $($variant:ident),* $(,)? }),* $(,)?) => {
         $(
             impl $ty {
-                /// JSON spelling (the Java constant name).
+                /// JSON spelling (the official constant name).
                 #[must_use]
                 pub const fn as_str(self) -> &'static str {
                     match self { $(Self::$variant => stringify!($variant)),* }
                 }
 
-                /// Parse the JSON spelling (exact case; the reference maps
-                /// unknown values to null — `READ_UNKNOWN_ENUM_VALUES_AS_NULL`).
+                /// Parse the JSON spelling (exact case; the official reader maps
+                /// unknown values to null).
                 #[must_use]
                 pub fn parse(s: &str) -> Option<Self> {
                     match s {
@@ -534,8 +529,8 @@ json_names! {
     },
 }
 
-/// An element style (`view/ElementStyle`), matched by `tag`. All paint fields
-/// are Option (`NON_EMPTY`: only set fields serialize).
+/// An element style, matched by `tag`. All paint fields are Option
+/// (only set fields serialize).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ElementStyle {
     /// Tag this style applies to.
@@ -567,16 +562,15 @@ pub struct ElementStyle {
     pub border: Option<LineStyle>,
     /// Opacity percent.
     pub opacity: Option<i32>,
-    /// Show metadata (reference `Boolean metadata` — default null).
+    /// Show metadata (nullable — default null).
     pub metadata: Option<bool>,
     /// Show description.
     pub description: Option<bool>,
-    /// Free-form properties (`AbstractStyle implements PropertyHolder`;
-    /// `NON_EMPTY` — only written when set).
+    /// Free-form properties — only written when non-empty.
     pub properties: crate::properties::Properties,
 }
 
-/// A relationship style (`view/RelationshipStyle`), matched by `tag`.
+/// A relationship style, matched by `tag`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RelationshipStyle {
     /// Tag this style applies to.
@@ -611,33 +605,31 @@ pub struct RelationshipStyle {
     pub properties: crate::properties::Properties,
 }
 
-/// Element + relationship styles (`view/Styles`). The vectors mirror the
-/// reference collections' iteration order: the DSL builder inserts through
-/// [`Styles::insert_element_style`] (the Java fields default to `TreeSet`s),
-/// while the JSON reader appends in document order (Jackson binds
-/// `Styles.elements`/`relationships` by FIELD — there is no setter, so unlike
-/// `Model.setPeople` the `TreeSet` is replaced by an ordered list; oracle
-/// probes 2026-11-17, WRITE-CATALOG §5).
+/// Element + relationship styles. The vectors mirror the format's
+/// iteration order: the DSL builder inserts through
+/// [`Styles::insert_element_style`] (sorted-set semantics in the format),
+/// while the JSON reader appends in document order (the reader binds
+/// `elements`/`relationships` by FIELD, replacing the set with an ordered
+/// list, so document order survives).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Styles {
-    /// Element styles, in reference iteration order (see [`Styles`]).
+    /// Element styles, in format iteration order (see [`Styles`]).
     pub element_styles: Vec<ElementStyle>,
-    /// Relationship styles, in reference iteration order (see [`Styles`]).
+    /// Relationship styles, in format iteration order (see [`Styles`]).
     pub relationship_styles: Vec<RelationshipStyle>,
-    /// Themes loaded by `ThemeUtils.loadThemes`
-    /// (`Styles.addStylesFromTheme`), in add order. Consulted by the
+    /// Themes loaded from the themes directory
+    /// loaded from theme files, in add order. Consulted by the
     /// resolution engine (`crate::styles`) BEFORE the workspace styles —
-    /// never merged, and NOT serialized: Java's field has no getter/setter,
-    /// so Jackson never sees it (oracle: a `-f json` export after
-    /// `loadThemes` shows no theme content).
+    /// never merged, and NOT serialized (the format has no accessor for it:
+    /// a JSON export after loading themes shows no theme content).
     pub themes: Vec<Theme>,
 }
 
 impl Styles {
-    /// Insert `style` at its `AbstractStyle.compareTo` position — the
-    /// `TreeSet<ElementStyle>` the reference adds into on the DSL path. The
+    /// Insert `style` at its sorted position — the DSL path adds into
+    /// a sorted set the whole time. The
     /// ordering key (`colorScheme`, `tag`) is fixed at construction, so sorted
-    /// insertion reproduces `TreeSet` iteration exactly. Returns the index.
+    /// insertion reproduces the official iteration exactly. Returns the index.
     pub fn insert_element_style(&mut self, style: ElementStyle) -> usize {
         let pos = self.element_styles.partition_point(|s| {
             style_cmp(s.color_scheme, &s.tag, style.color_scheme, &style.tag).is_lt()
@@ -658,7 +650,7 @@ impl Styles {
 
 /// `AbstractStyle.compareTo` (`view/AbstractStyle`): null `colorScheme` sorts
 /// before non-null; both null → `tag`, both set → `colorScheme + "/" + tag` —
-/// always UTF-16 code-unit order (`String.compareTo`).
+/// always UTF-16 code-unit order.
 fn style_cmp(
     a_scheme: Option<ColorScheme>,
     a_tag: &str,
@@ -678,31 +670,30 @@ fn style_cmp(
     }
 }
 
-/// A `theme.json` document (`view/Theme`) — the theme de/serialization shape
-/// of Phase 2 `export --format theme` (write: name/description from the
-/// workspace, styles the live collections) and of theme loading (M1). Field
-/// order is the Java declaration order, which the plain `ThemeUtils` mapper
-/// serializes as key order (oracle probes 2026-11-17): `name, description,
-/// elements, relationships, license`.
+/// A `theme.json` document — the theme de/serialization shape
+/// of `export --format theme` (write: name/description from the
+/// workspace, styles the live collections) and of theme loading. Field
+/// order is the format's declaration order, written as key order:
+/// `name, description, elements, relationships, license`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Theme {
-    /// Theme name — the workspace name on the export path (`NON_EMPTY`).
+    /// Theme name — the workspace name on the export path (omitted empty).
     pub name: Option<String>,
-    /// Theme description (`NON_EMPTY`).
+    /// Theme description (omitted empty).
     pub description: Option<String>,
     /// Element styles, document order on read.
     pub elements: Vec<ElementStyle>,
     /// Relationship styles, document order on read.
     pub relationships: Vec<RelationshipStyle>,
-    /// `license` — declared last, never set by `ThemeUtils.toJson`.
+    /// License text — declared last, never set on write.
     pub license: Option<String>,
 }
 
-/// Terminology overrides (`view/Terminology`); every field defaults to `""`
-/// (`NON_EMPTY` omits unset ones).
+/// Terminology overrides; every field defaults to `""` (unset ones are
+/// omitted).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Terminology {
-    /// Legacy `enterprise` (schema-era read; Java field exists).
+    /// Legacy `enterprise` (schema-era read; the field exists).
     pub enterprise: Option<String>,
     /// `person`.
     pub person: Option<String>,
@@ -744,8 +735,8 @@ pub struct ViewConfiguration {
 }
 
 /// All views onto the model (`view/ViewSet`). Each collection preserves
-/// insertion order; the reference keeps `TreeSet`s ordered by
-/// `(order, key-ignore-case)` — the M3 write catalog sorts on output.
+/// insertion order; the official tooling keeps sets ordered by
+/// `(order, key-ignore-case)` — the writer sorts on output.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ViewSet {
     /// Custom views (★ in Java, absent from the schema).
@@ -771,9 +762,9 @@ pub struct ViewSet {
 }
 
 impl ViewSet {
-    /// Every view (key, kind label) in the reference `getViews()` traversal
-    /// order used for key-uniqueness validation: the union `TreeSet` ordered by
-    /// `(order, key lowercased)` is what `checkViewKeysAreUnique` iterates —
+    /// Every view (key, kind label) in the official traversal
+    /// order used for key-uniqueness validation: the union set ordered by
+    /// `(order, key lowercased)` is what uniqueness validation walks —
     /// [`mod@crate::validate`] reproduces that ordering.
     #[must_use]
     pub fn all_views(&self) -> Vec<View<'_>> {

@@ -1,24 +1,23 @@
-//! The faithful single-pass DSL parse engine (P1-D3, "engine of record").
+//! The faithful single-pass DSL parse engine ("engine of record").
 //!
-//! This module ports `StructurizrDslParser.java` line-for-line: the same
+//! This module mirrors the official DSL parser line-for-line: the same
 //! logical-line pipeline (preprocess → BOM strip → empty/comment gates →
 //! tokenize → `${}` substitution → `id = ` prefix), the same ordered
 //! `if-else` statement dispatch chain over the same context stack (context
-//! guards are TOP-OF-STACK `instanceof` checks — `inContext` is
-//! `clazz.isAssignableFrom(stack.peek().getClass())`, NOT a stack search).
-//! The chain is split into the section modules `stmt_line` (arms at Java
-//! lines 281–347), `stmt_model` (350–611), `stmt_props` (612–741),
-//! `stmt_style` (742–948), `stmt_deployment` (949–1028), `stmt_views`
-//! (1029–1196) and `stmt_config` (1197–1339) — each section runs in that
-//! order, so the chain order in the reference (which IS the compatibility
-//! contract) is preserved exactly; every arm is annotated with its Java line
-//! number.
+//! guards are TOP-OF-STACK kind checks — `inContext` tests the
+//! runtime class of the TOP frame only, NOT a stack search).
+//! The chain is split into the section modules `stmt_line`,
+//! `stmt_model`, `stmt_props`, `stmt_style`,
+//! `stmt_deployment`, `stmt_views` and `stmt_config` — each section
+//! runs in that order, so the statement dispatch order of
+//! the official parser (which IS the compatibility contract) is
+//! preserved exactly.
 //!
-//! The ONE deliberate difference (D1): the reference throws at the first
-//! failure and aborts; here each logical line is processed with the reference
+//! The ONE deliberate difference: the official parser throws at the first
+//! failure and aborts; here each logical line is processed with the official parser
 //! semantics and, on failure, the diagnostic is recorded, the context stack
 //! is popped back to the height recorded before the line, and parsing
-//! continues. Reference message texts are reproduced byte-identically
+//! continues. Official message texts are reproduced byte-identically
 //! ([`DslError`]); locations are structured, not embedded.
 
 mod ctx;
@@ -48,9 +47,9 @@ use oxidizr_core::{CoreError, Id, ViewRef, Workspace, WorkspaceBuilder};
 use crate::compat;
 use crate::preprocess::{Logical, text_block_value};
 
-// 2R R-dsl-09: externals consume only the parse surface (`parse_dsl`,
+// externals consume only the parse surface (`parse_dsl`,
 // `ParseOptions`/`ParseResult`/`EnvLookup`/`InstalledThemes`, `DslError`)
-// plus the §P4-LSP L-4 cursor helper (`cursor_scope`/`CursorScope`) — the
+// plus the cursor helper (`cursor_scope`/`CursorScope`) — the
 // engine's working types stay crate-internal.
 pub(crate) use ctx::{ColorScheme, Ctx, DslEnvironment, DslGroup, Holder};
 pub use error::DslError;
@@ -67,13 +66,13 @@ pub(crate) enum Sec {
     /// An arm matched and FAILED — the line carries a diagnostic.
     Err(DslError),
     /// No arm in this section matched; fall through to the next section
-    /// (== the next `else if` in the reference).
+    /// (== the next `else if` in the official parser).
     No,
 }
 
-/// One chain section (`else if` group over a contiguous Java line range).
-/// Shared-borrow `&Stmt` per 2R R-dsl-01: no section mutates the statement
-/// (they mutate the parser), and the Java chain shares ONE tokens reference
+/// One chain section (one `else if` group from the dispatch chain).
+/// Shared-borrow `&Stmt`: no section mutates the statement
+/// (they mutate the parser), and the official chain shares ONE token list
 /// across every `else if`.
 type Section = fn(&mut Parser, &Stmt) -> Sec;
 
@@ -88,7 +87,7 @@ impl From<Result<(), DslError>> for Sec {
 }
 
 /// The ordered dispatch chain. Order IS the compatibility contract — the
-/// array index mirrors the reference's `else if` sequence.
+/// array index mirrors the official parser's `else if` sequence.
 const SECTIONS: &[Section] = &[
     stmt_line::section,
     stmt_model::section,
@@ -100,48 +99,48 @@ const SECTIONS: &[Section] = &[
 ];
 
 /// A dispatched logical line (state the chain arms read; mutations land on
-/// the parser, never here — 2R R-dsl-01).
+/// the parser, never here).
 pub(crate) struct Stmt {
     /// The joined logical line, BOM-stripped — what the tokenizer saw.
     pub raw: String,
-    /// The logical line number (`DslLine.getLineNumber()`).
-    #[allow(dead_code)] // diagnostics re-anchor on it from M5 onward
+    /// The logical line number (`DslLine.getLineNumber`).
+    #[allow(dead_code)] // diagnostics re-anchor on it later
     pub number: u32,
     /// Tokens after `${}` substitution and `id =` prefix removal.
     pub tokens: Tokens<'static>,
-    /// The `id = ` identifier, if the statement carried one (Java
-    /// `identifier`).
+    /// The `id = ` identifier, if the statement carried one;
+    /// `None` when the line carried no identifier prefix.
     pub identifier: Option<String>,
 }
 
 impl Stmt {
-    /// Java `String firstToken = tokens.get(0)` (post id-strip).
+    /// The first token (post id-strip).
     pub fn first(&self) -> std::borrow::Cow<'_, str> {
         self.tokens.get(0)
     }
 }
 
-/// Java `String.equalsIgnoreCase` (compat-routed so the call sites stay
+/// Case-insensitive token equality (compat-routed so the call sites stay
 /// honest about the UTF-16 subtleties documented there).
 #[must_use]
 pub(crate) fn eqi(a: &str, b: &str) -> bool {
     compat::java_eq_ignore_case(a, b)
 }
 
-/// Reference `Archetype` (`final class Archetype`), stored parser-side;
-/// `archetype_list` indices are the `ArchetypeDslContext` payloads.
+/// One parsed archetype, stored parser-side; the
+/// `archetype_list` indices are the archetype-context payloads.
 #[derive(Debug, Clone)]
 pub(crate) struct Archetype {
-    /// Lowercased name (`Archetype` ctor).
+    /// Lowercased name (blank falls back to the kind).
     pub name: String,
     /// The archetype type token (`person`, `->`, …).
     pub kind: String,
     pub metadata: String,
     pub description: String,
     pub technology: String,
-    /// `LinkedHashSet` semantics: insertion-ordered, deduped.
+    /// Insertion-ordered, deduped set semantics.
     pub tags: Vec<String>,
-    /// `LinkedHashMap` insertion order matters for JSON output.
+    /// Insertion order matters for JSON output.
     pub properties: Vec<(String, String)>,
     pub perspectives: Vec<oxidizr_core::model::Perspective>,
 }
@@ -150,8 +149,8 @@ impl Archetype {
     /// `new Archetype(name, type)` — an empty name falls back to the type;
     /// the name is lowercased.
     fn new(name: Option<&str>, kind: &str) -> Self {
-        // `StringUtils.isNullOrEmpty` TRIMS, but the retained name is NOT
-        // trimmed — only lowercased (`this.name = name.toLowerCase()`).
+        // The blank check TRIMS, but the retained name is NOT
+        // trimmed — only lowercased.
         let name = match name {
             Some(n) if !n.trim().is_empty() => n,
             _ => kind,
@@ -182,16 +181,16 @@ pub(crate) enum NameValueType {
 #[derive(Debug, Clone)]
 pub(crate) struct NameValue {
     // `name` is the entry's literal key — kept for `!const`/`!var`
-    // diagnostics when the M5 directive engine lands.
+    // diagnostics when the directive engine lands.
     #[allow(dead_code)]
     pub name: String,
     pub value: String,
     pub vtype: NameValueType,
 }
 
-/// One frame of the reference `SequenceNumber`/`SequenceCounter` stack,
-/// mirrored parser-side per dynamic view (`startParallelSequence` /
-/// `endParallelSequence` / `getNextSequenceNumber` are DSL-time state; the
+/// One frame of the parallel-sequence counter stack,
+/// mirrored parser-side per dynamic view (the parallel-sequence start/end
+/// and next-number reads are DSL-time state; the
 /// core receives the resulting `order` string).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SeqFrame {
@@ -199,15 +198,15 @@ pub(crate) struct SeqFrame {
     incremented: bool,
 }
 
-/// Base-workspace loader for `workspace extends <file.json>` (M5): receives
+/// Base-workspace loader for `workspace extends <file.json>`: receives
 /// the canonical path string, returns the loaded workspace or the
-/// reference-shaped failure message.
+/// official-style failure message.
 pub type JsonWorkspaceLoader = fn(&str) -> Result<Workspace, String>;
 
-/// `${VAR}` environment lookup override (Phase 1T, P1T-D1): lets the
+/// `${VAR}` environment lookup override : lets the
 /// headless API run parses hermetically (test-provided map instead of the
 /// process environment). `None` — the production default — keeps the V-3
-/// reference behavior (`System.getenv` equivalent, `std::env::var`).
+/// official behavior (`System.getenv` equivalent, `std::env::var`).
 ///
 /// `Arc<dyn Fn>` (not a fn pointer) so a captured map rides along;
 /// `Send + Sync` keeps [`ParseOptions`] usable from parallel in-process
@@ -238,11 +237,11 @@ impl std::fmt::Debug for EnvLookup {
     }
 }
 
-/// Installed-theme name check for `ThemeParser.addTheme`'s installed branch
-/// (`InstalledThemes.isInstalled`, P2-D3/M1-d). The pipeline builds the
-/// registry BEFORE parsing (reference `AbstractCommand.installThemes`) and
+/// Installed-theme name check for the installed-theme branch of the
+/// `theme` statement. The pipeline builds the
+/// registry BEFORE parsing (themes are installed up front) and
 /// injects it here — this crate never touches the filesystem for themes
-/// (topology P1-D1). `None` = an empty registry (fragment parses, library
+/// (crate topology). `None` = an empty registry (fragment parses, library
 /// defaults): every non-URL theme token takes the FILE branch.
 /// The boxed check behind [`InstalledThemes`] (named to tame
 /// `type_complexity`).
@@ -258,7 +257,7 @@ impl InstalledThemes {
         InstalledThemes(std::sync::Arc::new(check))
     }
 
-    /// `InstalledThemes.isInstalled` — the sole parse-time entry point.
+    /// The sole parse-time entry point of the registry.
     #[must_use]
     pub fn is_installed(&self, name: &str) -> bool {
         (self.0)(name)
@@ -275,31 +274,30 @@ impl std::fmt::Debug for InstalledThemes {
 /// ([`json_dsl_identifiers`]).
 type DslIdentifiers = Vec<(String, Id)>;
 
-/// Entry options (the reference `parse(String, File)` entry: main file,
+/// Entry options (the official parser `parse(String, File)` entry: main file,
 /// source tracked, not a fragment).
 #[derive(Debug, Clone)]
 pub struct ParseOptions<'a> {
-    /// Path reported in reference-style messages (`of <path>`); `None` for
-    /// stdin/fragment input (the reference prints no `of …` for non-files).
+    /// Path reported in official-style messages (`of <path>`); `None` for
+    /// stdin/fragment input (the official parser prints no `of …` for non-files).
     pub file: Option<&'a str>,
     /// Directory relative paths (includes) resolve against; `file`'s parent
-    /// by default. `None` = the process CWD (`new File(".").getParent()`).
+    /// by default. `None` = the process CWD.
     pub base_dir: Option<&'a str>,
-    /// `.json` base loader for `workspace extends <file.json>` (M5,
-    /// `PHASE_1.md` §M5-b): receives the canonical path string, returns the
-    /// loaded workspace or the reference-shaped failure message. Topology
-    /// keeps `oxidizr-json` out of this crate (P1-D1) — the CLI injects it;
+    /// `.json` base loader for `workspace extends <file.json>`:
+    /// receives the canonical path string, returns the
+    /// loaded workspace or the official-style failure message. Topology
+    /// keeps `oxidizr-json` out of this crate — the CLI injects it;
     /// `None` (default, e.g. fragment parsing) rejects `.json` bases with a
     /// clean error.
     pub json_loader: Option<JsonWorkspaceLoader>,
     /// `${VAR}` fallback lookup ([`EnvLookup`]); `None` (production, CLI)
-    /// reads the process environment exactly as the reference parser does
-    /// (V-3). Set by the headless API for hermetic in-process runs
-    /// (`agents/plan/build/PHASE_1T.md` P1T-D1).
+    /// reads the process environment exactly as the official parser does;
+    /// set by the headless API for hermetic in-process runs.
     pub env_lookup: Option<EnvLookup>,
-    /// Installed-theme registry check ([`InstalledThemes`], M1-d): gates
-    /// `ThemeParser.addTheme`'s installed-name branch. `None` = empty
-    /// registry (the reference's `InstalledThemes` when no themes dir was
+    /// Installed-theme registry check ([`InstalledThemes`]): gates
+    /// the installed-name branch of the `theme` statement. `None` = empty
+    /// registry (the official tooling's theme registry when no themes dir was
     /// installed) — non-URL theme tokens then take the FILE branch.
     pub installed_themes: Option<InstalledThemes>,
 }
@@ -330,7 +328,7 @@ impl<'a> ParseOptions<'a> {
         }
     }
 
-    /// Fragment options (no file, includes unresolvable ⇒ reference parity
+    /// Fragment options (no file, includes unresolvable ⇒ official parity
     /// for `!include` errors).
     #[must_use]
     pub fn fragment() -> Self {
@@ -348,8 +346,8 @@ impl<'a> ParseOptions<'a> {
 pub struct ParseResult {
     /// The built workspace.
     pub workspace: Workspace,
-    /// Diagnostics recorded via D1 recovery (empty for reference-accepted
-    /// inputs whose only errors would be reference aborts).
+    /// Diagnostics recorded via recover-and-continue (empty for officially-accepted
+    /// inputs whose only errors would be official aborts).
     pub errors: Vec<DslError>,
     /// Every file-system `!include`d file, in parse order (directory
     /// includes contribute their sorted entry list; nested includes
@@ -359,15 +357,15 @@ pub struct ParseResult {
     /// `std::fs::canonicalize` further if it cares).
     /// Empty for fragments and URL-free parses: URL includes are
     /// policy-rejected, so this set is file-system-only BY CONSTRUCTION
-    /// (the M4 live-reload watch closure, §P3-M4).
+    /// (the live-reload watch closure).
     pub includes: Vec<String>,
 }
 
-/// The parser (reference `StructurizrDslParser` instance state).
+/// The parser (one parse's working state).
 pub(crate) struct Parser<'a> {
     pub builder: WorkspaceBuilder,
     pub ids: IdentifiersRegister,
-    /// The context stack (`contextStack`). Java stacks hold ONE object per
+    /// The context stack. The official stack holds ONE object per
     /// frame; the portable flag lives ON the context, so it rides a parallel
     /// stack kept in lock-step by [`Parser::start_context`] /
     /// [`Parser::end_context`].
@@ -375,7 +373,7 @@ pub(crate) struct Parser<'a> {
     frame_portable: Vec<bool>,
     pub opts: ParseOptions<'a>,
 
-    // --- reference parser fields -----------------------------------------
+    // --- official parser fields -----------------------------------------
     /// `workspace != null` ⇔ the `workspace` token was seen (gates the
     /// catch-all's permitted-token list and the `structurizr.dsl` property
     /// at finish).
@@ -384,7 +382,7 @@ pub(crate) struct Parser<'a> {
     /// `model`, `views`).
     pub parsed_tokens: Vec<String>,
     /// `extendingWorkspace` — set only by the `workspace extends` arm once
-    /// the workspace statement completes (`StructurizrDslParser` line 719);
+    /// the workspace statement completes;
     /// the four element parsers read it (their contexts capture it at push
     /// time — the flag never changes after, so the parser-level read is
     /// equivalent) and switch to get-or-add by name on the base workspace.
@@ -393,7 +391,7 @@ pub(crate) struct Parser<'a> {
     /// context by file-system `!include`).
     pub dsl_portable: bool,
     /// `dslSourceLines`: the MAIN file's raw physical lines (BOM included —
-    /// the reference accumulates before stripping; includes excluded).
+    /// the official parser accumulates before stripping; includes excluded).
     pub dsl_source_lines: Vec<String>,
     /// `constantsAndVariables`.
     pub constants: HashMap<String, NameValue>,
@@ -406,17 +404,17 @@ pub(crate) struct Parser<'a> {
     /// `dslFile` per recursion level (includes push theirs; `None` =
     /// fragment/no file).
     pub file_stack: Vec<Option<String>>,
-    /// Pseudo-object uid source (Java object identity surrogate).
+    /// Pseudo-object uid source (object-identity surrogate).
     pub next_uid: u64,
-    /// D1 diagnostics.
+    /// recovery diagnostics.
     pub errors: Vec<DslError>,
-    /// Per dynamic view: the `SequenceNumber` counter stack (empty vec =
+    /// Per dynamic view: the sequence counter stack (empty vec =
     /// the implicit root counter starting at 0).
     pub seq: HashMap<usize, Vec<SeqFrame>>,
-    /// Transient set by the `!include` arm: the `IncludedFile.getFile()`
-    /// the recursion reports as its `dslFile`.
+    /// Transient set by the `!include` arm: the file the recursion
+    /// reports as its own.
     pub(crate) last_include_path: Option<String>,
-    /// File-system `!include`d files in read order (§P3-M4 watch
+    /// File-system `!include`d files in read order (watch
     /// closure) — canonical PATH form, see [`ParseResult::includes`].
     pub includes: Vec<String>,
     /// The `ElementGroup` member sets, indexed by group `uid`: the live
@@ -430,7 +428,7 @@ pub(crate) struct Parser<'a> {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GroupRecord {
     /// Members, first-insertion order (the portable stand-in for the
-    /// reference `HashSet` iteration — see `agents/plan/PROGRESS.md`).
+    /// hash-set iteration (a documented deviation).
     pub members: Vec<Id>,
     /// The enclosing group's `uid` (nested `group` blocks).
     pub parent_uid: Option<u64>,
@@ -485,7 +483,7 @@ impl<'a> Parser<'a> {
     }
 
     // ------------------------------------------------------------------
-    // context stack helpers (reference `startContext`/`endContext`/…)
+    // context stack helpers
     // ------------------------------------------------------------------
 
     fn start_context(&mut self, ctx: Ctx) {
@@ -493,18 +491,18 @@ impl<'a> Parser<'a> {
         self.frame_portable.push(true);
     }
 
-    /// The top of the stack (`getContext()`), Java `peek()`.
+    /// The top of the stack (`None` when empty).
     fn top(&self) -> Option<&Ctx> {
         self.stack.last()
     }
 
-    /// `inContext(Foo.class)` — TOP frame only (`isAssignableFrom(peek())`).
+    /// In-context test — TOP frame only (never a stack search).
     fn in_ctx(&self, p: impl FnOnce(&Ctx) -> bool) -> bool {
         self.top().is_some_and(p)
     }
 
-    /// `getContext(Foo.class)` against a predicate: the Java cast error text
-    /// uses fully-qualified reference class names — pinned here.
+    /// The top-of-stack cast check: the official cast error text
+    /// uses fully-qualified official class names — pinned here.
     fn ctx_cast(&self, expected: &str, ok: impl FnOnce(&Ctx) -> bool) -> Result<(), DslError> {
         if self.in_ctx(ok) {
             Ok(())
@@ -516,13 +514,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `endContext()`: pop, run `DslContext.end()`, fold portability.
+    /// Pop the top frame, run its close side-effects, fold portability.
     fn end_context(&mut self) -> Result<(), DslError> {
         match self.stack.pop() {
             Some(ctx) => {
                 let portable = self.frame_portable.pop().unwrap_or(true);
                 self.end_ctx(&ctx)?;
-                // `dslPortable &= context.isDslPortable()` (reference).
+                // The popped frame's portability flag ANDs into the parser's.
                 self.dsl_portable &= portable;
                 Ok(())
             }
@@ -530,10 +528,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Which `end()` context family started the import — it ONLY selects
-    /// the `RuntimeException` prefix. The resolved CLASS decides what runs
-    /// (a `!docs` naming a decision importer imports decisions — faithful
-    /// to `constructor.newInstance()` + `importDocumentation`).
+    /// Which context family started the import — it ONLY selects
+    /// the wrapper-exception prefix. The resolved importer decides what runs
+    /// (a `!docs` naming a decision importer imports decisions — faithfully
+    /// reproduced).
     fn run_import(
         &mut self,
         holder: &Holder,
@@ -555,19 +553,19 @@ impl<'a> Parser<'a> {
         let Some(dsl_file) = self.current_file_raw() else {
             return Ok(());
         };
-        // `loadClass(fqn)` runs FIRST: an unknown importer beats every
-        // path/regex error (the JVM plugin-jar loader is out of reach —
-        // the registry is the six built-ins, D7).
+        // The importer lookup runs FIRST: an unknown importer beats every
+        // path/regex error (there is no dynamic plugin loading —
+        // the registry is the six built-ins).
         let Some(target) = oxidizr_import::resolve_importer(fqn) else {
             return Err(DslError::stmt(format!("{prefix}{fqn} was not found")));
         };
-        // `documentationImporter.exclude(regex)` per token — an empty
-        // token is rejected there (`IllegalArgumentException`).
+        // Per-token exclude configuration — an empty
+        // token is rejected there (the official rejection).
         if excludes.iter().any(String::is_empty) {
             return Err(DslError::stmt(format!("{prefix}A regex must be provided.")));
         }
-        // `new File(dslFile.getParentFile(), path)` (no `..` resolution —
-        // the importers `getAbsolutePath`/`getCanonicalPath` themselves).
+        // Resolved against the file's parent directory (no `..` resolution —
+        // the importers resolve absolute/canonical paths themselves).
         let base = std::path::Path::new(&dsl_file)
             .parent()
             .map_or_else(std::path::PathBuf::new, std::path::PathBuf::from);
@@ -579,7 +577,7 @@ impl<'a> Parser<'a> {
             _ => return Ok(()),
         };
         let Some(documentation) = self.builder.documentation_mut(id.as_ref()) else {
-            // A vanished holder id — the reference cannot construct this
+            // A vanished holder id — the official parser cannot construct this
             // state (its `Documentable` is held by the context itself).
             return Ok(());
         };
@@ -610,7 +608,7 @@ impl<'a> Parser<'a> {
         };
         imported.map_err(|e| DslError::stmt(format!("{prefix}{}", import_error_message(e))))?;
         // Post-import RELUCTANT image pass — only when the joined path is
-        // a DIRECTORY (both `end()` shapes, pinned; it runs after ANY
+        // a DIRECTORY (both import close-shapes, pinned; it runs after ANY
         // importer, a decision import included).
         if joined.is_dir() {
             import_images(documentation, &joined, true)
@@ -619,11 +617,11 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    /// `DslContext.end()` side effects.
+    /// The side effects of closing (popping) a context.
     fn end_ctx(&mut self, ctx: &Ctx) -> Result<(), DslError> {
         match ctx {
-            // `PerspectiveDslContext.end()` attaches the finished
-            // perspective to the enclosing PerspectivesDslContext's holders.
+            // Closing a PERSPECTIVE context attaches the finished
+            // perspective to the enclosing perspectives context's holders.
             Ctx::Perspective { def } => {
                 let holders: Vec<Holder> = self
                     .stack
@@ -637,8 +635,8 @@ impl<'a> Parser<'a> {
                 self.add_perspective_to_holders(&holders, def)?;
                 Ok(())
             }
-            // `DynamicViewParallelSequenceDslContext.end()`:
-            // `getView().endParallelSequence(!relationships)`.
+            // Closing a parallel-sequence frame ends the sequence with
+            // the has-relationships flag inverted.
             Ctx::DynamicParallel {
                 view,
                 has_relationships,
@@ -646,9 +644,9 @@ impl<'a> Parser<'a> {
                 self.seq_end_parallel(*view, !has_relationships);
                 Ok(())
             }
-            // P4-M2: `DocumentationDslContext.end()` /
-            // `DecisionsDslContext.end()` — the importer runs at context
-            // close, where the reference LOADED content (`IMPORT-DOCS-ADRS.md`).
+            // The documentation and decisions contexts close:
+            // the importer runs at context
+            // close, where the official parser LOADED content.
             Ctx::Documentation {
                 holder,
                 path,
@@ -661,9 +659,9 @@ impl<'a> Parser<'a> {
                 fqn,
                 excludes,
             } => self.run_import(holder, path, fqn, excludes, ImportSide::Decisions),
-            // `ImageViewDslContext.end()`: a view that ends without any
+            // Closing an IMAGE view: a view that ends without any
             // (light/dark/plain) content fails — checked on EVERY frame pop,
-            // so `light { ... }` inside an empty image view fails there too.
+            // so `light {... }` inside an empty image view fails there too.
             Ctx::ImageView { view, .. } => {
                 if self.builder.image_has_content(*view) {
                     Ok(())
@@ -679,15 +677,15 @@ impl<'a> Parser<'a> {
     }
 
     // ------------------------------------------------------------------
-    // identifier registration (reference `registerIdentifier`)
+    // identifier registration
     // ------------------------------------------------------------------
 
     /// Register an element (or pseudo-element) under the statement's
     /// `identifier` (or a fresh uuid) and set its
-    /// `structurizr.dsl.identifier` property — EXACTLY the reference: even
+    /// `structurizr.dsl.identifier` property — EXACTLY the official parser: even
     /// anonymous elements get the (uuid-valued) property.
     // The owned `item` is CONSUMED by the registry (its own copy, like the
-    // reference identifiers map); the element id is read out before the move.
+    // the official identifier map); the element id is read out before the move.
     fn register_identifier_element(
         &mut self,
         identifier: Option<&str>,
@@ -724,7 +722,7 @@ impl<'a> Parser<'a> {
             .ids
             .register_relationship(identifier, id, canonical_name)
             .map_err(DslError::stmt)?;
-        // reference: property added only when an identifier was GIVEN.
+        // The property is added only when an identifier was GIVEN.
         if identifier.is_some_and(|i| !i.is_empty()) {
             let _ = self
                 .builder
@@ -737,9 +735,9 @@ impl<'a> Parser<'a> {
     /// (`null` → literal `"null"` string concatenation). For a parentless
     /// `DeploymentNode` (and a `DeploymentGroup`, whose parent is the
     /// context's environment) the prefix comes from
-    /// `findIdentifier(new DeploymentEnvironment(env))` — DSL
-    /// `DeploymentEnvironment.equals` is NAME-BASED, so this resolves to the
-    /// environment's registered identifier (oracle-verified: `live.n1`),
+    /// The environment's registered identifier — environment matching is
+    /// NAME-BASED, so this resolves to
+    /// environment's registered identifier,
     /// falling back to the literal `"null"` only when no environment of that
     /// name was registered. `None` = no prefix at all (parentless, non-node).
     fn hierarchical_prefix(&self, item: &RegItem) -> Option<String> {
@@ -761,7 +759,7 @@ impl<'a> Parser<'a> {
                 None => None,
             },
             RegItem::Pseudo { kind, .. } => match kind {
-                // `ElementGroup.getParent()` — set only in the system/
+                // The group's parent — set only in the system/
                 // container group arms.
                 PseudoKind::Group { parent, .. } => parent
                     .as_ref()
@@ -780,21 +778,21 @@ impl<'a> Parser<'a> {
     }
 
     // ------------------------------------------------------------------
-    // element lookup (reference `DslContext.getElement`)
+    // element lookup
     // ------------------------------------------------------------------
 
-    /// `context.getElement(identifier)` — case-insensitive,
+    /// Identifier lookup — case-insensitive,
     /// hierarchical-aware.
     fn get_element(&self, identifier: &str) -> Option<RegItem> {
         self.get_element_typed(identifier, None)
     }
 
-    /// `context.getElement(identifier, Type.class)` — kind-filtered.
-    /// `checkElementType` is REVERSED assignability
-    /// (`element.getClass().isAssignableFrom(type)`), which for the three
-    /// DSL call-site classes (`SoftwareSystem`, `Container`,
+    /// Kind-filtered identifier lookup.
+    /// The official kind check is REVERSED assignability
+    /// (element kind accepts the requested kind), which for the three
+    /// DSL call-site kinds (`SoftwareSystem`, `Container`,
     /// `DeploymentGroup` — no subclasses anywhere in the DSL path) means
-    /// exact-kind matching. The filter runs PER PARENT HOP (the Java loop
+    /// exact-kind matching. The filter runs PER PARENT HOP (the official loop
     /// re-checks inside the walk) and once more on the fallback result.
     fn get_element_typed(&self, identifier: &str, kind: Option<KindFilter>) -> Option<RegItem> {
         let identifier = identifier.to_lowercase();
@@ -815,8 +813,8 @@ impl<'a> Parser<'a> {
                     parent = self.builder.element_parent(&p);
                 }
             } else if let Some(env) = self.top().and_then(Ctx::env_name) {
-                // `findIdentifier(context.getEnvironment())` — DSL
-                // `DeploymentEnvironment.equals` is name-based, so the
+                // The DSL environment identifier lookup -
+                // environment matching is name-based, so the
                 // context's fresh environment object RESOLVES to the
                 // registered identifier (literal `"null"` only when no
                 // environment of that name was registered).
@@ -833,9 +831,9 @@ impl<'a> Parser<'a> {
         found.filter(|item| self.passes_type_filter(item, kind))
     }
 
-    /// `checkElementType` with reversed assignability
-    /// (`element.getClass().isAssignableFrom(type)`): for the three DSL
-    /// call-site classes (no subclasses in the DSL path) this is exact-kind
+    /// The kind filter with reversed assignability — for the three
+    /// DSL call-site kinds (no subclasses in the DSL path)
+    /// this is exact-kind
     /// matching.
     fn passes_type_filter(&self, item: &RegItem, kind: Option<KindFilter>) -> bool {
         let Some(kind) = kind else {
@@ -861,9 +859,9 @@ impl<'a> Parser<'a> {
 
     /// The element whose registered identifier seeds the hierarchical
     /// lookup walk: the TOP context's element when TOP is an
-    /// `ElementDslContext`, or the frame BELOW it when TOP is the
-    /// `ElementsDslContext` created over an element context
-    /// (`getParentDslContext()` captured at push time).
+    /// The element context, or the frame BELOW it when TOP is
+    /// the plural-relationships context created over an element context
+    /// (the parent context captured at push time).
     fn hierarchy_start(&self) -> Option<Id> {
         let top = self.stack.last()?;
         if let Some(id) = top.item_id() {
@@ -881,7 +879,7 @@ impl<'a> Parser<'a> {
         None
     }
 
-    /// `context.getRelationship(identifier)`.
+    /// The relationship identifier lookup.
     fn get_relationship(&self, identifier: &str) -> Option<Id> {
         self.ids
             .relationship(&identifier.to_lowercase())
@@ -891,14 +889,14 @@ impl<'a> Parser<'a> {
             })
     }
 
-    /// `DeploymentElementParser.getDeploymentGroups` — comma-split refs, each
-    /// resolved through the node context's `getElement(ref,
-    /// DeploymentGroup.class)`; unresolved refs retry the hierarchical
-    /// `<envIdentifier>.<ref>` form (the environment resolves by name, like
-    /// the Java `equals`), and anything still unresolved is SILENTLY dropped
+    /// The node's `deploymentGroups` — comma-split refs, each
+    /// resolved through the node context's group-typed lookup;
+    /// unresolved refs retry the hierarchical
+    /// `<envIdentifier>.<ref>` form (the environment resolves by NAME
+    /// only), and anything still unresolved is SILENTLY dropped
     /// ("backwards compatibility — deployment environment name rather than
-    /// identifier"). Java's `HashSet` order is not portable; insertion order
-    /// stands in (D8 family, agents/plan/PROGRESS.md).
+    /// identifier"). The official hash-set order is not portable; insertion order
+    /// stands in (a documented deviation).
     pub(crate) fn deployment_groups(&self, node: &Id, token: &str) -> Vec<String> {
         let env = self.builder.node_ref(node).map(|n| n.environment.clone());
         let mut groups: Vec<String> = Vec::new();
@@ -927,7 +925,7 @@ impl<'a> Parser<'a> {
     }
 
     // ------------------------------------------------------------------
-    // dynamic-view sequence numbers (reference `SequenceNumber`)
+    // dynamic-view sequence numbers
     // ------------------------------------------------------------------
 
     fn dynamic_idx(view: ViewRef) -> usize {
@@ -937,9 +935,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `SequenceNumber.getNext()` — read the number a step WOULD take
-    /// (top + 1) without burning it. Java evaluates `getNext()` as the
-    /// argument of the final `addRelationship(...)` call, i.e. only after
+    /// Read the number a step WOULD take
+    /// (top + 1) without burning it. The official parser numbers the step as the
+    /// argument of the final relationship-add call, i.e. only after
     /// every lookup/validation throw; pair this with [`Self::seq_commit`]
     /// right after a successful core add so failed steps consume nothing.
     fn seq_peek(&mut self, view: ViewRef) -> String {
@@ -953,8 +951,8 @@ impl<'a> Parser<'a> {
         (stack.last().expect("root frame").sequence + 1).to_string()
     }
 
-    /// Burn one sequence number (`getNext()`'s increment) — call only after
-    /// the core add returned `Ok`, mirroring where Java evaluates `getNext()`.
+    /// Burn one sequence number (the peeked increment) — call only after
+    /// the core add returned `Ok`, mirroring where the official parser numbers.
     fn seq_commit(&mut self, view: ViewRef) {
         let stack = self.seq.entry(Self::dynamic_idx(view)).or_default();
         if stack.is_empty() {
@@ -968,7 +966,7 @@ impl<'a> Parser<'a> {
         top.incremented = true;
     }
 
-    /// `startParallelSequence()` — a child counter seeded from the parent.
+    /// `startParallelSequence` — a child counter seeded from the parent.
     fn seq_start_parallel(&mut self, view: ViewRef) {
         let stack = self.seq.entry(Self::dynamic_idx(view)).or_default();
         let seed = stack.last().map_or(0, |f| f.sequence);
@@ -978,15 +976,15 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// `endParallelSequence(endAll)` — both `endAll` branches copy the
+    /// Ending the parallel sequence - both end-all branches copy the
     /// child sequence up; the child being un-incremented adds the extra
     /// parent increment (the "empty parallel block doesn't burn a number"
     /// semantics).
     fn seq_end_parallel(&mut self, view: ViewRef, end_all: bool) {
         let stack = self.seq.entry(Self::dynamic_idx(view)).or_default();
         if stack.len() < 2 {
-            // Java: counter.getParent() == null → NPE; the DSL never
-            // closes a parallel sequence that was never started, and D1
+            // The official tool throws when the parent counter is absent; the DSL never
+            // closes a parallel sequence that was never started, and recovery
             // truncation can't leave one open. No-op.
             return;
         }
@@ -1005,7 +1003,7 @@ impl<'a> Parser<'a> {
     // ${} substitution (`substituteStrings`)
     // ------------------------------------------------------------------
 
-    /// Java `String.replace` is literal; the `Matcher` iterates occurrences
+    /// The official replace is literal; the scan iterates occurrences
     /// of the ORIGINAL token while each hit rewrites the current token in
     /// full — occurrences introduced by an earlier replacement are NOT
     /// substituted. That is modeled here by collecting the occurrences from
@@ -1035,7 +1033,7 @@ impl<'a> Parser<'a> {
                 i = start + 1;
             }
         }
-        // The Java Matcher scans the ORIGINAL token but `token.replace`
+        // The scan uses the ORIGINAL token but each replace
         // mutates the working string — so every match (including repeats)
         // triggers a replace-all on the CURRENT token, in scan order.
         // Replacement-introduced `${…}` is never rescanned; a constant's
@@ -1049,8 +1047,8 @@ impl<'a> Parser<'a> {
                     _ => nv.value.clone(),
                 })
             } else {
-                // V-3: env substitution is ON (reference parser ctor default)
-                // unless a hermetic lookup is injected (Phase 1T P1T-D1).
+                // V-3: env substitution is ON (official parser ctor default)
+                // unless a hermetic lookup is injected.
                 match &self.opts.env_lookup {
                     Some(lookup) => lookup.get(name),
                     None => std::env::var(name).ok(),
@@ -1064,7 +1062,7 @@ impl<'a> Parser<'a> {
     }
 
     // ------------------------------------------------------------------
-    // archetype registry (reference `getArchetype`/`isElement…Archetype`)
+    // archetype registry
     // ------------------------------------------------------------------
 
     fn is_element_keyword_or_archetype(&self, token: &str, keyword: &str) -> bool {
@@ -1075,10 +1073,10 @@ impl<'a> Parser<'a> {
                 .is_some_and(|m| m.contains_key(&token.to_lowercase()))
     }
 
-    /// Java `isRelationshipKeywordOrArchetype`. Known corner: the token
-    /// `-->` satisfies both prefix and suffix, and Java's
-    /// `substring(2, len-2)` THROWS (`String index out of range`) — here it
-    /// evaluates as no-match (recorded in agents/plan/PROGRESS.md; no corpus file
+    /// The relationship keyword-or-archetype test. Known corner: the token
+    /// `-->` satisfies both prefix and suffix, and the official
+    /// tail check THROWS (`String index out of range`) - here it
+    /// evaluates as no-match (recorded in a documented deviation; no corpus file
     /// uses `-->`).
     fn is_relationship_keyword_or_archetype(&self, token: &str) -> bool {
         if eqi(token, tok::RELATIONSHIP) {
@@ -1097,11 +1095,11 @@ impl<'a> Parser<'a> {
         false
     }
 
-    /// `getArchetype(type, name)` — the registered archetype index, or a
+    /// The archetype lookup by (type, name) - the registered archetype index, or a
     /// fresh EMPTY (unregistered) archetype for an unknown name (the chain
     /// guarantees the token was a keyword/archetype check hit; the keyword
     /// itself is NOT registered, so `person …` with no archetype gets an
-    /// empty throwaway exactly like the reference).
+    /// empty throwaway exactly like the official parser).
     fn get_archetype(&mut self, kind: &str, name: &str) -> usize {
         let mut name = name.to_string();
         if kind == tok::RELATIONSHIP
@@ -1140,16 +1138,16 @@ impl<'a> Parser<'a> {
         a.description = p.description;
         a.technology = p.technology;
         for t in p.tags {
-            // Parent tags are already trimmed; this is pure `addTags`
-            // deduplication into the child's `LinkedHashSet`.
+            // Parent tags are already trimmed; this is only the add's
+            // deduplication into the child ordered set.
             Self::add_archetype_tag(a, &t);
         }
     }
 
-    /// One value of Java `Archetype.addTags(String...)`: the value is
-    /// TRIMMED and added to the `LinkedHashSet` — an empty trimmed value IS
-    /// added (`this.tags.add(tag.trim())` is unconditional, verified against
-    /// `Archetype.java`); duplicates are ignored.
+    /// One value of the archetype tag add: the value is
+    /// TRIMMED and added to the ordered set — an empty trimmed value IS
+    /// added (the add is unconditional);
+    /// duplicates are ignored.
     fn add_archetype_tag(a: &mut Archetype, tag: &str) {
         let tag = tag.trim();
         if !a.tags.iter().any(|t| t == tag) {
@@ -1157,8 +1155,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// The `tags <tags> [tags]` statement: `addTags(tags.split(","))` per
-    /// token — Java `split` DROPS trailing empty strings; leading/embedded
+    /// The `tags <tags> [tags]` statement: the comma-split tags applied per
+    /// token — the official split DROPS trailing empty strings; leading/embedded
     /// empties are kept and reach `addTags` (they land as empty tags).
     fn add_archetype_tags(a: &mut Archetype, tags: &str) {
         for t in split_keeping_lead_dropping_trail(tags) {
@@ -1227,7 +1225,7 @@ impl<'a> Parser<'a> {
                     s.properties.insert(name, value);
                 }
             }
-            // `views { properties … }` — the reference's ViewsDslContext is
+            // `views { properties … }` — the official parser's views context is
             // a PropertyHolder over the view-set configuration.
             Holder::ViewSet => {
                 self.builder
@@ -1239,10 +1237,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `PerspectivesDslContext` statement form / `PerspectiveDslContext.end()`
+    /// The plural perspectives statement form / closing a perspective
     /// — add to EVERY holder of the context.
-    // One clone per holder (the reference builds a fresh perspective per
-    // holder too); the loop shape mirrors the reference and keeps the
+    // One clone per holder (the official parser builds a fresh perspective per
+    // holder too); the loop shape mirrors the official parser and keeps the
     // `?`-early-exit semantics identical.
     fn add_perspective_to_holders(
         &mut self,
@@ -1268,7 +1266,7 @@ impl<'a> Parser<'a> {
                 Ok(())
             }
             Holder::Items(ids) => {
-                // The reference loop applies holders in order; a duplicate
+                // The official loop applies holders in order; a duplicate
                 // on a later one leaves the earlier ones MUTATED (faithful).
                 for id in ids {
                     self.builder
@@ -1278,7 +1276,7 @@ impl<'a> Parser<'a> {
                 Ok(())
             }
             Holder::Archetype { idx } => {
-                // `Archetype.addPerspective(Perspective)` — the same
+                // The archetype's perspective add — the same
                 // duplicate guard.
                 let dup = self.archetype_list[*idx]
                     .perspectives
@@ -1293,7 +1291,7 @@ impl<'a> Parser<'a> {
                 self.archetype_list[*idx].perspectives.push(perspective);
                 Ok(())
             }
-            // The reference's `PerspectivesHolder` universe covers model
+            // The official perspective universe covers model
             // items and archetypes only; a perspective elsewhere is parsed
             // and dropped (the context has no holder to append to).
             _ => Ok(()),
@@ -1310,9 +1308,9 @@ impl<'a> Parser<'a> {
         rel: &Id,
     ) -> Option<&mut oxidizr_core::views::RelationshipView> {
         let content = self.builder.content_mut(view)?;
-        // Java `DynamicViewRelationshipContext` resolves the view through
-        // `getRelationshipView(id)`-style lookups over the (TreeSet-ordered)
-        // relationship views; with duplicate ids the reference's setter hits
+        // The official relationship-view context resolves the view through
+        // id lookups over the (name-ordered)
+        // relationship views; with duplicate ids the official parser's setter hits
         // the LAST match, so mutate from the back.
         content
             .relationships
@@ -1330,20 +1328,20 @@ impl<'a> Parser<'a> {
     /// the logical lines index into.
     fn parse_lines(&mut self, lines: &[Logical], source: &str, track_source: bool) {
         if track_source {
-            // Java accumulates the RAW lines (before per-line BOM strip and
+            // The official parser accumulates the RAW lines (before per-line BOM strip and
             // before preprocessing folding); includes are never tracked.
-            // The reference's entry is `parse(String)`: `dsl.split("\\r?\\n")`
-            // — one `\r` before each `\n` is consumed by the split, and Java's
-            // `split` drops ALL trailing empty entries (a file ending with a
+            // Its entry splits the source with `"\\r?\\n"`
+            // — one `\r` before each `\n` is consumed by the split, and the
+            // split drops ALL trailing empty entries (a file ending with a
             // newline never retains it; trailing blank lines vanish too).
-            // M1-e A/B probe 2026-11-17 (`m1d` witness): the reference's
+            // Witnessed: the official parser's
             // `structurizr.dsl` base64 has no trailing newline.
             self.dsl_source_lines
                 .extend(compat::java_split_dsl_lines(source));
         }
         for logical in lines {
             if logical.dropped {
-                // the reference's buffer never flushed this tail
+                // the official parser's buffer never flushed this tail
                 continue;
             }
             let height = self.stack.len();
@@ -1352,7 +1350,7 @@ impl<'a> Parser<'a> {
                 self.process_line(logical.number, raw)
             })();
             if let Err(e) = outcome {
-                // D1 recovery: record, pop back to the statement boundary.
+                // recover-and-continue: record, pop back to the statement boundary.
                 let file = self.current_file();
                 let fatal = e.fatal_file;
                 self.stack.truncate(height);
@@ -1362,7 +1360,7 @@ impl<'a> Parser<'a> {
                     Some(compat::java_trim(&logical.joined(source)).to_string()),
                 ));
                 // A failed text-block fold is fatal for the whole FILE in
-                // the reference (preProcessLines runs BEFORE any line is
+                // the official parser (preprocessing runs BEFORE any line is
                 // processed) — closest recoverable behavior: stop here.
                 if fatal {
                     break;
@@ -1372,9 +1370,9 @@ impl<'a> Parser<'a> {
     }
 
     /// The logical line text the parse loop sees: the joined segments, plus
-    /// the text-block fold — the reference replaces `prefix """…"""` with
+    /// the text-block fold — the official parser replaces `prefix """…"""` with
     /// `prefix "${<uuid>}"` and registers the content as a `TextBlock`
-    /// constant BEFORE the loop (`preProcessLines`).
+    /// constant BEFORE the parse loop.
     fn logical_raw(&mut self, logical: &Logical, source: &str) -> Result<String, DslError> {
         let mut raw = logical.joined(source); // BOM already stripped by preprocess
         if let Some(tb) = logical.text_block {
@@ -1402,7 +1400,7 @@ impl<'a> Parser<'a> {
     /// The per-logical-line pipeline: gates (empty/comment), tokenizer,
     /// `${}` substitution, `id = ` prefix, then the dispatch chain.
     fn process_line(&mut self, number: u32, raw: String) -> Result<(), DslError> {
-        // 255: EMPTY_LINE_PATTERN (`^\s*` .matches()).
+        // 255: EMPTY_LINE_PATTERN (`^\s*`.matches).
         if raw.chars().all(compat::is_java_regex_s) {
             return Ok(());
         }
@@ -1413,7 +1411,7 @@ impl<'a> Parser<'a> {
                 return Ok(());
             }
         }
-        // 259–264: InlineScriptDslContext swallowing — unreachable: `!script`
+        // 259–264: inline-script context swallowing — unreachable: `!script`
         // is rejected (OXZ-5002), so that context is never on the stack.
 
         // 266–269: tokenize + per-token substitution.
@@ -1424,7 +1422,7 @@ impl<'a> Parser<'a> {
             .collect();
 
         // 271–278: the `id = ` prefix. Applied on the token Vec before the
-        // `Tokens` wrap (2R R-dsl-01 — the old `tokens.sublist(2)` reassign
+        // `Tokens` wrap (the old `tokens.sublist(2)` reassign
         // cannot express itself over borrowed views; the unescape view and
         // the check order are identical).
         let mut identifier = None;
@@ -1436,10 +1434,10 @@ impl<'a> Parser<'a> {
         }
         let tokens = Tokens::new(substituted);
 
-        // `String firstToken = tokens.get(0)` — Java throws
-        // IndexOutOfBoundsException for a token list that is empty AFTER the
-        // id-strip (only reachable via degenerate lines like `""` /
-        // `x = ""`); the JDK message is reproduced.
+        // Reading the first token of the (post-id-strip) list THROWS for
+        // an empty list
+        // (only reachable via degenerate lines like `""` /
+        // `x = ""`); the official message is reproduced.
         if tokens.is_empty() {
             return Err(DslError::stmt("Index 0 out of bounds for length 0"));
         }
@@ -1462,7 +1460,7 @@ impl<'a> Parser<'a> {
 
     /// The chain's catch-all (1340–1366).
     fn catch_all(&self) -> DslError {
-        // Java picks the expected-token list from the TOP context; with an
+        // The official parser picks the expected-token list from the TOP context; with an
         // empty stack, from whether the workspace object exists yet.
         if self.stack.is_empty() {
             if !self.have_workspace {
@@ -1485,8 +1483,8 @@ impl<'a> Parser<'a> {
     // file context (includes)
     // ------------------------------------------------------------------
 
-    /// The `dslFile` of the current recursion level, in the form reference
-    /// messages use it: `dslFile.isFile() ? dslFile.getAbsolutePath()` —
+    /// The file of the current recursion level, in the form official
+    /// messages use it: the absolute path when the file exists —
     /// `None` (no `of …` in messages) when there is no file or it does not
     /// exist.
     pub(crate) fn current_file(&self) -> Option<String> {
@@ -1502,8 +1500,8 @@ impl<'a> Parser<'a> {
     }
 
     /// The directory `!include`/content paths resolve against —
-    /// `new File(dslFile.getParent(), source)`; no file ⇒ the CWD
-    /// (`new File(".").getParent()` = `null` ⇒ process dir in Java).
+    /// The current file's parent joined with `source`; no file ⇒ the CWD
+    /// (the process dir).
     pub(crate) fn current_dir(&self) -> Option<String> {
         match self.current_file_raw() {
             Some(f) => match std::path::Path::new(&f).parent() {
@@ -1514,10 +1512,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Enter an included file: push its `dslFile`, parse, pop (the reference
+    /// Enter an included file: push its `dslFile`, parse, pop (the official parser
     /// recursion `parse(paddedLines, file, true, false)` — fragments are not
     /// source-tracked and their context stack must return to the entry
-    /// height; under D1 the truncation-per-line already guarantees that, so
+    /// height; under recover-and-continue the truncation-per-line already guarantees that, so
     /// no extra check).
     pub(crate) fn parse_included(&mut self, source: &str) {
         let path = self.last_include_path.clone();
@@ -1528,15 +1526,15 @@ impl<'a> Parser<'a> {
         self.last_include_path = None;
     }
 
-    /// `workspace extends <file|url>` (M5, `PHASE_1.md` §M5-b) — the file
-    /// branch of `WorkspaceParser.parse` @`ad34036`. The loaded base REPLACES
+    /// `workspace extends <file|url>` — the file branch.
+    /// The loaded base REPLACES
     /// the workspace under construction; later statements layer over it.
-    /// The reference's non-file guard (`context.getFile() == null`) skips the
+    /// The official non-file guard skips the
     /// whole branch silently — same quirk as file `!include`s.
     pub(crate) fn extend_from(&mut self, source: &str) -> Result<(), DslError> {
-        // D5 (mirrors the `!include` arm): ALL network input rejected, the
-        // reference feature-gate texts kept (`Features.HTTPS`/`HTTP` messages
-        // of `WorkspaceParser.parse`).
+        // Mirrors the `!include` arm: ALL network input rejected, the
+        // official feature-gate texts kept (the HTTPS and HTTP
+        // rejection messages).
         if source.starts_with("https://") {
             return Err(DslError::coded(
                 oxidizr_diag::codes::NET_DISABLED,
@@ -1569,7 +1567,7 @@ impl<'a> Parser<'a> {
             )));
         }
 
-        // 2R R-dsl-13: the `.json` test was computed twice in this path.
+        // the `.json` test was computed twice in this path.
         let is_json = source.to_lowercase().ends_with(".json");
         let loaded = if is_json {
             // `WorkspaceUtils.loadWorkspaceFromJson(file)` — via the
@@ -1581,9 +1579,9 @@ impl<'a> Parser<'a> {
             };
             loader(&stmt_line::java_canonical(&path)).map_err(DslError::stmt)?
         } else {
-            // child `StructurizrDslParser` (`createParser` + `parse(context,
-            // file)`): fresh parser state over the same file entry; its
-            // `configureFrom` handover happens below, before `finish()`.
+            // The official child-parser pattern (create + parse): fresh
+            // parser state over the same file entry; its
+            // configure-from handover happens below, before finishing.
             let bytes = std::fs::read(&path).map_err(|_| {
                 DslError::stmt(format!(
                     "Error reading file at {}: stream read failed",
@@ -1600,7 +1598,7 @@ impl<'a> Parser<'a> {
             };
             let mut child = Parser::new(child_opts);
             child.parse(&text);
-            // `context.getParser().configureFrom(structurizrDslParser)`:
+            // The official configure-from handover:
             // identifier scope, archetypes and constants/variables move into
             // THIS parser; the identifier register is context-shared, so the
             // child's registrations merge into ours.
@@ -1615,25 +1613,24 @@ impl<'a> Parser<'a> {
         };
 
         self.builder.adopt(loaded);
-        // JSON bases: `WorkspaceParser.registerIdentifiers` — elements AND
+        // JSON bases: the official identifier registration — elements AND
         // relationships carrying `structurizr.dsl.identifier` enter the
         // (context-shared) register so `!element <identifier>` finds them.
         if is_json {
             self.register_json_identifiers()?;
         }
-        // `DslUtils.clearDsl(workspace)` (the base's own retention is
-        // discarded — the EXTENDING file is the source) and the reference's
-        // `context.setDslPortable(false)` on the WorkspaceParser context:
-        // the `WorkspaceDslContext` frame is seeded NOT-portable, so the
-        // extending file keeps no source either (`DslTests` asserts
-        // `DslUtils.getDsl` == "" for `source-child.dsl`). The statement
+        // The base's retained `structurizr.dsl` is
+        // discarded — the EXTENDING file is the source — and the official
+        // parser seeds the workspace context NOT-portable, so the
+        // extending file keeps no source either (`source-child.dsl`
+        // retains an empty `structurizr.dsl`). The statement
         // runs on an empty stack, so this is the parser-level flag.
         self.builder.remove_property("structurizr.dsl");
         self.dsl_portable = false;
         Ok(())
     }
 
-    /// `WorkspaceParser.registerIdentifiers` over the ADOPTED workspace:
+    /// Identifier registration over the ADOPTED workspace:
     /// elements AND relationships carrying `structurizr.dsl.identifier`
     /// enter the (context-shared) register. Shared by the `workspace
     /// extends` JSON-base leg and the public [`crate::query`] entry, so
@@ -1678,7 +1675,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        // `getWorkspace()`: `if (dslPortable)` attach the retained source.
+        // `getWorkspace`: `if (dslPortable)` attach the retained source.
         if self.have_workspace && self.dsl_portable {
             let existing = self
                 .builder
@@ -1754,7 +1751,7 @@ impl Parser<'_> {
     }
 
     /// `ElementGroup.addElement`: record membership, propagating to the
-    /// parent group object exactly like the reference.
+    /// parent group object exactly like the official parser.
     #[allow(clippy::cast_possible_truncation)] // uid counts model items (see group_open)
     pub(crate) fn group_add_member(&mut self, uid: u64, member: &Id) {
         let mut cur = Some(uid);
@@ -1770,7 +1767,7 @@ impl Parser<'_> {
         }
     }
 
-    /// `ElementGroup.getElements()` — the (propagated) member set.
+    /// `ElementGroup.getElements` — the (propagated) member set.
     #[allow(clippy::cast_possible_truncation)] // uid counts model items (see group_open)
     pub(crate) fn group_members(&self, uid: u64) -> Vec<Id> {
         self.groups
@@ -1783,16 +1780,16 @@ impl Parser<'_> {
     // element-definition and relationship-statement post-processing
     // ------------------------------------------------------------------
 
-    /// The shared post-creation sequence of `PersonParser`,
-    /// `SoftwareSystemParser`, `ContainerParser` and `ComponentParser`
+    /// The shared post-creation sequence of the person, software-system,
+    /// container and component parsers
     /// (the custom-element parser deviates — see `stmt_model`):
     /// description is set UNCONDITIONALLY (`null` → `""`), then
-    /// `addTags(archetype ++ token parts)`, the archetype properties and
+    /// the combined archetype + token-part tags are added, then the archetype
     /// perspectives, and finally the enclosing context's group
     /// (`setGroup` + `group.addElement`, which propagates to parent
     /// group objects).
     ///
-    /// `tags` is the reference's combined list (archetype tags first,
+    /// `tags` is the official parser's combined list (archetype tags first,
     /// then the comma-split statement token, each entry trimmed and
     /// first-position-deduped by [`WorkspaceBuilder::add_tag_parts`]).
     pub(crate) fn define_element(
@@ -1831,9 +1828,9 @@ impl Parser<'_> {
 
     /// The relationship-statement registration block shared by the four
     /// chain arms: exactly ONE created relationship is registered (and a
-    /// `{` opens a `RelationshipDslContext`); several create a
-    /// `RelationshipsDslContext` only (`getContext()` — top of stack).
-    /// `raw` is the RAW token list — `shouldStartContext` reads the
+    /// `{` opens a relationship context); several create a
+    /// a relationships context only (the top of the stack).
+    /// `raw` is the RAW token list — the context-open check reads the
     /// original tokens including the trailing `{`.
     pub(crate) fn register_rel_result(
         &mut self,
@@ -1854,14 +1851,14 @@ impl Parser<'_> {
         Ok(())
     }
 
-    /// `GroupParser.parseContext` + `startContext`: re-pushes the TOP
-    /// context of the stack carrying a FRESH `ElementGroup` object (the
-    /// five groupable context classes, each reconstructed with the new
-    /// payload — reference `new SoftwareSystemDslContext(ss, group)`).
-    // 2R PR6 (`redundant_clone` ratchet): exactly one of the six exclusive
+    /// The group statement's context switch: re-pushes the TOP
+    /// context of the stack carrying a FRESH group object (the
+    /// five groupable context kinds, each reconstructed with the new
+    /// payload).
+    // Exactly one of the six exclusive
     // arms runs and it MOVES the by-value group into the replacement frame —
-    // callers hand over a group they no longer use (reference `new X(group)`),
-    // so the per-arm `clone()` was redundant and `needless_pass_by_value`
+    // callers hand over a group they no longer use,
+    // so the per-arm `clone` was redundant and `needless_pass_by_value`
     // has nothing to ask for (its allow removed with it).
     pub(crate) fn start_group_context(&mut self, top: &Ctx, group: DslGroup) {
         let replacement = match top {
@@ -1879,8 +1876,8 @@ impl Parser<'_> {
                 group: Some(group),
             },
             // A `group` inside `source -/> destination {` matches the
-            // ENVIRONMENT arm (subclass instanceof) and re-pushes a PLAIN
-            // `new DeploymentEnvironmentDslContext(name, group)` — the
+            // ENVIRONMENT arm (subclass match) and re-pushes a PLAIN
+            // environment frame — the
             // NoRelInEnv nature (and its linked relationship) is lost.
             Ctx::NoRelInEnv { environment, .. } => Ctx::Environment {
                 env: DslEnvironment {
@@ -1894,7 +1891,7 @@ impl Parser<'_> {
             },
             other => {
                 // Unreachable: callers only pass groupable payload-bearing
-                // tops; defensive replay of the Java `instanceof` ladder.
+                // tops; defensive replay of the official type ladder.
                 let _ = other;
                 return;
             }
@@ -1903,7 +1900,7 @@ impl Parser<'_> {
     }
 }
 
-/// Kind filters for `getElement(id, Type.class)` — see
+/// Kind filters for the identifier lookup (id, Type) — see
 /// [`Parser::passes_type_filter`] for why exact-kind is the right reading of
 /// the reversed `isAssignableFrom` check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1913,7 +1910,7 @@ pub(crate) enum KindFilter {
     DeploymentGroup,
 }
 
-/// Java fully-qualified-name tail for the `Expected … but got …` cast error.
+/// The fully-qualified-name tail for the `Expected … but got …` cast error.
 pub(crate) fn java_class_name(ctx: &Ctx) -> &'static str {
     match ctx {
         Ctx::Workspace => "WorkspaceDslContext",
@@ -1973,9 +1970,9 @@ pub(crate) fn java_class_name(ctx: &Ctx) -> &'static str {
     }
 }
 
-/// Standard-base64 (RFC 4648, padded) — matches Java `Base64.getEncoder()`.
+/// Standard-base64 (RFC 4648, padded) — the official encoding.
 /// Generic over byte sources so raw file bytes (which need not be valid UTF-8)
-/// encode exactly like Java's `Files.readAllBytes` + `Base64.getEncoder()`.
+/// encode exactly like the official reader does.
 #[must_use]
 pub(crate) fn base64_std(bytes: impl AsRef<[u8]>) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -2004,11 +2001,11 @@ pub(crate) fn base64_std(bytes: impl AsRef<[u8]>) -> String {
     out
 }
 
-/// Java `String.split(",")`: leading and MIDDLE empties are kept, trailing
+/// The official comma-split: leading and MIDDLE empties are kept, trailing
 /// empties dropped — but EMPTY INPUT is the documented special case:
-/// `"".split(",")` → `[""]` (one empty element, JVM-proven on the pinned
-/// Java 21 — the oracle's `"Element,Deployment Node,"` tags for an empty
-/// `TAGS_INDEX` token proves it for the reference too).
+/// `"".split(",")` → `[""]` (one empty element) —
+/// the `"Element,Deployment Node,"` tags for an empty
+/// `TAGS_INDEX` token prove it for the official parser too.
 pub(crate) fn split_keeping_lead_dropping_trail(s: &str) -> Vec<&str> {
     if s.is_empty() {
         return vec![""];
@@ -2017,7 +2014,7 @@ pub(crate) fn split_keeping_lead_dropping_trail(s: &str) -> Vec<&str> {
     drop_trailing_empties(&parts)
 }
 
-/// Java `String.split(String)` (LITERAL separator — all call sites pass
+/// The official literal-separator split (all call sites pass
 /// one, which is what makes the empty-input ⇒ `[""]` special case valid).
 /// Non-empty all-empty input still yields `[]` (e.g. `","` → `[]`).
 pub(crate) fn java_split_str<'a>(s: &'a str, sep: &str) -> Vec<&'a str> {
@@ -2028,10 +2025,10 @@ pub(crate) fn java_split_str<'a>(s: &'a str, sep: &str) -> Vec<&'a str> {
     drop_trailing_empties(&parts)
 }
 
-/// The reference out-of-bounds condition a Java `parts[i]` on a split
+/// The official out-of-bounds condition an indexed access on a split
 /// result would hit (e.g. the expression `"|"` split on `" || "` yields
 /// `[]`, but the arm only runs when `contains` is true — the guard makes
-/// this unreachable for empty input); surfaced as the pinned JVM message
+/// this unreachable for empty input); surfaced as the pinned official message
 /// instead of a panic.
 pub(crate) fn java_index_or_oob<'a>(parts: &'a [&'a str], i: usize) -> Result<&'a str, String> {
     parts
@@ -2048,23 +2045,23 @@ fn drop_trailing_empties<'a>(parts: &[&'a str]) -> Vec<&'a str> {
     parts[..end].to_vec()
 }
 
-/// Which `end()` context family started the import — it ONLY selects the
-/// `RuntimeException` prefix (`DocumentationDslContext` /
-/// `DecisionsDslContext`). The resolved CLASS decides what actually runs:
-/// a `!docs` naming a decision importer imports decisions (faithful to
-/// `constructor.newInstance()` + `importDocumentation`).
+/// Which context family started the import — it ONLY selects
+/// the wrapper-exception prefix (documentation vs decisions).
+/// The resolved CLASS decides what actually runs:
+/// a `!docs` naming a decision importer imports decisions (faithfully
+/// reproduced).
 #[derive(Clone, Copy)]
 enum ImportSide {
     Documentation,
     Decisions,
 }
 
-/// `catch (Exception e) → "Error importing …: " + e.getMessage()`: the
-/// importer ports carry the reference exception MESSAGES verbatim in
+/// The official `Error importing …: ` + message shape: the
+/// importer ports carry the official parser exception MESSAGES verbatim in
 /// [`oxidizr_import::ImportError::Failed`]; a raw OS failure maps to the
-/// `DocumentationImportException(cause)` shape (`getMessage()` = the
-/// cause's `toString()` — hence the `java.io.IOException:` prefix);
-/// everything else already displays the reference text.
+/// the importer-exception shape (the message is the
+/// cause's display text — hence the `java.io.IOException:` prefix);
+/// everything else already displays the official parser text.
 fn import_error_message(err: oxidizr_import::ImportError) -> String {
     match err {
         oxidizr_import::ImportError::Failed(msg) => msg,
@@ -2075,7 +2072,7 @@ fn import_error_message(err: oxidizr_import::ImportError) -> String {
     }
 }
 
-/// `WorkspaceParser.registerIdentifiers` (JSON bases of `workspace extends`):
+/// Identifier registration (JSON bases of `workspace extends`):
 /// elements AND relationships carrying `structurizr.dsl.identifier` — the
 /// property stores the FINAL (hierarchical-composite) key, so identifiers are
 /// registered verbatim.
@@ -2134,10 +2131,10 @@ fn collect_json_item_refs<'a>(
 ///
 /// Returns a fatal statement-level [`DslError`] when `source` is empty;
 /// per-statement problems are collected in [`ParseResult::errors`] as the
-/// reference does (D1 recovery), not returned here.
+/// the official parser does (recover-and-continue), not returned here.
 pub fn parse_dsl(source: &str, opts: ParseOptions<'_>) -> Result<ParseResult, DslError> {
     if source.is_empty() {
-        // reference: StringUtils.isNullOrEmpty(dsl) → throw
+        // blank input → throw
         return Err(DslError::stmt("A DSL fragment must be specified"));
     }
     let mut parser = Parser::new(opts);
@@ -2153,7 +2150,7 @@ impl Parser<'_> {
     }
 }
 
-// `oxidizr_core::CoreError` display texts are the reference messages by
+// `oxidizr_core::CoreError` display texts are the official messages by
 // construction; sections convert with this shorthand.
 impl From<&CoreError> for DslError {
     fn from(e: &CoreError) -> Self {
@@ -2169,8 +2166,8 @@ mod tests {
 
     #[test]
     fn base64_matches_java_encoder() {
-        // Java Base64.getEncoder() vectors, incl. the golden `structurizr.dsl`
-        // sample from the 2026-11-14 oracle probe.
+        // Standard-base64 vectors, incl. the golden `structurizr.dsl`
+        // sample.
         assert_eq!(base64_std(""), "");
         assert_eq!(base64_std("f"), "Zg==");
         assert_eq!(base64_std("fo"), "Zm8=");
@@ -2186,8 +2183,8 @@ mod tests {
 
     #[test]
     fn retained_dsl_drops_trailing_newlines() {
-        // M1-e A/B probe 2026-11-17 (`m1d` witness): the reference splits the
-        // source with Java `split("\\r?\\n")` — the file's final newline can
+        // The official parser splits the
+        // source with `split("\\r?\\n")` — the file's final newline can
         // never enter the retained `structurizr.dsl`, and trailing blank
         // lines drop out too. Vendored fixtures end `}` without a final
         // newline, so only this shape pins the behavior.
@@ -2226,12 +2223,12 @@ mod tests {
         assert_eq!(p.substitute_strings("a${name}b"), "aXb");
         // occurrences come from the ORIGINAL token; replace is ALL:
         assert_eq!(p.substitute_strings("${name}-${name}"), "X-X");
-        // a Constant's value is substituted RAW (Java only re-substitutes
-        // TextBlocks) and the replacement is never rescanned — so `${twice}`
+        // a Constant's value is substituted RAW (only text blocks re-substitute
+        // them) and the replacement is never rescanned — so `${twice}`
         // yields its literal value, `${name}` references and all:
         assert_eq!(p.substitute_strings("${twice}"), "${name} ${name}");
-        // replacement-introduced `${…}` is NOT re-substituted (Java Matcher
-        // scans the original): ${x}'s value below contains ${name}
+        // replacement-introduced `${…}` is NOT re-substituted (the scan
+        // uses the original): ${x}’s value below contains ${name}
         p.constants.insert(
             "ind".to_string(),
             NameValue {
@@ -2241,8 +2238,8 @@ mod tests {
             },
         );
         assert_eq!(p.substitute_strings("${ind}"), "${name}");
-        // inner match inside a non-match: the Matcher finds `${name}` and
-        // Java's literal `replace` rewrites it even though it sits inside
+        // inner match inside a non-match: the scan finds `${name}` and
+        // the literal `replace` rewrites it even though it sits inside
         // the (unmatched) `${nope_…}` text:
         assert_eq!(p.substitute_strings("${nope_${name}}"), "${nope_X}");
         assert_eq!(p.substitute_strings("plain"), "plain");
@@ -2250,7 +2247,7 @@ mod tests {
 
     #[test]
     fn env_lookup_override_is_hermetic() {
-        // Phase 1T P1T-D1: with an injected lookup, `${VAR}` resolution must
+        // Hermetic mode: with an injected lookup, `${VAR}` resolution must
         // never touch the process environment (hermetic in-process runs).
         fn fake_env(name: &str) -> Option<String> {
             (name == "OXZ_SEAM").then(|| "injected".to_string())
@@ -2290,9 +2287,9 @@ mod tests {
         assert_eq!(split_keeping_lead_dropping_trail("a,b,"), vec!["a", "b"]);
         assert_eq!(split_keeping_lead_dropping_trail(",a,"), vec!["", "a"]);
         assert_eq!(split_keeping_lead_dropping_trail(","), Vec::<&str>::new());
-        // Java's documented empty-input special case: `"".split(",")`
-        // yields ONE empty element (JVM-proven, pinned Java 21) — this is
-        // what makes the reference emit `"Element,Deployment Node,"` for
+        // The documented empty-input special case: `"".split(",")`
+        // yields ONE empty element — this is
+        // what makes the official parser emit `"Element,Deployment Node,"` for
         // an empty TAGS_INDEX token.
         assert_eq!(split_keeping_lead_dropping_trail(""), vec![""]);
         assert_eq!(java_split_str("", "|"), vec![""]);
@@ -2305,8 +2302,8 @@ mod tests {
 
     #[test]
     fn sequence_number_parallel_semantics() {
-        // SequenceNumberTests.parallelSequences_1, mirrored: a peek never
-        // burns a number, only a commit does (Java evaluates `getNext()`
+        // Parallel-sequence semantics: a peek never
+        // burns a number, only a commit does (the number is evaluated
         // only when the final add actually runs).
         let v = ViewRef::Dynamic(0);
         let mut p = Parser::new(ParseOptions::fragment());

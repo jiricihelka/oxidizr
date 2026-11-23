@@ -1,9 +1,9 @@
 //! Checked-operation errors for [`crate::builder::WorkspaceBuilder`].
 //!
-//! Hand-rolled (no `thiserror` — `oxidizr-core` is dependency-free, P1-D1).
+//! Hand-rolled (no `thiserror` — `oxidizr-core` is dependency-free).
 //! Variants are STRUCTURED: the DSL/JSON layers map them to `oxidizr-diag`
-//! diagnostics with OXZ codes and reference-style text (D1); the reference's
-//! original message is carried along where it exists, since those texts are
+//! diagnostics with OXZ codes and official-style text; the official
+//! tooling's original message is carried along where it exists, since
 //! what users compared against for a decade.
 
 use std::fmt;
@@ -13,12 +13,12 @@ use crate::ids::Id;
 /// A rejected builder operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoreError {
-    /// A name is required but was null/empty (reference
-    /// `IllegalArgumentException("A name must be specified.")`).
+    /// A name is required but was null/empty — the official
+    /// message, verbatim: `A name must be specified.`).
     NameRequired,
     /// A view key is required but was null/empty.
     ViewKeyRequired,
-    /// Top-level (person/system/custom) name collision — reference
+    /// Top-level (person/system/custom) name collision — official
     /// "A top-level element named 'X' already exists."
     DuplicateTopLevelName {
         /// The colliding name.
@@ -48,7 +48,7 @@ pub enum CoreError {
         /// Parent node name.
         parent: String,
     },
-    /// Infrastructure node name collision within the parent node (reference
+    /// Infrastructure node name collision within the parent node (official
     /// "A deployment/infrastructure node named 'X' already exists." — the two
     /// kinds share the parent's child-name space).
     DuplicateInfrastructureNodeName {
@@ -57,7 +57,7 @@ pub enum CoreError {
         /// Parent node name.
         parent: String,
     },
-    /// View key already taken — reference "A view with the key X already exists."
+    /// View key already taken — official: "A view with the key X already exists."
     DuplicateViewKey {
         /// The colliding key.
         key: String,
@@ -90,27 +90,27 @@ pub enum CoreError {
         /// The unknown id.
         id: Id,
     },
-    /// 2R R-core-07: a view slot that carries no model-view content was used
+    /// a view slot that carries no model-view content was used
     /// for a content mutation — an image/filtered view (or, in theory, a
-    /// stale slot; the port has no view-removal API). The reference cannot
-    /// express this call at all (its view handles are typed), so there is no
-    /// reference message; this replaces the port's own `expect` panic. Not
+    /// stale slot; the port has no view-removal API). The official tooling
+    /// cannot express this call at all (its view handles are typed), so
+    /// there is no official message; this replaces the `expect` panic. Not
     /// reachable from the DSL: statements mutate only typed model views.
     NoViewContent {
         /// The view key.
         key: String,
     },
-    /// Reference `IllegalArgumentException("A deployment group name must be
-    /// specified.")` — `DeploymentNode.addDeploymentGroup`.
+    /// Official rejection text: "A deployment group name must be
+    /// specified.")
     DeploymentGroupNameRequired,
-    /// `StaticStructureElementInstance.addHealthCheck` rejections — the
-    /// variant payload is the reference `IllegalArgumentException` message
+    /// `healthCheck` rejections — the
+    /// variant payload is the official message
     /// verbatim (`The name must not be null or empty.`, `The URL must not be
     /// null or empty.`, `X is not a valid URL.`, `The polling interval must
     /// be zero or a positive integer.`, `The timeout must be zero or a
     /// positive integer.`).
     HealthCheckInvalid(String),
-    /// `Model.addRelationship` returned null (reference `Element.has` matches
+    /// The official add returned null when the duplicate check matches
     /// source+destination+description) — the DSL layer turns this into
     /// `A relationship between "A" and "B" already exists` (canonical names).
     DuplicateRelationship {
@@ -119,20 +119,20 @@ pub enum CoreError {
         /// Canonical name of the destination element.
         destination: String,
     },
-    /// Reference `IllegalArgumentException("Relationships cannot be added
-    /// between parents and children.")` in `Model.addRelationship`.
+    /// Official rejection text: "Relationships cannot be added
+    /// between parents and children.").
     ParentChildRelationship,
-    /// Reference `IllegalArgumentException("Perspective name must be
-    /// specified")` — `Perspective.setName` (the 3-arg `addPerspective` path).
+    /// Official rejection text: "Perspective name must be
+    /// specified.")
     PerspectiveNameRequired,
-    /// Reference `IllegalArgumentException("A perspective named \"X\"
-    /// already exists.")` — `ModelItem.addPerspective` duplicate guard.
+    /// Official rejection text: "A perspective named \"X\"
+    /// already exists.").
     DuplicatePerspective {
         /// Perspective name.
         name: String,
     },
-    /// `AbstractRelationshipParser.createRelationship` fell through its
-    /// instanceof ladder — reference
+    /// The relationship-kind dispatch fell through its
+    /// ladder — official text:
     /// `A relationship between "A" and "B" is not permitted`.
     RelationshipPairNotPermitted {
         /// Canonical name of the source element.
@@ -140,16 +140,16 @@ pub enum CoreError {
         /// Canonical name of the destination element.
         destination: String,
     },
-    /// Reference `ElementNotPermittedInViewException` — message texts are the
-    /// reference strings verbatim (the DSL content parsers CATCH this one).
+    /// An element cannot be added to this view kind — message texts are the
+    /// official strings verbatim (the DSL content parsers CATCH this one).
     ElementNotPermittedInView(String),
-    /// Reference `IllegalArgumentException("The element named 'X' cannot be
-    /// removed from this view.")` in `ModelView.removeElement`.
+    /// Official text: "The element named 'X' cannot be
+    /// removed from this view.").
     ElementCannotBeRemoved {
         /// Element name.
         name: String,
     },
-    /// Dynamic-view `add`: no matching model relationship. Reference texts
+    /// Dynamic-view step add: no matching model relationship. Official texts
     /// `A relationship between A and B does not exist in model.` (and the
     /// `… with technology T …` variant).
     DynamicRelationshipMissing {
@@ -160,8 +160,8 @@ pub enum CoreError {
         /// Technology filter, when one was given.
         technology: Option<String>,
     },
-    /// Reference `IllegalArgumentException("None of the specified elements
-    /// exist in this view.")` in `addAnimation`.
+    /// Official rejection text: "None of the specified elements
+    /// exist in this view.").
     NoAnimatableElements,
 }
 

@@ -1,7 +1,7 @@
-//! Cursor-scope replay for the language server (§P4-LSP L-4).
+//! Cursor-scope replay for the language server.
 //!
 //! [`cursor_scope`] re-runs the REAL engine (tokenizer, `${}`-substitution,
-//! the ordered dispatch chain, D1 recovery) over the lines BEFORE a cursor
+//! the ordered dispatch chain, error recovery) over the lines BEFORE a cursor
 //! offset and reports what the scope machine would accept there — never the
 //! partial statement the cursor sits in (its prefix is the CLIENT's
 //! filter material; feeding an incomplete statement would change the stack
@@ -9,14 +9,14 @@
 //!
 //! The replay is filesystem-free BY CONSTRUCTION: [`ParseOptions::fragment`]
 //! means no `dslFile`, and the `!include`/`extends` legs skip their whole
-//! branch without one (the reference's no-file quirk, mirrored in
+//! branch without one (the official tooling's no-file quirk, mirrored in
 //! `stmt_line::include`). The env lookup is CLOSED (`None` for every name)
 //! so `${VAR}` sites fail the same way on every machine — completion must
 //! not depend on the editor server's environment.
 //!
 //! The returned [`CursorScope`] is purpose-shaped on purpose: `Ctx` and
-//! `Parser` stay `pub(crate)` (`PHASE_1.md` 2R R-dsl-09 — externals get the
-//! parse surface only), so the engine's working types never leak.
+//! `Parser` stay `pub(crate)` — externals get the parse surface only — so the
+//! engine's working types never leak.
 
 use oxidizr_core::Workspace;
 use oxidizr_core::model::ModelItem;
@@ -25,8 +25,8 @@ use super::tok;
 use super::{EnvLookup, ParseOptions, Parser};
 use crate::preprocess;
 
-/// What the scope machine accepts and knows AT a cursor offset (§P4-LSP
-/// L-4): the completion menu's raw material.
+/// What the scope machine accepts and knows AT a cursor offset: the
+/// completion menu's raw material.
 #[derive(Debug, Clone)]
 pub struct CursorScope {
     /// Tokens a statement may START with here — the top context's
@@ -41,8 +41,8 @@ pub struct CursorScope {
     /// Element + relationship identifiers the `id =` statements BEFORE the
     /// cursor registered (auto-UUID keys dropped — not typeable).
     pub identifiers: Vec<String>,
-    /// View keys defined before the cursor, in the reference `getViews`
-    /// order (style statements and `!ref` targets).
+    /// View keys defined before the cursor, in the order the official
+    /// tooling reports views (style statements and `!ref` targets).
     pub view_keys: Vec<String>,
     /// Custom tags used before the cursor (elements + relationships),
     /// sorted and deduplicated — the `views { styles { … } }` vocabulary.
@@ -50,7 +50,7 @@ pub struct CursorScope {
 }
 
 /// Every `!`-directive the parser dispatches. `!plugin`/`!script` are
-/// deliberately absent: oxidizr rejects them as JVM-only, so advertising
+/// deliberately absent: oxidizr rejects them as the official tooling-only, so advertising
 /// them would offer unparseable statements. Their validity AT a given
 /// scope is decided by the engine's dispatch chain — items are advisory.
 pub const DIRECTIVES: &[&str] = &[
@@ -89,7 +89,7 @@ pub fn cursor_scope(source: &str, cursor: usize) -> CursorScope {
     let mut parser = Parser::new(opts);
     for logical in &preprocess::preprocess(source) {
         if logical.dropped {
-            continue; // the reference's never-flushed EOF tail
+            continue; // the never-flushed EOF tail
         }
         if logical.span.1 > cursor {
             // `span` is (start, end); this line ends after the cursor, so
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn the_cursor_line_is_never_fed() {
-        // Cursor mid-`  model {`: the partial statement must not push the
+        // Cursor mid-` model {`: the partial statement must not push the
         // Model context — completion still offers the Workspace list.
         let source = "workspace {\n  model {\n";
         let scope = cursor_scope(source, nth(source, "model", 0) + 3);
@@ -257,8 +257,8 @@ mod tests {
 
     #[test]
     fn broken_lines_do_not_blind_the_replay() {
-        // D1 recovery mirrors the parse loop: the error statement pops
-        // back to its line-entry stack, the lines below keep their scope.
+        // The replay mirrors the parse loop's recovery: the error statement
+        // pops back to its line-entry stack, the lines below keep their scope.
         let source = "workspace {\n  this is not dsl ~~~~\n  model {\n";
         let scope = cursor_scope(source, source.len());
         assert!(

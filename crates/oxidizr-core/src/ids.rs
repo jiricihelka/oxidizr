@@ -1,15 +1,15 @@
-//! Identity newtypes and the shared id counter (Locked behavior, `agents/plan/FEATURES.md` §2/§8.1).
+//! Identity newtypes and the shared id counter.
 //!
 //! ONE sequential integer counter is shared by elements and relationships in
 //! definition order, starting at 1 (`SequentialIntegerIdGeneratorStrategy`); JSON
 //! renders ids as strings everywhere except `workspace.id` (a number) — the
 //! string rendering happens in `oxidizr-json`, the model stores [`Id`] values.
 //!
-//! [`Id`] is string-typed (like the reference's Java `String` ids) so legacy
+//! [`Id`] is string-typed (like the official string ids) so legacy
 //! workspaces with non-numeric ids round-trip byte-losslessly; numeric ids keep a
-//! cached integer view because the reference's ORDERING of model items
-//! (`ModelItem.compareTo`: numeric when both parse, else string) is an output
-//! concern for the M3 write catalog, while id LOOKUP (`Model.getElement`, a Java
+//! cached integer view because the official ORDERING of model items
+//! (numeric when both parse, else string) is an output
+//! concern, while id LOOKUP is a Java `HashMap` lookup:
 //! `HashMap<String,…>`) is TEXT equality — which is what [`Id`]'s `Eq`/`Ord`
 //! implement.
 
@@ -21,8 +21,8 @@ use std::sync::Arc;
 pub struct Id {
     text: Arc<str>,
     /// `Some` iff `text` parses as a Java `int` (leading `+`/`-` accepted,
-    /// 32-bit range) — mirrors the `Integer.parseInt` attempts in the reference
-    /// (`ModelItem.compareTo`, `IdGenerator.found`).
+    /// 32-bit range) — mirrors the official int-parse attempts
+    /// (ordering and id registration).
     num: Option<i32>,
 }
 
@@ -149,15 +149,15 @@ impl IdGenerator {
     /// # Panics
     ///
     /// If more than `i32::MAX` ids are allocated (a workspace beyond the
-    /// reference's own int-id ceiling — unrecoverable by construction).
+    /// official int-id ceiling — unrecoverable by construction).
     pub fn generate(&mut self) -> u32 {
         self.last += 1;
         u32::try_from(self.last).expect("id counter overflow (more than i32::MAX ids allocated)")
     }
 
     /// Register an externally assigned id (JSON load): the counter jumps past
-    /// NUMERIC ids; non-numeric ids are ignored, exactly like the reference's
-    /// `found()` swallowing `NumberFormatException`.
+    /// NUMERIC ids are ignored, exactly like the official
+    /// id registration swallowing parse failures.
     pub fn found(&mut self, id: &Id) {
         if let Some(n) = id.as_num()
             && n > self.last
@@ -199,9 +199,9 @@ mod tests {
 
     #[test]
     fn id_equality_is_text_equality() {
-        // `Model.getElement` is a Java HashMap lookup: "+5" and "5" are DISTINCT
-        // ids for lookup, even though `ModelItem.compareTo` (a TreeSet ordering,
-        // an M3 output concern) would rate them equal when both parse as ints.
+        // id lookup is a Java HashMap lookup: "+5" and "5" are DISTINCT
+        // ids for lookup, even though the ordering comparator
+        // (an output concern) would rate them equal when both parse as ints.
         assert_ne!(Id::new("+5"), Id::new("5"));
         assert_ne!(Id::new("03"), Id::new("3"));
         assert_eq!(Id::new("7"), Id::new("7"));

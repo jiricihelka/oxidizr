@@ -1,23 +1,24 @@
-//! Bug-compatible port of the reference `Tokenizer.java`, operating on the
-//! joined logical-line text. Kept separate from [`crate::lexer`] on purpose:
-//! the CST lexer tracks spans and strips quote characters from pieces, while
-//! the reference tokenizer operates on the already-joined text and leaves
-//! `\`-escapes in the token values for `Tokens.get(i)` to unescape.
+//! Bug-compatible tokenizer operating on the joined logical-line text.
+//! Kept separate from [`crate::lexer`] on purpose: the CST lexer tracks
+//! spans and strips quote characters from pieces, while this tokenizer
+//! operates on the already-joined text and leaves `\`-escapes in the token
+//! values for `Tokens::get` to unescape.
 //!
-//! Quirks replicated (verified against `Tokenizer.java` @ `ad34036`):
+//! Quirks replicated, deliberately:
 //!
 //! * The escaped-quote test is a RAW LOOKBEHIND AT THE LINE, not the token:
-//!   `c == '"' && line.charAt(i - 1) == '\\'` — reached for any character
-//!   (quoted or bare), so a `\` before a quote in a BARE token also swallows
-//!   that quote into the token. The backslash stays in the value.
+//!   the preceding character of the line is checked for `\`. It is reached
+//!   for any character (quoted or bare), so a `\` before a quote in a BARE
+//!   token also swallows that quote into the token. The backslash stays in
+//!   the value.
 //! * A `"` opens a quoted token only at token start; inside a quoted token
 //!   it closes and FLUSHES (quote chars are dropped from the value).
 //! * Inside a bare token a `"` is an ordinary character (`a"b` is one token).
-//! * A bare token flushes on Java whitespace; a quoted token does not.
+//! * A bare token flushes on whitespace; a quoted token does not.
 //! * End of text flushes an open token; an unterminated quoted token is NOT
-//! * an error at this level, and `""` flushes an EMPTY token.
+//!   an error at this level, and `""` flushes an EMPTY token.
 
-/// `Tokenizer.tokenize(line.trim())` — returns the raw token values (escape
+/// Tokenize the trimmed `line` — returns the raw token values (escape
 /// sequences still intact; unescape per `Tokens::get`).
 #[must_use]
 pub fn tokenize(line: &str) -> Vec<String> {
@@ -28,8 +29,8 @@ pub fn tokenize(line: &str) -> Vec<String> {
     let mut quoted = false;
     let mut token = String::new();
 
-    // The reference indexes the ORIGINAL line (`line.charAt(i - 1)`), so
-    // the lookbehind is done on the trimmed line bytes, not the token text.
+    // The lookbehind indexes the TRIMMED LINE, not the token text, so the
+    // escape check sees the line's preceding character even across tokens.
     let bytes = line.as_bytes();
     for (i, c) in line.char_indices() {
         if !token_started {
@@ -81,7 +82,7 @@ mod tests {
     fn basic_quoting() {
         assert_eq!(t(" a  b \"c d\"  "), ["a", "b", "c d"]);
         assert_eq!(t(r#"a"b"#), [r#"a"b"#]);
-        // `""` closes an empty quoted token — the reference flushes it
+        // `""` closes an empty quoted token — and the empty token is flushed
         assert_eq!(t("\"\""), [""]);
     }
 
@@ -113,7 +114,7 @@ mod tests {
 
     #[test]
     fn bare_token_swallows_backslash_quote() {
-        // reference quirk: the line lookbehind fires in bare tokens too
+        // quirk: the line lookbehind fires in bare tokens too
         assert_eq!(t(r#"a\"b c"#), [r#"a\"b"#, "c"]);
     }
 }
