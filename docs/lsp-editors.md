@@ -1,6 +1,6 @@
 # Editor setup notes (`oxidizr-lsp`)
 
-Smoke notes for driving `oxidizr-lsp` (§P4-LSP) from a real editor. The
+Smoke notes for driving `oxidizr-lsp` from a real editor. The
 server speaks plain LSP over stdio with no client requirements; the
 snippets below are the shapes we smoke-tested by hand, not a support
 matrix. Range semantics are UTF-16 code units (0-based), as the spec
@@ -16,11 +16,11 @@ prints and exits. Nothing else on argv; unknown argv is ignored.
 | Sync | `textDocumentSync = Full` — every `didChange` carries the whole buffer (files are small; incremental stays deferred). |
 | Diagnostics | Pushed on `didOpen`/`didChange`, cleared on `didClose` (EMPTY publish). The exact CLI pipeline (`oxidizr validate` squiggle-for-squiggle); `.json` buffers validate through the JSON read leg. |
 | Completion | Scope-accurate keywords + directives + contextual identifiers + snippets; trigger character `!`. |
-| Hover | Model cards (kind, reference canonical name, technology, tags, relationship counts) from the LAST SUCCESSFUL parse — mid-typing hovers survive a broken buffer; plus keyword/directive cards. |
+| Hover | Model cards (kind, canonical name, technology, tags, relationship counts) from the LAST SUCCESSFUL parse — mid-typing hovers survive a broken buffer; plus keyword/directive cards. |
 | Formatting | `formatting` prints the canonical style (4-space indent, conservative unquoting) as ONE whole-buffer edit; `rangeFormatting` widens to whole top-level statements (the canonical print is global — a mid-statement edit would disagree with the next full format). `.json` buffers are NEVER formatted — the byte contract. |
 | Shutdown | `shutdown` then `exit`; clean exit ⇒ status 0. |
 
-Not implemented (answering `MethodNotFound`, deferred per P4-D5):
+Not implemented (answering `MethodNotFound`):
 semantic tokens, rename, code actions, incremental sync, watching.
 
 ## `initializationOptions`
@@ -32,7 +32,7 @@ defaults — configuration never fails `initialize`.
 |---|---|---|---|
 | `strict` | bool | `false` | `--strict` for every pipeline run (warnings block). |
 | `themesDir` | string | unset | `--themes-dir`: highest-priority installed-theme source. |
-| `allowNet` | bool | `false` | `--allow-net`: lifts the pipeline's theme-URL gate. The server NEVER introduces network access of its own (D5). |
+| `allowNet` | bool | `false` | `--allow-net`: lifts the pipeline's theme-URL gate. The server NEVER introduces network access of its own. |
 | `maxNumberOfProblems` | number | `100` | Cap for each `publishDiagnostics` (`0` is honored literally). |
 
 ```json

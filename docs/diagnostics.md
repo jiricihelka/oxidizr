@@ -1,7 +1,9 @@
 # Diagnostics registry (`OXZ` codes)
 
-Target document for `oxidizr-diag`'s stable diagnostic codes (P1-D2). Codes are stable
-after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxidizr-diag`.
+The stable diagnostic codes emitted by oxidizr. Codes are stable after
+1.0; retiring a code leaves a tombstone row here and the number is never
+reused. Every code the codebase can emit is listed; the emitter lives in
+`crates/oxidizr-diag`.
 
 ## Ranges
 
@@ -18,22 +20,22 @@ after 1.0; retiring a code leaves a tombstone row here. Range owner: `crates/oxi
 
 | Code | Severity | Message shape | Notes |
 |---|---|---|---|
-| `OXZ-1001` | Error | unterminated quoted string at end of line | lexer bug-compat: the reference does NOT error here, so oxidizr never emits this by default — reserved for `--strict`-style linting (allow-listed in the e2e coverage gate) |
-| `OXZ-2001` | Error | `Unexpected tokens (expected: …)` | token rejected by the context's permitted set / unexpected identifier, inside the statement engine |
-| `OXZ-2002` | Error | reference statement message | any statement rejected by the faithful reference port (grammar, unknown identifier, duplicate name, …) — the reference text travels verbatim |
-| `OXZ-2003` | Error | `Unexpected end of DSL content - are one or more closing curly braces missing?` | unclosed context at EOF |
-| `OXZ-3001` | Error | reference validation message | `oxidizr validate` (M6): model/view rule from the M2 catalog violated — reference `hydrate()` text verbatim |
-| `OXZ-3002` | Error | `ambiguous reconcile: …` | `oxidizr reconcile` (M6-c): a layout id matches >1 re-parsed id (or two match one) — never guessed, entry not remapped (F1, P1-D8) |
-| `OXZ-4001` | Error | `failed to parse JSON: …` / `failed to read workspace: …` / `workspace validation failed: …` | JSON input rejected — syntax, structural read or hydrate validation (`JsonError::Parse/Read/Validation`) |
-| `OXZ-4002` | Error | `failed to write workspace: …` | the model cannot be written byte-faithfully (`JsonError::Write`, e.g. filtered view without base) |
-| `OXZ-5001` | Error | network disabled | theme URL fetch without `--allow-net` (D5, flag ships P2-M1; `!include <url>` / `workspace extends <url>` are rejected regardless of the flag — hardened P1 behavior) |
-| `OXZ-5002` | Error | JVM-only directive not supported | `!script`, `!plugin`, `!components`, `!impliedRelationships <fqcn>` (D2) |
-| `OXZ-5003` | — | (tombstone) | retired at P4-M2 (D7 by P4-D13): the `!docs`/`!adrs` importers landed (`agents/plan/build/IMPORT-DOCS-ADRS.md`); never emitted, must not be reused |
-| `OXZ-5004` | — | (tombstone) | retired at M5 (D9): `workspace extends` landed with file and JSON bases; never emitted, must not be reused |
-| `OXZ-5005` | Error | import arrives in Phase 4 | `plantuml`/`mermaid`/`kroki` render branches and `theme <file>` content load parsed, importer deferred (D11, retired by P4); raster `image <file>` stays OXZ-5002 (D10) |
-| `OXZ-5006` | Error | `cannot read/write …` | CLI I/O and input policy (M6): unreadable/unwritable file, stdio error, non-UTF-8 input (V-8: UTF-8 only), undetectable workspace format; exit code 3 |
-| `OXZ-5007` | Error | export format not implemented | `export --format` parsed a reference-registry format whose exporter has not landed: `websequencediagrams` (out of Phase 2 scope), `static`/`png`/`svg` (not oxidizr targets) (P2-D10) — the Phase 2 formats `plantuml*`/`c4plantuml*`/`mermaid` landed at M2–M4; truly-unknown format strings are NOT a diagnostic — the reference logs `Unknown export format: …` and exits 0, oxidizr notes likewise |
-| `OXZ-5008` | Error | theme loading failed | an installed theme's `theme.json` is unreadable/unparsable, a fetched theme's content-type is neither JSON nor plain text, or the fetch failed — including no system `curl` to perform it with `--allow-net` (P2-D3); a theme URL without `--allow-net` is `OXZ-5001`, not this code |
-| `OXZ-5009` | Error | export aborted | the reference ABORTS the whole export where its JVM throws — the shared diagram engine's cast/NPE paths (`EXPORT-PLANTUML.md` §14): a view-kind cast mismatch, a dangling id dereferenced mid-write, a foreign animation frame; oxidizr reports the abort as this diagnostic instead of panicking (M2) |
-| `OXZ-5010` | Error | `generate` failed | `generate system-landscape` (§P4-M3 O-4, P4-D9): an `--include`/`--exclude` pattern uses a construct outside the std-only full-match filter subset (`{m,n}` quantifiers, lookaround, `\p{…}`, named groups, inline flags — see `oxidizr_api::generate::pathfilter`), or the landscape cannot be derived (no workspace matched); never a silent widening or narrowing of the user's pattern |
-| `OXZ-9001` | Error | too many errors | collection aborted at the `Collector` cap (CAP=100, `oxidizr-diag`); the cap is not wired into the pipeline today, so no corpus path emits it (allow-listed in the e2e coverage gate) |
+| `OXZ-1001` | Error | unterminated quoted string at end of line | Reserved, never emitted by default: an unterminated quote does not fail lexing (the official tooling does not error here either); kept for future linting. |
+| `OXZ-2001` | Error | `Unexpected tokens (expected: …)` | Token outside the set permitted at this point in the grammar; the message lists the permitted set and a did-you-mean when one is near. |
+| `OXZ-2002` | Error | reference statement message | A statement rejected by the grammar (unknown identifier, duplicate name, bad placement, …) — the message is the official tooling's, verbatim. |
+| `OXZ-2003` | Error | `Unexpected end of DSL content - are one or more closing curly braces missing?` | An unclosed block at EOF. Add the missing closing braces. |
+| `OXZ-3001` | Error | reference validation message | A model/view validation rule was violated (`oxidizr validate`); the message is the official tooling's, verbatim. |
+| `OXZ-3002` | Error | `ambiguous reconcile: …` | A layout id matches more than one re-parsed id (or two match one) — never guessed, the entry is not remapped. |
+| `OXZ-4001` | Error | `failed to parse JSON: …` / `failed to read workspace: …` / `workspace validation failed: …` | JSON input rejected: syntax, structural read, or validation. Fix the input file. |
+| `OXZ-4002` | Error | `failed to write workspace: …` | The model cannot be written byte-faithfully (e.g. a filtered view without a base view). |
+| `OXZ-5001` | Error | network disabled | A theme URL was referenced without `--allow-net`. Pass `--allow-net` or use an installed theme; URL inputs `!include <url>` / `workspace extends <url>` are always rejected. |
+| `OXZ-5002` | Error | JVM-only directive not supported | `!script`, `!plugin`, `!components`, `!impliedRelationships <fqcn>` need the JVM import stack and are unsupported. |
+| `OXZ-5003` | — | (tombstone) | Retired when the `!docs`/`!adrs` importers landed; never emitted, must not be reused. |
+| `OXZ-5004` | — | (tombstone) | Retired when `workspace extends` landed; never emitted, must not be reused. |
+| `OXZ-5005` | Error | server-side import deferred | A `theme <file>` content load or a raster/plantuml/mermaid/kroki `image` import was attempted; these need the official import stack and are unsupported. Raster `image <file>` in DSL views is `OXZ-5002`. |
+| `OXZ-5006` | Error | `cannot read/write …` | CLI I/O and input policy: unreadable/unwritable file, stdio error, non-UTF-8 input, undetectable workspace format. Exit code 3. |
+| `OXZ-5007` | Error | export format not implemented | `export --format` named a registered format whose exporter has not landed (`static`/`png`/`svg`). Truly-unknown format strings are NOT a diagnostic — they log `Unknown export format: …` and exit 0, like the official CLI. |
+| `OXZ-5008` | Error | theme loading failed | An installed theme's `theme.json` is unreadable/unparsable, or a fetched theme's content-type is neither JSON nor plain text, or the fetch failed (including no system `curl` under `--allow-net`). A theme URL without `--allow-net` is `OXZ-5001`. |
+| `OXZ-5009` | Error | export aborted | The diagram engine failed fatally mid-export (a view-kind cast mismatch, a dangling id dereferenced while writing); reported instead of panicking. |
+| `OXZ-5010` | Error | `generate` failed | An `--include`/`--exclude` pattern uses a construct outside the supported full-match filter subset (`{m,n}` quantifiers, lookaround, `\p{…}`, named groups, inline flags), or no workspace matched. Narrow the pattern; it is never silently widened or narrowed. |
+| `OXZ-9001` | Error | too many errors | Diagnostic collection aborted at the 100-entry cap; further details are replaced by one summary note. |
