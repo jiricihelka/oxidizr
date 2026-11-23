@@ -127,3 +127,9 @@ pedantic = "warn"
 # row). Measured: 11/11 genuine sites (all fixed in that commit), ≈ +4 %
 # cold-clippy cost, ranges overlapping. CI `-D warnings` makes it binding.
 redundant_clone = "warn"
+
+# --- Release packaging (cargo-dist) ------------------------------------------
+# The `dist` configuration lives in `dist-workspace.toml` next to this file
+# (v1 config location; the GitHub-release matrix and installers are defined
+# there). Per-package dist decisions are the `[package.metadata.dist]` tables
+# in the crate manifests.

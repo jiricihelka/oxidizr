@@ -42,3 +42,10 @@ criterion = { workspace = true }
 [[bench]]
 name = "reconcile"
 harness = false
+
+# Release packaging (dist-workspace.toml at the workspace root): the `oxidizr`
+# binary ships in the GitHub release. `publish = false` above keeps the crate
+# off crates.io; `dist = true` is cargo-dist's documented override of the
+# publish signal for exactly this case.
+[package.metadata.dist]
+dist = true

@@ -1,0 +1,38 @@
+# cargo-dist release packaging (https://axodotdev.github.io/cargo-dist/).
+#
+# The `dist` binary in the flake dev shell consumes this file; the CI matrix
+# is the generated `.github/workflows/release.yml` (`dist generate --mode ci`
+# regenerates it, `dist plan` checks it). This is the v1 config location —
+# the v0 `[workspace.metadata.dist]` block in Cargo.toml hits an upstream
+# cargo-dist panic (`couldn't find the release!?`, cargo-dist 0.31–0.34) as
+# soon as installers are configured; the v1 file with explicit `ci`/`hosting`
+# plans cleanly. See agents/notes/pitfalls/cargo-dist-installer-panic.md.
+[workspace]
+members = ["cargo:."]
+
+# Config for 'dist'
+[dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.34.0"
+# CI backends to support
+ci = "github"
+# Where to host releases
+hosting = "github"
+# The installers to generate for each app
+installers = ["shell", "powershell"]
+# Target platforms to build apps for (Rust target-triple syntax).
+# Linux is GNU (not musl): the pinned toolchain in rust-toolchain.toml carries
+# no musl std or linker, so musl artifacts would not be verifiable here.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+# Which actions to run on pull requests: the plan leg validates this config
+# and the generated workflow; the full build happens on pushed `v*` tags.
+pr-run-mode = "plan"
+# Whether to install an updater program alongside the apps (not wanted:
+# releases are fetched from GitHub, the updater would be dead weight).
+install-updater = false

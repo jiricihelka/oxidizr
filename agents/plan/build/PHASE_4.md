@@ -472,6 +472,36 @@ written to fire on the pushed tag). crates.io publishing skipped
 
 ## §P4-M5 item stamps
 
+- **E-4 DONE (commit M5d, 2026-11-23)** — cargo-dist wiring (P4-D10 + the
+  P4-V6 closure). The config is the v1 **`dist-workspace.toml`** (row-wording
+  deviation: `[workspace.metadata.dist]` in Cargo.toml makes cargo-dist
+  panic `couldn't find the release!?` whenever `installers` is configured —
+  reproduced on 0.31.0–0.34.0, official AND nixpkgs binaries, on a vanilla
+  `cargo new` project; the v1 file with explicit `ci = "github"` +
+  `hosting = "github"` plans cleanly —
+  `agents/notes/pitfalls/cargo-dist-installer-panic.md`).
+  `rust-toolchain-version` is deprecated in 0.34; the nightly travels in
+  `rust-toolchain.toml`. Release set: `oxidizr` (cli — `[package.metadata.dist]
+  dist = true`, cargo-dist's documented override of the crate's
+  `publish = false`; default features = zero GPU) + `oxidizr-lsp` +
+  `oxidizr-viewer` under the per-package `features = ["gui"]` override — the
+  row's preferred shape, probed live: dist adds the release with per-target
+  binaries, so no R-5 deviation needed. Five targets (linux **gnu** ×2,
+  macOS ×2, windows-msvc); sha256 checksums; `installers =
+  ["shell","powershell"]`; `pr-run-mode = "plan"` (PRs run the `dist plan`
+  dry-run leg, which also re-validates the generated workflow; full builds
+  on pushed `v*` tags); signing deferred (unsigned releases); musl stayed a
+  `💡` per P4-V6. `.github/workflows/release.yml` is `dist generate --mode
+  ci` output kept PURE (dist rejects hand edits). The per-OS smoke is
+  therefore a deviation in placement — a companion
+  `.github/workflows/release-smoke.yml` (`release: published` + manual
+  dispatch): per-OS matrix (linux ×2, aarch64-mac, windows — the fleet has
+  no x86_64 macOS runner), checksum verification of all three archives, then
+  `--version` (version must match the tag) + `dsl2json` of one Category A
+  fixture (`testdata/dsl/color-schemes.dsl`, commands verified locally) with
+  the JSON parsed; the GUI binary is archive/checksum-verified only (a
+  headless runner cannot verify it — its build leg is). `cargo xtask ci` +
+  `cargo xtask lint` green; `dist plan` a clean three-release manifest.
 - **E-3 DONE (commit M5c, 2026-11-22)** — P4-D13-3 `Layered` polish. The
   charter's three items met reality differently (plan-assumption drift,
   resolved per the working-style rule): (1) RANK TIGHTENING is already the

@@ -62,3 +62,12 @@ ab_glyph = { workspace = true }
 dark-light = { workspace = true }
 clap = { workspace = true, optional = true }
 eframe = { workspace = true, optional = true }
+
+# Release packaging (dist-workspace.toml at the workspace root): the GUI
+# binary ships in the GitHub release via this per-package feature override
+# (the crate's default build stays zero-GPU; required-features on the bin
+# would otherwise leave dist with nothing to package). The headless release
+# smoke does not cover it — a GUI binary cannot be smoked headless, its
+# verification stays the CI `--features gui` build leg.
+[package.metadata.dist]
+features = ["gui"]
