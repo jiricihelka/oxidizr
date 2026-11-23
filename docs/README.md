@@ -8,3 +8,5 @@
 - [query-schema.md](query-schema.md) — the `oxidizr query --format json`
   document
 - [lsp-editors.md](lsp-editors.md) — wiring `oxidizr-lsp` into your editor
+- [RELEASING.md](RELEASING.md) — how a version is tagged, built and shipped
+  (maintainer reference)

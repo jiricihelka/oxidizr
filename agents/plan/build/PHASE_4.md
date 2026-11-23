@@ -468,10 +468,27 @@ written to fire on the pushed tag). crates.io publishing skipped
 | **E-2** | P4-D13-2 semantic comparators for the two P2-gated dialects: fact grammars for the reference **Structurizr-PlantUML** (`export -f plantuml`) and **Mermaid** (`export -f mermaid`) outputs — inventoried by WITNESS legs on the pinned binary (`TZ=UTC`) over the golden corpus, NOT guessed; `xtask/exportcmp` grows `facts_plantuml`/`facts_mermaid` extractors (same `FactSet` frame: element name+type/stereotype + relationship ends+label facts); `cargo xtask export-verify --format plantuml\|mermaid` legs over the same fixture set as the C4 comparator. Category B — the fidelity window closes with witness evidence in the row stamp | **DONE** M5b |
 | **E-3** | P4-D13-3 `Layered` polish, regression-gated (determinism property + `bench cmp P3` must stay green): (1) rank tightening — pull each node to its tightest feasible rank (max pred + 1) after layering, so single-edge chains stop wasting slack; (2) boundary refinement — place boundary nodes by median of their FIXED neighbours instead of sweeping them blindly; (3) edge-channel pass — nudge parallel orthogonal segments to distinct lanes. Scene-fixture snapshots re-blessed ONLY where the quality metric (crossings + total bend count + edge length) improves on the corpus, per-fixture in the row stamp | **DONE** M5c |
 | **E-4** | cargo-dist wiring per P4-D10 + the P4-V6 closure: `[workspace.metadata.dist]` (artifacts: `oxidizr` [cli, default features = zero GPU] + `oxidizr-lsp`; `oxidizr-viewer` as a per-package `features = ["gui"]` override — if cargo-dist's package-level override cannot carry it, the row records the deviation and the GUI binary stays a documented `cargo build --features gui` release story, R-5), targets x86_64/aarch64 linux (**gnu**, per P4-V6: musl feasibility below), x86_64/aarch64 macOS, x86_64 windows-msvc; checksums + install script defaults; `.github/workflows/release.yml` (tag-push `v*` → `cargo dist build` + GitHub Release + the per-OS smoke: `--version` + `dsl2json` on one fixture — Category A) + a `dist --check` dry-run leg on PRs; `actionlint` clean locally. **P4-V6 (CLOSED at this row, 2026-11-21):** the pinned nightly `rustup`-less dev shell carries NO musl target/std and no musl linker (mingw only) ⇒ `x86_64-unknown-linux-musl` is NOT locally verifiable; decided **gnu** for linux (P4-D10's documented fallback), musl revisit = `💡` only. Signing deferred (unsigned v1, documented — not a deviation) | M5d |
-| **E-5** | Release chore: workspace version `0.1.0` → **`0.4.0`** (+ lockfile + `--version` goldens incl. the lsp `tests/version.rs` pin), `CHANGELOG.md` catch-up in Keep-a-Changelog form (v0.1.0/v0.2.0/v0.3.0 reconstructed from the PROGRESS milestone logs + the v0.4.0 section: LSP, diff, inspect, importers, WSD export, query/init/completions/generate, oracle command), `docs/RELEASING.md` (tag → CI → dist publish → changelog + register sync checklist), docs pass (README command list through `generate`/`oracle`), **P4 milestone close ritual** (full tier + bless + PROGRESS `P4-M5` log + status board + RESUME) and the local `v0.4.0` tag. **Never push** — publish/push stay an explicit user action | M5e |
+| **E-5** | Release chore: workspace version `0.1.0` → **`0.4.0`** (+ lockfile + `--version` goldens incl. the lsp `tests/version.rs` pin), `CHANGELOG.md` catch-up in Keep-a-Changelog form (v0.1.0/v0.2.0/v0.3.0 reconstructed from the PROGRESS milestone logs + the v0.4.0 section: LSP, diff, inspect, importers, WSD export, query/init/completions/generate, oracle command), `docs/RELEASING.md` (tag → CI → dist publish → changelog + register sync checklist), docs pass (README command list through `generate`/`oracle`), **P4 milestone close ritual** (full tier + bless + PROGRESS `P4-M5` log + status board + RESUME) and the local `v0.4.0` tag. **Never push** — publish/push stay an explicit user action | **DONE** M5e |
 
 ## §P4-M5 item stamps
 
+- **E-5 DONE (commit M5e, 2026-11-23) — §P4-M5 CLOSED, PHASE 4 COMPLETE.**
+  Release chore: workspace `0.1.0` → `0.4.0` (root `[workspace.package]` +
+  13 path-dep pins + `cargo update --workspace`; `--version` goldens all
+  derive from `CARGO_PKG_VERSION`, the lsp transcript pins the server name
+  only, export bytes carry no generator — **the bump moved zero goldens**,
+  bless 307×unchanged after the bump proves it). `CHANGELOG.md` created
+  (Keep-a-Changelog; v0.1.0–v0.3.0 reconstructed from the PROGRESS journal
+  + v0.4.0 section + the three frozen Rust-API churn lines verbatim from
+  the churn list). `docs/RELEASING.md`: tag → CI → smoke → register
+  checklist; **crates.io publishing SKIPPED for v0.4.0** (user decision,
+  recorded in the doc). README verified current (command table already
+  complete through `oracle`/`view`). Close ritual: quartet + full e2e tier
+  green, bless 307×unchanged, `testdata/` clean; **Category B skipped with
+  reason** — the diff is versions/changelog/release-docs, no generator or
+  parser code since the P4D close where the oracle evidence is green.
+  Local annotated tag `v0.4.0`; pushing the tag, the GitHub Release and
+  any publish stay the user's explicit actions.
 - **E-4 DONE (commit M5d, 2026-11-23)** — cargo-dist wiring (P4-D10 + the
   P4-V6 closure). The config is the v1 **`dist-workspace.toml`** (row-wording
   deviation: `[workspace.metadata.dist]` in Cargo.toml makes cargo-dist
