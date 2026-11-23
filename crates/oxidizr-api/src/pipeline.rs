@@ -1327,7 +1327,7 @@ fn import_cmd(
             return Err(out.fail(
                 Issue::error(
                     codes::CLI_IO,
-                    "image import needs a file (the reference reads the bytes off disk)",
+                    "image import needs a file (the official tooling reads the bytes off disk)",
                 ),
                 ExitClass::Usage,
             ));

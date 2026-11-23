@@ -800,7 +800,7 @@ fn cmd_vendor(src: &Path) -> Result<()> {
         .join("resources");
     ensure!(
         dsl_root.is_dir(),
-        "not a reference repo clone: {}",
+        "not an official-tooling clone: {}",
         src.display()
     );
 
@@ -1215,7 +1215,7 @@ fn cmd_oracle_landscape(oracle: &Path) -> Result<()> {
         .with_context(|| format!("failed to run {}", oracle.display()))?;
     ensure!(
         output.status.success(),
-        "reference generate system-landscape failed:\n{}",
+        "official tooling generate system-landscape failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let theirs = fs::read(&produced)?;
@@ -1336,7 +1336,7 @@ fn verify_json_legs(oracle: &Path, root: &Path) -> Result<(Vec<PathBuf>, Vec<Str
             println!("ok: {name}");
         } else {
             failed.push(format!(
-                "MISMATCH: {name} (reference output drifted from committed golden)"
+                "MISMATCH: {name} (official output drifted from committed golden)"
             ));
         }
     }

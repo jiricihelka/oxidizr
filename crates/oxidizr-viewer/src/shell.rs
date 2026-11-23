@@ -1805,7 +1805,7 @@ impl Viewer {
                     self.tag_mode == FilterMode::Exclude,
                     egui::RichText::new("exclude").small(),
                 )
-                .on_hover_text("Hide tagged items (absent mode in the reference)")
+                .on_hover_text("Hide tagged items (official UI: absent mode)")
                 .clicked()
             {
                 mode = Some(FilterMode::Exclude);
@@ -2432,7 +2432,9 @@ impl Viewer {
         ui.horizontal(|ui| {
             if ui
                 .button("Bring back")
-                .on_hover_text("pull off-canvas elements onto the visible page (reference: magnet)")
+                .on_hover_text(
+                    "pull off-canvas elements onto the visible page (official UI: magnet)",
+                )
                 .clicked()
             {
                 let page = self.canvas_page();
@@ -2443,7 +2445,7 @@ impl Viewer {
             if ui
                 .button("Remove vertices")
                 .on_hover_text(
-                    "straighten every routed relationship (reference: remove all vertices)",
+                    "straighten every routed relationship (official UI: remove all vertices)",
                 )
                 .clicked()
             {

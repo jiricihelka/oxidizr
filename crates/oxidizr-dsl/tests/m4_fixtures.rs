@@ -92,17 +92,17 @@ const KNOWN_ERRORS: &[(&str, u16, &str)] = &[
     (
         "image-views/workspace-via-file.dsl",
         codes::IMPORT_DEFERRED.get(),
-        "plantuml <file> import arrives in Phase 4",
+        "plantuml <file> import is not supported yet",
     ),
     (
         "image-views/workspace-via-source.dsl",
         codes::IMPORT_DEFERRED.get(),
-        "plantuml <source> import arrives in Phase 4",
+        "plantuml <source> import is not supported yet",
     ),
     (
         "text-block.dsl",
         codes::IMPORT_DEFERRED.get(),
-        "plantuml <source> import arrives in Phase 4",
+        "plantuml <source> import is not supported yet",
     ),
     // -- D5: no network (OXZ-5001, `--allow-net` only) ----------------------
     (

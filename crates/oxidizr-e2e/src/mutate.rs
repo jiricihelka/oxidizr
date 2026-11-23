@@ -162,7 +162,7 @@ fn op_dup_name(text: &str, rng: &mut Rng) -> Option<String> {
         }
         depth = delta_depth(l, depth);
     }
-    let i = pick_index(&cands, rng)?; // 2R R-tool-04 (depth scan stays op-local)
+    let i = pick_index(&cands, rng)?; // depth scan stays op-local
     // `person "Name" "desc"` (or without desc) — re-issue it with a fresh
     // (never-taken) identifier and the SAME name.
     let indent: String = lines[i].chars().take_while(|c| c.is_whitespace()).collect();

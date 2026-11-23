@@ -575,7 +575,7 @@ fn index_views(
 
 /// The per-kind field set: scope ids, boundary flags, membership
 /// and (gated) geometry. One `match` on the borrowed `View` enum.
-#[allow(clippy::too_many_lines)] // one arm per `View` variant: the P4-D2 field matrix
+#[allow(clippy::too_many_lines)] // one arm per `View` variant: the field matrix
 fn push_view_fields(
     v: View<'_>,
     canon: &dyn Fn(&Id) -> String,

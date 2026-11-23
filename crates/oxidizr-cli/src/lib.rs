@@ -36,7 +36,7 @@ use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::Context as _; // §P3-M8: the `to_request` Option's internal-fault arm
+use anyhow::Context as _; // the `to_request` Option's internal-fault arm
 use clap::{CommandFactory as _, Parser, Subcommand, ValueEnum};
 use oxidizr_api::{
     ApiOptions, DiffFormat, ExitClass, FmtMode, ImportFormat, InitTemplate, Input, InspectFormat,

@@ -1151,7 +1151,7 @@ fn diagram_file_or_url(p: &mut Parser, source: &str, keyword: &str) -> Result<()
         *frame = false;
     }
     Err(deferred(&format!(
-        "{keyword} <file> import arrives in Phase 4 (D11)"
+        "{keyword} <file> import is not supported yet"
     )))
 }
 
@@ -1175,12 +1175,12 @@ fn plantuml_or_mermaid(p: &mut Parser, tokens: &Tokens, keyword: &str) -> Result
     let source = tokens.get(1);
     if source.contains('\n') {
         return Err(deferred(&format!(
-            "{keyword} <source> import arrives in Phase 4 (D11)"
+            "{keyword} <source> import is not supported yet"
         )));
     }
     if diagram_view_key(p, &source) {
         return Err(deferred(&format!(
-            "{keyword} <viewKey> import arrives in Phase 4 (D11)"
+            "{keyword} <viewKey> import is not supported yet"
         )));
     }
     diagram_file_or_url(p, &source, keyword)
@@ -1197,7 +1197,7 @@ fn kroki(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
     }
     let source = tokens.get(2);
     if source.contains('\n') {
-        return Err(deferred("kroki <source> import arrives in Phase 4 (D11)"));
+        return Err(deferred("kroki <source> import is not supported yet"));
     }
     diagram_file_or_url(p, &source, "kroki")
 }
@@ -1481,7 +1481,7 @@ fn add_theme(p: &mut Parser, theme_token: String) -> Result<(), DslError> {
             java_absolute(&file)
         )));
     }
-    Err(deferred("theme <file> inlining arrives in Phase 4 (D11)"))
+    Err(deferred("theme <file> inlining is not supported yet"))
 }
 
 fn theme(p: &mut Parser, tokens: &Tokens) -> Result<(), DslError> {
@@ -2751,7 +2751,7 @@ mod tests {
         assert_eq!(r.errors[0].code, oxidizr_diag::codes::IMPORT_DEFERRED);
         assert_eq!(
             first_error(&r),
-            "plantuml <source> import arrives in Phase 4 (D11)"
+            "plantuml <source> import is not supported yet"
         );
 
         let r = views("    image * ix {\n        plantuml\n    }");
@@ -2773,7 +2773,7 @@ mod tests {
         );
         assert_eq!(
             first_error(&r),
-            "plantuml <viewKey> import arrives in Phase 4 (D11)"
+            "plantuml <viewKey> import is not supported yet"
         );
 
         let r = views("    image * ix {\n        kroki plantuml \"a\\nb\"\n    }");
