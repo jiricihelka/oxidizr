@@ -111,6 +111,17 @@ no dev-process or Java-reference mentions in human-facing docs, README per
 directory, root README as user documentation (`build/PHASE_4D.md`). The
 `v0.4.0` tag lands after P4D closes; roadmap completion = P4D + release tail.
 
+## Phase 5R — large-scale idiomatic-Rust refactor → v0.5.0 (added 2026-11-25)
+
+Goal: structural idiomaticity on the released tree — giant-file module
+decomposition, error-taxonomy redesign (OXIDIZR-COINED texts may improve,
+reference-ported stay verbatim), typed ids/newtypes in the engines,
+visibility minimization, allocation removal with criterion evidence, crate
+topology reviewed (default KEEP). Successful-output bytes, CLI grammar, exit
+classes and OXZ codes stay frozen; the Rust API churns freely with every
+line recorded in the changelog `[Unreleased]`. Closes with the v0.5.0
+release ritual + local tag. Decisions + waves: `build/PHASE_5R.md`.
+
 ## Out of scope for this roadmap
 
 Server/lite/playground/web-UI equivalents, MCP server, static-site/PNG/SVG export,

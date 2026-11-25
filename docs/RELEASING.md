@@ -45,11 +45,12 @@ Binaries are packaged and published by
    cargo test -p oxidizr-cli -- --version
    ```
 
-3. **CHANGELOG.md.** Add the new version section at the top
-   (Keep-a-Changelog form: Added / Changed / Fixed). Fold any staged
-   Rust-API churn lines in verbatim; the running list lives at
-   `agents/notes/process/api-churn-v<version>.md` and is frozen at the last
-   API-touching commit before release.
+3. **CHANGELOG.md.** Cut the `## [Unreleased]` section into
+   `## [X.Y.Z] - <date>` at the top (Keep-a-Changelog form:
+   Added / Changed / Fixed); tidy the wording, keep the substance.
+   Rust-API churn lines live in `[Unreleased]` already — waves append
+   theirs the commit that makes the change (since v0.4.0 there is no
+   separate running list).
 
 4. **Docs pass.** The README command table matches `oxidizr --help`;
    `docs/*.md` schemas are current.

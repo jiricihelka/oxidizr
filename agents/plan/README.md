@@ -28,6 +28,7 @@ disagree, the source wins — update the notes.
 | `build/PHASE_4T.md`           | Phase 4T plan: feature × suite test matrix, P4 coverage gaps            | Implementing the 4T interlude   |
 | `build/PHASE_4R.md`           | Phase 4R plan: idiomatic refactors, public-API churn allowed            | Implementing the 4R interlude   |
 | `build/PHASE_4D.md`           | Phase 4D plan: docs reset — short human-first text, READMEs everywhere  | Implementing the 4D interlude   |
+| `build/PHASE_5R.md`           | Phase 5R plan: large-scale idiomatic refactor → v0.5.0 (error texts loosened) | Implementing P5R            |
 | `DEVIATIONS.md`               | Agreed, compat-safe differences from the reference + Locked list       | Before implementing ANY behavior   |
 | `ADDITIONAL_FEATURES.md`      | Registry of features Structurizr doesn't have (✅ agreed / 💡 ideas)    | Adding anything beyond parity      |
 | `research/notes-features.md`  | Raw deep notes behind FEATURES.md (see errata!)                        | Deep dive on a specific feature    |
