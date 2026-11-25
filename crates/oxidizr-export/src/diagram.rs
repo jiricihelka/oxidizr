@@ -1,8 +1,7 @@
 //! The export bean model: one [`Diagram`] per view (key, definition, file
 //! extension, animation frames, optional legend), the [`Legend`] side-car,
-//! and the [`WorkspaceExport`] whole-workspace payload. The two exporter
-//! shapes become traits: [`WorkspaceExporter`] (whole workspace, one
-//! document) and [`DiagramExporter`] (one diagram per view).
+//! and the [`WorkspaceExport`] whole-workspace payload. The per-view
+//! exporter shape is a trait: [`DiagramExporter`] (one diagram per view).
 
 use oxidizr_core::Workspace;
 
@@ -88,7 +87,7 @@ impl Diagram {
 /// One whole-workspace document plus its file extension (`json` for the
 /// workspace JSON and the theme export).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceExport {
+pub(crate) struct WorkspaceExport {
     definition: Vec<u8>,
     file_extension: String,
 }
@@ -111,16 +110,6 @@ impl WorkspaceExport {
     pub fn file_extension(&self) -> &str {
         &self.file_extension
     }
-}
-
-/// The whole workspace as one document.
-pub trait WorkspaceExporter {
-    /// Exports the workspace as a single document.
-    ///
-    /// # Errors
-    ///
-    /// Format-specific failures (see [`ExportError`]).
-    fn export(&self, workspace: &Workspace) -> Result<WorkspaceExport, ExportError>;
 }
 
 /// One diagram per view.

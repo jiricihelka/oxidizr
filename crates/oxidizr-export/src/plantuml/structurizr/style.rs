@@ -13,7 +13,7 @@ use super::{SHADOW_DISTANCE, b64, color_or_null};
 /// each renders through a fresh [`IndentingWriter`] exactly like the
 /// official render overrides).
 #[derive(Debug, Clone)]
-pub enum PlantUMLStyle {
+pub(crate) enum PlantUMLStyle {
     /// `PlantUMLRootStyle` — `fontName` is always `null` at the call site.
     Root {
         /// `Styles.DEFAULT_BACKGROUND_*`.

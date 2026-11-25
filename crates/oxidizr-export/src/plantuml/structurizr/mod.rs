@@ -30,7 +30,7 @@ use crate::plantuml::{
     plantuml_sequence_shape_of, plantuml_shape_of,
 };
 use style::ElementSpec;
-pub use style::PlantUMLStyle;
+use style::PlantUMLStyle;
 mod legs;
 
 pub(crate) use legs::{
@@ -61,7 +61,7 @@ const DEFAULT_REL_WIDTH: i32 = 200;
 /// (`groupId` — NEVER reset between views/exports) and the style-set
 /// serialization order.
 #[derive(Debug, Default)]
-pub struct StructurizrDialect {
+pub(crate) struct StructurizrDialect {
     styles: Vec<PlantUMLStyle>,
     group_id: i32,
 }

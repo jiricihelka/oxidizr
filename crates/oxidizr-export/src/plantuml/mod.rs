@@ -8,63 +8,64 @@ pub mod engine;
 pub mod model;
 pub mod structurizr;
 
-pub use c4::C4PlantUmlDialect;
+pub(crate) use c4::C4PlantUmlDialect;
 pub use engine::{Dialect, Engine, Frame};
 pub use model::ElemRef;
-pub use structurizr::StructurizrDialect;
+pub(crate) use structurizr::StructurizrDialect;
 
 use oxidizr_core::views::Shape;
 
 /// `plantuml.title` — title gate; the match is case-SENSITIVE.
-pub const PLANTUML_TITLE_PROPERTY: &str = "plantuml.title";
+pub(crate) const PLANTUML_TITLE_PROPERTY: &str = "plantuml.title";
 /// `plantuml.includes` — comma-separated `!include` lines.
-pub const PLANTUML_INCLUDES_PROPERTY: &str = "plantuml.includes";
+pub(crate) const PLANTUML_INCLUDES_PROPERTY: &str = "plantuml.includes";
 /// `plantuml.skinparams` — comma-separated `name=value` pairs written into
 /// a `skinparam { … }` block.
-pub const PLANTUML_SKINPARAMS_PROPERTY: &str = "plantuml.skinparams";
+pub(crate) const PLANTUML_SKINPARAMS_PROPERTY: &str = "plantuml.skinparams";
 /// `plantuml.animation` — whether animation frames are exported.
-pub const PLANTUML_ANIMATION_PROPERTY: &str = "plantuml.animation";
+pub(crate) const PLANTUML_ANIMATION_PROPERTY: &str = "plantuml.animation";
 /// `plantuml.sequenceDiagram` — sequence-diagram gate for dynamic views.
-pub const PLANTUML_SEQUENCE_DIAGRAM_PROPERTY: &str = "plantuml.sequenceDiagram";
+pub(crate) const PLANTUML_SEQUENCE_DIAGRAM_PROPERTY: &str = "plantuml.sequenceDiagram";
 /// `plantuml.boundaries` — boundary boxes along sequence paths.
-pub const PLANTUML_BOUNDARIES_PROPERTY: &str = "plantuml.boundaries";
+pub(crate) const PLANTUML_BOUNDARIES_PROPERTY: &str = "plantuml.boundaries";
 /// Element-style property `plantuml.shadow`.
-pub const PLANTUML_SHADOW_PROPERTY: &str = "plantuml.shadow";
+pub(crate) const PLANTUML_SHADOW_PROPERTY: &str = "plantuml.shadow";
 /// `c4plantuml.legend` — controls `SHOW_LEGEND` (default `true`).
-pub const C4PLANTUML_LEGEND_PROPERTY: &str = "c4plantuml.legend";
+pub(crate) const C4PLANTUML_LEGEND_PROPERTY: &str = "c4plantuml.legend";
 /// `c4plantuml.stereotypes` — `show`/`hide stereotypes` (default `false`).
-pub const C4PLANTUML_STEREOTYPES_PROPERTY: &str = "c4plantuml.stereotypes";
+pub(crate) const C4PLANTUML_STEREOTYPES_PROPERTY: &str = "c4plantuml.stereotypes";
 /// `c4plantuml.tags` — includes the tags section (default `false`).
-pub const C4PLANTUML_TAGS_PROPERTY: &str = "c4plantuml.tags";
+pub(crate) const C4PLANTUML_TAGS_PROPERTY: &str = "c4plantuml.tags";
 /// `c4plantuml.stdlib` — `<C4/…>` standard-library includes vs raw-URL
 /// includes (default `true`).
-pub const C4PLANTUML_STANDARD_LIBRARY_PROPERTY: &str = "c4plantuml.stdlib";
+pub(crate) const C4PLANTUML_STANDARD_LIBRARY_PROPERTY: &str = "c4plantuml.stdlib";
 /// Element-style property `c4plantuml.sprite` (tags section `$sprite`).
-pub const C4PLANTUML_SPRITE: &str = "c4plantuml.sprite";
+pub(crate) const C4PLANTUML_SPRITE: &str = "c4plantuml.sprite";
 /// Element-style property `c4plantuml.shadow` (tags section `$shadowing`).
-pub const C4PLANTUML_SHADOW: &str = "c4plantuml.shadow";
+pub(crate) const C4PLANTUML_SHADOW: &str = "c4plantuml.shadow";
 /// `c4plantuml.elementProperties` — writes `AddProperty` lines on elements
 /// and deployment nodes (default `false`).
-pub const C4PLANTUML_ELEMENT_PROPERTIES_PROPERTY: &str = "c4plantuml.elementProperties";
+pub(crate) const C4PLANTUML_ELEMENT_PROPERTIES_PROPERTY: &str = "c4plantuml.elementProperties";
 /// `c4plantuml.relationshipProperties` — writes `AddProperty` lines on
 /// relationships (default `false`).
-pub const C4PLANTUML_RELATIONSHIP_PROPERTIES_PROPERTY: &str = "c4plantuml.relationshipProperties";
+pub(crate) const C4PLANTUML_RELATIONSHIP_PROPERTIES_PROPERTY: &str =
+    "c4plantuml.relationshipProperties";
 /// `Diagram:Title` — element style tag giving the diagram title its style.
-pub const DIAGRAM_TITLE_TAG: &str = "Diagram:Title";
+pub(crate) const DIAGRAM_TITLE_TAG: &str = "Diagram:Title";
 /// `Diagram:Description` — element style tag giving the diagram description
 /// its style.
-pub const DIAGRAM_DESCRIPTION_TAG: &str = "Diagram:Description";
+pub(crate) const DIAGRAM_DESCRIPTION_TAG: &str = "Diagram:Description";
 
 /// The icon scale is PINNED to the official tooling's fallback constant
 /// (the icon fetch always fails over to it — oxidizr never touches the
 /// network during export, so the fallback always applies). Already
 /// formatted the way the official tooling renders it.
-pub const ICON_SCALE: &str = "0.5";
+pub(crate) const ICON_SCALE: &str = "0.5";
 
 /// An icon is supported when its URL is non-empty (after trimming) AND the
 /// raw string starts with `http` (any http prefix — not https-only).
 #[must_use]
-pub fn is_supported_icon(icon: Option<&str>) -> bool {
+pub(crate) fn is_supported_icon(icon: Option<&str>) -> bool {
     icon.is_some_and(|i| !i.trim().is_empty() && i.starts_with("http"))
 }
 

@@ -34,6 +34,10 @@ release.
     `DEFAULT_WORKSPACE_NAME`/`DEFAULT_WORKSPACE_DESCRIPTION` (the parser
     applies those defaults inline); root re-exports trimmed to the names
     consumers import (R5)
+  - oxidizr-export: removed the never-implemented `WorkspaceExporter` trait
+    (the whole-workspace `json`/`theme` path dispatches inline through
+    `ExportFormat::export`); root re-exports trimmed to the names consumers
+    import (R5)
 - The stable-toolchain floor (`rust-version`) rises 1.85 → 1.88: stabilized
   let-chains and slice `as_chunks` are adopted across the workspace.
   Shipped behavior, outputs and the CLI are unchanged.

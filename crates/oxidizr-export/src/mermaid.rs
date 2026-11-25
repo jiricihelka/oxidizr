@@ -30,12 +30,12 @@ use crate::plantuml::structurizr::{
 
 /// `MermaidDiagramExporter.MERMAID_TITLE_PROPERTY` (default `true`,
 /// case-SENSITIVE equality check.
-pub const MERMAID_TITLE_PROPERTY: &str = "mermaid.title";
+pub(crate) const MERMAID_TITLE_PROPERTY: &str = "mermaid.title";
 /// `MERMAID_SEQUENCE_DIAGRAM_PROPERTY` (default `false`,
 /// case-insensitive).
-pub const MERMAID_SEQUENCE_DIAGRAM_PROPERTY: &str = "mermaid.sequenceDiagram";
+pub(crate) const MERMAID_SEQUENCE_DIAGRAM_PROPERTY: &str = "mermaid.sequenceDiagram";
 /// `MERMAID_ICONS_PROPERTY` (default `false`, case-SENSITIVE `equals`).
-pub const MERMAID_ICONS_PROPERTY: &str = "mermaid.icons";
+pub(crate) const MERMAID_ICONS_PROPERTY: &str = "mermaid.icons";
 
 /// The `mermaid.*` gate helpers — per-property case rules (the export catalog):
 /// The title and icons need exactly `"true"` (case-SENSITIVE), the sequence
@@ -107,7 +107,7 @@ fn node_symbols(shape: Option<Shape>) -> (&'static str, &'static str) {
 /// The Mermaid dialect: the engine drives the iteration, the dialect owns
 /// the group-id counter (reset in the header write, one per diagram).
 #[derive(Debug, Default)]
-pub struct MermaidDialect {
+pub(crate) struct MermaidDialect {
     group_id: u32,
 }
 

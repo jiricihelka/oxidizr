@@ -3,8 +3,7 @@
 //! not sources.
 //!
 //! The parts: [`indent::IndentingWriter`], the [`diagram`] model
-//! (`Diagram`, `Legend`, the [`WorkspaceExporter`]/[`DiagramExporter`]
-//! shapes), the shared property cascade ([`property::export_property`])
+//! (`Diagram`, `Legend`, the [`DiagramExporter`] shape), the shared property cascade ([`property::export_property`])
 //! and the `export` command's dispatch + file-naming rules
 //! ([`mod@format`], [`naming`]):
 //!
@@ -38,10 +37,7 @@ pub mod property;
 pub mod themes;
 pub mod wsd;
 
-pub use diagram::{Diagram, DiagramExporter, Legend, WorkspaceExport, WorkspaceExporter};
+pub use diagram::{Diagram, DiagramExporter, Legend};
 pub use error::ExportError;
 pub use format::{ColorMode, ExportFormat};
-pub use indent::{IndentType, IndentingWriter};
-pub use naming::{ExportedFile, diagram_files, diagram_prefix, workspace_export_files};
-pub use property::export_property;
 pub use themes::{ThemeError, ThemeStore};

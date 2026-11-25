@@ -116,7 +116,7 @@ impl ExportFormat {
         }
     }
 
-    /// The dispatch. `json` and `theme` are the [`crate::diagram::WorkspaceExporter`]
+    /// The dispatch. `json` and `theme` are the whole-workspace single-document
     /// pair; `plantuml`/`plantuml/structurizr`, `plantuml/c4plantuml`,
     /// `mermaid` and `websequencediagrams` are the
     /// [`crate::diagram::DiagramExporter`] formats — the
@@ -130,7 +130,7 @@ impl ExportFormat {
     ///
     /// [`ExportError::NotImplemented`] for known-but-unimplemented formats,
     /// [`ExportError::NoExtension`] when the workspace file name has no `.`
-    /// (the [`crate::diagram::WorkspaceExporter`] branch only),
+    /// (the whole-workspace branch only),
     /// [`ExportError::Json`] when
     /// serialization fails, [`ExportError::ReferenceAbort`] when the
     /// diagram engine hits a case where the official tooling aborts.

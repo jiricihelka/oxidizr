@@ -269,7 +269,7 @@ impl<'a> ElemRef<'a> {
 /// Resolve any model id to its [`ElemRef`] (the engine's `getElement()`);
 /// walks systems' containers/components and deployment trees.
 #[must_use]
-pub fn element_by_id<'a>(model: &'a Model, id: &Id) -> Option<ElemRef<'a>> {
+pub(crate) fn element_by_id<'a>(model: &'a Model, id: &Id) -> Option<ElemRef<'a>> {
     for e in &model.custom_elements {
         if &e.item.id == id {
             return Some(ElemRef::Custom(e));

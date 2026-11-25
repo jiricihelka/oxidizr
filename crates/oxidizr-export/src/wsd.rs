@@ -43,7 +43,7 @@ use crate::plantuml::structurizr::view_name;
 
 /// The WSD dialect — stateless (no color scheme, no group counter).
 #[derive(Debug, Default)]
-pub struct WsdDialect;
+pub(crate) struct WsdDialect;
 
 impl WsdDialect {
     /// A fresh dialect.
@@ -342,7 +342,7 @@ impl Dialect for WsdDialect {
 ///
 /// [`ExportError::ReferenceAbort`] when a view aborts the export (the official tooling
 /// cast/null-pointer crash paths of  — dangling endpoints, an unresolved view scope).
-pub fn export_all(workspace: &Workspace) -> Result<Vec<Diagram>, ExportError> {
+pub(crate) fn export_all(workspace: &Workspace) -> Result<Vec<Diagram>, ExportError> {
     // The exporter has no color-scheme constructor and never consults the
     // engine for one; the scheme is inert here.
     let mut engine = Engine::new(workspace, ColorScheme::Light);

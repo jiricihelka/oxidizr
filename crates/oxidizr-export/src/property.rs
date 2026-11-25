@@ -21,7 +21,7 @@ use oxidizr_core::views::{ViewBase, ViewSet};
 /// `views.configuration.properties`, else `default`. Present-but-empty
 /// values are returned verbatim — emptiness never cascades.
 #[must_use]
-pub fn export_property<'a>(
+pub(crate) fn export_property<'a>(
     view: &'a ViewBase,
     views: &'a ViewSet,
     name: &str,

@@ -23,7 +23,7 @@ pub struct ExportedFile {
 /// The diagram file prefix: `structurizr-<id>` for a positive id,
 /// bare `structurizr` otherwise.
 #[must_use]
-pub fn diagram_prefix(workspace_id: i64) -> String {
+pub(crate) fn diagram_prefix(workspace_id: i64) -> String {
     if workspace_id > 0 {
         format!("structurizr-{workspace_id}")
     } else {
@@ -41,7 +41,7 @@ fn stem(file_name: &str) -> Result<&str, ExportError> {
         })
 }
 
-/// The single file of a [`crate::diagram::WorkspaceExporter`] export:
+/// The single file of a whole-workspace export:
 /// `<stem>[-theme].<extension>`.
 ///
 /// # Errors
@@ -49,7 +49,7 @@ fn stem(file_name: &str) -> Result<&str, ExportError> {
 /// [`ExportError::NoExtension`] when `workspace_file_name` has no `.` —
 /// the official tooling fails outright there; oxidizr reports an input
 /// error instead.
-pub fn workspace_export_files(
+pub(crate) fn workspace_export_files(
     export: &WorkspaceExport,
     theme: bool,
     workspace_file_name: &str,
@@ -67,7 +67,7 @@ pub fn workspace_export_files(
 /// numbered frame files (the parent's key and extension, frames indexed
 /// from 1).
 #[must_use]
-pub fn diagram_files(prefix: &str, diagrams: &[Diagram]) -> Vec<ExportedFile> {
+pub(crate) fn diagram_files(prefix: &str, diagrams: &[Diagram]) -> Vec<ExportedFile> {
     let mut out = Vec::new();
     for diagram in diagrams {
         out.push(ExportedFile {

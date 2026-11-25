@@ -38,7 +38,7 @@ use crate::plantuml::{
 /// dialect owns the per-diagram group-id counter (reset in
 /// `writeHeader`).
 #[derive(Debug, Default)]
-pub struct C4PlantUmlDialect {
+pub(crate) struct C4PlantUmlDialect {
     group_id: u32,
 }
 

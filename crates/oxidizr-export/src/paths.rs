@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 /// cannot answer (cache then simply stays off; the official tooling has no cache at
 /// all, so this can only ADD convenience, never behavior).
 #[must_use]
-pub fn themes_cache_dir() -> Option<PathBuf> {
+pub(crate) fn themes_cache_dir() -> Option<PathBuf> {
     // cfg branches are env-layout differences, not behavior differences:
     // each OS's conventional cache dir, no fallback chains across cfgs.
     #[cfg(windows)]
@@ -171,7 +171,7 @@ fn compress(h: &mut [u32; 8], block: &[u8]) {
 /// Lowercase hex SHA-256 (FIPS 180-4) — the theme URL cache-key hash
 /// (`<cache>/<sha256(url)>/theme.json`).
 #[must_use]
-pub fn sha256_hex(data: &[u8]) -> String {
+pub(crate) fn sha256_hex(data: &[u8]) -> String {
     // Pad: 0x80, zeros to a 56 mod 64 offset, 64-bit big-endian bit length.
     let mut msg = data.to_vec();
     let bit_len = (data.len() as u64).wrapping_mul(8);
