@@ -86,7 +86,7 @@ impl Json {
 
 /// Serialize to the official pretty JSON bytes (no trailing newline).
 #[must_use]
-pub fn to_bytes(root: &Json) -> Vec<u8> {
+pub(crate) fn to_bytes(root: &Json) -> Vec<u8> {
     let mut out = Vec::with_capacity(8 * 1024);
     emit(root, 0, &mut out);
     out

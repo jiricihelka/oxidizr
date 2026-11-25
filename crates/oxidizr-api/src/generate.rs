@@ -65,7 +65,10 @@ pub struct Landscape {
 /// Derive the system landscape of 1..N workspaces (the official tooling
 /// `SystemLandscapeGenerator.generate`).
 #[must_use]
-pub fn system_landscape(workspaces: &[Workspace], strategy: RelationshipsStrategy) -> Landscape {
+pub(crate) fn system_landscape(
+    workspaces: &[Workspace],
+    strategy: RelationshipsStrategy,
+) -> Landscape {
     let mut out = Workspace {
         name: Some("System Landscape".into()),
         configuration: WorkspaceConfiguration {

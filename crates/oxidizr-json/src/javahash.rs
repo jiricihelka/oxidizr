@@ -29,7 +29,7 @@
 /// `java.lang.String.hashCode()` over UTF-16 code units (surrogate pairs
 /// count as TWO units — Rust `char`s must be expanded, not iterated raw).
 #[must_use]
-pub fn string_hash_code(s: &str) -> i32 {
+pub(crate) fn string_hash_code(s: &str) -> i32 {
     let mut h: i32 = 0;
     // UTF-16 code units: Java counts surrogate halves separately, so expand
     // Rust scalars (surrogate halves never appear in valid Rust `char`s).
@@ -90,7 +90,9 @@ pub fn entry_order(keys: &[&str]) -> Vec<usize> {
 /// The properties map of `Properties` (insertion-ordered) in Java `HashMap`
 /// output order: `(key, value)` pairs.
 #[must_use]
-pub fn ordered_properties(props: &oxidizr_core::properties::Properties) -> Vec<(&str, &str)> {
+pub(crate) fn ordered_properties(
+    props: &oxidizr_core::properties::Properties,
+) -> Vec<(&str, &str)> {
     let pairs: Vec<(&str, &str)> = props.iter().collect();
     let keys: Vec<&str> = pairs.iter().map(|(k, _)| *k).collect();
     entry_order(&keys).into_iter().map(|i| pairs[i]).collect()
