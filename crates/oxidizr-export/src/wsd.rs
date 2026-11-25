@@ -3,7 +3,7 @@
 //! The official exporter emits ONLY `CustomView`s (the base
 //! body export is not overridden) and
 //! `DynamicView`s (an override with its own walk); the static-structure and
-//! deployment overloads return `null`, so the [`export_all`] loop here skips
+//! deployment overloads return `null`, so the `export_all` loop here skips
 //! every other view kind. `renderAsSequenceDiagram` has no property gate:
 //! the dynamic override IS the sequence form, so the dialect claims it via
 //! the [`Dialect::sequence_document`] route (the Mermaid precedent).

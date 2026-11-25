@@ -15,7 +15,7 @@
 //!   is on top and wins ([`pick`] scans [`Scene::items`] back to front).
 //! - Boundaries are not pickable: selection and drags never target them.
 //! - Edges hit by polyline distance: the tolerance is
-//!   [`HIT_TOLERANCE_PX`] screen pixels converted to world units at the
+//!   `HIT_TOLERANCE_PX` screen pixels converted to world units at the
 //!   current scale, so thin lines stay clickable when zoomed out.
 //! - Item over edge wins: arrows paint under boxes, so a point inside a
 //!   box is never an arrow click.
@@ -36,7 +36,7 @@ pub(crate) const FIT_PADDING_PX: f64 = 40.0;
 
 /// The world→screen similarity transform: `screen = world * scale +
 /// offset` ([`Viewport::world_to_screen`]). Scale is always within
-/// [`MIN_SCALE`]..=`MAX_SCALE` (constructed through [`Viewport::new`] /
+/// `MIN_SCALE`..=`MAX_SCALE` (constructed through [`Viewport::new`] /
 /// [`Viewport::fit`], never field-wise — the fields are private).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Viewport {
@@ -45,7 +45,7 @@ pub struct Viewport {
 }
 
 impl Viewport {
-    /// A viewport at `scale` (clamped into [`MIN_SCALE`]..=`MAX_SCALE`,
+    /// A viewport at `scale` (clamped into `MIN_SCALE`..=`MAX_SCALE`,
     /// a NaN scale falling back to 1.0) with the world origin landing at
     /// `offset` screen pixels.
     #[must_use]
@@ -57,7 +57,7 @@ impl Viewport {
     }
 
     /// A viewport centring `bounds` in a `screen`-sized surface, zoomed
-    /// to fit with [`FIT_PADDING_PX`] padding. Degenerate (zero-width or
+    /// to fit with `FIT_PADDING_PX` padding. Degenerate (zero-width or
     /// zero-height) bounds fit at scale 1.0, still centred.
     #[must_use]
     pub fn fit(bounds: Rect, screen: (f64, f64)) -> Self {
@@ -153,7 +153,7 @@ pub enum Hit {
 
 /// Pick the top-most scene entry at screen pixel `point` under
 /// `viewport`: items first (content order, last painted wins), then
-/// edges within [`HIT_TOLERANCE_PX`]. `None` = canvas background.
+/// edges within `HIT_TOLERANCE_PX`. `None` = canvas background.
 #[must_use]
 pub fn pick(scene: &Scene, viewport: Viewport, point: (f64, f64)) -> Option<Hit> {
     let world = viewport.screen_to_world(point);

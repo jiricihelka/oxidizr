@@ -1,6 +1,6 @@
 //! The export bean model: one [`Diagram`] per view (key, definition, file
 //! extension, animation frames, optional legend), the [`Legend`] side-car,
-//! and the [`WorkspaceExport`] whole-workspace payload. The per-view
+//! and the `WorkspaceExport` whole-workspace payload. The per-view
 //! exporter shape is a trait: [`DiagramExporter`] (one diagram per view).
 
 use oxidizr_core::Workspace;

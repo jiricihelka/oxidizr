@@ -12,7 +12,7 @@
 //!   [`Overrides`] (auto-layout) replaces it — build-time only,
 //!   the stored workspace is never touched (editor rule).
 //!   **Size** is the resolved style's `width`/`height`,
-//!   else the [`DEFAULT_ITEM_WIDTH`]×[`DEFAULT_ITEM_HEIGHT`] box: the
+//!   else the `DEFAULT_ITEM_WIDTH`×`DEFAULT_ITEM_HEIGHT` box: the
 //!   the official UI auto-sizes boxes by measuring text on a canvas
 //!   (`structurizr-diagram.js` `calculateWidth`/`calculateHeight`), which
 //!   is visual parity — out of contract per .
@@ -217,7 +217,7 @@ pub struct Boundary {
     /// Metadata line under the label — `None` for groups (the official UI
     /// `createBoundaryForGroup` passes no metadata).
     pub metadata: Option<String>,
-    /// Union of the member rects + [`BOUNDARY_PADDING`].
+    /// Union of the member rects + `BOUNDARY_PADDING`.
     pub rect: Rect,
     /// Resolved background `#rrggbb` (Boundary tag chain, theme-stylable).
     pub background: String,
@@ -293,7 +293,7 @@ pub struct Scene {
     pub items: Vec<Item>,
     /// Edges in content order.
     pub edges: Vec<Edge>,
-    /// Union of boundaries, items and edge points + [`SCENE_MARGIN`]
+    /// Union of boundaries, items and edge points + `SCENE_MARGIN`
     /// (the zero rect when the scene is empty).
     pub bounds: Rect,
 }

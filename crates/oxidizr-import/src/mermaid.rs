@@ -5,7 +5,7 @@
 //!
 //! - `C4Context`/`C4Container`/`C4Component` headers and `title`/
 //!   `direction` lines are chrome, `%%` comments (incl. `%%{init}%%`
-//!   config) vanish via [`strip_comments_mermaid`];
+//!   config) vanish via `strip_comments_mermaid`;
 //! - positional `$tags` sits one slot earlier than in C4-`PlantUML`:
 //!   `Person(a, "A", $descr, $tags)` and `Container(a, "A", $techn,
 //!   $descr, $tags)` (`Component` likewise); `Rel(a, b, $label, $techn,

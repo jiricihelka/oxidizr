@@ -5,13 +5,13 @@
 //! (`from`/`to` pairs), so undo is a symmetric re-apply — no closures
 //! on the stack, and a saved session never needs to serialise one.
 //!
-//! Factories ([`move_by`], [`align`], [`distribute`], [`centre_view`],
-//! [`bring_back`], [`remove_all_vertices`], [`set_waypoints`], ...)
+//! Factories (`move_by`, `align`, `distribute`, `centre_view`,
+//! `bring_back`, `remove_all_vertices`, `set_waypoints`, ...)
 //! compute the delta from the CURRENT effective geometry: the overlay
 //! first, the scene (already built with the overlay) as the stored
 //! fallback — `from` is always exactly what the user sees. Every
 //! factory returns `None` when nothing would move, so the shell never
-//! pushes a no-op onto [`History`]. The auto-layout engine lands through
+//! pushes a no-op onto `History`. The auto-layout engine lands through
 //! the same door: the shell turns one run into `MoveElements` +
 //! `SetWaypoints` and it becomes undoable like any edit.
 //!

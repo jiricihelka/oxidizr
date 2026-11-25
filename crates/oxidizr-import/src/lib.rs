@@ -106,7 +106,7 @@ impl ImportFormat {
     /// Extension sniff: `.puml`/`.iuml`/`.c4p` →
     /// C4-`PlantUML`, `.mmd`/`.mermaid` → `Mermaid`, the official tooling image
     /// extensions (the `ImageUtils` table behind
-    /// [`image::content_type_of`]) → image.
+    /// `image::content_type_of`) → image.
     /// `None` = not guessable from the name.
     #[must_use]
     pub fn sniff(name: &str) -> Option<Self> {

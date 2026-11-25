@@ -111,7 +111,7 @@ pub(crate) fn discover_in(root: &Path) -> Result<Vec<Entry>, String> {
 ///
 /// # Errors
 ///
-/// See [`discover_in`].
+/// See `discover_in`.
 pub fn discover() -> Result<Vec<Entry>, String> {
     discover_in(&crate::corpus_root())
 }

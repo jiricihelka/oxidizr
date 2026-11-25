@@ -91,7 +91,7 @@ impl Severity {
     ///
     /// # Errors
     ///
-    /// [`ParseThresholdError`] unless the token is one of `info`,
+    /// `ParseThresholdError` unless the token is one of `info`,
     /// `warning`, `error` (case-insensitive).
     pub fn parse_threshold(value: &str) -> Result<Severity, ParseThresholdError> {
         match value.to_ascii_lowercase().as_str() {

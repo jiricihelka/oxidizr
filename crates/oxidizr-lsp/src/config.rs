@@ -14,7 +14,7 @@
 //! and the LSP NEVER introduces network access of its own — the flag
 //! only lifts the pipeline's own theme-URL gate. `maxNumberOfProblems`
 //! caps every `publishDiagnostics` (default
-//! [`crate::diagnostics::MAX_DIAGNOSTICS`]).
+//! `crate::diagnostics::MAX_DIAGNOSTICS`).
 //!
 //! Parsing is TOTAL on purpose — hand-rolled over [`serde_json::Value`]
 //! (no serde-derive dependency for four fields), each field read

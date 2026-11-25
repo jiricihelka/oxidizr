@@ -83,7 +83,7 @@ pub enum ExportError {
 pub struct Composed {
     /// Shapes in paint order (background first).
     pub shapes: Vec<Shape>,
-    /// Document size (px) — feed to [`shapes_to_svg`] unchanged.
+    /// Document size (px) — feed to `shapes_to_svg` unchanged.
     pub size: (f64, f64),
 }
 

@@ -4,12 +4,12 @@
 //! (feature `gui`) only wires button + dialog + the ONE pass — every
 //! decision lives here, tested headlessly (boundary guard).
 //!
-//! - [`graph_for`] reads **ids and sizes only** from the scene — never
+//! - `graph_for` reads **ids and sizes only** from the scene — never
 //!   positions — so a run with the same config is IDEMPOTENT: re-running
 //!   on an already-overridden scene reproduces identical [`Overrides`].
 //! - Boundaries need no override entries: [`crate::scene::build`] recomputes
 //!   them from member unions, so they follow moved items. The
-//!   boundary pad stays [`crate::scene::BOUNDARY_PADDING`] (our chrome
+//!   boundary pad stays `crate::scene::BOUNDARY_PADDING` (our chrome
 //!   constant, not the engine's internal 50 px).
 //! - Engine node placements are box TOP-LEFTS in the scene's frame;
 //!   route points are world-space polylines whose FIRST and LAST points
@@ -117,7 +117,7 @@ pub(crate) fn stored_for(workspace: &Workspace, view_key: &str) -> Option<Automa
     rendered.content()?.automatic_layout
 }
 
-/// Does the RENDERED view (filtered → base, as [`stored_for`] and
+/// Does the RENDERED view (filtered → base, as `stored_for` and
 /// `scene::build` resolve it) carry NO stored coordinates at all? The
 /// loader materializes a missing `location` as the `0`/`0` pair, so
 /// all-zeros means "the file has no layout for this view" — such a view
@@ -252,7 +252,7 @@ pub(crate) fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
 ///
 /// # Errors
 ///
-/// As [`apply_with`].
+/// As `apply_with`.
 pub fn apply(scene: &Scene, layout: &AutomaticLayout) -> Result<Overrides, LayoutError> {
     apply_with(Engine::Layered, scene, layout)
 }

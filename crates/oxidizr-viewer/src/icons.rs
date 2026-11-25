@@ -7,12 +7,12 @@
 //! - `data:` URIs (the DSL embeds `icon <file>` values as data URIs):
 //!   base64 or percent-encoded payloads, sniffed by content;
 //! - bare file paths (JSON workspaces may keep raw paths): read relative
-//!   to the workspace file's directory ([`build_atlas`]'s `base_dir`);
+//!   to the workspace file's directory (`build_atlas`'s `base_dir`);
 //! - `http(s)` URLs — never fetched (the viewer is offline); the caller
-//!   keeps the dashed [`crate::paint::icon_slot`] placeholder and
-//!   surfaces the [`IconError`] as a warning diagnostic;
+//!   keeps the dashed `crate::paint::icon_slot` placeholder and
+//!   surfaces the `IconError` as a warning diagnostic;
 //! - anything that sniffs neither PNG nor SVG →
-//!   [`IconError::Unsupported`].
+//!   `IconError::Unsupported`.
 //!
 //! Rasterization rules:
 //!
@@ -21,16 +21,16 @@
 //!   down-scales oversized cells with a box filter;
 //! - foreign SVGs go usvg → resvg → tiny-skia (tiny-skia dropped the old
 //!   usvg `Renderer`, so resvg is the raster seam) and rasterize fitted
-//!   into an [`ICON_RASTER_PX`] box;
+//!   into an `ICON_RASTER_PX` box;
 //! - SVGs containing text render text-less ON PURPOSE: the raster stack
 //!   carries no font features and no fontdb surface, and the bundled
 //!   themes contain no SVG-with-text icons.
 //!
-//! The whole visible icon set packs into a single [`Atlas`] (RGBA8,
+//! The whole visible icon set packs into a single `Atlas` (RGBA8,
 //! shelf-packed, keyed `icon × size × scheme` — icons are never re-tinted
 //! by scheme today, the key slot is reserved). Entries
-//! that failed rasterization are absent from [`Atlas::entries`] (the
-//! placeholder stands in) and reported once each in [`Atlas::errors`].
+//! that failed rasterization are absent from `Atlas::entries` (the
+//! placeholder stands in) and reported once each in `Atlas::errors`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
@@ -102,7 +102,7 @@ pub(crate) fn rasterize(icon: &str, base_dir: Option<&Path>) -> Result<Raster, I
     }
 }
 
-/// Discriminator of a [`ColorScheme`] inside an [`IconKey`].
+/// Discriminator of a [`ColorScheme`] inside an `IconKey`.
 #[must_use]
 pub const fn scheme_code(scheme: ColorScheme) -> u8 {
     match scheme {

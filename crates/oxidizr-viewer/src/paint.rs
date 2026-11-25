@@ -20,9 +20,9 @@
 //!   box; the official UI’s bold name falls back to the same bundled
 //!   face (: bundled fonts only, no bold variant).
 //! - Element glyphs are polygon approximations of the official UI SVG
-//!   paths (arcs sampled at [`ARC_SEGMENTS`] points); arrowheads are
+//!   paths (arcs sampled at `ARC_SEGMENTS` points); arrowheads are
 //!   filled triangles at the destination end.
-//! - Below [`MIN_TEXT_PX`] text is skipped, and anything outside the
+//! - Below `MIN_TEXT_PX` text is skipped, and anything outside the
 //!   painted screen rect is culled — cheap paints at any zoom.
 
 use std::sync::Arc;

@@ -20,7 +20,7 @@
 //!   (closes); inside a bare token it is an ordinary character (`a"b` is one token).
 //! * End of line with a token open pushes it: an unterminated quoted token silently
 //!   loses its opening `"` and produces no error at this level.
-//! * Whitespace is the ASCII set ` \t\n\x0B\f\r` ([`compat::is_java_whitespace`]);
+//! * Whitespace is the ASCII set ` \t\n\x0B\f\r` (`compat::is_java_whitespace`);
 //!   Unicode divergences are documented there.
 
 use oxidizr_ast::{NodeKind, TextRange, u32_len};

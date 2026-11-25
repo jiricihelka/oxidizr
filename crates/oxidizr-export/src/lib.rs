@@ -3,7 +3,7 @@
 //! not sources.
 //!
 //! The parts: [`indent::IndentingWriter`], the [`diagram`] model
-//! (`Diagram`, `Legend`, the [`DiagramExporter`] shape), the shared property cascade ([`property::export_property`])
+//! (`Diagram`, `Legend`, the [`DiagramExporter`] shape), the shared property cascade (`property::export_property`)
 //! and the `export` command's dispatch + file-naming rules
 //! ([`mod@format`], [`naming`]):
 //!

@@ -314,7 +314,7 @@ pub enum Request {
     },
     /// Derive the system landscape of 1..N workspaces (`generate
     /// system-landscape`): the
-    /// [`crate::generate::system_landscape`] oxidizr — app-layer ONLY, and
+    /// `crate::generate::system_landscape` oxidizr — app-layer ONLY, and
     /// the verification settled that the official tooling adds NO views. The
     /// output is ALWAYS standard JSON (regardless of the `-o` name).
     Generate {

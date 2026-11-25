@@ -9,7 +9,7 @@
 //!   order — the data the shell renders as a key panel.
 //! - [`tags`] inventories the model's stored (custom) tags with hit
 //!   counts — the chip list of the session tag filter.
-//! - [`session_mask`] evaluates the chip selection with
+//! - `session_mask` evaluates the chip selection with
 //!   [`oxidizr_core::filter::eval`] against the view's renderable
 //!   content, producing the [`Included`] mask `scene::build` consumes.
 //!   The selection is SESSION state: the workspace model and any view

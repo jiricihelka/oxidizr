@@ -7,7 +7,7 @@
 //! disagree with what the parser would accept. This module adds only the
 //! wire presentation: the [`DIRECTIVES`] set (statement-level `!` tokens),
 //! a handful of statement snippets, and the UTF-16-aware inverse mapper
-//! ([`position_to_offset`], the mirror of `diagnostics::position`).
+//! (`position_to_offset`, the mirror of `diagnostics::position`).
 //!
 //! Kinds are cosmetic (the editor filters), the SETS are the contract:
 //! keywords → `Keyword`, directives → `Keyword` (label starts with `!`),

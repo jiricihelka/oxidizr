@@ -9,13 +9,13 @@
 //! so watches sit on the PARENT DIRECTORIES (`NonRecursive`) with an
 //! exact-path filter (the `.tmp` siblings our saves churn can never
 //! match). Events are debounced per path-SET: the reload edge fires
-//! once [`DEBOUNCE`] has settled after the LAST event, then exactly
+//! once `DEBOUNCE` has settled after the LAST event, then exactly
 //! once per content change — five rapid writes are 13 raw events
 //! and must still be one reload.
 //!
 //! The driver is headless (no eframe): the shell polls
-//! [`ReloadDriver::poll`] from its own frame loop and hands its repaint
-//! signal to [`ReloadDriver::watch`] so a change wakes a sleeping UI.
+//! `ReloadDriver::poll` from its own frame loop and hands its repaint
+//! signal to `ReloadDriver::watch` so a change wakes a sleeping UI.
 
 use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
