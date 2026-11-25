@@ -6,7 +6,8 @@
 use crate::{commands, key, overview, paint};
 use eframe::egui::{self};
 
-use super::{FilterMode, Viewer, edge_swatch, element_swatch, icon_cell, log_row, snip, truncate};
+use super::widgets::{edge_swatch, element_swatch, icon_cell, log_row, snip, truncate};
+use super::{FilterMode, Viewer};
 
 impl Viewer {
     pub(super) fn status(&mut self, ui: &mut egui::Ui) {

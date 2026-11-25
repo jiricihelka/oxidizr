@@ -8,7 +8,8 @@ use eframe::egui;
 
 use oxidizr_core::views::ColorScheme;
 
-use super::{Drag, NavJump, Viewer, nav_element_rows, view_label, view_row};
+use super::widgets::{NavJump, nav_element_rows, view_label, view_row};
+use super::{Drag, Viewer};
 
 impl Viewer {
     pub(super) fn toolbar(&mut self, ui: &mut egui::Ui) {

@@ -7,7 +7,8 @@ use crate::{commands, hit, overview, paint, scene};
 use eframe::egui::{self, Pos2, Vec2};
 use oxidizr_core::Id as ModelId;
 
-use super::{Drag, Viewer, WaypointHit, lasso_drag, tooltip_text, url_at};
+use super::widgets::{lasso_drag, tooltip_text, url_at};
+use super::{Drag, Viewer, WaypointHit};
 
 impl Viewer {
     #[allow(clippy::too_many_lines)] // the canvas pass: input → fit → paint → tip

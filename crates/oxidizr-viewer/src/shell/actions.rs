@@ -14,7 +14,8 @@ use oxidizr_api::{ApiOptions, Input, Opened};
 use oxidizr_core::Id as ModelId;
 use oxidizr_core::views::{AutomaticLayout, RankDirection, View};
 
-use super::{Viewer, companion_dsl, direction_label, newest_by_mtime, summarize_log};
+use super::widgets::{direction_label, summarize_log};
+use super::{Viewer, companion_dsl, newest_by_mtime};
 
 impl Viewer {
     /// Run one editing command on the current view: apply through the
