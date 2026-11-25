@@ -42,7 +42,7 @@ pub struct ImageImport<'a> {
 /// `name` is the FILE NAME; the extension match is case-insensitive
 /// (name guessing is suffix-based, `.PNG` resolves).
 #[must_use]
-pub fn content_type_of(name: &str) -> Option<&'static str> {
+pub(crate) fn content_type_of(name: &str) -> Option<&'static str> {
     let dot = name.rfind('.')?;
     match name[dot..].to_ascii_lowercase().as_str() {
         ".png" => Some("image/png"),

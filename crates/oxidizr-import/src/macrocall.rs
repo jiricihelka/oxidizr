@@ -15,7 +15,7 @@ use std::collections::HashMap;
 /// comment start inside double-quoted strings, nor on `!`-directive
 /// lines, where preprocessor literals like `'enterprise'` use apostrophes.
 #[must_use]
-pub fn strip_comments(text: &str) -> String {
+pub(crate) fn strip_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0;
@@ -115,7 +115,7 @@ fn text_at(chars: &[char], i: usize, word: &str) -> bool {
 /// quoted strings. `%%{init}%%` config directives vanish with the
 /// comment; `'` and `rem` are NOT comment forms here.
 #[must_use]
-pub fn strip_comments_mermaid(text: &str) -> String {
+pub(crate) fn strip_comments_mermaid(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0;
@@ -160,7 +160,7 @@ pub fn strip_comments_mermaid(text: &str) -> String {
 /// `!if`/`!endif`, and whole `!procedure`/`!function`/`!definelong`/
 /// `!sub` blocks (their bodies never reach the macro classifier).
 #[derive(Default)]
-pub struct Preprocessor {
+pub(crate) struct Preprocessor {
     vars: HashMap<String, String>,
     in_def: bool,
 }
@@ -253,7 +253,7 @@ impl Preprocessor {
 /// Paren balance of a line, quote-aware (`~"` is a literal quote).
 /// Stray `)` never drives the balance below zero.
 #[must_use]
-pub fn paren_balance(line: &str) -> i32 {
+pub(crate) fn paren_balance(line: &str) -> i32 {
     let mut depth = 0_i32;
     let mut quoted = false;
     let mut prev_tilde = false;
@@ -279,7 +279,7 @@ pub fn paren_balance(line: &str) -> i32 {
 /// Joins physical lines into logical lines while a `(` stays open —
 /// `Rel(a, b,\n "uses")` is one call. Joined parts are space-separated.
 #[must_use]
-pub fn join_logical_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+pub(crate) fn join_logical_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut pending = String::new();
     for line in lines {
@@ -305,7 +305,7 @@ pub fn join_logical_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Vec<S
 
 /// One parsed macro call: `Name(pos0, pos1, …, $key = value, …)`.
 #[derive(Debug, Clone)]
-pub struct Call {
+pub(crate) struct Call {
     /// Macro name exactly as spelled (case preserved).
     pub name: String,
     /// Positional arguments, unquoted and trimmed.
@@ -465,7 +465,7 @@ fn split_args(inner: &str) -> (Vec<String>, Vec<(String, String)>) {
 /// Strips a surrounding pair of double quotes (if present) and undoes the
 /// `PlantUML` `~"` literal-quote escape.
 #[must_use]
-pub fn unquote_str(s: &str) -> String {
+pub(crate) fn unquote_str(s: &str) -> String {
     let inner = s.strip_prefix('"').and_then(|x| x.strip_suffix('"'));
     match inner {
         Some(inner) => inner.replace("~\"", "\""),

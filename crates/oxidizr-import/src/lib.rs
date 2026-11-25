@@ -24,9 +24,9 @@ pub mod c4plantuml;
 pub mod decisions;
 pub mod docs;
 pub mod image;
-pub mod macrocall;
+pub(crate) mod macrocall;
 pub mod mermaid;
-pub mod regexlite;
+pub(crate) mod regexlite;
 
 #[cfg(test)]
 pub(crate) mod testutil;
@@ -167,21 +167,21 @@ pub(crate) fn java_canonical(path: &std::path::Path) -> std::path::PathBuf {
 pub const DEFAULT_DOCUMENTATION_IMPORTER: &str =
     "com.structurizr.importer.documentation.DefaultDocumentationImporter";
 /// FQN of the recursive `!docs` documentation importer.
-pub const RECURSIVE_DOCUMENTATION_IMPORTER: &str =
+pub(crate) const RECURSIVE_DOCUMENTATION_IMPORTER: &str =
     "com.structurizr.importer.documentation.RecursiveDefaultDocumentationImporter";
 /// FQN of the default image importer — DSL-reachable through
 /// `!docs`; the eager variant.
-pub const DEFAULT_IMAGE_IMPORTER: &str =
+pub(crate) const DEFAULT_IMAGE_IMPORTER: &str =
     "com.structurizr.importer.documentation.DefaultImageImporter";
 /// FQN of the `AdrTools` decision importer — the `!adrs` default
 /// (`adrtools` token).
 pub const ADRTOLS_DECISION_IMPORTER: &str =
     "com.structurizr.importer.documentation.AdrToolsDecisionImporter";
 /// FQN of the Madr decision importer.
-pub const MADR_DECISION_IMPORTER: &str =
+pub(crate) const MADR_DECISION_IMPORTER: &str =
     "com.structurizr.importer.documentation.MadrDecisionImporter";
 /// FQN of the Log4brains decision importer.
-pub const LOG4BRAINS_DECISION_IMPORTER: &str =
+pub(crate) const LOG4BRAINS_DECISION_IMPORTER: &str =
     "com.structurizr.importer.documentation.Log4brainsDecisionImporter";
 
 /// One of the six built-in importer classes the official tooling loads

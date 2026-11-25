@@ -43,7 +43,7 @@ pub fn repo_root() -> PathBuf {
 /// The corpus root (`e2e/corpus` outside `testdata/` by P1T-D2: authored,
 /// blessable fixtures must not touch the vendored byte-contract).
 #[must_use]
-pub fn corpus_root() -> PathBuf {
+pub(crate) fn corpus_root() -> PathBuf {
     repo_root().join("e2e").join("corpus")
 }
 

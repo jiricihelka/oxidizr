@@ -28,7 +28,7 @@ use std::fmt;
 
 /// Pattern syntax the subset does not carry.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyntaxError(pub String);
+pub(crate) struct SyntaxError(pub String);
 
 impl fmt::Display for SyntaxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -110,7 +110,7 @@ impl Class {
 
 /// A compiled pattern.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Regex {
+pub(crate) struct Regex {
     root: Node,
     groups: usize,
 }
@@ -119,7 +119,7 @@ pub struct Regex {
 /// groups (index `0` is the whole match; groups in untaken branches are
 /// `None`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Found {
+pub(crate) struct Found {
     /// Start (byte offset, inclusive).
     pub start: usize,
     /// End (byte offset, exclusive).

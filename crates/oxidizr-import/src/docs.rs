@@ -50,7 +50,7 @@ pub enum DocsKind {
 /// `FormatFinder.isMarkdownOrAsciiDoc` — extension from the LAST dot,
 /// case-sensitive, membership in either set.
 #[must_use]
-pub fn is_markdown_or_asciidoc(name: &str) -> bool {
+pub(crate) fn is_markdown_or_asciidoc(name: &str) -> bool {
     let Some(dot) = name.rfind('.') else {
         return false;
     };
@@ -68,7 +68,7 @@ fn asciidoc_ext(ext: &str) -> bool {
 /// `FormatFinder.findFormat` — Markdown/AsciiDoc by extension, anything
 /// else “just assume Markdown”.
 #[must_use]
-pub fn find_format(name: &str) -> Format {
+pub(crate) fn find_format(name: &str) -> Format {
     let ext = match name.rfind('.') {
         Some(dot) => &name[dot..],
         None => "",

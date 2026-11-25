@@ -66,7 +66,7 @@ impl Entry {
 /// # Errors
 ///
 /// Directory read failures, or an entry directory without any input file.
-pub fn discover_in(root: &Path) -> Result<Vec<Entry>, String> {
+pub(crate) fn discover_in(root: &Path) -> Result<Vec<Entry>, String> {
     let mut out = Vec::new();
     for kind in [Kind::Valid, Kind::Invalid, Kind::Mutated] {
         let dir = root.join(kind.dir_name());
