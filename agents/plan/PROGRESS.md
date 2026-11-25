@@ -38,6 +38,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P4R | idiomatic-Rust refactor pass (R0–R5, interlude) | **COMPLETE 2026-11-22** — API churn allowed (bytes/CLI/OXZ frozen): R0 inventory (allow audit 157 sites ALL justified; `cargo doc` 43 warnings → **0** = per-wave drift detector; bench baseline `4T`); R1 viewops default-view leg split + dsl `needless_pass_by_value` ×2 (allows GONE); R2 typed `ImportFormat` + `sniff` into `oxidizr-import` + `regexlite`/`pathfilter` KEEP-SPLIT (§P4R-D5); R3 flagship: report domain typed `format: DiffFormat`/`InspectFormat` + `ApiOptions` → nested `parse: ParseFlags` (`struct_excessive_bools` allow GONE) + KEEP rows (export open-set `String`-format, inspect `<Type>` consts = Java provenance); R4 viewer shell 8 bools → `Toggles`+`Latches` (allow GONE) + `to_request`/report-plumbing/cli-flags KEEP rows; R5 pub-use graph audit + churn list FROZEN (3 CHANGELOG-ready lines, E-5 folds). Net: 5 allows GONE (106→101), 3 public-API churn lines staged. Every wave: quartet + full tier 8/8 + bless 307×unchanged + doc-zero; hot-path waves `bench cmp 4T` ALL 1.00. Close: `oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme + `export-verify` 31/31 × 3 (`TZ=UTC`); `oracle landscape` skipped with reason (generate/oracle paths untouched since P4T, proven by diff). **No tag** (1T/2T/2R precedent). Commits R0 `9b31f97` → R5 (this). Log below (`build/PHASE_4R.md`) |
 | P4D | documentation reset — short, human-first (D-1…D-8, interlude) | **COMPLETE 2026-11-23** — every human-facing prose rewritten: 302 `§P`-refs + reference-implementation narration stripped from rustdoc/help/messages/`docs/*.md`/UI strings (provenance single-homed in `agents/plan/` + git); README program (root ≤ 120 lines + `docs/README.md` + 14 crate READMEs ≤ 20); message pass (7 deferred-import texts → "is not supported yet" — assertions same-commit); `cargo xtask refs` gained a self-gating **hygiene leg** (process ids + narration patterns, std-only, string-literal fixture keys exempt). **Bless never moved** (307×unchanged every close — no golden embeds human text, V2). Close: quartet + full tier 8/8 + Category B (`oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme, `export-verify` 31/31 × 3 `TZ=UTC`; landscape skipped with reason — no oracle-path diff) + close review (compat promise stands in README + `--help`; 5 residual help artifacts fixed). **No tag** (interlude precedent). Commits D-1 `6f8fd6d` → D-8 (this). Log below (`build/PHASE_4D.md`) |
 | P4 | §P4-M5 release endgame (E-1…E-5) | **COMPLETE 2026-11-23** — `oxidizr oracle gen\|verify` user command (shared engine in the cli lib, xtask delegates — dev shim); semantic comparators for the PlantUML + Mermaid dialects (`export-verify --format plantuml\|mermaid`, Category B 31/31 × 2 legs witnessed `TZ=UTC`); `Layered` polish (ranks proven already-tight by test, channel-lane pass `spread_channels` — zero colliding channels at 1k scale; boundary refinement deferred as an additional-feature candidate); cargo-dist release wiring (v1 `dist-workspace.toml` — the Cargo.toml form panics with installers configured, pitfall note; three release apps × 5 targets, shell/PS1 installers, pure generated `release.yml` + companion `release-smoke.yml`); **E-5**: workspace version `0.1.0` → `0.4.0` (14 pins + lockfile — `--version` goldens derived from `CARGO_PKG_VERSION`, bump moved none), `CHANGELOG.md` created (v0.1.0–v0.3.0 reconstructed + the 3 frozen Rust-API churn lines verbatim), `docs/RELEASING.md` (tag → CI → smoke → register; crates.io publishing SKIPPED for v0.4.0 per user decision), README verified current. Close ritual: quartet + full e2e tier + bless **307×unchanged** + `testdata/` clean; Category B skipped with reason (diff = versions/docs/packaging, no generator/parser change since the P4D close where the oracle evidence is green). **Phase 4 complete — tagged v0.4.0 (LOCAL; push/publish never executed, stays the user's call).** Commits M5a `696e849` → M5e `3c34a08` → M5f (this, post-close Windows-assertion fix). Log below (`build/PHASE_4.md`) |
+| P5R | large-scale idiomatic-Rust refactor → v0.5.0 (R0…R7 + close) | **COMPLETE 2026-11-26** — the refactor phase closed with the release: ten giant modules decomposed (R2 `68e8ef9`…`21118a7` 21 commits, R3 `0f3fae0`…`1788247` 15 — plantuml engine 2186→813, shell 2980→803); error taxonomy vs the message-provenance registry (R1 `0127166` `0851ff0`); typed-id conversions measured ZERO (R4 `c510fc3`); visibility 189 net demotes, 5 real removals (R5 `b586953`…`1df9cd2`); bench-guided allocation removal, critcmp-evidenced (R6 `92a212f` `efa9494` — json write corpus 2.0→1.09 ms, dsl `${}` substitution in place, parse legs ~5 % faster; empty clusters recorded with negative evidence); topology KEEP by re-measured DAG + idiom/NIGHTLY/churn audits (R7 `649abce`). Bytes frozen end-to-end (bless 307×unchanged NO-OP every wave), dist surface intact (3 packages × 5 targets). The windows leg found and fixed two REAL bugs (`a48b306`: fmt swallowed content after a continuation-joined backslash comment — proptest-proven cross-platform; `!docs` trim hardcoded `/` where the tooling is `File.separator`-aware). Close: full gate chain + Category B (oracle 4 json + 4 sidecar + 99 diagram + 6 theme, export-verify 31/31 ×3 TZ=UTC) green on the final tree; **tag `v0.5.0` (LOCAL; push/publish never executed, stays the user's call)**. Commits R0 `75ce39d` → close (this). Log below (`build/PHASE_5R.md`) |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -159,6 +160,49 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P5R — large-scale idiomatic-Rust refactor, closing with v0.5.0 ✅ (2026-11-26, COMPLETE)
+
+The refactor phase (charter, waves and per-wave evidence in
+`build/PHASE_5R.md`), one green sub-piece per commit; product bytes frozen
+throughout (bless 307×unchanged NO-OP at every wave close — success output,
+CLI grammar, exit classes and OXZ codes exactly as shipped in v0.4.0):
+
+- **R0** `75ce39d` `eb09b52` — MSRV floor 1.88 + stabilized-idiom adoption
+  (let-chains et al., the expected clippy wave fixed same-commit); inventory,
+  bench baseline `5R`, message-provenance registry, release churn convention.
+- **R1** `0127166` `0851ff0` — error taxonomy: 4 provenance leaks reworded
+  (registry-gated, class tests added); `PathFilter::compile` → `PatternError`.
+- **R2** `68e8ef9`…`21118a7` (21) — giant-file decomposition A:
+  `builder`→7 modules, `viewops`→5, dsl `engine/mod` 2332→1618,
+  `stmt_views`→7.
+- **R3** `0f3fae0`…`1788247` (15) — decomposition B: plantuml engine
+  2186→813, `structurizr` 1967→1221, `layered` 1736→651, `scene` 2068→1533,
+  `shell` 2980→803 (all VERBATIM moves, roots stable).
+- **R4** `c510fc3` — typed ids: zero real conversions (48 grep-hits = 35
+  fixtures + 13 text/serde/composite seams; layout already `NodeId`/`EdgeId`).
+- **R5** `b586953`…`1df9cd2` (8) — visibility minimization: 189 net
+  pub→pub(crate) demotes (viewer 159→58, export 80→39), 5 real removals
+  recorded as CHANGELOG churn; module-privacy correction (demotes inside
+  private submodules are no-ops).
+- **R6** `92a212f` `efa9494` — allocations, bench-guided, critcmp-evidenced
+  same-session: json writer emit-loop trims (write corpus 2.0→1.09 ms,
+  1.84→1.00), dsl `${}` substitution IN PLACE (529→502 µs parse leg);
+  inventory clusters measured EMPTY with negative evidence recorded.
+- **R7** `649abce` — close review: topology **KEEP** (cargo-metadata
+  re-measure = the recorded DAG, `inspect`'s dsl edge is dev); stabilized-idiom
+  sweep EMPTY; NIGHTLY audit CLEAN; churn list = the 5 lines.
+- **Close** — bump 0.4.0→0.5.0 (+ lock, `--version` surfaces green),
+  CHANGELOG `## [0.5.0]` cut, README verified vs `--help`; the windows leg
+  exposed two REAL bugs fixed in `a48b306` (fmt swallowed content after a
+  continuation-joined backslash comment — proptest regression replay proved
+  it platform-independent; `!docs` filename trim hardcoded `/` where the
+  tooling checks `File.separator` — Linux bytes unchanged, bless-proved);
+  final-tree gates green incl. `cargo xtask ci windows` and Category B
+  (`oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme,
+  `export-verify` 31/31 × plantuml/c4/mermaid, TZ=UTC).
+  **Phase 5R complete — tagged v0.5.0 (LOCAL; push/publish never executed,
+  stays the user's call).** Commits R0 `75ce39d` → close (this).
 
 ### P4-M5 — release endgame: oracle command, dialect comparators, layout polish, release packaging, v0.4.0 ✅ (2026-11-23, COMPLETE)
 

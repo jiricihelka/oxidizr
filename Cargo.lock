@@ -2997,7 +2997,7 @@ checksum = "13c45bb4a6ae1280ec0803b1ef9d3455eb50f01efbbe1447ab020f1d54fba9d8"
 
 [[package]]
 name = "oxidizr-api"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "expect-test",
  "oxidizr-core",
@@ -3012,11 +3012,11 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-ast"
-version = "0.4.0"
+version = "0.5.0"
 
 [[package]]
 name = "oxidizr-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3033,18 +3033,18 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "oxidizr-diag"
-version = "0.4.0"
+version = "0.5.0"
 
 [[package]]
 name = "oxidizr-dsl"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "criterion",
  "expect-test",
@@ -3058,7 +3058,7 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-e2e"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "criterion",
  "oxidizr-api",
@@ -3071,7 +3071,7 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-export"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "oxidizr-core",
  "oxidizr-json",
@@ -3081,7 +3081,7 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-import"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64",
  "expect-test",
@@ -3091,7 +3091,7 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-inspect"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "expect-test",
  "oxidizr-core",
@@ -3102,7 +3102,7 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-json"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "criterion",
@@ -3114,14 +3114,14 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-layout"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "criterion",
 ]
 
 [[package]]
 name = "oxidizr-lsp"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "expect-test",
@@ -3138,7 +3138,7 @@ dependencies = [
 
 [[package]]
 name = "oxidizr-viewer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "ab_glyph",
  "base64",
@@ -5404,7 +5404,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "oxidizr-api",

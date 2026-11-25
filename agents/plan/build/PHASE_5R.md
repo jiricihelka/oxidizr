@@ -1,6 +1,8 @@
 # PHASE_5R.md — detailed plan: large-scale idiomatic-Rust refactor, closing with the v0.5.0 release
 
-**Status: OPEN 2026-11-25** (wave table below carries per-wave evidence rows).
+**Status: CLOSED 2026-11-26** — annotated tag `v0.5.0` (LOCAL; push/publish
+never executed, stays the user's call). Wave table below carries per-wave
+evidence rows; the Close row carries the release ritual.
 Position: after Phase 4 / v0.4.0 (the first phase run on a *released* tree —
 the byte contract is now defended by a published baseline, not just goldens).
 Unlike P2R/P4R this is a full phase (R0…R7 waves), and it **closes with a
@@ -125,25 +127,38 @@ reopen it).
 | **R5** | Visibility minimization — **DONE 2026-11-25**: 8 commits (`b586953`…`1df9cd2`): audit = inverted token index over every workspace `.rs` (bin targets + integration tests counted EXTERNAL), per-NAME `pub use` rebuilds, compiler/clippy as final judge. Net **189 `pub`→`pub(crate)` demotes**; density before→after: viewer 159→58, export 80→39, dsl 186→169, core 131→125, api 52→51. REAL REMOVALS (CHANGELOG churn lines): core `ids::ElementId`/`RelationshipId` + `DEFAULT_WORKSPACE_NAME`/`DESCRIPTION`; export `diagram::WorkspaceExporter` trait (never implemented); viewer `Overview::bounds`/`map` (zero callers); dsl `engine::JsonWorkspaceLoader` crate-only. KEEP-family evidence: the signature-leak blind spot per batch (types reached through pub signatures/inference — ast `LosslessnessError`, `StdinReader`, `FileId`/`CodeRange`, `IdChange`, layout `NodePlacement`/`EdgePlacement`/`Anchor`, `ParseThresholdError`, core `ValidationError`/`ElementMut`, cli clap-derive enum family (rides pub `Command` fields), e2e manifest report family, export `ExportedFile`/`IndentingWriter`/`IndentType`, viewer scene/hit/icons plumbing 10 types, dsl `CursorScope`/`Logical`/`Segment`/`LexedLine`); **module-privacy correction (R5g): demotes inside PRIVATE submodules are no-ops** — 93 tok.rs consts + idents/ctx/uuid/tokenize/tokens reverted, audit DEMOTE rows there reclassified KEEP (the `pub` keyword was already capped by `mod` privacy). Test-only members on demoted types → `#[cfg(test)] pub(crate)` + justification (lib-target dead_code is not silenced by unit tests). Viewer headless core: one crate-level `#![cfg_attr(not(feature = "gui"), allow(dead_code))]` (the gui shell is its only non-test consumer). R5h: 48 intra-doc links de-linked (rustdoc private-item warnings) restoring doc-zero. Wave end: quartet green every commit (gui leg on viewer/cli/dsl), full tier 8 suites 0 FAILED, bless 307×unchanged NO-OP, doc-zero, `bench cmp 5R` all ≤1.06 (majority faster than the `5R` baseline — visibility shrink is codegen-neutral to-positive) | `b586953`…`1df9cd2` |
 | **R6** | Allocation-removal pass, bench-guided — **DONE 2026-11-26**: 2 commits (`92a212f` R6a, `efa9494` R6b), every claim critcmp-evidenced in the same session (baseline `5R` untouched — no `bench save` mid-phase). **R6a** json writer: `Json::Num` renders via `write!` into the byte buffer, `pad` resizes straight to spaces, `escape_into` walks bytes (non-ASCII copies verbatim = same bytes as the char-wise re-encode) — `m7_json_write_corpus` 2.0→1.09 ms (1.84→1.00), `e2e_json2json_all` 6.7→5.8 ms. **R6b** dsl engine: `${}` substitution runs IN PLACE on the tokenizer's own Strings (`substitute_in`; tokens without `${` never copied; `substitute_strings` kept as the cold wrapper) — `m7_dsl_parse_test.dsl` 529→502 µs, `e2e_dsl2json_all` 10.0→9.1 ms, no public churn (private `engine` submodules, no CHANGELOG line). **Inventory clusters measured EMPTY** (negative evidence, no change attempted — charter: measured or absent): export-path `to_string()`s are output-OWNED (`Diagram`/`ModelItem` own their strings), `Ctx`/`Id` clones are `Arc<str>` refcount bumps (no string allocation), no collect-then-clone ladders exist in hot paths. Wave end: quartet+gui green, full tier 8 suites 0 FAILED, bless 307×unchanged NO-OP, doc-zero, `bench cmp 5R` **every leg ≤ 1.01** — json writer, dsl parse, json read, validate, reconcile and layered legs all FASTER than the R0 baseline | `92a212f` `efa9494` |
 | **R7** | Topology verdict + close review — **DONE 2026-11-26** (measurements taken this session, recorded here; zero code changes by verdict). **Topology: KEEP, zero crate changes** — graph re-measured via `cargo metadata` (normal deps): leaves `ast`/`core`/`diag`/`layout`; `json`/`import`→core; `dsl`→ast,core,diag,import (real); `inspect`→core (its dsl dep is DEV — corpus fixtures, matching the §Inventory dev bookkeeping, NOT a topology change); `export`→core,json; `api`→all feature crates; `viewer`→api,core,diag,json,layout; `cli`→api..viewer; `lsp`→api..json; clean topological order, **no cycles = the recorded DAG holds** (§Inventory SHOW). **Stabilized-idiom sweep: EMPTY** — `map_or(false` 0 hits, `unwrap_or_else(Default::default)` 0, the 14 remaining `if let`+`if` line-adjacencies are NON-collapsible shapes (`clippy::collapsible_if` runs under `-D warnings` on every gate incl. tests), nursery `redundant_clone` active with 0 findings and 0 suppressions. **NIGHTLY audit: CLEAN** — zero `#![feature]` usages in code; `rust-toolchain.toml` pin `nightly-2026-11-13` == the NIGHTLY.md register row; both rows current (lint ratchet + MSRV-1.88 floor). **Churn-list review**: `CHANGELOG.md [Unreleased]` carries exactly the 5 real-churn lines (R1 error-reason text + R5's four removals); R2–R4/R6 additions were internal-only by the RELEASING.md convention — nothing to add, wording re-checked at the v0.5.0 cut | this commit |
-| **Close** | v0.5.0 release ritual per `docs/RELEASING.md`: bump `0.4.0`→`0.5.0` (+ lock), cut `[Unreleased]` → `## [0.5.0] - date`, docs pass, gates: quartet + full tier + bless no-op + **windows leg** + **Category B (mandatory)** + `dist plan`; PROGRESS board/log + PHASE_5R close stamps + RESUME; LOCAL annotated tag `v0.5.0`. **Never push** | |
+| **Close** | v0.5.0 release ritual per `docs/RELEASING.md`: bump `0.4.0`→`0.5.0` (+ lock), cut `[Unreleased]` → `## [0.5.0] - date`, docs pass, gates: quartet + full tier + bless no-op + **windows leg** + **Category B (mandatory)** + `dist plan`; PROGRESS board/log + PHASE_5R close stamps + RESUME; LOCAL annotated tag `v0.5.0`. **Never push** — **DONE 2026-11-26**: bump = workspace version + 13 path-dep pins + lock (21 members at `0.5.0`); `--version` surfaces green (lsp version test, cli `version_and_help_exit_0`); CHANGELOG cut `## [0.5.0] - 2026-11-26` (phase summary, perf Changed entry, **3 Fixed lines** — the two Wine-exposed bugs `a48b306` plus the R1 message pass — and the 5 churn lines) + fresh `[Unreleased]` stub; README command table verified against live `--help` (all 15 + `view`). Gates on the FINAL tree: quartet+gui green, lint green, full tier 8 ok/0 FAILED, bless **307×unchanged NO-OP**, doc-zero 0, `dist plan` **EXIT 0** (3 packages × 5 targets), **`cargo xtask ci windows` green (EXIT 0)** — the sweep first exposed two REAL bugs, fixed in `a48b306` (fmt swallowed content after a continuation-joined backslash comment; `!docs` trim hardcoded `/` where the Java is `File.separator`-aware — Linux bytes unchanged, bless-proved); **Category B: oracle verify 4 json + 4 sidecar + 99 diagram + 6 theme match (EXIT 0), export-verify 31/31 × plantuml/c4/mermaid (TZ=UTC, EXIT 0 each)**. Annotated tag `v0.5.0` LOCAL on this commit | `a48b306` + this |
 
 ## P5R-D4 Verification list
 
 - **P5R-V1** — message-provenance registry `agents/plan/ERROR-MESSAGES.md`
   exists (R0) and every message a wave rewords maps to an
   `OXIDIZR-COINED` row; REFERENCE-PORTED/`VERBATIM`/catalog-golden rows
-  untouched. — OPEN
+  untouched. — MET at R1 (`0127166`): the 4 reworded texts are registry
+  OXIDIZR-COINED rows; the VERBATIM families were not touched.
 - **P5R-V2** — bless NO-OP at every wave end (307×unchanged; success bytes
-  untouched). — OPEN
+  untouched). — MET: 307×unchanged + empty `testdata/` porcelain at every
+  wave close (R0…R6) and the release close.
 - **P5R-V3** — `5R` baseline committed at R0; every hot wave carries
-  `bench cmp 5R`; swings > ~10 % reviewed in the wave row. — OPEN
+  `bench cmp 5R`; swings > ~10 % reviewed in the wave row. — MET: R1/R3/R5
+  recorded per row; R6 ran the full table (every leg ≤ 1.01, wave targets
+  1.84→1.00 and ~1.05 faster reviewed in-row).
 - **P5R-V4** — dist release surface unchanged through the phase:
-  `dist plan` clean at R0/R6/close; three package names + 5 targets intact. — OPEN
-- **P5R-V5** — windows leg green at close (+ any fs-touching wave). — OPEN
+  `dist plan` clean at R0/R6/close; three package names + 5 targets intact.
+  — MET: EXIT 0 at the R6 checkpoint and the close; matrix unchanged.
+- **P5R-V5** — windows leg green at close (+ any fs-touching wave). — MET:
+  `cargo xtask ci windows` green at close; the pre-close sweep exposed two
+  real bugs (fmt continuation-comment swallow; `File.separator` trim) and a
+  canonicalize-vs-lexical expectation class — all fixed in `a48b306`,
+  pitfall note extended.
 - **P5R-V6** — `cargo doc --workspace --no-deps` stays 0 warnings; refs gate
-  green at every commit (P4R-V2 carry-over). — OPEN
+  green at every commit (P4R-V2 carry-over). — MET: 0 at every wave end and
+  the close (R5h repaired 48 links mid-wave); refs green at every commit —
+  the close-window `a48b306` run even caught its own comment as reference
+  narration, reworded before the commit.
 - **P5R-V7** — `rust-version`/NIGHTLY.md/README claims truthful after the
-  idiom adoption (no false stable-compat claim). — OPEN
+  idiom adoption (no false stable-compat claim). — MET at the R7 audit:
+  floor 1.88, register current, zero `#![feature]` usages.
 
 ## Risks
 

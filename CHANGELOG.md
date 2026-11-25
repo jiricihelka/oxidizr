@@ -14,14 +14,35 @@ Rust-API churn lands here as it happens (each breaking-ish change gets its
 line in the same commit); the section is cut into the next version at its
 release.
 
+## [0.5.0] - 2026-11-26
+
+Phase 5R — the large-scale idiomatic-Rust refactor: the ten giant modules
+decomposed, the error taxonomy tidied against the reference-provenance
+registry, the public surface shrunk to what consumers actually reach, and
+two benchmark-guided allocation passes. The product contract held
+throughout: the CLI grammar, success-output bytes (bless 307×unchanged at
+every wave close) and diagnostic codes are exactly as shipped in v0.4.0.
+
 ### Fixed
 
 - Two user-visible messages dropped their citations of internal planning
   documents: the un-implemented export format text (`OXZ-5007`) and the
   oracle "binary not found" text.
+- `fmt` no longer drops everything after a continuation-joined comment
+  whose last line ends in a backslash: the trailing-whitespace trim used
+  to expose the backslash, and the re-parse read it as a continuation that
+  swallowed the following lines (found by the formatter's property tests).
+- `!docs` imports on Windows targets: imported section filenames no longer
+  keep a leading path separator — the base-path trim follows the platform
+  separator, as the tooling's does (Linux output unchanged).
 
 ### Changed
 
+- Allocation-light hot loops, measured with the committed bench set against
+  the phase baseline: the JSON writer renders numbers, indentation and
+  string escapes straight into the output buffer (write corpus 2.0 ms →
+  1.1 ms), and the DSL parser substitutes `${}` in place on the tokenizer's
+  own tokens (parse legs up to ~5 % faster). Output bytes identical.
 - Rust API (the large-scale idiomatic-Rust refactor; the CLI grammar,
   output bytes and diagnostic codes are unchanged):
   - oxidizr-api: `generate::pathfilter::PathFilter::compile` now fails with
