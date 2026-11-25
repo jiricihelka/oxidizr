@@ -47,6 +47,22 @@ mod tests {
     #[test]
     fn lib_core_never_references_the_gui_shell() {
         const SHELL_FILES: [&str; 2] = ["main.rs", "shell.rs"];
+        // Recursive: directory modules (scene/) must be guarded file by
+        // file, not skipped — every lib-core source carries the boundary.
+        fn collect(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).expect("src readable") {
+                let path = entry.expect("dir entry").path();
+                if path.is_dir() {
+                    collect(&path, out);
+                } else if path.extension().is_some_and(|x| x == "rs")
+                    && !path
+                        .file_name()
+                        .is_some_and(|n| SHELL_FILES.iter().any(|shell| n == *shell))
+                {
+                    out.push(path);
+                }
+            }
+        }
         // Built at runtime: the literals themselves must not appear in this
         // file, or the guard would flag its own source.
         let (e, g) = ("eframe", "egui");
@@ -57,18 +73,10 @@ mod tests {
             format!("{g}::"),
         ];
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let entries = std::fs::read_dir(&src).expect("src readable");
-        let mut checked = 0_usize;
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.extension().is_none_or(|e| e != "rs")
-                || path
-                    .file_name()
-                    .is_some_and(|n| SHELL_FILES.iter().any(|shell| n == *shell))
-            {
-                continue;
-            }
-            let text = std::fs::read_to_string(&path).expect("source readable");
+        let mut files = Vec::new();
+        collect(&src, &mut files);
+        for path in &files {
+            let text = std::fs::read_to_string(path).expect("source readable");
             for token in &forbidden {
                 assert!(
                     !text.contains(token.as_str()),
@@ -76,8 +84,11 @@ mod tests {
                     path.display()
                 );
             }
-            checked += 1;
         }
-        assert_eq!(checked, 12, "lib core = lib.rs + eleven modules");
+        assert_eq!(
+            files.len(),
+            13,
+            "lib core = lib.rs + ten module files + the scene tree (mod.rs + resolve.rs)"
+        );
     }
 }
