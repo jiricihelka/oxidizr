@@ -361,6 +361,21 @@ fn hyperlink_first_system(source: &Workspace, out: &mut Workspace, warnings: &mu
 /// lookaround, `\p{…}`, inline flags — are an OXZ-5010 diagnostic, never
 /// a silent widening or narrowing of the user's pattern.
 pub mod pathfilter {
+    /// The reason a pattern sits outside [`PathFilter`]'s supported subset.
+    /// Transparent by design: [`Display`](std::fmt::Display) IS the human
+    /// reason the caller decorates into an OXZ-5010 diagnostic, so the text
+    /// is user-visible output and stays byte-stable.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct PatternError(String);
+
+    impl std::fmt::Display for PatternError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+
+    impl std::error::Error for PatternError {}
+
     /// A compiled pattern; [`PathFilter::is_match`] is the full match.
     #[derive(Debug, Clone)]
     pub struct PathFilter(Node);
@@ -371,11 +386,11 @@ pub mod pathfilter {
         ///
         /// # Errors
         ///
-        /// Returns the human reason when `pattern` uses a construct
+        /// Returns [`PatternError`] when `pattern` uses a construct
         /// outside the documented subset (`{m,n}` quantifiers,
         /// lookaround, `\p{…}`, named groups, inline flags, dangling
         /// meta characters, unbalanced groups/classes).
-        pub fn compile(pattern: &str) -> Result<PathFilter, String> {
+        pub fn compile(pattern: &str) -> Result<PathFilter, PatternError> {
             let mut parser = Parser {
                 chars: pattern.chars().collect(),
                 pos: 0,
@@ -383,7 +398,10 @@ pub mod pathfilter {
             };
             let node = parser.parse_alt()?;
             if parser.pos != parser.chars.len() {
-                return Err(format!("unexpected `{}`", parser.chars[parser.pos]));
+                return Err(PatternError(format!(
+                    "unexpected `{}`",
+                    parser.chars[parser.pos]
+                )));
             }
             Ok(PathFilter(node))
         }
@@ -503,7 +521,7 @@ pub mod pathfilter {
             self.chars.get(self.pos).copied()
         }
 
-        fn parse_alt(&mut self) -> Result<Node, String> {
+        fn parse_alt(&mut self) -> Result<Node, PatternError> {
             let mut branches = vec![self.parse_concat()?];
             while self.peek() == Some('|') {
                 self.pos += 1;
@@ -516,7 +534,7 @@ pub mod pathfilter {
             })
         }
 
-        fn parse_concat(&mut self) -> Result<Node, String> {
+        fn parse_concat(&mut self) -> Result<Node, PatternError> {
             let mut parts = Vec::new();
             while !matches!(self.peek(), None | Some('|' | ')')) {
                 parts.push(self.parse_repeat()?);
@@ -528,7 +546,7 @@ pub mod pathfilter {
             })
         }
 
-        fn parse_repeat(&mut self) -> Result<Node, String> {
+        fn parse_repeat(&mut self) -> Result<Node, PatternError> {
             let mut node = self.parse_atom()?;
             if let Some(c) = self.peek() {
                 if matches!(c, '*' | '+' | '?') {
@@ -541,7 +559,10 @@ pub mod pathfilter {
                         self.pos += 1;
                     }
                     if matches!(self.peek(), Some('*' | '+' | '?')) {
-                        return Err(format!("dangling quantifier `{}`", self.chars[self.pos]));
+                        return Err(PatternError(format!(
+                            "dangling quantifier `{}`",
+                            self.chars[self.pos]
+                        )));
                     }
                     node = Node::Repeat {
                         sub: Box::new(node),
@@ -549,38 +570,39 @@ pub mod pathfilter {
                         infinite: c != '?',
                     };
                 } else if c == '{' {
-                    return Err(
-                        "unsupported construct `{` (`{m,n}` quantifiers are not supported)".into(),
-                    );
+                    return Err(PatternError(
+                        "unsupported construct `{` (`{m,n}` quantifiers are not supported)"
+                            .to_string(),
+                    ));
                 }
             }
             Ok(node)
         }
 
-        fn parse_atom(&mut self) -> Result<Node, String> {
+        fn parse_atom(&mut self) -> Result<Node, PatternError> {
             let Some(c) = self.peek() else {
-                return Err("unexpected end of pattern".into());
+                return Err(PatternError("unexpected end of pattern".to_string()));
             };
             self.pos += 1;
             match c {
                 '(' => {
                     self.depth += 1;
                     if self.depth > MAX_DEPTH {
-                        return Err("pattern nested too deeply".into());
+                        return Err(PatternError("pattern nested too deeply".to_string()));
                     }
                     if self.peek() == Some('?') {
                         // Only the non-capturing form is accepted: capture
                         // groups have no semantic use under `matches`.
                         if self.chars.get(self.pos + 1) != Some(&':') {
-                            return Err(
-                                "unsupported group `(?…` (only `(?:…)` is supported)".into()
-                            );
+                            return Err(PatternError(
+                                "unsupported group `(?…` (only `(?:…)` is supported)".to_string(),
+                            ));
                         }
                         self.pos += 2;
                     }
                     let inner = self.parse_alt()?;
                     if self.peek() != Some(')') {
-                        return Err("missing `)`".into());
+                        return Err(PatternError("missing `)`".to_string()));
                     }
                     self.pos += 1;
                     self.depth -= 1;
@@ -590,17 +612,17 @@ pub mod pathfilter {
                 '.' => Ok(Node::AnyChar),
                 '^' => Ok(Node::Start),
                 '$' => Ok(Node::End),
-                '|' | ')' => Err(format!("dangling meta character `{c}`")),
-                '*' | '+' | '?' => Err(format!("dangling quantifier `{c}`")),
-                '}' => Err(format!("unsupported construct `{c}`")),
+                '|' | ')' => Err(PatternError(format!("dangling meta character `{c}`"))),
+                '*' | '+' | '?' => Err(PatternError(format!("dangling quantifier `{c}`"))),
+                '}' => Err(PatternError(format!("unsupported construct `{c}`"))),
                 '\\' => self.parse_escape(),
                 c => Ok(Node::Char(c)),
             }
         }
 
-        fn parse_escape(&mut self) -> Result<Node, String> {
+        fn parse_escape(&mut self) -> Result<Node, PatternError> {
             let Some(c) = self.peek() else {
-                return Err("trailing `\\`".into());
+                return Err(PatternError("trailing `\\`".to_string()));
             };
             self.pos += 1;
             if let Some(ranges) = shorthand(c) {
@@ -610,7 +632,7 @@ pub mod pathfilter {
                 });
             }
             if c.is_alphabetic() {
-                return Err(format!("unsupported escape `\\{c}`"));
+                return Err(PatternError(format!("unsupported escape `\\{c}`")));
             }
             Ok(Node::Char(c))
         }
@@ -619,7 +641,7 @@ pub mod pathfilter {
         /// `[d]` is the literal letter, matching the official tooling), ranges,
         /// and `^` negation. A leading `]` is a literal (like the
         /// the official tooling).
-        fn parse_class(&mut self) -> Result<Node, String> {
+        fn parse_class(&mut self) -> Result<Node, PatternError> {
             let negated = self.peek() == Some('^');
             if negated {
                 self.pos += 1;
@@ -628,7 +650,7 @@ pub mod pathfilter {
             let mut first = true;
             loop {
                 let Some(c) = self.peek() else {
-                    return Err("missing `]`".into());
+                    return Err(PatternError("missing `]`".to_string()));
                 };
                 self.pos += 1;
                 if c == ']' && !first {
@@ -637,15 +659,15 @@ pub mod pathfilter {
                 first = false;
                 // An escaped shorthand (`\d` etc.) expands; anything else
                 // resolves to one literal character.
-                let literal = |c: char| -> Result<char, String> {
+                let literal = |c: char| -> Result<char, PatternError> {
                     if c.is_alphabetic() {
-                        return Err(format!("unsupported escape `\\{c}`"));
+                        return Err(PatternError(format!("unsupported escape `\\{c}`")));
                     }
                     Ok(c)
                 };
                 let start = if c == '\\' {
                     let Some(e) = self.peek() else {
-                        return Err("trailing `\\`".into());
+                        return Err(PatternError("trailing `\\`".to_string()));
                     };
                     self.pos += 1;
                     match shorthand(e) {
@@ -663,23 +685,25 @@ pub mod pathfilter {
                 {
                     self.pos += 1;
                     let Some(end) = self.peek() else {
-                        return Err("missing `]`".into());
+                        return Err(PatternError("missing `]`".to_string()));
                     };
                     self.pos += 1;
                     let end = if end == '\\' {
                         let Some(e) = self.peek() else {
-                            return Err("trailing `\\`".into());
+                            return Err(PatternError("trailing `\\`".to_string()));
                         };
                         self.pos += 1;
                         if shorthand(e).is_some() {
-                            return Err(format!("unsupported range endpoint `\\{e}`"));
+                            return Err(PatternError(format!(
+                                "unsupported range endpoint `\\{e}`"
+                            )));
                         }
                         literal(e)?
                     } else {
                         end
                     };
                     if end < start {
-                        return Err(format!("bad character range `{start}-{end}`"));
+                        return Err(PatternError(format!("bad character range `{start}-{end}`")));
                     }
                     ranges.push((start, end));
                 } else {

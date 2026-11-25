@@ -22,6 +22,11 @@ release.
 
 ### Changed
 
+- Rust API (the large-scale idiomatic-Rust refactor; the CLI grammar,
+  output bytes and diagnostic codes are unchanged):
+  - oxidizr-api: `generate::pathfilter::PathFilter::compile` now fails with
+    the new `PatternError` error type instead of a bare `String`; the
+    reason text (decorated into `OXZ-5010`) is unchanged (R1)
 - The stable-toolchain floor (`rust-version`) rises 1.85 → 1.88: stabilized
   let-chains and slice `as_chunks` are adopted across the workspace.
   Shipped behavior, outputs and the CLI are unchanged.
