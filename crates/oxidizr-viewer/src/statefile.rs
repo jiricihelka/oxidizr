@@ -37,7 +37,7 @@ const SUFFIX: &str = ".oxidizr.json";
 /// offset) keeps the memory resolution-independent — on reopen the offset
 /// is recomputed for whatever canvas size the first frame reports.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ViewMemory {
+pub(crate) struct ViewMemory {
     /// Zoom scale (the viewport's, already clamped by the shell).
     pub zoom: f64,
     /// The world point the canvas was centred on.
@@ -47,7 +47,7 @@ pub struct ViewMemory {
 /// The per-file state: view key → remembered camera. A `BTreeMap` so the
 /// JSON key order is deterministic (the write stays byte-stable).
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct ViewerState {
+pub(crate) struct ViewerState {
     /// One entry per view the user has panned/zoomed this session.
     pub views: BTreeMap<String, ViewMemory>,
 }
@@ -55,7 +55,9 @@ pub struct ViewerState {
 impl ViewerState {
     /// Nothing remembered (the decode fallback for any unusable file).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    // test-only: the shipped shell never calls this (driven by unit tests)
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.views.is_empty()
     }
 }
@@ -70,7 +72,7 @@ impl ViewerState {
 /// `big.json` is a different exact filename and can never collide. Empty
 /// and stdin (`-`) have no sidecar — there is nothing beside them.
 #[must_use]
-pub fn sidecar_path(display: &str) -> Option<std::path::PathBuf> {
+pub(crate) fn sidecar_path(display: &str) -> Option<std::path::PathBuf> {
     if display.is_empty() || display == "-" {
         return None;
     }

@@ -78,7 +78,7 @@ impl Engine {
 /// working copy) maps to. A null `rankDirection` falls to the default
 /// direction, exactly like the core's [`AutomaticLayout::default`].
 #[must_use]
-pub fn config_for(layout: &AutomaticLayout) -> LayoutConfig {
+pub(crate) fn config_for(layout: &AutomaticLayout) -> LayoutConfig {
     LayoutConfig {
         rank_direction: layout
             .rank_direction
@@ -107,7 +107,7 @@ pub const fn direction(value: RankDirection) -> EngineDirection {
 /// [`crate::scene::build`]). `None` for unknown keys and views without
 /// a layout request.
 #[must_use]
-pub fn stored_for(workspace: &Workspace, view_key: &str) -> Option<AutomaticLayout> {
+pub(crate) fn stored_for(workspace: &Workspace, view_key: &str) -> Option<AutomaticLayout> {
     let views = workspace.views.all_views();
     let view = views.iter().find(|v| v.key() == view_key).copied()?;
     let rendered: View = match view {
@@ -153,7 +153,7 @@ pub fn view_needs_layout(workspace: &Workspace, view_key: &str) -> bool {
 /// file. The geometry is session display state, so no byte is
 /// touched and the core's [`AutomaticLayout::default`] (a JSON default)
 /// stands untouched.
-pub const DISPLAY_FALLBACK: AutomaticLayout = AutomaticLayout {
+pub(crate) const DISPLAY_FALLBACK: AutomaticLayout = AutomaticLayout {
     rank_direction: Some(RankDirection::LeftRight),
     rank_separation: 200,
     node_separation: 120,
@@ -172,7 +172,7 @@ pub const DISPLAY_FALLBACK: AutomaticLayout = AutomaticLayout {
 /// Display stays deterministic and file-driven: no byte of any
 /// output changes (geometry is session state until a save seeds it).
 #[must_use]
-pub fn display_params(workspace: &Workspace, view_key: &str) -> AutomaticLayout {
+pub(crate) fn display_params(workspace: &Workspace, view_key: &str) -> AutomaticLayout {
     let mut params = stored_for(workspace, view_key).unwrap_or(DISPLAY_FALLBACK);
     params.rank_separation = params.rank_separation.max(DISPLAY_FALLBACK.rank_separation);
     params.node_separation = params.node_separation.max(DISPLAY_FALLBACK.node_separation);
@@ -227,7 +227,7 @@ pub fn seed_overlay(
 /// items (the scene already dropped boundary/unresolvable endpoints).
 /// Content order = insertion order (deterministic).
 #[must_use]
-pub fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
+pub(crate) fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
     let mut graph = LayoutGraph::new();
     graph.config = config;
     for item in &scene.items {
@@ -266,7 +266,7 @@ pub fn apply(scene: &Scene, layout: &AutomaticLayout) -> Result<Overrides, Layou
 /// Any [`LayoutError`] from graph validation or the engine run;
 /// `Engine::Dot` with `$OXIDZR_DOT_BIN` unset reports
 /// `LayoutError::DotBackend` rather than spawning nothing silently.
-pub fn apply_with(
+pub(crate) fn apply_with(
     engine: Engine,
     scene: &Scene,
     layout: &AutomaticLayout,

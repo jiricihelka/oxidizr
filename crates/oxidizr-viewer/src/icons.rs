@@ -41,7 +41,7 @@ use oxidizr_core::views::ColorScheme;
 
 /// Rasterization box for SVG icons, and the down-scale cap the atlas
 /// applies to oversized rasters (px).
-pub const ICON_RASTER_PX: u32 = 64;
+pub(crate) const ICON_RASTER_PX: u32 = 64;
 
 /// Shelf-width cap of the atlas (icons are tens; this only bounds junk).
 const ATLAS_MAX_WIDTH: u32 = 1024;
@@ -53,7 +53,7 @@ const ATLAS_GAP: u32 = 1;
 
 /// Why one icon could not be rasterized.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum IconError {
+pub(crate) enum IconError {
     /// The icon string is blank.
     #[error("icon is empty")]
     Empty,
@@ -91,7 +91,7 @@ pub struct Raster {
 /// [`IconError`] variant matching the failure: blank string, rejected
 /// source (remote URL, foreign bytes), unreadable file, malformed data
 /// URI, or a PNG/SVG container that fails to decode.
-pub fn rasterize(icon: &str, base_dir: Option<&Path>) -> Result<Raster, IconError> {
+pub(crate) fn rasterize(icon: &str, base_dir: Option<&Path>) -> Result<Raster, IconError> {
     let bytes = payload(icon, base_dir)?;
     if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         decode_png(&bytes)
@@ -115,7 +115,7 @@ pub const fn scheme_code(scheme: ColorScheme) -> u8 {
 /// atlas key). Ord — the atlas packs in this order, so the packing is
 /// deterministic.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct IconKey {
+pub(crate) struct IconKey {
     /// Style `icon` value, stored verbatim.
     pub icon: String,
     /// Rasterization box edge (`ICON_RASTER_PX` in the viewer).
@@ -127,7 +127,7 @@ pub struct IconKey {
 
 /// Placement of one icon inside the atlas, in atlas pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AtlasEntry {
+pub(crate) struct AtlasEntry {
     /// Cell origin x.
     pub x: u32,
     /// Cell origin y.
@@ -140,7 +140,7 @@ pub struct AtlasEntry {
 
 /// One RGBA8 texture holding every rasterized icon of the current scene.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Atlas {
+pub(crate) struct Atlas {
     /// Texture width (`0` when empty).
     pub width: u32,
     /// Texture height (`0` when empty).
@@ -157,7 +157,9 @@ pub struct Atlas {
 impl Atlas {
     /// Cell of one icon (`None` = absent: never requested or failed).
     #[must_use]
-    pub fn entry(&self, icon: &str, size: u32, scheme: ColorScheme) -> Option<AtlasEntry> {
+    // test-only: the shipped shell never calls this (driven by unit tests)
+    #[cfg(test)]
+    pub(crate) fn entry(&self, icon: &str, size: u32, scheme: ColorScheme) -> Option<AtlasEntry> {
         self.entries
             .get(&IconKey {
                 icon: icon.to_owned(),
@@ -172,7 +174,10 @@ impl Atlas {
 /// (the shell passes a set); iteration is sorted, so two calls on equal
 /// input produce byte-identical atlases. A failing icon never aborts the
 /// atlas — it lands in [`Atlas::errors`] once and its cell is skipped.
-pub fn build_atlas(keys: impl IntoIterator<Item = IconKey>, base_dir: Option<&Path>) -> Atlas {
+pub(crate) fn build_atlas(
+    keys: impl IntoIterator<Item = IconKey>,
+    base_dir: Option<&Path>,
+) -> Atlas {
     let mut atlas = Atlas::default();
     let mut placed: Vec<(IconKey, Raster, u32, u32)> = Vec::new();
     let mut failed: BTreeSet<String> = BTreeSet::new();

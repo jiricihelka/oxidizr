@@ -39,31 +39,31 @@ use crate::paint::{self, PaintOptions};
 use crate::scene::{Rect, Scene};
 
 /// Diagram margin around the scene bounds (export px).
-pub const EXPORT_MARGIN: f32 = 40.0;
+pub(crate) const EXPORT_MARGIN: f32 = 40.0;
 /// Soft cap for the diagram side (px): big canvases shrink toward
 /// [`EXPORT_MIN_SCALE`] first, and only exceed the cap when even that
 /// scale would (huge canvases stay readable, at the user's file size).
-pub const EXPORT_MAX_SIDE: f32 = 4096.0;
+pub(crate) const EXPORT_MAX_SIDE: f32 = 4096.0;
 /// Floor for the fit scale: at 0.25 the default 24 px box font still
 /// clears [`paint::MIN_TEXT_PX`] so text survives the export.
-pub const EXPORT_MIN_SCALE: f64 = 0.25;
+pub(crate) const EXPORT_MIN_SCALE: f64 = 0.25;
 /// Hard pixel cap for the whole document (~80 MP): protects the PNG
 /// raster from absurd canvases.
-pub const EXPORT_MAX_PIXELS: f64 = 80e6;
+pub(crate) const EXPORT_MAX_PIXELS: f64 = 80e6;
 /// Key row height (export px).
-pub const KEY_ROW_H: f32 = 26.0;
+pub(crate) const KEY_ROW_H: f32 = 26.0;
 /// Key swatch column x (export px).
-pub const KEY_SWATCH_X: f32 = 20.0;
+pub(crate) const KEY_SWATCH_X: f32 = 20.0;
 /// Key swatch box width (export px).
-pub const KEY_SWATCH_W: f32 = 28.0;
+pub(crate) const KEY_SWATCH_W: f32 = 28.0;
 /// Key text column x (export px).
-pub const KEY_TEXT_X: f32 = 56.0;
+pub(crate) const KEY_TEXT_X: f32 = 56.0;
 /// Key text size (export px).
-pub const KEY_TEXT_PX: f32 = 15.0;
+pub(crate) const KEY_TEXT_PX: f32 = 15.0;
 /// Heading size (export px).
-pub const KEY_HEADING_PX: f32 = 20.0;
+pub(crate) const KEY_HEADING_PX: f32 = 20.0;
 /// Gap between the diagram bottom and the key band (export px).
-pub const KEY_TOP_PAD: f32 = 36.0;
+pub(crate) const KEY_TOP_PAD: f32 = 36.0;
 
 /// Export failures (values, not panics). File writing is the shell's
 /// (`commands::write_atomic`), so no `Io` arm here.
@@ -90,7 +90,7 @@ pub struct Composed {
 /// Fit scale for `bounds`: 1:1 until [`EXPORT_MAX_SIDE`] binds, floor
 /// [`EXPORT_MIN_SCALE`], then a final pixel-cap squeeze.
 #[must_use]
-pub fn export_scale(bounds: Rect) -> f64 {
+pub(crate) fn export_scale(bounds: Rect) -> f64 {
     let max_side = bounds.width.max(bounds.height).max(1.0);
     let fit = (f64::from(EXPORT_MAX_SIDE) - 2.0 * f64::from(EXPORT_MARGIN)) / max_side;
     let mut scale = 1.0_f64.min(fit).max(EXPORT_MIN_SCALE);
@@ -197,7 +197,7 @@ pub fn compose(scene: &Scene, fonts: &mut FontsView<'_>) -> Composed {
 /// `kind · shape`, edge line swatch + `style · color`, boundary swatch +
 /// label). Returns the shapes + content extent (width, height).
 #[must_use]
-pub fn key_shapes(scene: &Scene, fonts: &mut FontsView<'_>, ink: Color32) -> Composed {
+pub(crate) fn key_shapes(scene: &Scene, fonts: &mut FontsView<'_>, ink: Color32) -> Composed {
     let legend: Key = key::legend(scene);
     let mut shapes = Vec::new();
     let mut width = 0.0_f32;
@@ -343,7 +343,7 @@ fn outline_font() -> Option<FontArc> {
 /// Translate a flat shape list (document px) into a self-contained SVG
 /// document. Text becomes per-glyph outline paths (module docs).
 #[must_use]
-pub fn shapes_to_svg(shapes: &[Shape], size: (f64, f64)) -> String {
+pub(crate) fn shapes_to_svg(shapes: &[Shape], size: (f64, f64)) -> String {
     let font = outline_font();
     let mut cache: BTreeMap<char, Option<GlyphBody>> = BTreeMap::new();
     let (w, h) = (n64(size.0), n64(size.1));
@@ -367,7 +367,7 @@ pub fn shapes_to_svg(shapes: &[Shape], size: (f64, f64)) -> String {
 /// well-formedness gate); [`ExportError::Png`] when the raster or the
 /// PNG encode fails (degenerate size).
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // document px are positive (usvg sizes) and fit u32 at export sizes
-pub fn svg_to_png(svg: &str) -> Result<Vec<u8>, ExportError> {
+pub(crate) fn svg_to_png(svg: &str) -> Result<Vec<u8>, ExportError> {
     let tree = usvg::Tree::from_str(svg, &usvg::Options::default())
         .map_err(|e| ExportError::Svg(e.to_string()))?;
     let size = tree.size();

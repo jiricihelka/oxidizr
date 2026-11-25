@@ -38,28 +38,28 @@ use oxidizr_core::views::{IconPosition, LineStyle, Shape as ElementShape};
 
 /// Selection accent outline color (ours — the official UI uses its CSS
 /// accent; visual parity is out of contract).
-pub const SELECTION_COLOR: Color32 = Color32::from_rgb(0, 150, 215);
+pub(crate) const SELECTION_COLOR: Color32 = Color32::from_rgb(0, 150, 215);
 /// Text below this many SCREEN pixels is not painted at all (zoomed-out
 /// culling; shapes stay, runs vanish).
-pub const MIN_TEXT_PX: f32 = 5.0;
+pub(crate) const MIN_TEXT_PX: f32 = 5.0;
 /// `Dashed` dash length in screen px (period constant of ours).
-pub const DASH_PX: f32 = 8.0;
+pub(crate) const DASH_PX: f32 = 8.0;
 /// `Dashed` gap length in screen px.
-pub const DASH_GAP_PX: f32 = 6.0;
+pub(crate) const DASH_GAP_PX: f32 = 6.0;
 /// Arrowhead length in WORLD px (clamped into 5..=40 screen px at paint
 /// time; the official UI marker ≈ 10).
-pub const ARROW_LEN: f32 = 10.0;
+pub(crate) const ARROW_LEN: f32 = 10.0;
 /// Box-interior text padding in world px (scaled).
-pub const TEXT_PAD: f32 = 8.0;
+pub(crate) const TEXT_PAD: f32 = 8.0;
 /// Arc sampling resolution for ellipse-derived outlines.
-pub const ARC_SEGMENTS: usize = 32;
+pub(crate) const ARC_SEGMENTS: usize = 32;
 /// Fallback fill when a scene color fails [`parse_color`].
-pub const FALLBACK_FILL: Color32 = Color32::from_rgb(135, 180, 220);
+pub(crate) const FALLBACK_FILL: Color32 = Color32::from_rgb(135, 180, 220);
 /// Fallback ink (stroke/text) when a scene color fails [`parse_color`].
-pub const FALLBACK_INK: Color32 = Color32::BLACK;
+pub(crate) const FALLBACK_INK: Color32 = Color32::BLACK;
 /// Screen-space radius of the waypoint handles painted on the SELECTED
 /// edge — fixed pixels, so they stay grabbable at any zoom.
-pub const WAYPOINT_HANDLE_PX: f32 = 4.0;
+pub(crate) const WAYPOINT_HANDLE_PX: f32 = 4.0;
 
 /// What the shell selects (id-based so the selection survives scene
 /// rebuilds across zoom-band/filter changes).
@@ -150,7 +150,7 @@ fn split_text(layer: &mut Vec<Shape>, geometry: &mut Vec<Shape>, text: &mut Vec<
 /// (the scene guarantees the format, so `None` means a bug upstream —
 /// the paint falls back, never panics).
 #[must_use]
-pub fn parse_color(text: &str) -> Option<Color32> {
+pub(crate) fn parse_color(text: &str) -> Option<Color32> {
     let hex = text.strip_prefix('#')?;
     if hex.len() != 6 {
         return None;
@@ -161,7 +161,7 @@ pub fn parse_color(text: &str) -> Option<Color32> {
 
 /// Scene opacity (0-100 %) as an alpha-adjusted color.
 #[must_use]
-pub fn with_opacity(color: Color32, opacity: i32) -> Color32 {
+pub(crate) fn with_opacity(color: Color32, opacity: i32) -> Color32 {
     let alpha = u8::try_from(i32::from(color.a()) * opacity.clamp(0, 100) / 100).unwrap_or(u8::MAX);
     Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
 }
@@ -609,14 +609,14 @@ fn icon_box(r: ERect, position: IconPosition) -> (ERect, Vec2) {
 /// The icon slot rect inside a screen rect — where the shell overlays a
 /// rasterized icon texture and where the placeholder below draws.
 #[must_use]
-pub fn icon_slot(r: ERect, position: IconPosition) -> ERect {
+pub(crate) fn icon_slot(r: ERect, position: IconPosition) -> ERect {
     icon_box(r, position).0
 }
 
 /// World-space item/boundary rect → screen rect through `viewport` —
 /// paint's own mapping, shared with the shell's icon overlay .
 #[must_use]
-pub fn to_screen_rect(rect: Rect, viewport: &Viewport) -> ERect {
+pub(crate) fn to_screen_rect(rect: Rect, viewport: &Viewport) -> ERect {
     to_rect(rect, viewport)
 }
 

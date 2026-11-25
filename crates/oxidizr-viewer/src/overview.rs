@@ -23,30 +23,30 @@ use crate::scene::{Rect, Scene};
 use oxidizr_core::views::View;
 
 /// Minimap box width in screen px (bottom-right of the canvas).
-pub const MAP_WIDTH_PX: f32 = 220.0;
+pub(crate) const MAP_WIDTH_PX: f32 = 220.0;
 /// Minimap box height in screen px.
-pub const MAP_HEIGHT_PX: f32 = 140.0;
+pub(crate) const MAP_HEIGHT_PX: f32 = 140.0;
 /// Gap between the minimap box and the canvas edges.
-pub const MAP_MARGIN_PX: f32 = 12.0;
+pub(crate) const MAP_MARGIN_PX: f32 = 12.0;
 /// Content padding INSIDE the box (the scaled scene never touches the
 /// border stroke the shell draws).
-pub const MAP_PAD_PX: f32 = 4.0;
+pub(crate) const MAP_PAD_PX: f32 = 4.0;
 
 /// Item boxes in the map (a muted blue that reads on both schemes).
-pub const ITEM_FILL: Color32 = Color32::from_rgb(96, 144, 192);
+pub(crate) const ITEM_FILL: Color32 = Color32::from_rgb(96, 144, 192);
 /// Selected item boxes — the same accent as the main canvas.
-pub const SELECTED_FILL: Color32 = crate::paint::SELECTION_COLOR;
+pub(crate) const SELECTED_FILL: Color32 = crate::paint::SELECTION_COLOR;
 /// Boundary outlines.
-pub const BOUNDARY_STROKE: Color32 = Color32::from_gray(150);
+pub(crate) const BOUNDARY_STROKE: Color32 = Color32::from_gray(150);
 /// The live-viewport rect (orange: distinguishable from the selection
 /// accent on both schemes).
-pub const VIEWPORT_STROKE: Color32 = Color32::from_rgb(220, 90, 40);
+pub(crate) const VIEWPORT_STROKE: Color32 = Color32::from_rgb(220, 90, 40);
 
 /// The world↔map transform of one minimap frame (world coords → the
 /// box's screen px, uniform scale, content centred). Built per frame
 /// from `Scene::bounds` + the box rect — stateless like [`crate::paint`].
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Overview {
+pub(crate) struct Overview {
     bounds: Rect,
     map: ERect,
     scale: f64,
@@ -89,18 +89,6 @@ impl Overview {
                 map_center.1 - center.1 * scale,
             ),
         })
-    }
-
-    /// The world bounds this map fits (for shell-side triage).
-    #[must_use]
-    pub const fn bounds(&self) -> Rect {
-        self.bounds
-    }
-
-    /// The screen box the map paints into.
-    #[must_use]
-    pub const fn map(&self) -> ERect {
-        self.map
     }
 
     /// World → map screen px.
@@ -178,7 +166,7 @@ impl Overview {
 /// either the display `name` or the `id`. An empty/whitespace query
 /// matches NOTHING — the result list only opens once the user types.
 #[must_use]
-pub fn nav_matches(query: &str, name: &str, id: &str) -> bool {
+pub(crate) fn nav_matches(query: &str, name: &str, id: &str) -> bool {
     let needle = query.trim().to_lowercase();
     if needle.is_empty() {
         return false;
@@ -232,7 +220,7 @@ pub fn grouped<'a>(views: &[View<'a>]) -> Vec<(&'static str, Vec<View<'a>>)> {
 /// (ids only when an end is off-scene); rows that would be empty are
 /// skipped, so the block stays compact for sparse models.
 #[must_use]
-pub fn selection_info(scene: &Scene, selection: &Selection) -> Vec<(&'static str, String)> {
+pub(crate) fn selection_info(scene: &Scene, selection: &Selection) -> Vec<(&'static str, String)> {
     let name_of = |id: &Id| {
         scene
             .items

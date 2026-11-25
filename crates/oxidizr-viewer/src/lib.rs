@@ -23,19 +23,26 @@
 //! repaint on demand only — never every frame. Icons are rasterized from
 //! SVG and the OS light/dark preference comes from `dark-light`.
 
+// The lib core exists to serve the `gui`-gated shell: without that feature
+// the shell is not compiled, so core items driven only by it (or by unit
+// tests) would lint as dead in the headless build even though the gui
+// build — the configuration with the real consumer, and part of every
+// viewer commit's gate — proves them used.
+#![cfg_attr(not(feature = "gui"), allow(dead_code))]
+
 pub mod commands;
 pub mod export;
 pub mod hit;
 pub mod icons;
 pub mod key;
 pub mod layout;
-pub mod overview;
+pub(crate) mod overview;
 pub mod paint;
 pub mod reload;
 pub mod scene;
 #[cfg(feature = "gui")]
 pub mod shell;
-pub mod statefile;
+pub(crate) mod statefile;
 
 #[cfg(test)]
 mod tests {

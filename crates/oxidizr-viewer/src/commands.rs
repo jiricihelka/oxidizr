@@ -31,21 +31,21 @@ use oxidizr_core::views::{Dimensions, Vertex, ViewContent};
 use crate::scene::{Overrides, Rect, Scene};
 
 /// Grid-snap pitch in world px (10, toggle in the shell).
-pub const GRID_PX: f64 = 10.0;
+pub(crate) const GRID_PX: f64 = 10.0;
 /// Undo-stack cap: 200 — the oldest command drops off first.
-pub const HISTORY_CAP: usize = 200;
+pub(crate) const HISTORY_CAP: usize = 200;
 
 /// One element move: (id, previous top-left, new top-left) — the
 /// [`Command::MoveElements`] payload.
-pub type ElementMove = (Id, (f64, f64), (f64, f64));
+pub(crate) type ElementMove = (Id, (f64, f64), (f64, f64));
 /// One waypoint replacement: (id, previous interiors, new interiors) —
 /// the [`Command::SetWaypoints`] payload.
-pub type WaypointChange = (Id, Vec<(f64, f64)>, Vec<(f64, f64)>);
+pub(crate) type WaypointChange = (Id, Vec<(f64, f64)>, Vec<(f64, f64)>);
 
 /// Snap one world coordinate to the [`GRID_PX`] grid (half-way values
 /// round away from zero, like every other round in this crate).
 #[must_use]
-pub fn snapped(value: f64) -> f64 {
+pub(crate) fn snapped(value: f64) -> f64 {
     (value / GRID_PX).round() * GRID_PX
 }
 
@@ -246,7 +246,7 @@ impl Command {
 /// stacks, cap [`HISTORY_CAP`] (oldest drops), a fresh [`History::run`]
 /// clears the redo branch. The shell keeps one instance per view.
 #[derive(Debug, Default)]
-pub struct History {
+pub(crate) struct History {
     undo: Vec<Command>,
     redo: Vec<Command>,
 }
@@ -289,19 +289,25 @@ impl History {
 
     /// Whether [`History::undo`] would do anything.
     #[must_use]
-    pub fn can_undo(&self) -> bool {
+    // test-only: the shipped shell never calls this (driven by unit tests)
+    #[cfg(test)]
+    pub(crate) fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
 
     /// Whether [`History::redo`] would do anything.
     #[must_use]
-    pub fn can_redo(&self) -> bool {
+    // test-only: the shipped shell never calls this (driven by unit tests)
+    #[cfg(test)]
+    pub(crate) fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
 
     /// Drop both stacks (view switch / workspace reload — history does
     /// not survive a re-render from a new view).
-    pub fn reset(&mut self) {
+    // test-only: the shipped shell never calls this (driven by unit tests)
+    #[cfg(test)]
+    pub(crate) fn reset(&mut self) {
         self.undo.clear();
         self.redo.clear();
     }
@@ -314,7 +320,9 @@ impl History {
 /// UNDOABLE as one unit). `snap` grid-snaps each NEW top-left. `None`
 /// when nothing moves.
 #[must_use]
-pub fn move_by(
+// test-only: the shipped shell never calls this (driven by unit tests)
+#[cfg(test)]
+pub(crate) fn move_by(
     scene: &Scene,
     overlay: &LayoutOverlay,
     ids: &[Id],
@@ -336,7 +344,7 @@ pub fn move_by(
 /// line). Targets: the selection's bounding box, not the canvas. Needs
 /// at least two elements; `None` when nothing moves.
 #[must_use]
-pub fn align(
+pub(crate) fn align(
     scene: &Scene,
     overlay: &LayoutOverlay,
     ids: &[Id],
@@ -377,7 +385,7 @@ pub fn align(
 /// overlap is the user's cue). Needs at least three elements.
 #[must_use]
 #[allow(clippy::cast_precision_loss)] // selection count: exact in f64 (≤ item count)
-pub fn distribute(
+pub(crate) fn distribute(
     scene: &Scene,
     overlay: &LayoutOverlay,
     ids: &[Id],
@@ -439,7 +447,7 @@ pub fn distribute(
 /// shell passes ALL ids for "centre the view"). `None` when nothing
 /// moves.
 #[must_use]
-pub fn centre_view(scene: &Scene, overlay: &LayoutOverlay, ids: &[Id]) -> Option<Command> {
+pub(crate) fn centre_view(scene: &Scene, overlay: &LayoutOverlay, ids: &[Id]) -> Option<Command> {
     let rects: Vec<Rect> = ids
         .iter()
         .filter_map(|id| overlay.rect(scene, id))
@@ -472,7 +480,7 @@ pub fn centre_view(scene: &Scene, overlay: &LayoutOverlay, ids: &[Id]) -> Option
 /// Elements are shifted by the minimal
 /// delta; the loop order is content order (deterministic).
 #[must_use]
-pub fn bring_back(scene: &Scene, overlay: &LayoutOverlay, page: Rect) -> Option<Command> {
+pub(crate) fn bring_back(scene: &Scene, overlay: &LayoutOverlay, page: Rect) -> Option<Command> {
     let mut moves: Vec<ElementMove> = Vec::new();
     for item in &scene.items {
         let Some(rect) = overlay.rect(scene, &item.id) else {
@@ -508,7 +516,7 @@ pub fn bring_back(scene: &Scene, overlay: &LayoutOverlay, page: Rect) -> Option<
 /// one `SetWaypoints` change per rendered relationship, emptying the
 /// interiors. `None` when all edges are already straight.
 #[must_use]
-pub fn remove_all_vertices(scene: &Scene, overlay: &LayoutOverlay) -> Option<Command> {
+pub(crate) fn remove_all_vertices(scene: &Scene, overlay: &LayoutOverlay) -> Option<Command> {
     let changes: Vec<WaypointChange> = scene
         .edges
         .iter()
@@ -531,7 +539,7 @@ pub fn remove_all_vertices(scene: &Scene, overlay: &LayoutOverlay) -> Option<Com
 /// caller computes the new list with the `hit` helpers, this makes it a
 /// command). `None` when the list is unchanged.
 #[must_use]
-pub fn set_waypoints(
+pub(crate) fn set_waypoints(
     scene: &Scene,
     overlay: &LayoutOverlay,
     id: &Id,
@@ -549,7 +557,9 @@ pub fn set_waypoints(
 /// Set the canvas size (`None` clears back to stored/automatic).
 /// `None` when already the same.
 #[must_use]
-pub fn set_canvas_size(overlay: &LayoutOverlay, to: Option<Dimensions>) -> Option<Command> {
+// test-only: the shipped shell never calls this (driven by unit tests)
+#[cfg(test)]
+pub(crate) fn set_canvas_size(overlay: &LayoutOverlay, to: Option<Dimensions>) -> Option<Command> {
     if overlay.dimensions == to {
         return None;
     }
@@ -562,7 +572,7 @@ pub fn set_canvas_size(overlay: &LayoutOverlay, to: Option<Dimensions>) -> Optio
 /// "Clear layout" for the view: reset the overlay (undo restores the
 /// snapshot — always a command, the shell does not reset silently).
 #[must_use]
-pub fn clear_view(overlay: &LayoutOverlay) -> Command {
+pub(crate) fn clear_view(overlay: &LayoutOverlay) -> Command {
     Command::ClearView {
         snapshot: Box::new(overlay.clone()),
     }
@@ -572,7 +582,7 @@ pub fn clear_view(overlay: &LayoutOverlay) -> Command {
 /// snapped when `snap`. Shared by [`drag_move`] and the shell's live
 /// preview so preview frames EQUAL the committed geometry.
 #[must_use]
-pub fn drag_target(origin: (f64, f64), delta: (f64, f64), snap: bool) -> (f64, f64) {
+pub(crate) fn drag_target(origin: (f64, f64), delta: (f64, f64), snap: bool) -> (f64, f64) {
     let to = (origin.0 + delta.0, origin.1 + delta.1);
     if snap {
         (snapped(to.0), snapped(to.1))
@@ -589,7 +599,13 @@ pub fn drag_target(origin: (f64, f64), delta: (f64, f64), snap: bool) -> (f64, f
 /// moves. Re-applying the result is idempotent — the preview and the
 /// committed command write the same absolute positions.
 #[must_use]
-pub fn drag_move(from: &[(Id, (f64, f64))], delta: (f64, f64), snap: bool) -> Option<Command> {
+// test-only: the shipped shell never calls this (driven by unit tests)
+#[cfg(test)]
+pub(crate) fn drag_move(
+    from: &[(Id, (f64, f64))],
+    delta: (f64, f64),
+    snap: bool,
+) -> Option<Command> {
     let moves: Vec<ElementMove> = from
         .iter()
         .filter_map(|(id, (x, y))| {
@@ -607,7 +623,7 @@ pub fn drag_move(from: &[(Id, (f64, f64))], delta: (f64, f64), snap: bool) -> Op
 /// edge leaving the group keeps its stored route (rerouting it would
 /// fight the user's stored geometry).
 #[must_use]
-pub fn carried_interiors(
+pub(crate) fn carried_interiors(
     scene: &Scene,
     overlay: &LayoutOverlay,
     ids: &[Id],
@@ -631,7 +647,7 @@ pub fn carried_interiors(
 /// `from`. One [`Command::Group`] → one Ctrl+Z; re-applying the result
 /// is idempotent exactly like [`drag_move`].
 #[must_use]
-pub fn drag_group(
+pub(crate) fn drag_group(
     from: &[(Id, (f64, f64))],
     carries: &[(Id, Vec<(f64, f64)>)],
     delta: (f64, f64),
@@ -683,7 +699,7 @@ pub fn drag_group(
 /// so re-applying is idempotent). `None` when nothing moves or the
 /// index leaves the route.
 #[must_use]
-pub fn drag_waypoint(
+pub(crate) fn drag_waypoint(
     id: &Id,
     from: &[(f64, f64)],
     index: usize,
@@ -711,7 +727,7 @@ pub fn drag_waypoint(
 /// (the [`Overrides`] maps are hash maps). `None` when the run changes
 /// nothing.
 #[must_use]
-pub fn apply_layout(
+pub(crate) fn apply_layout(
     scene: &Scene,
     overlay: &LayoutOverlay,
     overrides: &Overrides,
@@ -750,7 +766,7 @@ pub fn apply_layout(
 
 /// Align target for [`align`] (edges and centre lines).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AlignEdge {
+pub(crate) enum AlignEdge {
     /// Common left edge.
     Left,
     /// Common vertical centre line.
@@ -767,7 +783,7 @@ pub enum AlignEdge {
 
 /// Distribute axis for [`distribute`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Axis {
+pub(crate) enum Axis {
     /// Even horizontal spacing.
     Horizontal,
     /// Even vertical spacing.
@@ -891,7 +907,7 @@ pub fn apply_overlay(workspace: &Workspace, view_key: &str, overlay: &LayoutOver
 /// in place, a `<stem>.json` SIDE CAR next to a `.dsl` source (the DSL
 /// text is never rewritten), `None` for stdin (`"-"`).
 #[must_use]
-pub fn save_target(display: &str) -> Option<PathBuf> {
+pub(crate) fn save_target(display: &str) -> Option<PathBuf> {
     if display == "-" {
         return None;
     }
@@ -930,7 +946,7 @@ pub fn write_workspace(path: &Path, workspace: &Workspace) -> Result<(), SaveErr
 ///
 /// [`SaveError::Io`] when the temp write or the rename fails (the
 /// error carries `path`).
-pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), SaveError> {
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), SaveError> {
     let name = path.file_name().map_or_else(
         || "workspace.json".to_owned(),
         |name| name.to_string_lossy().into_owned(),

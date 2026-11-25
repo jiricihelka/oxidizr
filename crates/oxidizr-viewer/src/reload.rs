@@ -33,12 +33,12 @@ use notify::{EventKind, RecursiveMode, Watcher};
 /// paint context — there is no repaint-signal type, that context
 /// method IS the cross-thread wake; keeping it a plain
 /// closure is what lets this module stay GUI-free (boundary guard).
-pub type Wake = Arc<dyn Fn() + Send + Sync>;
+pub(crate) type Wake = Arc<dyn Fn() + Send + Sync>;
 
 /// Settle window after the LAST raw event before the hash check runs:
 /// 250 ms. External bursts arrive ~30 ms apart, so this coalesces them
 /// into one check.
-pub const DEBOUNCE: Duration = Duration::from_millis(250);
+pub(crate) const DEBOUNCE: Duration = Duration::from_millis(250);
 
 /// The last content hash of a watched file; `None` = unreadable
 /// (deleted, mid-rename, zero permissions). An ABSENT file is only
@@ -50,7 +50,7 @@ type Hashed = Option<u64>;
 /// by contract: hashes only ever compare against their own previous
 /// reads, never across runs or machines (no byte contract touched).
 #[must_use]
-pub fn content_hash(path: &Path) -> Hashed {
+pub(crate) fn content_hash(path: &Path) -> Hashed {
     let bytes = std::fs::read(path).ok()?;
     let mut hasher = DefaultHasher::new();
     bytes.hash(&mut hasher);
@@ -84,7 +84,7 @@ struct Inner {
 /// Watches the source set of one opened workspace and reports content
 /// changes as debounced edges (see module docs).
 #[derive(Debug)]
-pub struct ReloadDriver {
+pub(crate) struct ReloadDriver {
     inner: Arc<Mutex<Inner>>,
     /// Kept alive with the driver: dropping it stops the watcher.
     _watcher: notify::RecommendedWatcher,
@@ -155,7 +155,9 @@ impl ReloadDriver {
     /// our save fired hash-match and no reload edge can fire for it —
     /// without waiting for the re-baseline `adopt` performs
     /// (saving must not self-trigger).
-    pub fn note_written(&self, path: &Path, bytes: &[u8]) {
+    // test-only: the shipped shell never calls this (driven by unit tests)
+    #[cfg(test)]
+    pub(crate) fn note_written(&self, path: &Path, bytes: &[u8]) {
         let mut inner = lock(&self.inner);
         if let Some(slot) = inner
             .baseline

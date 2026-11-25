@@ -38,6 +38,10 @@ release.
     (the whole-workspace `json`/`theme` path dispatches inline through
     `ExportFormat::export`); root re-exports trimmed to the names consumers
     import (R5)
+  - oxidizr-viewer: removed the never-called `Overview::bounds`/
+    `Overview::map` accessors; the module tree is trimmed to the visibility
+    its consumers reach (the headless lib core is crate-internal, the `gui`
+    shell is its only non-test consumer) (R5)
 - The stable-toolchain floor (`rust-version`) rises 1.85 → 1.88: stabilized
   let-chains and slice `as_chunks` are adopted across the workspace.
   Shipped behavior, outputs and the CLI are unchanged.

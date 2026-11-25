@@ -243,7 +243,7 @@ fn walk_nodes(nodes: &[DeploymentNode], visit: &mut impl FnMut(&ModelItem)) {
 /// so no mask is meaningful. An empty tag list is the caller's problem
 /// (pass no mask at all then).
 #[must_use]
-pub fn session_mask(
+pub(crate) fn session_mask(
     workspace: &Workspace,
     view_key: &str,
     mode: FilterMode,

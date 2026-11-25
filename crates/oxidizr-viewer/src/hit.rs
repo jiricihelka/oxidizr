@@ -24,15 +24,15 @@ use crate::scene::{Rect, Scene};
 
 /// Smallest zoom: the whole-landscape overview floor (ours — see module
 /// docs).
-pub const MIN_SCALE: f64 = 0.05;
+pub(crate) const MIN_SCALE: f64 = 0.05;
 /// Largest zoom: the pixel-detail ceiling (ours).
-pub const MAX_SCALE: f64 = 20.0;
+pub(crate) const MAX_SCALE: f64 = 20.0;
 /// Pick tolerance in SCREEN pixels ([`pick`]); divided by the scale to
 /// get the world-space polyline distance.
-pub const HIT_TOLERANCE_PX: f64 = 6.0;
+pub(crate) const HIT_TOLERANCE_PX: f64 = 6.0;
 /// Minimum screen padding [`Viewport::fit`] keeps around the scene
 /// bounds.
-pub const FIT_PADDING_PX: f64 = 40.0;
+pub(crate) const FIT_PADDING_PX: f64 = 40.0;
 
 /// The world→screen similarity transform: `screen = world * scale +
 /// offset` ([`Viewport::world_to_screen`]). Scale is always within
@@ -178,7 +178,7 @@ pub fn pick(scene: &Scene, viewport: Viewport, point: (f64, f64)) -> Option<Hit>
 /// INTERSECTS the world-space `rect`, in content order. Intersection,
 /// not containment — a lasso clipping a box edge selects it.
 #[must_use]
-pub fn items_in_rect(scene: &Scene, rect: Rect) -> Vec<usize> {
+pub(crate) fn items_in_rect(scene: &Scene, rect: Rect) -> Vec<usize> {
     scene
         .items
         .iter()
@@ -199,7 +199,11 @@ pub fn items_in_rect(scene: &Scene, rect: Rect) -> Vec<usize> {
 /// so the endpoints are skipped: they belong to the boxes, never the
 /// route. `None` for polylines without interior vertices.
 #[must_use]
-pub fn nearest_waypoint(point: (f64, f64), points: &[(f64, f64)], tol: f64) -> Option<usize> {
+pub(crate) fn nearest_waypoint(
+    point: (f64, f64),
+    points: &[(f64, f64)],
+    tol: f64,
+) -> Option<usize> {
     points
         .iter()
         .enumerate()
@@ -214,7 +218,7 @@ pub fn nearest_waypoint(point: (f64, f64), points: &[(f64, f64)], tol: f64) -> O
 /// nearest to `point` (a straight two-point edge inserts at 1; fewer
 /// than two points have nothing to split — the append index comes back).
 #[must_use]
-pub fn insert_waypoint(point: (f64, f64), points: &[(f64, f64)]) -> usize {
+pub(crate) fn insert_waypoint(point: (f64, f64), points: &[(f64, f64)]) -> usize {
     points
         .windows(2)
         .enumerate()
@@ -227,7 +231,7 @@ pub fn insert_waypoint(point: (f64, f64), points: &[(f64, f64)]) -> usize {
 /// point distance for a single vertex, else the minimum over the
 /// segments ([`distance_to_segment`]).
 #[must_use]
-pub fn distance_to_polyline(point: (f64, f64), points: &[(f64, f64)]) -> f64 {
+pub(crate) fn distance_to_polyline(point: (f64, f64), points: &[(f64, f64)]) -> f64 {
     match points.len() {
         0 => f64::INFINITY,
         1 => distance(point, points[0]),
@@ -242,7 +246,7 @@ pub fn distance_to_polyline(point: (f64, f64), points: &[(f64, f64)]) -> f64 {
 /// a zero-length segment degenerates to point distance — stored
 /// duplicate vertices are legal JSON).
 #[must_use]
-pub fn distance_to_segment(point: (f64, f64), from: (f64, f64), to: (f64, f64)) -> f64 {
+pub(crate) fn distance_to_segment(point: (f64, f64), from: (f64, f64), to: (f64, f64)) -> f64 {
     let dx = to.0 - from.0;
     let dy = to.1 - from.1;
     let length_sq = dx.mul_add(dx, dy * dy);

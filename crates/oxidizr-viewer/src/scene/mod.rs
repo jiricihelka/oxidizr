@@ -75,14 +75,14 @@ use resolve::{
 /// resolved style leaves `strokeWidth` unset.
 pub const DEFAULT_STROKE_WIDTH: i32 = 2;
 /// Box width when the resolved style sets no `width` (see module docs).
-pub const DEFAULT_ITEM_WIDTH: f64 = 350.0;
+pub(crate) const DEFAULT_ITEM_WIDTH: f64 = 350.0;
 /// Box height when the resolved style sets no `height` (see module docs).
-pub const DEFAULT_ITEM_HEIGHT: f64 = 150.0;
+pub(crate) const DEFAULT_ITEM_HEIGHT: f64 = 150.0;
 /// Padding a boundary's member union grows by (chrome of ours — the
 /// the official UI computes boundary insets from its own layout passes).
-pub const BOUNDARY_PADDING: f64 = 20.0;
+pub(crate) const BOUNDARY_PADDING: f64 = 20.0;
 /// Margin around the [`Scene::bounds`] union.
-pub const SCENE_MARGIN: f64 = 20.0;
+pub(crate) const SCENE_MARGIN: f64 = 20.0;
 
 /// An axis-aligned rectangle in world (stored-layout) coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
