@@ -9,7 +9,8 @@ use std::collections::{HashMap, VecDeque};
 use crate::engine::{EdgePlacement, LayoutError, LayoutResult, NodePlacement, Point};
 use crate::graph::{LayoutGraph, RankDirection};
 
-use super::{BARYCENTER_ROUNDS, PRIORITY_ROUNDS, port_spread, route, spread_channels};
+use super::routing::{port_spread, route, spread_channels};
+use super::{BARYCENTER_ROUNDS, PRIORITY_ROUNDS};
 
 /// One laid-out vertex: a real node or a rank-skipping dummy. Sizes
 /// are CANONICAL: `ra` along the rank axis, `cb` along the cross axis
