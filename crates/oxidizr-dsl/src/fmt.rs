@@ -15,8 +15,9 @@
 //! Two line-end guards mirror the official preprocessing:
 //! a rendered line whose content would END with `\` or `"""` gets
 //! one protective space (printed bare, the re-parse would see a continuation /
-//! text-block opener the original did not, swallowing following lines); and a
-//! content-final `\r` (only reachable inside a quoted value at EOF) is doubled,
+//! text-block opener the original did not, swallowing following lines), the same
+//! space guarding a trimmed continuation-joined comment whose last line ends `\`;
+//! and a content-final `\r` (only reachable inside a quoted value at EOF) is doubled,
 //! so it cannot fuse with the emitted LF into a `\r\n` terminator. Trailing
 //! whitespace is otherwise dropped — the official parser splits on `\r?\n`, so a CR
 //! before `\n` is a delimiter, never content, and terminators print as LF.
@@ -355,6 +356,19 @@ fn comment_line(cst: &Cst, line: &Node, depth: usize, out: &mut String) {
             |l| trim_java_end(cst.text(l)),
         );
     out.push_str(content);
+    // The line-end guard mirrored into continuation-JOINED comments: the
+    // trim can expose the last physical line's `\`, and bare that is a
+    // continuation on re-parse (the parser's comment exemption is per
+    // physical line — this line is not comment text on its own), swallowing
+    // following lines. One protective space keeps the structure; a comment-
+    // starting last line stays bare (the exemption already covers it).
+    if content.ends_with('\\') && content.contains('\n') {
+        let last = content.rsplit('\n').next().unwrap_or(content);
+        let rest = last.trim_start_matches(compat::is_java_regex_s);
+        if !(rest.starts_with("//") || rest.starts_with('#')) {
+            out.push(' ');
+        }
+    }
     out.push('\n');
 }
 

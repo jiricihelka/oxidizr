@@ -11,3 +11,4 @@ cc 8aa59ab407da1570f0c7f2df2023d30f2d373dfbaee9d87fa371573f1529c865 # shrinks to
 cc a928acd6a4ff370e9e1173d6c704c45e48c0e4dbf6c861e78e90a847b59314b6 # shrinks to s = "a\n/*\r\"\t"
 cc bea4ed153094e1b81d7f9efc77c7412f5c6fc61f9ab1851cdf71e0ae455eb0e0 # shrinks to s = "\"\\\n#\\\n"
 cc 0c3752df6b29b78cd6c564172dc7dbe01a4f8cd3a499eb5631abcf1daf3700f2 # shrinks to s = "//\n\"\"\"\\\n\t"
+cc 61a23ebc63103b8aee82cf37fe46d1159a0671772a87b03b80a558add8510893 # shrinks to s = "/\\\n/a\\\t\t"

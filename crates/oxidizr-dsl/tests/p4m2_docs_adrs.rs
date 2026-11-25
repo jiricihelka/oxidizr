@@ -22,6 +22,32 @@ fn scratch(tag: &str) -> PathBuf {
     std::fs::canonicalize(&dir).unwrap()
 }
 
+/// The importer's lexical `getAbsolutePath` (mirrors the
+/// `oxidizr-import` helper): `/`-rooted, `..` popped, drive/verbatim
+/// prefixes dropped. The guard-message expectations run the canonicalized
+/// scratch through THIS so they render in the product's shape on every
+/// target — identical strings on Linux (where the scratch is already in
+/// this form), and on Windows targets the product names the path through
+/// the same lexical function, not through `canonicalize`'s verbatim
+/// `\\?\` form (pitfall `windows-path-separator-assertions.md`).
+fn java_absolute(path: &std::path::Path) -> PathBuf {
+    use std::path::{Component, PathBuf};
+    let mut out = PathBuf::from("/");
+    for c in path.components() {
+        match c {
+            Component::RootDir => out.push("/"),
+            Component::Normal(seg) => out.push(seg),
+            Component::ParentDir => {
+                if !matches!(out.components().next_back(), Some(Component::RootDir)) {
+                    out.pop();
+                }
+            }
+            Component::CurDir | Component::Prefix(_) => {}
+        }
+    }
+    out
+}
+
 fn write(dir: &Path, rel: &str, body: &str) {
     let path = dir.join(rel);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -84,7 +110,8 @@ fn docs_import_success_with_holders_exclude_and_images() {
     );
     let ws = &result.workspace;
     // default importer: sorted top-level files, FormatFinder, trim of the
-    // base path, the exclude token applied by NAME.
+    // base path (the trim removes the PLATFORM separator, so the names are
+    // bare on every target), the exclude token applied by NAME.
     let names: Vec<&str> = ws
         .documentation
         .sections
@@ -226,7 +253,7 @@ fn decisions_alias_pass_through_and_missing_path() {
         result.errors[0].message,
         format!(
             "Error importing decisions: {} does not exist.",
-            dir.join("nosuchdir").display()
+            java_absolute(&dir.join("nosuchdir")).display()
         )
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -248,7 +275,7 @@ fn missing_docs_path_and_string_source_skips() {
         result.errors[0].message,
         format!(
             "Error importing documentation: {} does not exist.",
-            dir.join("nosuch").display()
+            java_absolute(&dir.join("nosuch")).display()
         )
     );
     // `dslFile == null` (string/fragment source): BOTH contexts silently

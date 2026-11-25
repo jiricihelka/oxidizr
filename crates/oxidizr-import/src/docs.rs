@@ -136,8 +136,11 @@ pub fn import_docs(
     for s in &mut target.sections {
         let mut filename = s.filename.clone().unwrap_or_default();
         filename = filename.replace(&base_s, "");
-        if filename.starts_with('/') {
-            filename.remove(0); // Java: substring(1) after the separator check
+        // Java checks `File.separator` — the PLATFORM separator (`/` on unix,
+        // `\` on Windows) — before substring(1); on Windows targets the walk
+        // leaves `\name` here, so the platform separator is what gets trimmed.
+        if filename.starts_with(std::path::is_separator) {
+            filename.remove(0);
         }
         if kind == DocsKind::Recursive {
             filename = filename.replace('\\', "/");
