@@ -461,6 +461,8 @@ fn narration(text: &str) -> Option<&'static str> {
         ),
         ("structurizr-monolith", "reference-repo narration"),
         ("ported from", "port provenance"),
+        ("agents/", "internal-doc path citation"),
+        ("phase_", "a phase-doc citation"),
     ] {
         if low.contains(pat) {
             return Some(label);
@@ -641,6 +643,9 @@ mod tests {
             "ui.weak(\"Hide tagged items (absent mode in the reference)\");",
             "s.push_str(\"ported from the reference implementation\");",
             "//! mirrored from Structurizr-Monolith",
+            "#[error(\"`{format}` is not implemented yet (see agents/plan/build/PHASE_2.md)\")]",
+            "/// extends) keep the hardened behavior regardless (`PHASE_2.md` item 3).",
+            "// the official loader is documented in agents/plan/TESTING.md",
         ] {
             assert!(hygiene_line(l).is_some(), "must flag: {l}");
         }
@@ -658,6 +663,8 @@ mod tests {
             "let v = Map::<String, String>::new(); // HashMap order is contract",
             "fn f32_bits() {}",
             "// planned forward reference refs:ignore",
+            "// the inspection runs in ordered phases; each violation names its phase",
+            "/// Diagram export happens in a later stage.",
         ] {
             assert_eq!(hygiene_line(l), None, "must pass: {l}");
         }

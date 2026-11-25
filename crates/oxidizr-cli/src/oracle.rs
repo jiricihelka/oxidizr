@@ -88,8 +88,7 @@ pub fn find_oracle(explicit: Option<&Path>) -> Result<PathBuf, OracleError> {
     }
     Err(OracleError::NotFound(
         "structurizr reference binary not found (--bin → $OXIDZR_STRUCTURIZR_BIN → PATH); \
-         it is an external prerequisite the nix dev flake provides \
-         (agents/plan/TESTING.md) — oxidizr never downloads it"
+         it is an external prerequisite the nix dev flake provides — oxidizr never downloads it"
             .to_string(),
     ))
 }

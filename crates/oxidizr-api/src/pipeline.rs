@@ -120,8 +120,7 @@ pub struct ApiOptions {
     /// `--allow-net`: permits the theme-URL fetch in the
     /// `export` diagram branch (`ThemeUtils.loadThemes` mirror). Without it
     /// a `themes` URL fails OXZ-5001; parse-time URL inputs (`!include`,
-    /// `extends`) keep the hardened P1 behavior regardless (`PHASE_2.md`
-    /// item 3 — the flag applies to theme URLs).
+    /// `extends`) ignore the flag regardless — it applies to theme URLs.
     pub allow_net: bool,
     /// `--themes-dir <dir>`: highest-priority installed-theme source
     /// (`<dir>/<name>/theme.json`); `None` starts the chain at

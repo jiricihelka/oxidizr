@@ -58,8 +58,9 @@ impl Position {
 }
 
 /// Region of a source file: byte offsets (machine use) plus start position (human
-/// use). The end position is omitted — diagnostics quote whole lines anyway
-/// (agents/plan/COMPAT.md: parser errors carry file, line and the offending source line).
+/// use). The end position is omitted — parser diagnostics quote whole lines:
+/// the file, the line and the offending source line carry all the position
+/// detail a diagnostic needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     /// Which file.

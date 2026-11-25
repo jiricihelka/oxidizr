@@ -14,6 +14,12 @@ Rust-API churn lands here as it happens (each breaking-ish change gets its
 line in the same commit); the section is cut into the next version at its
 release.
 
+### Fixed
+
+- Two user-visible messages dropped their citations of internal planning
+  documents: the un-implemented export format text (`OXZ-5007`) and the
+  oracle "binary not found" text.
+
 ### Changed
 
 - The stable-toolchain floor (`rust-version`) rises 1.85 → 1.88: stabilized

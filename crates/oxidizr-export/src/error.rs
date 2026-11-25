@@ -6,7 +6,7 @@ pub enum ExportError {
     /// The format is in the official tooling's export registry (or is a
     /// `static`/`png`/`svg` branch) but oxidizr's exporter does not
     /// implement it yet — surfaced as `OXZ-5007`.
-    #[error("`{format}` is not implemented by oxidizr yet (see agents/plan/build/PHASE_2.md)")]
+    #[error("`{format}` is not implemented by oxidizr yet")]
     NotImplemented {
         /// The requested format string (canonical spelling).
         format: String,

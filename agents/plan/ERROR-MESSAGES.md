@@ -65,3 +65,16 @@ diag 3, inspect 2, lsp/cli/e2e/xtask 1 each.
 3. Otherwise `IMPROVABLE`: reword + same commit update any prose assertions
    + `docs/diagnostics.md` row if the message is catalog-listed +
    CHANGELOG line ONLY if a Rust API changed (prose alone is not API churn).
+
+## Reword log
+
+- **R1-a (2026-11-25) — hygiene defect fixes** (provenance leaks in shipped
+  text, not prose improvements; all four grepped UNPINNED first):
+  `ExportError::NotImplemented` Display dropped its `(see agents/plan/…)`
+  citation (family 8); oracle “binary not found” text dropped its
+  `agents/plan/TESTING.md` parenthetical (family 11); `ApiOptions.allow_net`
+  doc comment dropped its `PHASE_2.md` citation (comment, not message);
+  `Span` doc comment dropped its `agents/plan/COMPAT.md` citation.
+  The refs hygiene leg gained the matching patterns (`agents/`, `phase_`)
+  with fixtures, so the class can no longer regress. `docs/diagnostics.md`
+  needed no edit (its `OXZ-5007` row describes the trigger, not the text).
