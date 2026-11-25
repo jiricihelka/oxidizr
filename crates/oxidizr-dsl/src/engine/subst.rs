@@ -93,6 +93,16 @@ impl Parser<'_> {
     /// substituted. That is modeled here by collecting the occurrences from
     /// the original first.
     pub(super) fn substitute_strings(&self, token: &str) -> String {
+        let mut token = token.to_string();
+        self.substitute_in(&mut token);
+        token
+    }
+
+    /// The same substitution IN PLACE: the hot per-token leg calls this on
+    /// the tokenizer's own `String` — a token without `${` occurrences
+    /// (every token on most lines) is left untouched, dropping the copy
+    /// the `&str -> String` shape forced on every token.
+    pub(super) fn substitute_in(&self, token: &mut String) {
         // `(\$\{[a-zA-Z0-9-_.]+?})` — the lazy `+` equals "up to the first
         // }", and name chars exclude `}`, so scan `${` … nearest `}` with
         // all-valid non-empty name.
@@ -122,7 +132,9 @@ impl Parser<'_> {
         // triggers a replace-all on the CURRENT token, in scan order.
         // Replacement-introduced `${…}` is never rescanned; a constant's
         // value is substituted RAW (only TextBlocks re-substitute).
-        let mut token = token.to_string();
+        if occurrences.is_empty() {
+            return;
+        }
         for before in occurrences {
             let name = &before[2..before.len() - 1];
             let after = if let Some(nv) = self.constants.get(name) {
@@ -139,9 +151,8 @@ impl Parser<'_> {
                 }
             };
             if let Some(after) = after {
-                token = token.replace(&before, &after);
+                *token = token.replace(&before, &after);
             }
         }
-        token
     }
 }

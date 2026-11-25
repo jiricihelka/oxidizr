@@ -1044,12 +1044,12 @@ impl<'a> Parser<'a> {
         // 259–264: inline-script context swallowing — unreachable: `!script`
         // is rejected (OXZ-5002), so that context is never on the stack.
 
-        // 266–269: tokenize + per-token substitution.
-        let raw_tokens = tokenize::tokenize(&raw);
-        let mut substituted: Vec<String> = raw_tokens
-            .iter()
-            .map(|t| self.substitute_strings(t))
-            .collect();
+        // 266–269: tokenize + per-token substitution (IN PLACE on the
+        // tokenizer's own Strings — a token without `${` is never copied).
+        let mut substituted: Vec<String> = tokenize::tokenize(&raw);
+        for token in &mut substituted {
+            self.substitute_in(token);
+        }
 
         // 271–278: the `id = ` prefix. Applied on the token Vec before the
         // `Tokens` wrap (the old `tokens.sublist(2)` reassign
