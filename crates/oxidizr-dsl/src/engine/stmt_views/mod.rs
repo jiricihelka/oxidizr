@@ -34,12 +34,14 @@ use oxidizr_core::{Id, ViewRef};
 
 use crate::compat::{java_parse_int, java_trim};
 
-use super::expr::{ExprScope, Mi, is_expression};
 use super::idents::RegItem;
 use super::stmt_line::{java_absolute, java_canonical};
 use super::{ColorScheme, Ctx, DslError, Parser, Sec, Stmt, Tokens, tok};
 mod content;
 mod defs;
+mod steps;
+
+use steps::{custom_animation_step, deployment_animation_step, static_animation_step};
 
 use defs::{
     component_view, container_view, context_view, custom_view, deployment_view, dynamic_view,
@@ -113,118 +115,6 @@ fn apply_text(p: &mut Parser, view: ViewRef, text: String, title: bool) {
             base.description = Some(text);
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// animation steps
-// ---------------------------------------------------------------------------
-
-fn static_animation_step(
-    p: &mut Parser,
-    view: ViewRef,
-    tokens: &Tokens,
-    start: usize,
-) -> Result<(), DslError> {
-    let mut ids: Vec<Id> = Vec::new();
-    for i in start..tokens.size() {
-        let token = tokens.get(i);
-        let items = if is_expression(&token) {
-            p.parse_expression(&token, ExprScope::Static)?
-        } else {
-            p.parse_identifier(&token, ExprScope::Static)?
-        };
-        for item in items {
-            if let Mi::Element(id) = item
-                && matches!(
-                    p.builder.element_kind(&id),
-                    Some(
-                        ElementKind::Person
-                            | ElementKind::SoftwareSystem
-                            | ElementKind::Container
-                            | ElementKind::Component
-                    )
-                )
-            {
-                ids.push(id);
-            }
-        }
-    }
-    if ids.is_empty() {
-        return Err(DslError::stmt("No elements were found"));
-    }
-    p.builder
-        .view_add_animation_step(view, &ids)
-        .map_err(|e| DslError::core(&e))
-}
-
-fn deployment_animation_step(
-    p: &mut Parser,
-    view: ViewRef,
-    tokens: &Tokens,
-    start: usize,
-) -> Result<(), DslError> {
-    let mut instances: Vec<Id> = Vec::new();
-    let mut infra: Vec<Id> = Vec::new();
-    for i in start..tokens.size() {
-        let token = tokens.get(i);
-        let items = if is_expression(&token) {
-            p.parse_expression(&token, ExprScope::Deployment)?
-        } else {
-            p.parse_identifier(&token, ExprScope::Deployment)?
-        };
-        for item in items {
-            if let Mi::Element(id) = item {
-                match p.builder.element_kind(&id) {
-                    Some(ElementKind::SoftwareSystemInstance | ElementKind::ContainerInstance) => {
-                        instances.push(id);
-                    }
-                    Some(ElementKind::InfrastructureNode) => infra.push(id),
-                    _ => {}
-                }
-            }
-        }
-    }
-    if instances.is_empty() && infra.is_empty() {
-        return Err(DslError::stmt(
-            "No software system instances, container instances, or infrastructure nodes were found",
-        ));
-    }
-    // `DeploymentView.addAnimation(instances, infrastructureNodes)` —
-    // The animation add takes
-    instances.extend(infra);
-    p.builder
-        .view_add_animation_step(view, &instances)
-        .map_err(|e| DslError::core(&e))
-}
-
-fn custom_animation_step(
-    p: &mut Parser,
-    view: ViewRef,
-    tokens: &Tokens,
-    start: usize,
-) -> Result<(), DslError> {
-    let mut ids: Vec<Id> = Vec::new();
-    for i in start..tokens.size() {
-        let token = tokens.get(i);
-        let items = if is_expression(&token) {
-            p.parse_expression(&token, ExprScope::Custom)?
-        } else {
-            p.parse_identifier(&token, ExprScope::Custom)?
-        };
-        for item in items {
-            if let Mi::Element(id) = item
-                && p.builder.element_kind(&id) == Some(ElementKind::CustomElement)
-            {
-                ids.push(id);
-            }
-        }
-    }
-    if ids.is_empty() {
-        return Err(DslError::stmt("No custom elements were found"));
-    }
-    p.builder
-        .view_add_animation_step(view, &ids)
-        .map_err(|e| DslError::core(&e))
 }
 
 // ---------------------------------------------------------------------------
