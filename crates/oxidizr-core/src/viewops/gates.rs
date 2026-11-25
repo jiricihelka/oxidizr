@@ -366,6 +366,4 @@ impl WorkspaceBuilder {
         let container = self.instance_static_element(id)?;
         self.element_parent(&container)
     }
-
-    // ------------------------------------------------------------------
 }
