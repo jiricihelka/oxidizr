@@ -33,18 +33,11 @@ pub const DEFAULT_ENVIRONMENT: &str = "Default";
 /// it quoted; the reader must also accept plain numbers).
 pub const DEFAULT_INSTANCES: &str = "1";
 
-/// The parser default workspace name (the official parser:
-/// a `workspace` declaration without a name literal stores `"Name"`).
-pub const DEFAULT_WORKSPACE_NAME: &str = "Name";
-
-/// The parser default workspace description (see [`DEFAULT_WORKSPACE_NAME`]).
-pub const DEFAULT_WORKSPACE_DESCRIPTION: &str = "Description";
-
 pub use builder::WorkspaceBuilder;
 pub use configuration::{
     Role, User, Visibility, Workspace, WorkspaceConfiguration, WorkspaceScope,
 };
 pub use error::CoreError;
-pub use ids::{ElementId, Id, IdGenerator, RelationshipId};
-pub use validate::{ValidationError, validate, validate_model, validate_views};
+pub use ids::{Id, IdGenerator};
+pub use validate::validate;
 pub use viewops::ViewRef;

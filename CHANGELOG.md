@@ -27,6 +27,13 @@ release.
   - oxidizr-api: `generate::pathfilter::PathFilter::compile` now fails with
     the new `PatternError` error type instead of a bare `String`; the
     reason text (decorated into `OXZ-5010`) is unchanged (R1)
+  - oxidizr-core: removed the never-constructed identity newtypes
+    `ids::ElementId`/`ids::RelationshipId` (the model has always keyed on
+    `Id` alone, matching the official shared element/relationship counter)
+    and the unused parser-default constants
+    `DEFAULT_WORKSPACE_NAME`/`DEFAULT_WORKSPACE_DESCRIPTION` (the parser
+    applies those defaults inline); root re-exports trimmed to the names
+    consumers import (R5)
 - The stable-toolchain floor (`rust-version`) rises 1.85 → 1.88: stabilized
   let-chains and slice `as_chunks` are adopted across the workspace.
   Shipped behavior, outputs and the CLI are unchanged.

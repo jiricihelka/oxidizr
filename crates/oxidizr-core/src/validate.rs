@@ -134,7 +134,7 @@ fn flatten_node(node: &DeploymentNode, out: &mut Vec<(Id, ElementKind, String)>)
 
 /// Model-level checks: id uniqueness, instance links,
 /// name uniqueness, relationship description uniqueness, linked ids.
-pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
+pub(crate) fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
     // 1. Unique ids across BOTH element and relationship spaces
     // (`addElementToInternalStructures` / `addRelationshipToInternalStructures`).
     let mut ids: HashMap<&Id, &'static str> = HashMap::new();
@@ -440,7 +440,7 @@ fn check_child_node_names(node: &DeploymentNode, out: &mut Vec<ValidationError>)
 }
 
 /// View-level checks, official order.
-pub fn validate_views(model: &Model, views: &ViewSet, out: &mut Vec<ValidationError>) {
+pub(crate) fn validate_views(model: &Model, views: &ViewSet, out: &mut Vec<ValidationError>) {
     let element_kinds: HashMap<&Id, ElementKind> = flattened_ids(model)
         .into_iter()
         .map(|(id, k, _)| (id, k))

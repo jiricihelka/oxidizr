@@ -1,4 +1,4 @@
-//! Identity newtypes and the shared id counter.
+//! Model identity and the shared id counter.
 //!
 //! ONE sequential integer counter is shared by elements and relationships in
 //! definition order, starting at 1 (`SequentialIntegerIdGeneratorStrategy`); JSON
@@ -59,75 +59,6 @@ impl std::fmt::Display for Id {
         f.write_str(&self.text)
     }
 }
-
-/// Id of an element (person / system / container / component / custom element /
-/// deployment element).
-#[derive(Debug, Clone, Eq)]
-pub struct ElementId(pub Id);
-
-/// Id of a relationship. Shares the counter with [`ElementId`] — the two id
-/// spaces must not collide (`Model::addRelationshipToInternalStructures` checks
-/// BOTH maps).
-#[derive(Debug, Clone, Eq)]
-pub struct RelationshipId(pub Id);
-
-macro_rules! id_newtype_impls {
-    ($t:ident) => {
-        impl std::ops::Deref for $t {
-            type Target = Id;
-            fn deref(&self) -> &Id {
-                &self.0
-            }
-        }
-
-        impl std::fmt::Display for $t {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                self.0.fmt(f)
-            }
-        }
-
-        impl PartialEq for $t {
-            fn eq(&self, other: &Self) -> bool {
-                self.0.eq(&other.0)
-            }
-        }
-
-        impl std::hash::Hash for $t {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                self.0.hash(state);
-            }
-        }
-
-        impl Ord for $t {
-            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                self.0.cmp(&other.0)
-            }
-        }
-
-        impl PartialOrd for $t {
-            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                Some(self.cmp(other))
-            }
-        }
-
-        impl $t {
-            /// Wrap an id string.
-            #[must_use]
-            pub fn new(text: impl Into<Arc<str>>) -> Self {
-                Self(Id::new(text))
-            }
-
-            /// The numeric id form (counter allocation).
-            #[must_use]
-            pub fn from_num(n: u32) -> Self {
-                Self(Id::from_num(n))
-            }
-        }
-    };
-}
-
-id_newtype_impls!(ElementId);
-id_newtype_impls!(RelationshipId);
 
 /// The single shared element/relationship id counter
 /// (`SequentialIntegerIdGeneratorStrategy`).
