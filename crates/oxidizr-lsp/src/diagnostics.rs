@@ -29,7 +29,7 @@ use crate::config::Config;
 /// the `initializationOptions` of §L-7 ([`crate::config::Config`]). A
 /// pathological DSL sprays one error per line; an editor gutter copes
 /// with 100.
-pub const MAX_DIAGNOSTICS: usize = 100;
+pub(crate) const MAX_DIAGNOSTICS: usize = 100;
 
 /// The registry document every `OXZ-nnnn` code links to (the `href` the
 /// editor shows under the diagnostic code).

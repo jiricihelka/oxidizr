@@ -37,9 +37,9 @@ use crate::engine::{EdgePlacement, LayoutEngine, LayoutError, LayoutResult, Node
 use crate::graph::{Anchor, LayoutGraph};
 
 /// Plain-format unit: 72 pt/in — we treat 1 in = 72 px.
-pub const PX_PER_INCH: f64 = 72.0;
+pub(crate) const PX_PER_INCH: f64 = 72.0;
 /// Horizontal gap between stacked connected components (px).
-pub const COMPONENT_GAP_PX: f64 = 50.0;
+pub(crate) const COMPONENT_GAP_PX: f64 = 50.0;
 
 /// The external-`dot` engine: holds the binary path (discovery via
 /// [`Dot::from_env`] from `$OXIDZR_DOT_BIN`).

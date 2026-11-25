@@ -31,7 +31,7 @@ use crate::diagnostics::{is_json, position};
 /// Whole-document formatting: the canonical print as ONE whole-buffer
 /// [`TextEdit`], or the EMPTY array (JSON route, canonical buffer).
 #[must_use]
-pub fn full_document(uri: &Uri, text: &str) -> Vec<TextEdit> {
+pub(crate) fn full_document(uri: &Uri, text: &str) -> Vec<TextEdit> {
     if is_json(uri) {
         return Vec::new();
     }

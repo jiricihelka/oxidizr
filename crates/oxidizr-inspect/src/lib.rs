@@ -26,7 +26,7 @@ mod strategy;
 mod violation;
 
 pub use run::inspect;
-pub use severity::{ParseThresholdError, Severity};
+pub use severity::Severity;
 pub use violation::Violation;
 
 /// Every inspection type string, keyed by a stable name. The strings

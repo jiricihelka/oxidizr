@@ -44,7 +44,7 @@ pub fn enabled(workspace_properties: &Properties) -> bool {
 /// are DROPPED: a relationship key can only be set per
 /// source→destination pair or with its own exact key.
 #[must_use]
-pub fn property_names(type_path: &str) -> Vec<String> {
+pub(crate) fn property_names(type_path: &str) -> Vec<String> {
     let lowered = type_path.to_lowercase();
     let mut names = vec![format!("{PREFIX}*")];
     let mut buf = String::from(PREFIX);
@@ -68,7 +68,10 @@ pub fn property_names(type_path: &str) -> Vec<String> {
 /// its value parses via [`Severity::parse`]. `None` = no candidate key in
 /// any holder.
 #[must_use]
-pub fn severity_lookup(type_path: &str, holders: &[Option<&Properties>]) -> Option<Severity> {
+pub(crate) fn severity_lookup(
+    type_path: &str,
+    holders: &[Option<&Properties>],
+) -> Option<Severity> {
     let names = property_names(type_path);
     for holder in holders.iter().flatten() {
         for name in &names {
@@ -82,14 +85,14 @@ pub fn severity_lookup(type_path: &str, holders: &[Option<&Properties>]) -> Opti
 
 /// The non-relationship entry point: lookup, else the ERROR default.
 #[must_use]
-pub fn severity_from(type_path: &str, holders: &[Option<&Properties>]) -> Severity {
+pub(crate) fn severity_from(type_path: &str, holders: &[Option<&Properties>]) -> Severity {
     severity_lookup(type_path, holders).unwrap_or(Severity::Error)
 }
 
 /// The lowercase element-kind token used in the `[srcType->dstType]`
 /// key rewrite.
 #[must_use]
-pub fn java_element_type(element_kind: &str) -> String {
+pub(crate) fn java_element_type(element_kind: &str) -> String {
     // `element_kind` is already the canonical lowercase kind token
     // ("softwaresystem", "deploymentnode", …), so this is the identity
     // map.
@@ -101,7 +104,7 @@ pub fn java_element_type(element_kind: &str) -> String {
 /// generic type SECOND; the holders are searched inner→outer in both
 /// passes.
 #[must_use]
-pub fn relationship_severity(
+pub(crate) fn relationship_severity(
     type_path: &str,
     source_kind: &str,
     destination_kind: &str,

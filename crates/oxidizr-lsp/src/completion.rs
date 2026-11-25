@@ -25,7 +25,7 @@ use oxidizr_dsl::engine::{DIRECTIVES, cursor_scope};
 /// the line end lands before its `\n`) — editors race mid-edit, and the
 /// server must answer them, not error.
 #[must_use]
-pub fn position_to_offset(text: &str, position: Position) -> usize {
+pub(crate) fn position_to_offset(text: &str, position: Position) -> usize {
     let mut offset = 0usize;
     for _ in 0..position.line {
         let Some(newline) = text[offset..].find('\n') else {
@@ -50,7 +50,7 @@ pub fn position_to_offset(text: &str, position: Position) -> usize {
 /// (letters/digits/`_`/`-`, plus a leading `!` so a half-typed directive
 /// filters the directive set). Empty at a fresh statement position.
 #[must_use]
-pub fn prefix_at(text: &str, offset: usize) -> &str {
+pub(crate) fn prefix_at(text: &str, offset: usize) -> &str {
     let offset = offset.min(text.len());
     let mut start = offset;
     while start > 0 {
