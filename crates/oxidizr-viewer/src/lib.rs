@@ -53,6 +53,11 @@ mod tests {
             for entry in std::fs::read_dir(dir).expect("src readable") {
                 let path = entry.expect("dir entry").path();
                 if path.is_dir() {
+                    // The gui shell module tree is the one place allowed
+                    // the GUI stack (it was shell.rs before the split).
+                    if path.file_name().is_some_and(|n| n == "shell") {
+                        continue;
+                    }
                     collect(&path, out);
                 } else if path.extension().is_some_and(|x| x == "rs")
                     && !path
