@@ -5,6 +5,7 @@
 
 use crate::javahash;
 use oxidizr_core::properties::Properties;
+use std::io::Write as _;
 
 /// A JSON value in output-ready shape. Objects carry their entries in FINAL
 /// key order (the caller sorts: alphabetical for model objects,
@@ -97,7 +98,9 @@ pub(crate) fn to_bytes(root: &Json) -> Vec<u8> {
 fn emit(value: &Json, depth: usize, out: &mut Vec<u8>) {
     match value {
         Json::Str(s) => escape_into(s, out),
-        Json::Num(n) => out.extend_from_slice(n.to_string().as_bytes()),
+        Json::Num(n) => {
+            let _ = write!(out, "{n}");
+        }
         Json::Bool(b) => out.extend_from_slice(if *b { b"true" } else { b"false" }),
         Json::Raw(literal) => out.extend_from_slice(literal.as_bytes()),
         Json::Obj(entries) => {
@@ -144,30 +147,30 @@ fn emit(value: &Json, depth: usize, out: &mut Vec<u8>) {
 }
 
 fn pad(depth: usize, out: &mut Vec<u8>) {
-    out.extend_from_slice(&[b' '; 2].repeat(depth));
+    out.resize(out.len() + 2 * depth, b' ');
 }
 
 /// The writer's string escaping: `"`, `\`, and the named controls;
 /// other `< 0x20` as `\u00XX` (UPPERCASE hex); everything else — including
-/// `/`, DEL and all non-ASCII — passes through raw UTF-8.
+/// `/`, DEL and all non-ASCII — passes through raw UTF-8. Byte-wise: every
+/// byte `>= 0x20` (ASCII pass-throughs and UTF-8 lead/continuation bytes
+/// alike) copies verbatim — the char-wise re-encode this replaces emitted
+/// exactly the same bytes.
 fn escape_into(s: &str, out: &mut Vec<u8>) {
     out.push(b'"');
-    for c in s.chars() {
-        match c {
-            '"' => out.extend_from_slice(b"\\\""),
-            '\\' => out.extend_from_slice(b"\\\\"),
-            '\u{08}' => out.extend_from_slice(b"\\b"),
-            '\u{09}' => out.extend_from_slice(b"\\t"),
-            '\u{0A}' => out.extend_from_slice(b"\\n"),
-            '\u{0C}' => out.extend_from_slice(b"\\f"),
-            '\u{0D}' => out.extend_from_slice(b"\\r"),
-            c if (c as u32) < 0x20 => {
-                out.extend_from_slice(format!("\\u00{:02X}", c as u32).as_bytes());
+    for &b in s.as_bytes() {
+        match b {
+            b'"' => out.extend_from_slice(b"\\\""),
+            b'\\' => out.extend_from_slice(b"\\\\"),
+            0x08 => out.extend_from_slice(b"\\b"),
+            0x09 => out.extend_from_slice(b"\\t"),
+            0x0A => out.extend_from_slice(b"\\n"),
+            0x0C => out.extend_from_slice(b"\\f"),
+            0x0D => out.extend_from_slice(b"\\r"),
+            b if b < 0x20 => {
+                let _ = write!(out, "\\u{b:04X}");
             }
-            c => {
-                let mut buf = [0u8; 4];
-                out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
-            }
+            b => out.push(b),
         }
     }
     out.push(b'"');
