@@ -22,3 +22,4 @@ tools, not guessed.
 | [agent-shell-quoting.md](agent-shell-quoting.md) | tool-call `\b` = JSON backspace; double-quoted backticks EXECUTE commands; subagent reports ≠ evidence (`git diff --stat` is) |
 | [cargo-dist-installer-panic.md](cargo-dist-installer-panic.md) | dist 0.31–0.34 panics `couldn't find the release!?` whenever `installers` is set but GitHub hosting isn't; fix = v1 `dist-workspace.toml` with `ci`+`hosting` |
 | [windows-path-separator-assertions.md](windows-path-separator-assertions.md) | test assertion hardcoded `/` met `Path::display`'s `\` on the first Windows run; assert the joined+rendered path; closes with filesystem tests need the windows leg |
+| [gui-leg-lint-drift.md](gui-leg-lint-drift.md) | the quartet never compiles `--features gui` code — clippy drift piles up silently in the gui-only shell (10 `collapsible_if` found pre-existing at HEAD by a stash check); run `cargo xtask ci gui` in the same wave that touches the viewer |
