@@ -541,10 +541,10 @@ impl Dialect for C4PlantUmlDialect {
         }
 
         let mut description = String::new();
-        if let Some(order) = &relationship_view.order {
-            if !is_null_or_empty(Some(order)) {
-                description = format!("{order}: ");
-            }
+        if let Some(order) = &relationship_view.order
+            && !is_null_or_empty(Some(order))
+        {
+            description = format!("{order}: ");
         }
         description.push_str(
             relationship_view

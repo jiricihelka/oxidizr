@@ -65,3 +65,4 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [p4d-strip-rules.md](process/p4d-strip-rules.md) | P4D comment-strip pass contract (comments only, facts restated, verify recipe) |
 | [p4d-d6-bless-prediction.md](process/p4d-d6-bless-prediction.md) | what may/must not move when D-6 rewrites human text (bless stays 307×) |
 | [windows-path-separator-assertions.md](pitfalls/windows-path-separator-assertions.md) | first native-Windows CI run caught a hardcoded `/` in a test assertion; fix = compare `join().display()`; windows leg belongs in closes touching the filesystem |
+| [msrv-bump-clippy-wave.md](pitfalls/msrv-bump-clippy-wave.md) | raising `rust-version` = clippy `--target-version` change: expect a lint wave (let-chain `collapsible_if`, `as_chunks`) — fix in the same commit, audit the `--fix` diff whole |

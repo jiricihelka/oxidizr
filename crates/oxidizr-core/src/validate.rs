@@ -292,15 +292,14 @@ pub fn validate_model(model: &Model, out: &mut Vec<ValidationError>) {
             // violation with the empty description instead.
             if let (Some(source_name), Some(destination_name)) =
                 (names.get(&r.source), names.get(&r.destination))
+                && reported_desc.insert((&r.source, &r.destination, description))
             {
-                if reported_desc.insert((&r.source, &r.destination, description)) {
-                    err(
-                        out,
-                        format!(
-                            "A relationship with the description \"{description}\" already exists between \"{source_name}\" and \"{destination_name}\"."
-                        ),
-                    );
-                }
+                err(
+                    out,
+                    format!(
+                        "A relationship with the description \"{description}\" already exists between \"{source_name}\" and \"{destination_name}\"."
+                    ),
+                );
             }
         }
     }

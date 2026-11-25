@@ -95,12 +95,11 @@ fn statements(text: &str) -> Vec<(usize, usize)> {
             open = Some(usize::try_from(line.range.start).unwrap_or(usize::MAX));
         }
         depth = (depth + delta).max(0); // stray closers cannot go negative
-        if depth == 0 {
-            if let Some(begin) = open.take() {
-                let end =
-                    terminator_end(text, usize::try_from(line.range.end).unwrap_or(usize::MAX));
-                out.push((begin, end));
-            }
+        if depth == 0
+            && let Some(begin) = open.take()
+        {
+            let end = terminator_end(text, usize::try_from(line.range.end).unwrap_or(usize::MAX));
+            out.push((begin, end));
         }
     }
     if let Some(begin) = open {

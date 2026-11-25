@@ -252,10 +252,10 @@ pub fn check_tree(root: &Path, skip_extra: &[PathBuf]) -> Result<Vec<Finding>> {
             continue;
         }
         let name = dir.file_name().map(|n| n.to_string_lossy().to_string());
-        if let Some(n) = &name {
-            if SKIP_DIRS.contains(&n.as_str()) {
-                continue;
-            }
+        if let Some(n) = &name
+            && SKIP_DIRS.contains(&n.as_str())
+        {
+            continue;
         }
         if skip_extra.iter().any(|p| dir.starts_with(p)) {
             continue;
@@ -495,10 +495,10 @@ fn hygiene_line(line: &str) -> Option<&'static str> {
         return None;
     }
     let (code, comment) = split_comment(line);
-    if !comment.is_empty() {
-        if let Some(w) = process_id(&comment, true).or_else(|| narration(&comment)) {
-            return Some(w);
-        }
+    if !comment.is_empty()
+        && let Some(w) = process_id(&comment, true).or_else(|| narration(&comment))
+    {
+        return Some(w);
     }
     for lit in string_literals(&code) {
         if let Some(w) = process_id(&lit, false).or_else(|| narration(&lit)) {

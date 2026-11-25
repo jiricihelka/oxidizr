@@ -726,10 +726,10 @@ impl Dialect for StructurizrDialect {
         });
         let metadata_font = metadata_font_size(font_size);
         let mut description = String::new();
-        if let Some(order) = relationship_view.order.as_deref() {
-            if is_value(order) {
-                description = format!("{order}: ");
-            }
+        if let Some(order) = relationship_view.order.as_deref()
+            && is_value(order)
+        {
+            description = format!("{order}: ");
         }
         description.push_str(
             relationship_view

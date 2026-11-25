@@ -1208,14 +1208,12 @@ impl<'a> Engine<'a> {
     pub(crate) fn get_boundary_containers(&self, view: View<'a>) -> Vec<ElemRef<'a>> {
         let mut out: Vec<ElemRef<'a>> = Vec::new();
         for element in self.view_elements(view) {
-            if element.kind() == oxidizr_core::validate::ElementKind::Component {
-                if let Some(parent_id) = element.parent_id() {
-                    if let Some(container) = element_by_id(self.model(), parent_id) {
-                        if !out.iter().any(|c| c.id() == container.id()) {
-                            out.push(container);
-                        }
-                    }
-                }
+            if element.kind() == oxidizr_core::validate::ElementKind::Component
+                && let Some(parent_id) = element.parent_id()
+                && let Some(container) = element_by_id(self.model(), parent_id)
+                && !out.iter().any(|c| c.id() == container.id())
+            {
+                out.push(container);
             }
         }
         out.sort_by(|a, b| java_cmp_str(a.id().as_str(), b.id().as_str()));

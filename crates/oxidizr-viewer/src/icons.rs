@@ -325,10 +325,10 @@ fn blit(out: &mut [u8], out_width: u32, raster: &Raster, px: u32, py: u32) {
         let Some(src) = slice_at(&raster.rgba, line * w * 4, w * 4) else {
             continue;
         };
-        if let Some(slot) = out.get_mut((y + line) * width * 4 + x * 4..) {
-            if let Some(dst) = slot.get_mut(..w * 4) {
-                dst.copy_from_slice(src);
-            }
+        if let Some(slot) = out.get_mut((y + line) * width * 4 + x * 4..)
+            && let Some(dst) = slot.get_mut(..w * 4)
+        {
+            dst.copy_from_slice(src);
         }
     }
 }
@@ -424,7 +424,7 @@ fn decode_png(bytes: &[u8]) -> Result<Raster, IconError> {
         (png::ColorType::Rgba, png::BitDepth::Eight) => data.to_vec(),
         (png::ColorType::Rgb, png::BitDepth::Eight) => {
             let mut out = Vec::with_capacity(data.len() / 3 * 4);
-            for px in data.chunks_exact(3) {
+            for px in data.as_chunks::<3>().0 {
                 out.extend_from_slice(&[px[0], px[1], px[2], u8::MAX]);
             }
             out

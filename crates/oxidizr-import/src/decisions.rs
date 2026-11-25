@@ -349,15 +349,15 @@ fn adrtools(
                 }
             } else if line.starts_with(ADR_CONTEXT_HEADING) {
                 break;
-            } else if !line.is_empty() {
-                if let Some(m) = link_re.find(line, 0) {
-                    let desc = m.group(line, 1).unwrap_or_default().to_owned();
-                    let tgt = m.group(line, 2).unwrap_or_default();
-                    if let Some(&ti) = index.get(tgt) {
-                        let tid = target.decisions[ti].id.clone();
-                        if tid != self_id {
-                            links.push((tid, desc));
-                        }
+            } else if !line.is_empty()
+                && let Some(m) = link_re.find(line, 0)
+            {
+                let desc = m.group(line, 1).unwrap_or_default().to_owned();
+                let tgt = m.group(line, 2).unwrap_or_default();
+                if let Some(&ti) = index.get(tgt) {
+                    let tid = target.decisions[ti].id.clone();
+                    if tid != self_id {
+                        links.push((tid, desc));
                     }
                 }
             }
@@ -629,30 +629,28 @@ fn log4brains(
         let mut links: Vec<(String, String)> = Vec::new();
         let mut in_links = false;
         for line in java_split_newlines(&content) {
-            if line.starts_with(L4B_STATUS_PREFIX) {
-                if let Some(m) = status_re.find(line, 0) {
-                    let desc = m.group(line, 1).unwrap_or_default().to_owned();
-                    let tgt = m.group(line, 2).unwrap_or_default();
-                    if let Some(&ti) = index.get(tgt) {
-                        let tid = target.decisions[ti].id.clone();
-                        if tid != self_id {
-                            links.push((tid, desc));
-                        }
+            if line.starts_with(L4B_STATUS_PREFIX)
+                && let Some(m) = status_re.find(line, 0)
+            {
+                let desc = m.group(line, 1).unwrap_or_default().to_owned();
+                let tgt = m.group(line, 2).unwrap_or_default();
+                if let Some(&ti) = index.get(tgt) {
+                    let tid = target.decisions[ti].id.clone();
+                    if tid != self_id {
+                        links.push((tid, desc));
                     }
                 }
             }
             if line.starts_with(L4B_LINKS_HEADING) {
                 in_links = true;
             }
-            if in_links {
-                if let Some(m) = link_re.find(line, 0) {
-                    let desc = m.group(line, 1).unwrap_or_default().to_owned();
-                    let tgt = m.group(line, 2).unwrap_or_default();
-                    if let Some(&ti) = index.get(tgt) {
-                        let tid = target.decisions[ti].id.clone();
-                        if tid != self_id {
-                            links.push((tid, desc));
-                        }
+            if in_links && let Some(m) = link_re.find(line, 0) {
+                let desc = m.group(line, 1).unwrap_or_default().to_owned();
+                let tgt = m.group(line, 2).unwrap_or_default();
+                if let Some(&ti) = index.get(tgt) {
+                    let tid = target.decisions[ti].id.clone();
+                    if tid != self_id {
+                        links.push((tid, desc));
                     }
                 }
             }

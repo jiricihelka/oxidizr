@@ -484,10 +484,10 @@ impl Parser<'_> {
                         }
                     }
                     Mi::Rel(id) => {
-                        if let Some(linked) = self.builder.linked_relationship_id(id) {
-                            if self.builder.has_relationship(&linked) {
-                                has = self.builder.item_has_tag(&linked, tag);
-                            }
+                        if let Some(linked) = self.builder.linked_relationship_id(id)
+                            && self.builder.has_relationship(&linked)
+                        {
+                            has = self.builder.item_has_tag(&linked, tag);
                         }
                     }
                 }
@@ -512,10 +512,10 @@ impl Parser<'_> {
                     }
                 }
                 Mi::Rel(id) => {
-                    if let Some(linked) = self.builder.linked_relationship_id(id) {
-                        if self.builder.has_relationship(&linked) {
-                            has = self.builder.item_has_property(&linked, name, value);
-                        }
+                    if let Some(linked) = self.builder.linked_relationship_id(id)
+                        && self.builder.has_relationship(&linked)
+                    {
+                        has = self.builder.item_has_property(&linked, name, value);
                     }
                 }
             }
@@ -699,10 +699,10 @@ impl Parser<'_> {
         let mut out: Vec<Id> = Vec::new();
         if is_expression(identifier) {
             for item in self.parse_expression(identifier, scope)? {
-                if let Mi::Element(id) = item {
-                    if !out.contains(&id) {
-                        out.push(id);
-                    }
+                if let Mi::Element(id) = item
+                    && !out.contains(&id)
+                {
+                    out.push(id);
                 }
             }
         } else {

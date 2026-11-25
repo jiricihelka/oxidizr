@@ -201,10 +201,11 @@ impl ThemeStore {
             // ONLY on this leg (catalog -3).
             let base = base_url(location);
             for style in &mut theme.elements {
-                if let Some(icon) = &style.icon {
-                    if !is_absolute_icon(icon) && !icon.starts_with("data:image") {
-                        style.icon = Some(format!("{base}{icon}"));
-                    }
+                if let Some(icon) = &style.icon
+                    && !is_absolute_icon(icon)
+                    && !icon.starts_with("data:image")
+                {
+                    style.icon = Some(format!("{base}{icon}"));
                 }
             }
             Ok(Some(theme))
@@ -237,13 +238,13 @@ impl ThemeStore {
             .cache_dir
             .as_ref()
             .map(|dir| dir.join(&hash).join("theme.json"));
-        if let Some(path) = &cache_path {
-            if path.is_file() {
-                return std::fs::read_to_string(path).map_err(|e| ThemeError::Fetch {
-                    url: url.to_string(),
-                    reason: format!("cached theme {} is unreadable: {e}", path.display()),
-                });
-            }
+        if let Some(path) = &cache_path
+            && path.is_file()
+        {
+            return std::fs::read_to_string(path).map_err(|e| ThemeError::Fetch {
+                url: url.to_string(),
+                reason: format!("cached theme {} is unreadable: {e}", path.display()),
+            });
         }
 
         let work_dir = cache_path

@@ -393,10 +393,10 @@ fn generate_pair_merge_is_view_free_and_id_unique() {
                 for rel in rels {
                     let src = rel.get("source").and_then(|v| v.as_str());
                     let dst = rel.get("destination").and_then(|v| v.as_str());
-                    if let (Some(s), Some(d)) = (src, dst) {
-                        if !pairs_seen.insert((s, d)) {
-                            return Err(format!("{name}: duplicate edge {s} -> {d} under First"));
-                        }
+                    if let (Some(s), Some(d)) = (src, dst)
+                        && !pairs_seen.insert((s, d))
+                    {
+                        return Err(format!("{name}: duplicate edge {s} -> {d} under First"));
                     }
                 }
             }

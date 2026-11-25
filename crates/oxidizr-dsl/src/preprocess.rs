@@ -325,24 +325,24 @@ pub fn preprocess(source: &str) -> Vec<Logical> {
         if tb.is_some() {
             // Inside a text block: only the closing check runs (the official text-block
             // branch); middle lines are captured by span, not per-line segments.
-            if content_text.ends_with(TEXT_BLOCK_MARKER) {
-                if let Some(open) = tb.take() {
-                    let mut logical = Logical {
-                        number, // reference flushes with the closing line's number
-                        span: (open.span_start, line.end),
-                        segments: open.prefix,
-                        text_block: Some(TextBlock {
-                            raw: (open.raw_start, line.end),
-                            after_opener: open.after_opener,
-                            middle_start: open.middle_start,
-                            middle_end: content.0,
-                            closed: true,
-                        }),
-                        dropped: false,
-                    };
-                    strip_bom(&mut logical, source);
-                    out.push(logical);
-                }
+            if content_text.ends_with(TEXT_BLOCK_MARKER)
+                && let Some(open) = tb.take()
+            {
+                let mut logical = Logical {
+                    number, // reference flushes with the closing line's number
+                    span: (open.span_start, line.end),
+                    segments: open.prefix,
+                    text_block: Some(TextBlock {
+                        raw: (open.raw_start, line.end),
+                        after_opener: open.after_opener,
+                        middle_start: open.middle_start,
+                        middle_end: content.0,
+                        closed: true,
+                    }),
+                    dropped: false,
+                };
+                strip_bom(&mut logical, source);
+                out.push(logical);
             }
             continue;
         }

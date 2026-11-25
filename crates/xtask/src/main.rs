@@ -1673,10 +1673,10 @@ fn cmd_export_verify(args: &mut impl Iterator<Item = String>) -> Result<()> {
         let base = root.join("testdata").join("golden").join(corpus);
         if let Ok(entries) = fs::read_dir(&base) {
             for e in entries.flatten() {
-                if e.path().is_dir() {
-                    if let Some(n) = e.path().file_name().and_then(|n| n.to_str()) {
-                        fixtures.push(n.to_owned());
-                    }
+                if e.path().is_dir()
+                    && let Some(n) = e.path().file_name().and_then(|n| n.to_str())
+                {
+                    fixtures.push(n.to_owned());
                 }
             }
         }

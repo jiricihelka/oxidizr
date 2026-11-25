@@ -222,14 +222,14 @@ pub fn diff(a: &Workspace, b: &Workspace, opts: &DiffOptions) -> Diff {
                 kind: item.kind,
             }),
             Some(other) => {
-                if let (Some(id_a), Some(id_b)) = (&item.id, &other.id) {
-                    if id_a != id_b {
-                        out.id_changed.push(IdChange {
-                            path: item.path.clone(),
-                            before: id_a.as_str().to_owned(),
-                            after: id_b.as_str().to_owned(),
-                        });
-                    }
+                if let (Some(id_a), Some(id_b)) = (&item.id, &other.id)
+                    && id_a != id_b
+                {
+                    out.id_changed.push(IdChange {
+                        path: item.path.clone(),
+                        before: id_a.as_str().to_owned(),
+                        after: id_b.as_str().to_owned(),
+                    });
                 }
                 compare_fields(&item.path, &item.fields, &other.fields, &mut out.changed);
             }

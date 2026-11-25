@@ -154,10 +154,10 @@ fn op_dup_name(text: &str, rng: &mut Rng) -> Option<String> {
                 if rest.starts_with('"') {
                     cands.push(i);
                 }
-            } else if let Some(rest) = t.strip_prefix("softwareSystem ") {
-                if rest.starts_with('"') {
-                    cands.push(i);
-                }
+            } else if let Some(rest) = t.strip_prefix("softwareSystem ")
+                && rest.starts_with('"')
+            {
+                cands.push(i);
             }
         }
         depth = delta_depth(l, depth);

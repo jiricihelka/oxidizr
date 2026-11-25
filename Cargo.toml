@@ -24,7 +24,9 @@ exclude = ["fuzz"]
 [workspace.package]
 version = "0.4.0"
 edition = "2024"
-rust-version = "1.85"
+# 1.88 floor: P5R adopts stabilized idioms (let-chains et al.) repo-wide;
+# everything shipped still builds on STABLE >= 1.88 (no `#![feature]`).
+rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jiricihelka/oxidizr"
 

@@ -16,13 +16,16 @@ for stabilization at each milestone.
 | bumped by | milestone process (`cargo xtask` notes + CI keep 3-OS green) |
 
 Why nightly at all: `cargo-fuzz` targets (P1-M6) and future stabilized-path features;
-library code itself is plain-stable-compatible (`rust-version = 1.85`).
+library code itself is plain-stable-compatible (`rust-version = 1.88` since P5R-R0 —
+the floor of the stabilized idiom set adopted in the large-scale refactor; see the
+register row below).
 
 ## Feature register
 
 | Feature | Crate(s) | Rationale | Stabilization status | Added | Removed |
 |---|---|---|---|---|---|
 | `clippy::redundant_clone` (nursery LINT, `[workspace.lints.clippy]`) | workspace-wide | 2R PR6 ratchet: catches the last-use-`clone()` family stable clippy misses — keep verdict + measurements in `agents/plan/build/PHASE_2R.md` §D4 (V-R2 table) | nursery = unstable on the pinned nightly; drop this row AND the Cargo.toml line the day it stabilizes | 2026-11-19 | |
+| stabilized-idiom set: let-chains `if let … && …` et al. (NO `#![feature]` usage) | workspace-wide | P5R idiom adoption: kills Option/boolean ladders (verified compiling on the pinned nightly WITHOUT a feature gate); raises the stable floor 1.85 → **1.88** — recorded honestly in `Cargo.toml rust-version` | **stabilized** (Rust 1.88 era); nothing to remove, the row documents the MSRV floor's reason | 2026-11-25 | |
 
 Category A tests, benches and the shipped binary must build on the pinned nightly;
 downstream stable builds are a non-goal while pinned (recorded deviation for

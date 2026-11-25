@@ -185,14 +185,14 @@ fn map_ids(olds: OldIds, new_idx: &Index, what: &str) -> Maps {
     let mut maps = Maps::default();
     for (old, ident, canonical) in olds {
         // (1) exact `structurizr.dsl.identifier` match.
-        if let Some(ident) = ident.as_deref() {
-            if let Some(cands) = new_idx.by_ident.get(ident) {
-                match cands.as_slice() {
-                    [one] => maps.claim(&old, one, what, &format!("identifier `{ident}`")),
-                    many => maps.ambiguous_hit(&old, what, &format!("identifier `{ident}`"), many),
-                }
-                continue;
+        if let Some(ident) = ident.as_deref()
+            && let Some(cands) = new_idx.by_ident.get(ident)
+        {
+            match cands.as_slice() {
+                [one] => maps.claim(&old, one, what, &format!("identifier `{ident}`")),
+                many => maps.ambiguous_hit(&old, what, &format!("identifier `{ident}`"), many),
             }
+            continue;
         }
         // (2) canonical-name fallback (identifier absent, or renamed away).
         if let Some(cn) = canonical.as_deref()

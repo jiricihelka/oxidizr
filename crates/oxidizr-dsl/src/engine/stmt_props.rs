@@ -202,13 +202,13 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // properties context OVER ITS HOLDER(S). The push is UNCONDITIONAL
     // (`{` is neither required nor optional — extra tokens are ignored, a
     // missing `{` still opens the context).
-    if eqi(&first, tok::PROPERTIES) {
-        if let Some(holder) = p.top().and_then(properties_holder) {
-            p.start_context(Ctx::Properties {
-                holders: vec![holder],
-            });
-            return Sec::Handled;
-        }
+    if eqi(&first, tok::PROPERTIES)
+        && let Some(holder) = p.top().and_then(properties_holder)
+    {
+        p.start_context(Ctx::Properties {
+            holders: vec![holder],
+        });
+        return Sec::Handled;
     }
 
     // Inside a properties block ANY statement is a `<name> <value>`

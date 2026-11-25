@@ -305,10 +305,10 @@ fn run(
                 }
                 k(end, caps)
             });
-            if res.is_none() {
-                if let (Some(i), Some(saved)) = (*n, saved) {
-                    caps[i] = saved;
-                }
+            if res.is_none()
+                && let (Some(i), Some(saved)) = (*n, saved)
+            {
+                caps[i] = saved;
             }
             res
         }

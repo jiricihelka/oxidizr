@@ -60,10 +60,10 @@ pub(crate) fn section(p: &mut Parser, stmt: &Stmt) -> Sec {
     // !docs <path> [importer] — workspace / softwareSystem /
     // container / component scopes; the single-line form ends the context
     // immediately, which is where the deferred import error surfaces.
-    if eqi(&first, tok::DOCS) {
-        if let Some(holder) = docs_holder(p) {
-            return docs_arm(p, &t, open, holder).into();
-        }
+    if eqi(&first, tok::DOCS)
+        && let Some(holder) = docs_holder(p)
+    {
+        return docs_arm(p, &t, open, holder).into();
     }
     if eqi(&first, tok::DOCS_EXCLUDE) && is_docs {
         return parse_exclude(p, raw).into();

@@ -8,6 +8,18 @@ change to any of those is called out explicitly below. The Rust APIs are not
 yet a stability contract — breaking Rust-level changes are listed under
 **Changed → Rust API** so they can be found.
 
+## [Unreleased]
+
+Rust-API churn lands here as it happens (each breaking-ish change gets its
+line in the same commit); the section is cut into the next version at its
+release.
+
+### Changed
+
+- The stable-toolchain floor (`rust-version`) rises 1.85 → 1.88: stabilized
+  let-chains and slice `as_chunks` are adopted across the workspace.
+  Shipped behavior, outputs and the CLI are unchanged.
+
 ## [0.4.0] - 2026-11-23
 
 Phase 4: workspace tooling beyond conversion — compare, inspect, import,

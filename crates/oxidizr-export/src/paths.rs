@@ -131,8 +131,8 @@ const H0: [u32; 8] = [
 #[allow(clippy::many_single_char_names)]
 fn compress(h: &mut [u32; 8], block: &[u8]) {
     let mut w = [0u32; 64];
-    for (word, chunk) in w.iter_mut().zip(block.chunks_exact(4)) {
-        *word = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+    for (word, chunk) in w.iter_mut().zip(block.as_chunks::<4>().0) {
+        *word = u32::from_be_bytes(*chunk);
     }
     for i in 16..64 {
         let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
