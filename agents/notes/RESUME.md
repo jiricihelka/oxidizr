@@ -1,31 +1,29 @@
-# RESUME — session checkpoint (updated 2026-11-25, **P5R OPEN — R0 + R1 + R2 DONE (R2 = 21 move-only commits `68e8ef9`…`21118a7` + this stamp) — next wave R3 decomposition of export+layout+viewer. Plan: `agents/plan/build/PHASE_5R.md`. Waves R3…R7 + release close (v0.5.0, LOCAL tag). Previous arc: Phase 4 complete, tag `v0.4.0` (local, `3c34a08`), fix `4e35ee2`; pushed by the user, never by us**
+# RESUME — session checkpoint (updated 2026-11-25, **P5R OPEN — R0 + R1 + R2 + R3 DONE (R3 = 15 move-only commits `0f3fae0`…`1788247` incl. R3j-lint + this stamp) — next wave R4 typed ids. Plan: `agents/plan/build/PHASE_5R.md`. Waves R4…R7 + release close (v0.5.0, LOCAL tag). Previous arc: Phase 4 complete, tag `v0.4.0` (local, `3c34a08`), fix `4e35ee2`; pushed by the user, never by us**
 
 ## Active now (2026-11-25)
 
-- **Next action: wave R3 — giant-file decomposition B** (PHASE_5R.md D3):
-  `plantuml/engine.rs` 2186 (`Dialect` trait 51–228, `Engine` struct+ctor
-  231–~310, write+sequence legs, query/visibility legs, free text helpers
-  1575–1652 — some `pub(crate)`-used by mermaid/c4/wsd, keep those import
-  paths stable via mod re-exports — tests tail); `plantuml/structurizr.rs`
-  1967 (constants + `StructurizrDialect` + 716-line `impl Dialect` +
-  `PlantUMLStyle` impl + naming/id legs `view_name`/`id_of`/… consumed by
-  c4/mermaid/wsd); `layout/layered.rs` 1736 (Skeleton pipeline 83–642 +
-  routing legs 651–1165 — `place()` calls route/port_spread/spread_channels
-  across the seam → `pub(super)`; only `Layered` is exported); viewer
-  `shell.rs` 2980 (Viewer structs + 3 impl blocks + canvas/panels/actions
-  legs + ~350 lines of free widget fns at the tail; NO tests in shell.rs)
-  and `scene.rs` 2068 (public types + `build()` + resolve/paint/title legs
-  + tests — public `scene::build` path stable). Same rules as R2:
-  `git mv`/verbatim moves, ZERO behavior edits, bench cmp 5R at wave end
-  (export/layout hot).
-- **R2 method (proven, 21 commits)**: verbatim line-range extraction;
-  behavior edits NEVER ride moves; parent private helpers STAY in the
-  parent (children see them through `super::`, nested grandchildren
-  re-qualify `super::x` → `super::super::x` as allowed text edits,
-  recorded per commit); child→parent-remaining calls get `pub(super)`
-  bumps (deliberate internal churn, in the commit message); parent wires
-  each child with `mod x;` + `use x::{arms};`; `cargo fix --allow-dirty`
-  prunes dead parent imports; `impl`-wrapper headers in /tmp/opencode.
+- **Next action: wave R4 — typed ids** (PHASE_5R.md D3): re-measured 2026-11-25,
+  48 `id: &str|String` params outside tests — export engines 26 (`plantuml/engine/mod.rs` 7,
+  `wsd.rs` 6, `plantuml/structurizr/mod.rs` 6, `mermaid.rs` 6, `engine/query.rs` 1),
+  layout 6 (`layered/mod.rs` 4, `graph.rs` 2), rest scattered (viewer 7, inspect 2,
+  dsl 2, core 2, import 1, api 1). Rule: newtypes ONLY where call sites clarify
+  (e.g. one id-domain per engine leg — element-id vs relationship-id confusion is
+  the bug class); serde/JSON edges stay `&str` (byte contract); `&str`→`&Id` where
+  `oxidizr_core::Id` already flows. `bench cmp 5R` mandatory at wave end; Rust-API
+  churn lines into `CHANGELOG.md ## [Unreleased]` (internal-API change — unlike
+  R2/R3 which were structural only).
+- **R3 method (proven, 15 commits)**: same as R2 + viewer lessons: extraction
+  headers wrap methods in `impl X {`; after a move + `cargo fix`, the `mod tests`
+  block often breaks (pruned parent import no longer reaches `use super::*`) —
+  fix with explicit imports IN the tests block (seen: `ModelItem`, `Model`,
+  `DeploymentNode`, `ElementView`); `pub(super) use` of a child-PRIVATE fn fails
+  E0364 — import sibling paths instead; the viewer lib-core guard is now a
+  RECURSIVE walk pinning 14 lib-core files and SKIPS the `shell` dir — bump the
+  count ONLY when a lib-core (non-shell) file is added.
+- **Gui-leg rule** (pitfall `gui-leg-lint-drift.md`): the quartet never compiles
+  `--features gui` code — viewer/cli-gui commits run
+  `cargo xtask ci gui fmt clippy test refs` (gui leg compiles shell only under
+  the feature); pre-existing gui drift gets its OWN zero-behavior commit.
 - **R1 verdicts to remember**: hand-rolled Displays at core/layout/ast and
   `OracleError` are KEEP (zero-dep promises / exit-family classification =
   contract); idents/query/json_loader String legs are KEEP at documented
@@ -38,8 +36,7 @@
   recorded in `CHANGELOG.md ## [Unreleased]` same commit (running list
   retired — RELEASING.md updated); allocation removal needs criterion
   evidence; topology default KEEP.
-- **Wave order after R2**: R3 export+layout+viewer (shell.rs, scene.rs,
-  plantuml, layered); R4 typed ids (export-heavy, 48 sites, bench
+- **Wave order after R3**: R4 typed ids (export-heavy, 48 sites, bench
   mandatory); R5 visibility shrink; R6 allocation removal (bench cmp
   mandatory); R7 topology verdict + idiom sweep + NIGHTLY audit; then
   v0.5.0 release close (bump, CHANGELOG cut, windows leg, **Category B
@@ -60,23 +57,38 @@
 - Gate-log reading: `grep -c` exits 1 on zero matches — the blessed
   `R0-GATES EXIT: 1` after a printed `0` doc-warnings count is GREEN
   (verify `ci: all steps green` + `0 FAILED` in the log body instead).
+- Split-script anchor hygiene: the `mod <stem>;` anchor insert SHIFTS line
+  numbers of everything below it — anchor ABOVE the extraction range or
+  extract first, wire the `use` list after (R3i clipped `build()`'s tail
+  this way; revert + redo cost 2 minutes).
 
 ## Gates quick reference
 
 - Sub-piece: quartet green → commit (`cargo xtask ci` in `nix develop`).
+- Viewer/gui commits: `cargo xtask ci gui fmt clippy test refs`.
 - Waves: + `OXIDZR_E2E_FULL=1 cargo test -p oxidizr-e2e` + bless NO-OP
   (307×unchanged, `git status --porcelain testdata/` empty) +
-  `cargo doc --workspace --no-deps` at 0.
+  `cargo doc --workspace --no-deps` at 0 + `bench cmp 5R` (run
+  `cargo xtask bench` in the same session first).
 - Category B env: `$OXIDZR_STRUCTURIZR_BIN=/nix/store/
   5yil7chk3cjg3qmsabq1vzdxv0v4bwm0-structurizr-2026.10.26/bin/structurizr`,
   legs `TZ=UTC`, background only.
 - Windows leg: `cargo xtask ci windows` (dev shell, Wine).
-- Pitfalls to honor: `msrv-bump-clippy-wave.md` (R0 lesson),
-  `windows-path-separator-assertions.md`, `bench-machine-drift-ab.md`,
-  `cargo-dist-installer-panic.md`.
+- Pitfalls to honor: `gui-leg-lint-drift.md` (R3),
+  `msrv-bump-clippy-wave.md` (R0), `windows-path-separator-assertions.md`,
+  `bench-machine-drift-ab.md`, `cargo-dist-installer-panic.md`.
 
 ## Done earlier (committed)
 
+- **P5R-R3** (`0f3fae0`…`1788247`, 15 commits + wave stamp): giant-file
+  decomposition B — `plantuml/engine.rs` 2186→813 (+dialect/write/query),
+  `plantuml/structurizr.rs` 1967→1221 (+style/legs), `layered.rs`
+  1736→651 (+skeleton/routing), `scene.rs` 2068→1533 (+resolve/label),
+  `shell.rs` 2980→803 (+canvas/browser/actions/widgets/panels); all
+  VERBATIM, roots stable; lib-core guard made recursive (14 files, shell
+  skipped); gui drift fixed as separate zero-behavior commit; wave gates:
+  quartet every commit + gui leg on shell commits, full tier 8/8, bless
+  NO-OP, doc-zero, bench cmp 5R all ≤1.07 (hot legs flat-to-faster).
 - **P5R-R2** (`68e8ef9`…`21118a7`, 21 commits + wave stamp): giant-file
   decomposition A — `builder.rs`→7 modules (root 1069), `viewops.rs`→5
   (1043), dsl `engine/mod.rs` 2332→1618 (+defs/archetypes/subst/holders/
