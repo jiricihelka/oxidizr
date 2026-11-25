@@ -1,49 +1,47 @@
-# RESUME — session checkpoint (updated 2026-11-25, **P5R OPEN — R0 + R1 + R2 + R3 DONE (R3 = 15 move-only commits `0f3fae0`…`1788247` incl. R3j-lint + this stamp) — next wave R4 typed ids. Plan: `agents/plan/build/PHASE_5R.md`. Waves R4…R7 + release close (v0.5.0, LOCAL tag). Previous arc: Phase 4 complete, tag `v0.4.0` (local, `3c34a08`), fix `4e35ee2`; pushed by the user, never by us**
+# RESUME — session checkpoint (updated 2026-11-25, **P5R OPEN — R0 + R1 + R2 + R3 + R4 + R5 DONE (R5 = 8 commits `b586953`…`1df9cd2` + this stamp) — next wave R6 allocation removal. Plan: `agents/plan/build/PHASE_5R.md`. Waves R6…R7 + release close (v0.5.0, LOCAL tag). Previous arc: Phase 4 complete, tag `v0.4.0` (local, `3c34a08`), fix `4e35ee2`; pushed by the user, never by us**
 
 ## Active now (2026-11-25)
 
-- **Next action: wave R4 — typed ids** (PHASE_5R.md D3): re-measured 2026-11-25,
-  48 `id: &str|String` params outside tests — export engines 26 (`plantuml/engine/mod.rs` 7,
-  `wsd.rs` 6, `plantuml/structurizr/mod.rs` 6, `mermaid.rs` 6, `engine/query.rs` 1),
-  layout 6 (`layered/mod.rs` 4, `graph.rs` 2), rest scattered (viewer 7, inspect 2,
-  dsl 2, core 2, import 1, api 1). Rule: newtypes ONLY where call sites clarify
-  (e.g. one id-domain per engine leg — element-id vs relationship-id confusion is
-  the bug class); serde/JSON edges stay `&str` (byte contract); `&str`→`&Id` where
-  `oxidizr_core::Id` already flows. `bench cmp 5R` mandatory at wave end; Rust-API
-  churn lines into `CHANGELOG.md ## [Unreleased]` (internal-API change — unlike
-  R2/R3 which were structural only).
-- **R3 method (proven, 15 commits)**: same as R2 + viewer lessons: extraction
-  headers wrap methods in `impl X {`; after a move + `cargo fix`, the `mod tests`
-  block often breaks (pruned parent import no longer reaches `use super::*`) —
-  fix with explicit imports IN the tests block (seen: `ModelItem`, `Model`,
-  `DeploymentNode`, `ElementView`); `pub(super) use` of a child-PRIVATE fn fails
-  E0364 — import sibling paths instead; the viewer lib-core guard is now a
-  RECURSIVE walk pinning 14 lib-core files and SKIPS the `shell` dir — bump the
-  count ONLY when a lib-core (non-shell) file is added.
+- **Next action: wave R6 — allocation-removal pass, bench-guided** (PHASE_5R.md
+  D3): targets named by the inventory — clones in the export path
+  (`crates/oxidizr-export/src/plantuml/*`, `mermaid.rs`, `wsd.rs`),
+  collect-then-clone ladders, String churn in `crates/oxidizr-dsl/src/engine/*`.
+  Rules: EVERY claim = critcmp evidence (`cargo xtask bench` then
+  `cargo xtask bench cmp 5R` — never `bench save` mid-phase); a "removal"
+  that does not measure better is REVERTED (charter: measured or absent).
+  Success bytes stay identical (bless 307× NO-OP at wave end proves it).
+  Rust-API churn lines into `CHANGELOG.md ## [Unreleased]` if internal
+  signatures change. Start by profiling candidates: grep `\.clone()` +
+  `to_string()` + `collect::<Vec` in export/dsl hot paths, keep the
+  serde/JSON byte edges untouched (borrowing `&str` out of held `Id`/maps
+  is the main lever).
+- **R5 method + leftovers to carry**: the token audit over-counted —
+  module privacy caps `pub` inside private submodules (demotes there are
+  NO-OPs, R5g lesson); signature-leaked types must stay pub (compiler
+  `private_interfaces`/E0365/E0446 = the judge). Leftover KEEP rows worth
+  remembering: viewer headless core has ONE crate-level
+  `#![cfg_attr(not(feature = "gui"), allow(dead_code))]` (shell is the
+  only non-test consumer); viewer test-only members are
+  `#[cfg(test)] pub(crate)` + comment; cli clap-derive enum family is pub
+  by design (rides `Command` fields).
 - **Gui-leg rule** (pitfall `gui-leg-lint-drift.md`): the quartet never compiles
   `--features gui` code — viewer/cli-gui commits run
   `cargo xtask ci gui fmt clippy test refs` (gui leg compiles shell only under
   the feature); pre-existing gui drift gets its OWN zero-behavior commit.
-- **R1 verdicts to remember**: hand-rolled Displays at core/layout/ast and
-  `OracleError` are KEEP (zero-dep promises / exit-family classification =
-  contract); idents/query/json_loader String legs are KEEP at documented
-  seams; rewording any message requires the ERROR-MESSAGES.md registry walk.
 - **P5R charter (user ruling, verbatim)**: “Behaviour and features must
   stay. Error messages can improve. Internal APIs can change to remove
   allocations and introduce more rusty concepts. Successful output must
   remain the same.” ⇒ success bytes + CLI + exit classes + OXZ frozen;
   OXIDIZR-COINED error TEXT improvable behind the registry; API churn
-  recorded in `CHANGELOG.md ## [Unreleased]` same commit (running list
-  retired — RELEASING.md updated); allocation removal needs criterion
-  evidence; topology default KEEP.
-- **Wave order after R3**: R4 typed ids (export-heavy, 48 sites, bench
-  mandatory); R5 visibility shrink; R6 allocation removal (bench cmp
-  mandatory); R7 topology verdict + idiom sweep + NIGHTLY audit; then
-  v0.5.0 release close (bump, CHANGELOG cut, windows leg, **Category B
-  mandatory**, dist plan, LOCAL tag).
-- **Gates**: quartet/commit; full tier + bless NO-OP (307×unchanged) +
-  doc-zero per wave; `bench cmp 5R` on hot waves; Windows leg at close +
-  fs-touching waves; NEVER push.
+  recorded in `CHANGELOG.md ## [Unreleased]` same commit; allocation
+  removal needs criterion evidence; topology default KEEP.
+- **After R6**: R7 = topology verdict (measured DAG already in PHASE_5R.md
+  §Inventory — default KEEP, SHOW the measurement) + stabilized-idiom
+  leftover sweep + NIGHTLY audit + churn-list review vs CHANGELOG; then
+  the v0.5.0 release close (bump 0.4.0→0.5.0 + lock, cut `[Unreleased]` →
+  `## [0.5.0]`, quartet + full tier + bless NO-OP + gui leg + WINDOWS leg
+  + **Category B** + `dist plan`, PROGRESS/PHASE/RESUME stamps, LOCAL
+  annotated tag `v0.5.0`). NEVER push.
 
 ## Workflow (measured, `agents/notes/process/parallelism.md`)
 
@@ -53,14 +51,17 @@
   background shells.
 - Script hygiene: python to a file under the session tmp dir, never
   `python3 -c` with backticks/`\b` (pitfall `agent-shell-quoting.md`);
-  long-line doc edits via anchored `sed -i 'Nr file'`.
+  regex replaces MUST use f-strings for `{name}` (R5f wrote a literal
+  `{name}` into three signatures with a raw-string — repaired by
+  `/tmp/opencode/p5r-r5-repair.py` the same session); long-line doc edits
+  via anchored `sed -i 'Nr file'`.
 - Gate-log reading: `grep -c` exits 1 on zero matches — the blessed
   `R0-GATES EXIT: 1` after a printed `0` doc-warnings count is GREEN
   (verify `ci: all steps green` + `0 FAILED` in the log body instead).
-- Split-script anchor hygiene: the `mod <stem>;` anchor insert SHIFTS line
-  numbers of everything below it — anchor ABOVE the extraction range or
-  extract first, wire the `use` list after (R3i clipped `build()`'s tail
-  this way; revert + redo cost 2 minutes).
+- Wave chains: chain quartet+gui → full tier → bless → doc → bench →
+  `bench cmp 5R` in ONE background script (pattern:
+  `/tmp/opencode/p5r-r5-waveclose.sh`); never touch tracked files while a
+  bless-NO-OP chain runs.
 
 ## Gates quick reference
 
@@ -80,27 +81,37 @@
 
 ## Done earlier (committed)
 
+- **P5R-R5** (`b586953`…`1df9cd2`, 8 commits + wave stamp): visibility
+  minimization — 189 net demotes pub→pub(crate) (viewer 159→58, export
+  80→39, dsl 186→169, core 131→125, api 52→51); real removals core
+  `ElementId`/`RelationshipId` + `DEFAULT_WORKSPACE_*`, export
+  `WorkspaceExporter`, viewer `Overview::bounds`/`map`, dsl
+  `JsonWorkspaceLoader` crate-only (+ 5 dead tok consts); module-privacy
+  correction (private-submodule demotes are no-ops — 93 tok + 10
+  engine/legs reverted); test-only members `#[cfg(test)] pub(crate)`;
+  viewer one justified `cfg_attr` allow; R5h 48 doc links de-linked;
+  wave gates: quartet every commit, gui leg on viewer/cli/dsl, full tier
+  8/8, bless NO-OP, doc-zero, bench cmp 5R all ≤1.06 (most faster).
+- **P5R-R4** (`c510fc3`, docs-only): typed-ids ZERO conversions — 48
+  grep-hits = 35 test fixtures + 13 PROD text/serde/composite seams;
+  layout already `NodeId`/`EdgeId`, export already `&Id`-typed.
 - **P5R-R3** (`0f3fae0`…`1788247`, 15 commits + wave stamp): giant-file
   decomposition B — `plantuml/engine.rs` 2186→813 (+dialect/write/query),
   `plantuml/structurizr.rs` 1967→1221 (+style/legs), `layered.rs`
   1736→651 (+skeleton/routing), `scene.rs` 2068→1533 (+resolve/label),
   `shell.rs` 2980→803 (+canvas/browser/actions/widgets/panels); all
-  VERBATIM, roots stable; lib-core guard made recursive (14 files, shell
-  skipped); gui drift fixed as separate zero-behavior commit; wave gates:
-  quartet every commit + gui leg on shell commits, full tier 8/8, bless
-  NO-OP, doc-zero, bench cmp 5R all ≤1.07 (hot legs flat-to-faster).
+  VERBATIM, roots stable; lib-core guard recursive (14 files, shell
+  skipped); gui drift fixed as separate zero-behavior commit.
 - **P5R-R2** (`68e8ef9`…`21118a7`, 21 commits + wave stamp): giant-file
   decomposition A — `builder.rs`→7 modules (root 1069), `viewops.rs`→5
-  (1043), dsl `engine/mod.rs` 2332→1618 (+defs/archetypes/subst/holders/
-  filectx), `stmt_views.rs`→7 modules (root 1464); all VERBATIM moves,
-  roots stable; wave gates: quartet every commit, full tier 8/8, bless
-  NO-OP, doc-zero, bench cmp 5R noise-level.
-- **P5R-R0a** (`75ce39d`): MSRV floor 1.88 + let-chain/as_chunks adoption
-  (20 code files, clippy lint wave fixed same-commit), NIGHTLY row,
-  CHANGELOG [Unreleased] seeded, pitfall note.
+  (1043), dsl `engine/mod.rs` 2332→1618, `stmt_views.rs`→7 (root 1464).
+- **P5R-R0a** (`75ce39d`): MSRV floor 1.88 + let-chain/as_chunks adoption,
+  NIGHTLY row, CHANGELOG [Unreleased] seeded, pitfall note.
 - **P5R-R0b** (`eb09b52`): PHASE_5R.md charter+waves, ERROR-MESSAGES.md
   provenance registry, PLAN/index rows, RELEASING churn convention,
-  bench baseline `5R` (92 files, saved from the pre-P5R tree — R0a is
-  codegen-neutral syntax only).
+  bench baseline `5R`.
+- **P5R-R1** (`0127166` `0851ff0`): error-taxonomy — 4 provenance leaks
+  reworded + class gated; `PathFilter::compile` → `PatternError`;
+  KEEP rows for FROZEN/REFERENCE Displays.
 - Phase 4 complete: tag `v0.4.0` (local); M5f windows fix (`4e35ee2`).
   Bench baselines `1T`…`4T` committed.
