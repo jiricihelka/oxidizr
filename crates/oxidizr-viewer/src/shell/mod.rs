@@ -1085,11 +1085,11 @@ impl Viewer {
                 }
             });
         let mut dirty = false;
-        if let Some(new_mode) = mode {
-            if self.tag_mode != new_mode {
-                self.tag_mode = new_mode;
-                dirty = true;
-            }
+        if let Some(new_mode) = mode
+            && self.tag_mode != new_mode
+        {
+            self.tag_mode = new_mode;
+            dirty = true;
         }
         if let Some(tag) = toggle {
             match self.tag_sel.iter().position(|t| *t == tag) {
@@ -1385,10 +1385,11 @@ impl Viewer {
         }
         let display = PathBuf::from(&self.display);
         let mut set = vec![display.clone()];
-        if let Some(sidecar) = commands::save_target(&self.display) {
-            if sidecar != display && sidecar.exists() {
-                set.push(sidecar);
-            }
+        if let Some(sidecar) = commands::save_target(&self.display)
+            && sidecar != display
+            && sidecar.exists()
+        {
+            set.push(sidecar);
         }
         // The source DSL of an opened sidecar stays watched:
         // text edits must reach the window even while the sidecar is
@@ -1406,10 +1407,10 @@ impl Viewer {
     fn reload_source(&self) -> PathBuf {
         let display = PathBuf::from(&self.display);
         let mut candidates = vec![display.clone()];
-        if let Some(sidecar) = commands::save_target(&self.display) {
-            if sidecar != display {
-                candidates.push(sidecar);
-            }
+        if let Some(sidecar) = commands::save_target(&self.display)
+            && sidecar != display
+        {
+            candidates.push(sidecar);
         }
         candidates.extend(companion_dsl(&self.display));
         newest_by_mtime(&candidates).unwrap_or(display)

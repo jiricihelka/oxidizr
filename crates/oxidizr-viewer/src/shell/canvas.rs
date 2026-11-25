@@ -42,12 +42,12 @@ impl Viewer {
             || (space && response.drag_started_by(egui::PointerButton::Primary))
         {
             self.drag = Drag::Pan;
-        } else if response.drag_started_by(egui::PointerButton::Primary) {
-            if let Some(origin) = ui.input(|i| i.pointer.press_origin()) {
-                let (shift, alt, ctrl) =
-                    ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.command));
-                self.drag = self.press_mode(origin, shift, alt, ctrl);
-            }
+        } else if response.drag_started_by(egui::PointerButton::Primary)
+            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        {
+            let (shift, alt, ctrl) =
+                ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.command));
+            self.drag = self.press_mode(origin, shift, alt, ctrl);
         }
         let cursor = response
             .interact_pointer_pos()
@@ -64,10 +64,10 @@ impl Viewer {
                 // Click or drag on the minimap: the pointer's world
                 // point IS the new viewport center — no
                 // scene edit, no history entry.
-                if let Some(pos) = cursor {
-                    if let Some(world) = self.minimap_world(pos) {
-                        self.center_world(world);
-                    }
+                if let Some(pos) = cursor
+                    && let Some(world) = self.minimap_world(pos)
+                {
+                    self.center_world(world);
                 }
                 if !release {
                     self.drag = Drag::Minimap;
@@ -240,16 +240,16 @@ impl Viewer {
                 }
             }
         }
-        if response.clicked() {
-            if let Some(pt) = response.interact_pointer_pos() {
-                // A click inside the minimap recenters; it never picks
-                // a box .
-                if let Some(world) = self.minimap_world(pt) {
-                    self.center_world(world);
-                } else {
-                    let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
-                    self.canvas_click(pt, command, shift, &ctx);
-                }
+        if response.clicked()
+            && let Some(pt) = response.interact_pointer_pos()
+        {
+            // A click inside the minimap recenters; it never picks
+            // a box .
+            if let Some(world) = self.minimap_world(pt) {
+                self.center_world(world);
+            } else {
+                let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+                self.canvas_click(pt, command, shift, &ctx);
             }
         }
         //: a double-click on an edge splices a waypoint into the
@@ -304,11 +304,11 @@ impl Viewer {
                     ),
                 );
             }
-        } else if self.latches.needs_fit {
-            if let Some(scene) = &self.scene {
-                self.viewport = hit::Viewport::fit(scene.bounds, screen);
-                self.latches.needs_fit = false;
-            }
+        } else if self.latches.needs_fit
+            && let Some(scene) = &self.scene
+        {
+            self.viewport = hit::Viewport::fit(scene.bounds, screen);
+            self.latches.needs_fit = false;
         }
 
         let painter = ui.painter_at(rect);
@@ -357,49 +357,49 @@ impl Viewer {
             );
         }
         //: lasso rubber band — accent rect from anchor to pointer.
-        if let Drag::Lasso { anchor, .. } = &self.drag {
-            if let Some(pos) = cursor {
-                let band = egui::Rect::from_two_pos(*anchor, pos);
-                painter.rect_stroke(
-                    band,
-                    0.0,
-                    egui::Stroke::new(1.0, paint::SELECTION_COLOR),
-                    egui::StrokeKind::Inside,
-                );
-            }
+        if let Drag::Lasso { anchor, .. } = &self.drag
+            && let Some(pos) = cursor
+        {
+            let band = egui::Rect::from_two_pos(*anchor, pos);
+            painter.rect_stroke(
+                band,
+                0.0,
+                egui::Stroke::new(1.0, paint::SELECTION_COLOR),
+                egui::StrokeKind::Inside,
+            );
         }
         //: minimap (the navigator.jspf analogue) — the whole
         // scene overview + the live viewport rect, bottom-right. The
         // painter is clipped to the box, so a viewport rect bigger than
         // the scene cannot spill onto the canvas.
-        if let (Some(scene), Some(mini)) = (&self.scene, Self::minimap_rect(rect)) {
-            if let Some(map) = overview::Overview::new(scene.bounds, mini) {
-                let tl = self
-                    .viewport
-                    .screen_to_world((f64::from(rect.min.x), f64::from(rect.min.y)));
-                let br = self
-                    .viewport
-                    .screen_to_world((f64::from(rect.max.x), f64::from(rect.max.y)));
-                let view_world = scene::Rect {
-                    x: tl.0.min(br.0),
-                    y: tl.1.min(br.1),
-                    width: (br.0 - tl.0).abs(),
-                    height: (br.1 - tl.1).abs(),
-                };
-                let bg = ui.visuals().window_fill;
-                let edge = ui.visuals().noninteractive().fg_stroke.color;
-                let map_painter = ui.painter_at(mini);
-                map_painter.rect_filled(mini, 6.0, bg);
-                for shape in map.shapes(scene, Some(view_world), self.selection.as_ref()) {
-                    map_painter.add(shape);
-                }
-                map_painter.rect_stroke(
-                    mini,
-                    6.0,
-                    egui::Stroke::new(1.0, edge),
-                    egui::StrokeKind::Inside,
-                );
+        if let (Some(scene), Some(mini)) = (&self.scene, Self::minimap_rect(rect))
+            && let Some(map) = overview::Overview::new(scene.bounds, mini)
+        {
+            let tl = self
+                .viewport
+                .screen_to_world((f64::from(rect.min.x), f64::from(rect.min.y)));
+            let br = self
+                .viewport
+                .screen_to_world((f64::from(rect.max.x), f64::from(rect.max.y)));
+            let view_world = scene::Rect {
+                x: tl.0.min(br.0),
+                y: tl.1.min(br.1),
+                width: (br.0 - tl.0).abs(),
+                height: (br.1 - tl.1).abs(),
+            };
+            let bg = ui.visuals().window_fill;
+            let edge = ui.visuals().noninteractive().fg_stroke.color;
+            let map_painter = ui.painter_at(mini);
+            map_painter.rect_filled(mini, 6.0, bg);
+            for shape in map.shapes(scene, Some(view_world), self.selection.as_ref()) {
+                map_painter.add(shape);
             }
+            map_painter.rect_stroke(
+                mini,
+                6.0,
+                egui::Stroke::new(1.0, edge),
+                egui::StrokeKind::Inside,
+            );
         }
         // Hover tooltip: egui's own tooltip machinery instead
         // of the hand-rolled Area — the old `Id::unique` gave every
@@ -663,16 +663,14 @@ impl Viewer {
             // the same shift rides the press-time routes
             // of fully-contained edges — `drag_group` commits exactly
             // this translation (both measure off the FIRST origin).
-            if carry {
-                if let Some(shift) = applied {
-                    for (id, wps) in carries {
-                        overlay.relationships.insert(
-                            id.clone(),
-                            wps.iter()
-                                .map(|(x, y)| (x + shift.0, y + shift.1))
-                                .collect(),
-                        );
-                    }
+            if carry && let Some(shift) = applied {
+                for (id, wps) in carries {
+                    overlay.relationships.insert(
+                        id.clone(),
+                        wps.iter()
+                            .map(|(x, y)| (x + shift.0, y + shift.1))
+                            .collect(),
+                    );
                 }
             }
         }
