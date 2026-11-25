@@ -29,16 +29,19 @@ use crate::preprocess::{Logical, preprocess};
 
 /// Byte-offset line index for mapping offsets to 1-based (line, char-column)
 /// positions — diagnostics spans and snapshot stability.
+// test-only: the shipped parser never builds one (driven by unit tests)
+#[cfg(test)]
 #[derive(Debug, Clone)]
-pub struct LineIndex {
+pub(crate) struct LineIndex {
     /// Byte offset of each line's first character (index 0 is always `0`).
     starts: Vec<u32>,
 }
 
+#[cfg(test)]
 impl LineIndex {
     /// Index a source (lines split on `\n`, matching the physical-line splitter).
     #[must_use]
-    pub fn new(source: &str) -> LineIndex {
+    pub(crate) fn new(source: &str) -> LineIndex {
         let mut starts = vec![0_u32];
         for (i, b) in source.bytes().enumerate() {
             if b == b'\n' {
@@ -51,7 +54,7 @@ impl LineIndex {
     /// 1-based line and character column of a byte offset (column counts UTF-8
     /// characters from the line start).
     #[must_use]
-    pub fn line_col(&self, source: &str, byte: usize) -> (u32, u32) {
+    pub(crate) fn line_col(&self, source: &str, byte: usize) -> (u32, u32) {
         let line = self
             .starts
             .partition_point(|&s| (s as usize) <= byte)

@@ -42,6 +42,9 @@ release.
     `Overview::map` accessors; the module tree is trimmed to the visibility
     its consumers reach (the headless lib core is crate-internal, the `gui`
     shell is its only non-test consumer) (R5)
+  - oxidizr-dsl: `engine::JsonWorkspaceLoader` (the loader-hook alias) is
+    crate-internal — no consumer named it; the compat/preprocess/lexer/cst
+    internal legs shrink to the same reach (R5)
 - The stable-toolchain floor (`rust-version`) rises 1.85 → 1.88: stabilized
   let-chains and slice `as_chunks` are adopted across the workspace.
   Shipped behavior, outputs and the CLI are unchanged.

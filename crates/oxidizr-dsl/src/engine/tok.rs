@@ -109,8 +109,6 @@ pub const RELATIONSHIP_STYLE_DASHED: &str = "dashed";
 pub const RELATIONSHIP_STYLE_OPACITY: &str = "opacity";
 pub const RELATIONSHIP_STYLE_ROUTING: &str = "routing";
 pub const RELATIONSHIP_STYLE_JUMP: &str = "jump";
-pub const RELATIONSHIP_STYLE_METADATA: &str = "metadata";
-pub const RELATIONSHIP_STYLE_DESCRIPTION: &str = "description";
 pub const RELATIONSHIP_STYLE_LINE_STYLE: &str = "style";
 pub const RELATIONSHIP_STYLE_FONT_SIZE: &str = "fontSize";
 pub const RELATIONSHIP_STYLE_WIDTH: &str = "width";
@@ -145,9 +143,6 @@ pub const FIND_RELATIONSHIPS: &str = "!relationships";
 pub const PLUGIN: &str = "!plugin";
 pub const SCRIPT: &str = "!script";
 pub const COMPONENT_FINDER: &str = "!components";
-pub const COMPONENT_FINDER_CLASSES: &str = "classes";
-pub const COMPONENT_FINDER_SOURCE: &str = "source";
-pub const COMPONENT_FINDER_STRATEGY: &str = "strategy";
 
 /// Archetype arrow token shape: `--<name>->`.
 pub const RELATIONSHIP_ARCHETYPE_PREFIX: &str = "--";

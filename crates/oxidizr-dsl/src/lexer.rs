@@ -283,7 +283,7 @@ pub fn lex_line(source: &str, logical: &Logical) -> LexedLine {
 /// Lex a whole-line `//`/`#` comment: leading trivia, one [`NodeKind::Comment`] leaf
 /// from the comment opener through the content end, trailing line-terminator trivia.
 #[must_use]
-pub fn lex_comment(source: &str, logical: &Logical) -> LexedLine {
+pub(crate) fn lex_comment(source: &str, logical: &Logical) -> LexedLine {
     let mut sink = LeafSink { leaves: Vec::new() };
     // The comment opener is the first non-`\s` char of the JOINED text — a
     // `\`-join can leave leading all-whitespace segments (e.g. `\` + `# c`,
@@ -315,7 +315,7 @@ pub fn lex_comment(source: &str, logical: &Logical) -> LexedLine {
 
 /// Lex a blank logical line (everything is trivia).
 #[must_use]
-pub fn lex_blank(source: &str, logical: &Logical) -> LexedLine {
+pub(crate) fn lex_blank(source: &str, logical: &Logical) -> LexedLine {
     let mut sink = LeafSink { leaves: Vec::new() };
     trivia_leaves(source, logical.span.0, logical.span.1, &mut sink);
     LexedLine {

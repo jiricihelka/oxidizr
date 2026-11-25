@@ -205,7 +205,7 @@ pub(crate) struct SeqFrame {
 /// Base-workspace loader for `workspace extends <file.json>`: receives
 /// the canonical path string, returns the loaded workspace or the
 /// official-style failure message.
-pub type JsonWorkspaceLoader = fn(&str) -> Result<Workspace, String>;
+pub(crate) type JsonWorkspaceLoader = fn(&str) -> Result<Workspace, String>;
 
 /// `${VAR}` environment lookup override : lets the
 /// headless API run parses hermetically (test-provided map instead of the

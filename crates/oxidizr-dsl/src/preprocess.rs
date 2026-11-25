@@ -32,7 +32,7 @@ const TEXT_BLOCK_MARKER: &str = "\"\"\"";
 
 /// A physical line with its byte spans (offsets into the whole source).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PhysicalLine {
+pub(crate) struct PhysicalLine {
     /// Byte offset of the first character.
     pub start: usize,
     /// Content end excluding the line terminator (and trailing `\r`).
@@ -437,7 +437,7 @@ fn trim_segments_to(segments: &mut [Segment], end: usize) {
 /// Split into physical lines on `\n`; content drops a trailing `\r` (the official
 /// reader's behavior); terminator bytes stay inside `start..end` spans.
 #[must_use]
-pub fn physical_lines(source: &str) -> Vec<PhysicalLine> {
+pub(crate) fn physical_lines(source: &str) -> Vec<PhysicalLine> {
     let mut out = Vec::new();
     let bytes = source.as_bytes();
     let mut start = 0_usize;
