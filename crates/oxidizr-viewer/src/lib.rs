@@ -87,8 +87,9 @@ mod tests {
         }
         assert_eq!(
             files.len(),
-            13,
-            "lib core = lib.rs + ten module files + the scene tree (mod.rs + resolve.rs)"
+            14,
+            "lib core = lib.rs + ten module files + the scene tree \
+             (mod.rs + resolve.rs + label.rs)"
         );
     }
 }
