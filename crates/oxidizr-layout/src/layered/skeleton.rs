@@ -603,7 +603,8 @@ impl Skeleton {
         let generate_vertices = graph.config.generate_vertices;
         // Port spread: edges that land on the SAME
         // (node, side) fan out along it by the far end's cross order,
-        // so arrows stop stacking on one midpoint. A lone edge keeps ½.
+        // so arrows stop stacking on one midpoint. A lone edge keeps ½;
+        // a fan holds the configured edge separation while it fits.
         let alongs = port_spread(
             &self.chains,
             &graph.edges,
@@ -611,6 +612,7 @@ impl Skeleton {
             &centers,
             &boxes,
             generate_vertices,
+            f64::from(graph.config.edge_separation),
         );
         let mut routes: Vec<Vec<Point>> = Vec::with_capacity(graph.edges.len());
         for (idx, edge) in graph.edges.iter().enumerate() {

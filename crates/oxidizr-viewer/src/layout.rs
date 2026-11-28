@@ -17,9 +17,11 @@
 //!   route points are world-space polylines whose FIRST and LAST points
 //!   are endpoint anchors — those are re-derived from the (moved) boxes
 //!   by the scene, so only `points[1..len-1]` become interior waypoints.
-//! - `edge_separation`: the `Dagre` engine honours it; the built-in
-//!   `Layered` engine ignores it (wiring it into the port spread is the
-//!   point at which the dialog field becomes honest for both engines).
+//! - `edge_separation`: honoured by BOTH engines — `Dagre` natively
+//!   (its `edgesep`), the built-in `Layered` as the desired pixel gap
+//!   between neighbouring ports on a shared side (the fan sits centred
+//!   on the side and falls back to equal slots when the requested
+//!   spread would not fit it).
 //! - The ENGINE is a session choice ([`Engine`]) — the dialog
 //!   combo lists [`Engine::available`], so graphviz `dot` appears only
 //!   when the `dot-backend` feature is compiled in AND `$OXIDZR_DOT_BIN`

@@ -344,27 +344,31 @@ mod tests {
         // Orthogonal route a → dummy → c: two rank-gap channels at
         // x 200 / x 360 around the dummy's 110 line. Port
         // spread: a's RIGHT side hosts a→b too and c's LEFT side hosts
-        // b→c, so a→c takes the lower slot of both sides (its far ends
-        // sit below b's centre line) — y 80 instead of the 70 midpoint.
+        // b→c, so a→c takes the LOWER port of both sides (its far ends
+        // sit below b's centre line). The 50 px edge separation FITS
+        // the 60 px side, so the pair sits centred exactly 50 px apart
+        // (y 45 / 95 around the 70 centre line) — y 95, not the 80 of
+        // the old ⅓-slot fallback.
         assert_eq!(
             pts(&r, "ac"),
             vec![
-                Point { x: 120.0, y: 80.0 },
-                Point { x: 200.0, y: 80.0 },
+                Point { x: 120.0, y: 95.0 },
+                Point { x: 200.0, y: 95.0 },
                 Point { x: 200.0, y: 110.0 },
                 Point { x: 360.0, y: 110.0 },
-                Point { x: 360.0, y: 80.0 },
-                Point { x: 440.0, y: 80.0 },
+                Point { x: 360.0, y: 95.0 },
+                Point { x: 440.0, y: 95.0 },
             ]
         );
     }
 
     #[test]
-    fn edges_sharing_a_side_spread_into_thirds() {
+    fn edges_sharing_a_side_spread_by_edge_separation() {
         // Port spread (arrows "should prefer to not land in
-        // each other"): a→h and b→h both enter h's LEFT side, so they
-        // take the ⅓ / ⅔ slots in source-centre order — never the
-        // shared midpoint.
+        // each other"): a→h and b→h both enter h's LEFT side. The
+        // 50 px edge separation fits the 60 px side, so they sit
+        // CENTRED exactly 50 px apart (h.y + 5 / + 55) in
+        // source-centre order — never the shared midpoint.
         let mut g = LayoutGraph::new();
         for id in ["a", "b", "h"] {
             g.add_node(node(id));
@@ -382,15 +386,77 @@ mod tests {
             ends[0],
             Point {
                 x: h.x,
-                y: h.y + 20.0
+                y: h.y + 5.0
             }
         );
         assert_eq!(
             ends[1],
             Point {
                 x: h.x,
-                y: h.y + 40.0
+                y: h.y + 55.0
             }
+        );
+        assert_eq!(ends[1].y - ends[0].y, 50.0, "the requested spacing");
+    }
+
+    #[test]
+    fn port_fan_holds_a_small_separation_and_is_deterministic() {
+        // Four edges into h's LEFT side with a SMALL separation:
+        // the 45 px span fits the 60 px side, so the fan sits
+        // centred exactly 15 px apart (h.y + 7.5 / 22.5 / 37.5 / 52.5).
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "c", "d", "h"] {
+            g.add_node(node(id));
+        }
+        for src in ["a", "b", "c", "d"] {
+            let id = format!("{src}h");
+            g.add_edge(edge(&id, src, "h"));
+        }
+        g.config.edge_separation = 15;
+        let r = layout(&g);
+        let h = pos(&r, "h");
+        let mut ys: Vec<f64> = ["ah", "bh", "ch", "dh"]
+            .iter()
+            .map(|id| pts(&r, id).last().unwrap().y)
+            .collect();
+        ys.sort_by(f64::total_cmp);
+        assert_eq!(
+            ys,
+            vec![h.y + 7.5, h.y + 22.5, h.y + 37.5, h.y + 52.5],
+            "exact 15 px steps, centred on the side"
+        );
+        // Determinism contract: the same input lays out bit-exactly.
+        let again = layout(&g);
+        for id in ["ah", "bh", "ch", "dh"] {
+            assert_eq!(pts(&again, id), pts(&r, id), "{id} repeats exactly");
+        }
+    }
+
+    #[test]
+    fn crowded_side_falls_back_to_equal_slots() {
+        // Five edges into h's 60 px LEFT side ask for 4 × 50 = 200 px:
+        // the side is the hard limit, so the fan falls back to
+        // N + 1 = 6 equal slots (h.y + 10 … + 50) instead of hanging
+        // ports off the corners.
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "c", "d", "e", "h"] {
+            g.add_node(node(id));
+        }
+        for src in ["a", "b", "c", "d", "e"] {
+            let id = format!("{src}h");
+            g.add_edge(edge(&id, src, "h"));
+        }
+        let r = layout(&g);
+        let h = pos(&r, "h");
+        let mut ys: Vec<f64> = ["ah", "bh", "ch", "dh", "eh"]
+            .iter()
+            .map(|id| pts(&r, id).last().unwrap().y)
+            .collect();
+        ys.sort_by(f64::total_cmp);
+        assert_eq!(
+            ys,
+            vec![h.y + 10.0, h.y + 20.0, h.y + 30.0, h.y + 40.0, h.y + 50.0],
+            "the equal-slot fallback keeps every port on the side"
         );
     }
 

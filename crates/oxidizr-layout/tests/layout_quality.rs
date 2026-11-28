@@ -295,9 +295,10 @@ fn row(name: &str, layered: Quality, dagre: Quality, verdict: &str) -> String {
 ///   fewer bends and a shorter total route length on the same shape;
 /// * `grid-120` — a random 10×12 grid, denser than any C4 view: the built-in
 ///   engine's channel lanes win here, while the candidate halves the crossings
-///   on the tangled shape. Its length gap is also partly honest bookkeeping:
-///   the candidate honours `edgeSeparation`, which the built-in engine ignores
-///   until the separation is wired through its port spread.
+///   on the tangled shape. Its length gap is honest bookkeeping now that BOTH
+///   engines honour `edgeSeparation`: on sides too crowded for the requested
+///   port spacing the built-in engine falls back to equal slots, where the
+///   candidate keeps every lane widened.
 const KNOWN_CROSSING_REGRESSIONS: &[&str] = &["c4-like", "grid-120"];
 
 #[test]
@@ -341,22 +342,22 @@ fn corpus_quality_table_is_committed() {
         fixture          cross L>D   pierce L>D   bend L>D    len L>D      verdict
         single              0→0          0→0          0→0           0→0       same
         chain-8             0→0          0→0          0→0         700→700     same
-        diamond             0→0          0→0          8→4         593→424     same
+        diamond             0→0          0→0          8→4         540→424     same
         fan-out             0→0          8→0         16→8        2970→2307    same
         fan-in              0→0          8→0         16→8        2970→2307    same
         cycle               1→1          0→0         18→7        2425→2149    same
         self-loops          0→0          0→0          0→17        290→1022    same
-        parallel            0→0          0→0         16→8        1089→1307    same
+        parallel            0→0          0→0         16→8        1061→1307    same
         disconnected        0→0          0→0          2→0         350→300     same
         mixed-sizes         0→0          0→0          0→0         500→500     same
         odd-ids             0→0          0→0          0→0         600→600     same
-        c4-like             0→1          0→0         20→9        2217→2072    WORSE
-        grouped-chains      0→0          0→0          6→3         697→772     same
-        groups-nested       0→0          0→0          6→2         610→590     same
-        c4-grouped          0→0          0→0         20→10       2217→2119    same
-        tangled-90       1303→609       44→22      2474→226    594549→555214  better
-        grid-120          199→394      244→169      404→211     65843→127147  WORSE
-        TOTAL            1503→1005     304→191     3006→513    678620→699530  
+        c4-like             0→1          0→0         20→9        2180→2072    WORSE
+        grouped-chains      0→0          0→0          6→3         665→772     same
+        groups-nested       0→0          0→0          6→2         580→590     same
+        c4-grouped          0→0          0→0         20→10       2180→2119    same
+        tangled-90       1302→609       43→22      2470→226    594487→555214  better
+        grid-120          187→394      234→169      404→211     65055→127147  WORSE
+        TOTAL            1490→1005     293→191     3002→513    677553→699530  
     "#]]
     .assert_eq(&table);
 }

@@ -25,12 +25,18 @@ enum SideKind {
 /// four sides ([`pick_side`] — the exact rule [`endpoint`] applies);
 /// edges sharing a (node, side) then SLIDE apart — ordered by the far
 /// box centre's coordinate PARALLEL to that side (ties → edge input
-/// order, determinism contract) and placed in N+1 equally spaced slots
-/// along it. The order preserves the far ends' cross order, so the
-/// fanned bundle keeps its (already minimised) crossing structure;
-/// N = 1 stays on the midpoint, so lone edges route exactly as before.
+/// order, determinism contract). `edge_separation` is the DESIRED
+/// distance between neighbouring ports: it fits the group, they sit
+/// CENTRED on the side exactly `edge_separation` apart; when it does
+/// not (many edges, small box), the side is the hard limit and they
+/// fall back to N+1 equally spaced slots along it. The order preserves
+/// the far ends' cross order, so the fanned bundle keeps its (already
+/// minimised) crossing structure; N = 1 stays on the midpoint, so lone
+/// edges route exactly as before.
 /// Returns the per-edge `(from, to)` fractions along the attach side.
 #[allow(clippy::cast_precision_loss)] // slot ranks/sizes are tiny counts
+#[allow(clippy::cast_possible_truncation)] // fan sizes are tiny counts
+#[allow(clippy::too_many_arguments)] // the geometry bundle the fan reads
 pub(super) fn port_spread(
     chains: &[Chain],
     edges: &[Edge],
@@ -38,6 +44,7 @@ pub(super) fn port_spread(
     centers: &[Point],
     boxes: &[(f64, f64, f64, f64)],
     generate_vertices: bool,
+    edge_separation: f64,
 ) -> Vec<(f64, f64)> {
     let mut alongs = vec![(0.5, 0.5); chains.len()];
     let mut from_groups: BTreeMap<(usize, Side4), Vec<(f64, usize)>> = BTreeMap::new();
@@ -85,8 +92,9 @@ pub(super) fn port_spread(
             .push((key(to_side, far_to), idx));
     }
     for (groups, which) in [(&to_groups, 1_usize), (&from_groups, 0)] {
-        for members in groups.values() {
-            if members.len() < 2 {
+        for (&(node_idx, side), members) in groups {
+            let n = members.len();
+            if n < 2 {
                 continue;
             }
             let mut sorted = members.clone();
@@ -95,9 +103,23 @@ pub(super) fn port_spread(
                     .unwrap_or(std::cmp::Ordering::Equal)
                     .then(a.1.cmp(&b.1))
             });
-            let slots = sorted.len() + 1;
+            // The side the ports slide along: `edge_separation` is a
+            // PIXEL distance, so it competes with the side's length.
+            let (_, _, bw, bh) = boxes[node_idx];
+            let side_len = if side.slides_x() { bw } else { bh };
+            let span = f64::from(n as u32 - 1) * edge_separation;
+            // Exact spacing when the requested span FITS the side
+            // (centred: the fan keeps the midpoint symmetric); a zero
+            // or negative request, or a span that would hang the outer
+            // ports off the corners, falls back to the N+1 equal slots.
+            let exact = edge_separation > 0.0 && side_len > 0.0 && span <= side_len;
             for (rank, (_, edge_idx)) in sorted.iter().enumerate() {
-                let fraction = (rank + 1) as f64 / slots as f64;
+                let fraction = if exact {
+                    let offset = f64::from(rank as u32) * edge_separation - span / 2.0;
+                    (0.5 + offset / side_len).clamp(0.0, 1.0)
+                } else {
+                    (rank + 1) as f64 / (n + 1) as f64
+                };
                 if which == 0 {
                     alongs[*edge_idx].0 = fraction;
                 } else {
