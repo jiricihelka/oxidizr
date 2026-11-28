@@ -39,7 +39,7 @@ impl Viewer {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 //: the hint chip doubles as the help overlay's mouse
-                // door (same toggle as F1 / `?`).
+                // door (same toggle as the help keys).
                 if ui
                     .small_button("?")
                     .on_hover_text("keys & gestures (F1)")
@@ -531,8 +531,8 @@ impl Viewer {
 
     /// The help overlay: the [`shortcuts`] binding table rendered
     /// verbatim — the ONE place keys and gestures are written down, so
-    /// the overlay cannot drift from the shell. F1 / `?` / the ? chip
-    /// toggle it; Esc closes it before clearing the selection.
+    /// the overlay cannot drift from the shell. The help keys and the
+    /// `?` chip toggle it; Esc closes it before clearing the selection.
     pub(super) fn help_window(&mut self, ctx: &egui::Context) {
         if !self.toggles.help {
             return;

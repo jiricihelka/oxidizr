@@ -1,7 +1,7 @@
 //! Invertible editing commands + undo/redo stacks:
 //! every geometry edit is a [`Command`] mutating only the
 //! [`LayoutOverlay`] — deltas over the stored geometry — while every
-//! MODEL edit is a [`ModelCommand`] mutating the workspace itself
+//! MODEL edit is a `ModelCommand` mutating the workspace itself
 //! (relationship create/delete/reconnect/relabel). The DSL text is
 //! NEVER rewritten: the shell gates model editing to `.json` sources.
 //! Commands carry their own inverse (`from`/`to` pairs, or exact

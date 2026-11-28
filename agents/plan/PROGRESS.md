@@ -39,7 +39,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P4D | documentation reset — short, human-first (D-1…D-8, interlude) | **COMPLETE 2026-11-23** — every human-facing prose rewritten: 302 `§P`-refs + reference-implementation narration stripped from rustdoc/help/messages/`docs/*.md`/UI strings (provenance single-homed in `agents/plan/` + git); README program (root ≤ 120 lines + `docs/README.md` + 14 crate READMEs ≤ 20); message pass (7 deferred-import texts → "is not supported yet" — assertions same-commit); `cargo xtask refs` gained a self-gating **hygiene leg** (process ids + narration patterns, std-only, string-literal fixture keys exempt). **Bless never moved** (307×unchanged every close — no golden embeds human text, V2). Close: quartet + full tier 8/8 + Category B (`oracle verify` 4 json + 4 sidecar + 99 diagram + 6 theme, `export-verify` 31/31 × 3 `TZ=UTC`; landscape skipped with reason — no oracle-path diff) + close review (compat promise stands in README + `--help`; 5 residual help artifacts fixed). **No tag** (interlude precedent). Commits D-1 `6f8fd6d` → D-8 (this). Log below (`build/PHASE_4D.md`) |
 | P4 | §P4-M5 release endgame (E-1…E-5) | **COMPLETE 2026-11-23** — `oxidizr oracle gen\|verify` user command (shared engine in the cli lib, xtask delegates — dev shim); semantic comparators for the PlantUML + Mermaid dialects (`export-verify --format plantuml\|mermaid`, Category B 31/31 × 2 legs witnessed `TZ=UTC`); `Layered` polish (ranks proven already-tight by test, channel-lane pass `spread_channels` — zero colliding channels at 1k scale; boundary refinement deferred as an additional-feature candidate); cargo-dist release wiring (v1 `dist-workspace.toml` — the Cargo.toml form panics with installers configured, pitfall note; three release apps × 5 targets, shell/PS1 installers, pure generated `release.yml` + companion `release-smoke.yml`); **E-5**: workspace version `0.1.0` → `0.4.0` (14 pins + lockfile — `--version` goldens derived from `CARGO_PKG_VERSION`, bump moved none), `CHANGELOG.md` created (v0.1.0–v0.3.0 reconstructed + the 3 frozen Rust-API churn lines verbatim), `docs/RELEASING.md` (tag → CI → smoke → register; crates.io publishing SKIPPED for v0.4.0 per user decision), README verified current. Close ritual: quartet + full e2e tier + bless **307×unchanged** + `testdata/` clean; Category B skipped with reason (diff = versions/docs/packaging, no generator/parser change since the P4D close where the oracle evidence is green). **Phase 4 complete — tagged v0.4.0 (LOCAL; push/publish never executed, stays the user's call).** Commits M5a `696e849` → M5e `3c34a08` → M5f (this, post-close Windows-assertion fix). Log below (`build/PHASE_4.md`) |
 | P5R | large-scale idiomatic-Rust refactor → v0.5.0 (R0…R7 + close) | **COMPLETE 2026-11-26** — the refactor phase closed with the release: ten giant modules decomposed (R2 `68e8ef9`…`21118a7` 21 commits, R3 `0f3fae0`…`1788247` 15 — plantuml engine 2186→813, shell 2980→803); error taxonomy vs the message-provenance registry (R1 `0127166` `0851ff0`); typed-id conversions measured ZERO (R4 `c510fc3`); visibility 189 net demotes, 5 real removals (R5 `b586953`…`1df9cd2`); bench-guided allocation removal, critcmp-evidenced (R6 `92a212f` `efa9494` — json write corpus 2.0→1.09 ms, dsl `${}` substitution in place, parse legs ~5 % faster; empty clusters recorded with negative evidence); topology KEEP by re-measured DAG + idiom/NIGHTLY/churn audits (R7 `649abce`). Bytes frozen end-to-end (bless 307×unchanged NO-OP every wave), dist surface intact (3 packages × 5 targets). The windows leg found and fixed two REAL bugs (`a48b306`: fmt swallowed content after a continuation-joined backslash comment — proptest-proven cross-platform; `!docs` trim hardcoded `/` where the tooling is `File.separator`-aware). Close: full gate chain + Category B (oracle 4 json + 4 sidecar + 99 diagram + 6 theme, export-verify 31/31 ×3 TZ=UTC) green on the final tree; **tag `v0.5.0` (LOCAL; push/publish never executed, stays the user's call)**. Commits R0 `75ce39d` → close (this). Log below (`build/PHASE_5R.md`) |
-| P6 | GUI improvements — arrow editing + help texts (M0…M8) | **PLANNED 2026-11-28** — scope ratified via questions tool (full scope A/B+C/D; single session history; port-drag create; Del=delete, Ctrl+Shift+K=strip waypoints; egui_commonmark allowed; model edits BLOCKED for DSL sources). F13+F14 registered, D17 deviation, decisions P6-D0…D8 + waves: `build/PHASE_6.md` |
+| P6 | GUI improvements — arrow editing + help texts (M0…M8) | **COMPLETE 2026-11-28** — first feature phase on the refactored tree; plan `9c4a4bf`, waves `a73a85a`…`e4d6606` (M7) + close (this). Route UX (insert dots per segment, endpoint squares, nudges, Ctrl+Shift+K straighten), model editing on plain `.json` ONLY (port-drag create, reconnect, Del delete, details-panel relabel — DSL sources gated read-only for the model, the DSL file is never rewritten), ONE session undo history (D17), help overlay from the single `shortcuts.rs` binding table (F1/`?`), details panel (facts + markdown description + editable edge fields), documentation window (F2, `!docs` sections, markdown via egui_commonmark gui-only + verbatim fallback). Model edits flow through invertible `ModelCommand`s + `Viewer::run_model_edit`; saves ride the shared byte-contract writer (bless NO-OP every wave). Close: V9 chain green — quartet+gui, full tier, doc-zero (caught a real private-doc-link), windows/Wine (caught 5 prose-hygiene comments, fixed + pitfall note), bless NO-OP, Category B oracle 4+4+99+6 + export-verify 31 ×2 formats (TZ=UTC). No tag. Manual GUI smoke lists = user-side. F13+F14 rows, D17 deviation, decisions P6-D0…D8: `build/PHASE_6.md` |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -161,6 +161,57 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P6 — GUI: dependency-arrow editing + help texts ✅ (2026-11-28, COMPLETE)
+
+The first feature phase on the refactored tree (charter, decisions P6-D0…D8,
+waves and per-wave evidence in `build/PHASE_6.md`; plan `9c4a4bf`): the viewer
+gained route-editing affordances, model editing on plain `.json` sources, one
+session undo history, a help overlay, an inspecting/editing details panel and
+a documentation window. The JSON byte contract held untouched — `e2e bless`
+was a NO-OP at every wave; model edits ride invertible `ModelCommand`s
+through ONE funnel (`Viewer::run_model_edit`) into the shared writer; DSL
+sources stay model-read-only (the DSL file is never rewritten). egui_commonmark
+0.26 ships behind the `gui` feature only — the headless viewer tree keeps
+ZERO windowing crates (V4 re-measured at close).
+
+- **M0** `a73a85a` — dep spike (egui_commonmark, `default-features = false`)
+  + `shortcuts.rs`: the ONE headless binding table.
+- **M1** `d283db4` — ONE session undo/redo history (D17: deliberate
+  divergence from the layout editor's per-diagram undo).
+- **M2** `05d331c` — route UX: insert dot per segment (press-drag splices +
+  routes), endpoint squares, arrow-key nudges (Shift 10×, grabbed waypoint
+  wins), Ctrl+Shift+K straighten; `insert_waypoint` factory (preview==commit).
+- **M3** `50fd2fa` — headless `ModelCommand`s: relationship create / delete /
+  reconnect / relabel + `IdGenerator` re-registration; oracle witness: a
+  created relationship stores EMPTY tags (derived `Relationship`),
+  description absent.
+- **M4** `e1e2a31` — canvas model ops: port-dot drag creates (new arrow
+  lands selected), endpoint drag reconnects, Del deletes; gate
+  `model_editing_allowed` (plain `.json` only — V7 matrix incl. sidecar
+  reopen + stdin); `model_dirty` chip + save rules.
+- **M5** `5674a02` — details panel: element facts, markdown description,
+  link; edge fields (description/technology/this-view label) with ONE
+  undoable commit per field; headless twin `SetRelationshipViewLabel`.
+- **M6** `ac91021` — help overlay (F1 / `?` / chip) rendering the binding
+  table verbatim; Esc closes help before deselecting; affordance tooltips;
+  V6 audit: table == shipped bindings (the docs row pulled, re-added with
+  its handler).
+- **M7** `e4d6606` — documentation window (F2 / details button):
+  `doc_sections` = workspace-level → attached → embedded, `order`-sorted;
+  markdown rendered, `AsciiDoc`/absent verbatim.
+- **Close** — CHANGELOG `[Unreleased]` reviewed, viewer README rewritten
+  for P6, root README + `docs/` verified current. V9 chain on the final
+  tree: V4 headless tree zero gui crates; `ci gui fmt clippy test refs`
+  green; full tier ok; doc-zero caught ONE real violation (module doc
+  linking a private item — fixed); bless NO-OP; windows/Wine leg caught
+  FIVE bare feature-tag comments (per-wave gates missed them — bare
+  `ci gui` runs the gui leg ONLY, pitfall note
+  `xtask-ci-steps-replace-defaults.md`) — reworded, green; **Category B:
+  oracle verify 4 json + 4 sidecar + 99 diagram + 6 theme match,
+  export-verify 31 fixtures × plantuml/c4plantuml semantically match
+  (TZ=UTC)**. No tag; push/publish stay the user's call. The manual GUI
+  smoke lists (M4–M7 wave rows) await a user-side interactive pass.
 
 ### P5R — large-scale idiomatic-Rust refactor, closing with v0.5.0 ✅ (2026-11-26, COMPLETE)
 

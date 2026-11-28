@@ -96,7 +96,7 @@ struct Toggles {
     /// Diagnostics window visibility (session).
     diagnostics: bool,
     /// Help overlay visibility (session) — the rendered [`crate::shortcuts`]
-    /// table (F1 / `?` / the ? chip).
+    /// table; the help keys and the `?` chip toggle it.
     help: bool,
     /// Documentation window visibility (session) — the `!docs` sections
     /// of the workspace plus the selected element (the other F-key).
@@ -739,8 +739,8 @@ impl Viewer {
     /// toolbar path field owns the keyboard (Ctrl+Z inside the path
     /// edit is egui's). Ctrl+S saves under the same focus guard.
     fn canvas_keys(&mut self, ctx: &egui::Context) {
-        //: F1 and `?` toggle the help overlay wherever the keyboard is
-        // free — an open workspace is NOT required (the table describes
+        //: the help overlay toggles wherever the keyboard is free — an
+        // open workspace is NOT required (the table describes
         // the app, not one view). egui has no `?` key, so it is the
         // shifted slash.
         if !self.text_focus

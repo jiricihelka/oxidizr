@@ -220,8 +220,8 @@ mod tests {
 
     #[test]
     fn help_row_survives_the_canvas_hint_lookup() {
-        // The empty-canvas hint looks the help line up by its `F1`
-        // key prefix — relabelling that row must trip this test, not
+        // The empty-canvas hint looks the help line up by its help-key
+        // prefix — relabelling that row must trip this test, not
         // silently drop the hint line.
         let hits: Vec<&Binding> = all()
             .iter()
