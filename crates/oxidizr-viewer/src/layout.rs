@@ -405,8 +405,8 @@ pub(crate) fn apply_with(
 /// not carry (hidden in this view) are ignored. Only the built-in
 /// [`Layered`] engine has a coordinate pass we control, so a run with
 /// a non-empty pin map uses it whatever `engine` says (the dialog
-/// explains the switch); an empty map reproduces [`apply_with`]
-/// byte-identically.
+/// explains the switch); an empty map reproduces `apply_with`
+/// byte-identically (the crate-internal seam behind [`apply`]).
 ///
 /// # Errors
 ///

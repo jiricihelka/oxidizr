@@ -40,7 +40,7 @@ Authority order: `DEVIATIONS.md` (contract + Locked) > `build/PHASE_N.md` > this
 | P4 | §P4-M5 release endgame (E-1…E-5) | **COMPLETE 2026-11-23** — `oxidizr oracle gen\|verify` user command (shared engine in the cli lib, xtask delegates — dev shim); semantic comparators for the PlantUML + Mermaid dialects (`export-verify --format plantuml\|mermaid`, Category B 31/31 × 2 legs witnessed `TZ=UTC`); `Layered` polish (ranks proven already-tight by test, channel-lane pass `spread_channels` — zero colliding channels at 1k scale; boundary refinement deferred as an additional-feature candidate); cargo-dist release wiring (v1 `dist-workspace.toml` — the Cargo.toml form panics with installers configured, pitfall note; three release apps × 5 targets, shell/PS1 installers, pure generated `release.yml` + companion `release-smoke.yml`); **E-5**: workspace version `0.1.0` → `0.4.0` (14 pins + lockfile — `--version` goldens derived from `CARGO_PKG_VERSION`, bump moved none), `CHANGELOG.md` created (v0.1.0–v0.3.0 reconstructed + the 3 frozen Rust-API churn lines verbatim), `docs/RELEASING.md` (tag → CI → smoke → register; crates.io publishing SKIPPED for v0.4.0 per user decision), README verified current. Close ritual: quartet + full e2e tier + bless **307×unchanged** + `testdata/` clean; Category B skipped with reason (diff = versions/docs/packaging, no generator/parser change since the P4D close where the oracle evidence is green). **Phase 4 complete — tagged v0.4.0 (LOCAL; push/publish never executed, stays the user's call).** Commits M5a `696e849` → M5e `3c34a08` → M5f (this, post-close Windows-assertion fix). Log below (`build/PHASE_4.md`) |
 | P5R | large-scale idiomatic-Rust refactor → v0.5.0 (R0…R7 + close) | **COMPLETE 2026-11-26** — the refactor phase closed with the release: ten giant modules decomposed (R2 `68e8ef9`…`21118a7` 21 commits, R3 `0f3fae0`…`1788247` 15 — plantuml engine 2186→813, shell 2980→803); error taxonomy vs the message-provenance registry (R1 `0127166` `0851ff0`); typed-id conversions measured ZERO (R4 `c510fc3`); visibility 189 net demotes, 5 real removals (R5 `b586953`…`1df9cd2`); bench-guided allocation removal, critcmp-evidenced (R6 `92a212f` `efa9494` — json write corpus 2.0→1.09 ms, dsl `${}` substitution in place, parse legs ~5 % faster; empty clusters recorded with negative evidence); topology KEEP by re-measured DAG + idiom/NIGHTLY/churn audits (R7 `649abce`). Bytes frozen end-to-end (bless 307×unchanged NO-OP every wave), dist surface intact (3 packages × 5 targets). The windows leg found and fixed two REAL bugs (`a48b306`: fmt swallowed content after a continuation-joined backslash comment — proptest-proven cross-platform; `!docs` trim hardcoded `/` where the tooling is `File.separator`-aware). Close: full gate chain + Category B (oracle 4 json + 4 sidecar + 99 diagram + 6 theme, export-verify 31/31 ×3 TZ=UTC) green on the final tree; **tag `v0.5.0` (LOCAL; push/publish never executed, stays the user's call)**. Commits R0 `75ce39d` → close (this). Log below (`build/PHASE_5R.md`) |
 | P6 | GUI improvements — arrow editing + help texts (M0…M8) | **COMPLETE 2026-11-28** — first feature phase on the refactored tree; plan `9c4a4bf`, waves `a73a85a`…`e4d6606` (M7) + close (this). Route UX (insert dots per segment, endpoint squares, nudges, Ctrl+Shift+K straighten), model editing on plain `.json` ONLY (port-drag create, reconnect, Del delete, details-panel relabel — DSL sources gated read-only for the model, the DSL file is never rewritten), ONE session undo history (D17), help overlay from the single `shortcuts.rs` binding table (F1/`?`), details panel (facts + markdown description + editable edge fields), documentation window (F2, `!docs` sections, markdown via egui_commonmark gui-only + verbatim fallback). Model edits flow through invertible `ModelCommand`s + `Viewer::run_model_edit`; saves ride the shared byte-contract writer (bless NO-OP every wave). Close: V9 chain green — quartet+gui, full tier, doc-zero (caught a real private-doc-link), windows/Wine (caught 5 prose-hygiene comments, fixed + pitfall note), bless NO-OP, Category B oracle 4+4+99+6 + export-verify 31 ×2 formats (TZ=UTC). No tag. Manual GUI smoke lists = user-side. F13+F14 rows, D17 deviation, decisions P6-D0…D8: `build/PHASE_6.md` |
-| P7 | Auto-layout quality (dagre) + configuration (M0…M7) | **PLANNED 2026-11-28** — scope ratified via questions tool (dagre 0.1.x as default engine behind the `LayoutEngine` seam, non-default cargo feature, Layered kept for pinned runs + fallback; compound BOUNDARY layout; PINNED tidy — manual placements exact; per-view config + opt-in `automaticLayout` write-back through the model gate; dot frozen, in the engine selection only). User rule: deps only crates.io/pure-Rust/static; determinism proof gates adoption (V1). O2 superseded, F15+D18 registered, decisions P7-D0…D7: `build/PHASE_7.md` |
+| P7 | Auto-layout quality (dagre) + configuration (M0…M7) | **COMPLETE 2026-11-28** — plan `f14b7b0`, waves `387f452`…`4548331` (M6) + close (this). `dagre` 0.1.2 (pure Rust, NON-default crate feature, viewer-default) is the DEFAULT engine behind the `LayoutEngine` seam — V1 determinism gate green (116 variants × 3 in-process + 10 concurrent processes, bit-identical); Layered kept (pinned runs, `--no-default-features` floor); compound BOUNDARY layout (members stay in frames); pinned tidy (overlay = pins, exact anchor clamps, Shift-click, "Apply (ignore pins)"); per-view layout config + "Remember in view" (five standard `automaticLayout` fields via `ModelCommand::SetAutomaticLayout`); `edgeSeparation` honoured by BOTH engines (Layered fan centred, equal-slot fallback); `--layout-engine layered|dagre|dot` on both GUI entries + completions. Quality: TOTAL crossings 1503→1490 (Layered) with dagre as default at 1005, pierces 304→293/191, bends 3006→3002/498 — blessed table + `KNOWN_CROSSING_REGRESSIONS` gate. Close: full tier ok; doc-zero caught 1 real private-doc-link (fixed); windows/Wine green (dagre runs under Wine); Category B oracle 4+4+99+6 + export-verify 31 ×2 (TZ=UTC); bless NO-OP every wave; bench: dagre unchanged, Layered 1k +2.7–7.5% recorded (M5 spread pass, µs-scale). No tag. Smoke lists user-side. Decisions P7-D0…D9, waves + evidence: `build/PHASE_7.md` |
 | P3 | viewer+layout | **COMPLETE 2026-11-20** — M6 post-tag: un-laid-out views open laid out (display-time auto-layout like the web app, `a1e7dfc`). M7 post-tag: sidebar view list grouped per view kind. M8 post-tag: `oxidizr view` in-binary GUI subcommand (feature `gui`, F10, shell shared with the binary). M9 post-tag: Windows CI reload fix (notify `Modify(Any)` class, cfg-widen + hash authority). M10 post-tag: display separation floor + right-drag pan. M11 post-tag: twelve-item UX batch — gesture swap + trackpad split, side arrow ports (engine port spread), text-last painting, selection info panel, `<stem>.oxidizr.json` viewport sidecar (F11, 2026-11-21). M5 hardening: saved-sidecar A/B oracle legs (`oracle verify` 4 json + 4 sidecar + 90 diagram + 6 theme), perf pass (209 items ≈ 1.0 ms/frame, ~16× headroom), viewer README. **Phase 3 complete, tagged v0.3.0 (local)**. M4 live reload + minimap/nav + SVG+PNG export + `dot-backend`; M3 editing + SAVE; M2 `Layered` engine + auto-layout (`P3` baseline); M1 read-only viewer; M0 scaffold 2026-11-19. Log below (`build/PHASE_3.md`) |
 
 Commit cadence (user decision revised 2026-11-15, after M4): **commit every green
@@ -162,6 +162,59 @@ decomposed in the PHASE doc first. Questions only on plan-contradicting reality
   CI-only (no darwin cross from Linux).
 
 ## Milestone log
+
+### P7 — Auto-layout quality (dagre) + configuration ✅ (2026-11-28, COMPLETE)
+
+The layout phase (charter, decisions P7-D0…D9, waves and per-wave evidence in
+`build/PHASE_7.md`; plan `f14b7b0`): the viewer's auto-layout runs the `dagre`
+layered pipeline by default — a pure-Rust crates.io dependency behind the
+existing `LayoutEngine` seam, a NON-default cargo feature keeping the layout
+library's zero-dependency promise — while the hand-written `Layered` engine
+stays selectable, the floor of `--no-default-features` builds, and the owner
+of pinned runs. The adoption was PROVEN, not assumed: V1 ran 116 corpus
+variants × 3 in-process repeats + 10 concurrent fresh processes bit-identical
+before the default flipped; V2 is a committed per-fixture metric table with a
+named-regression set (`c4-like`, `grid-120`) that fails on new worse shapes
+AND on silently fixed ones. The JSON byte contract held throughout — bless
+NO-OP at every wave; the oracle and export goldens match unchanged at close.
+
+- **M0** `387f452` — dagre 0.1.2 spike + adapter + V1 determinism gate GREEN
+  + V2 quality harness with the blessed table; measured reality: the crate
+  does not build `default-features = false` (ungated serde use — note
+  written), `f64::signum(0.0) == 1.0` inflated every crossing count until the
+  side test was hand-rolled, and no engine option profile dominates.
+- **M1** `fd802f7` — dagre DEFAULT (viewer `default = ["dagre"]`, hand-written
+  `Engine::default()`); adapter `simplify()` drops exactly-collinear route
+  interiors (bend TOTAL 2385→498); EVERY viewer geometry test passed
+  byte-unchanged under the new default; R-5 bench posture recorded.
+- **M2** `1f054cc` — compound BOUNDARY layout: group forest through the
+  graph seam, dagre parent/child, scene membership; members stay inside their
+  frames; V1 green on 134 corpus variants.
+- **M3** `96faf70` — pinned tidy: overlay entries ARE pins, exact hold via
+  Layered anchor clamps, `apply_pinned`, Shift-click toggle while the dialog
+  is open, "Apply (ignore pins)" escape hatch.
+- **M4** `71aeb34` — per-view layout config (`KEY_LAYOUT/<view>` cache +
+  legacy fallback, seed order stored → cache → legacy → default) + "Remember
+  in view" writing the FIVE standard `automaticLayout` fields through
+  `ModelCommand::SetAutomaticLayout` (one undoable step, plain `.json`).
+- **M5** `e884dac` — `edgeSeparation` honoured by BOTH engines: Layered port
+  fans sit centred at the exact requested spacing when the side fits, equal
+  slots otherwise, lone arrows byte-unchanged; metric-gated re-bless:
+  Layered rows only improve, dagre columns byte-unchanged, verdict set
+  unchanged.
+- **M6** `4548331` — `--layout-engine <layered|dagre|dot>` on BOTH entries
+  through the ONE `shell::run` seam (unavailable request = default kept +
+  dialog note, errors as values); completions render the flag; CHANGELOG +
+  viewer README + shortcuts pin row; smoke lists M1–M5 written.
+- **Close** — doc-zero caught ONE real violation (public doc linking the
+  crate-private seam — reworded); windows/Wine leg green — dagre cross-
+  compiles AND runs under Wine (V7); full tier ok; **Category B: oracle
+  verify 4 json + 4 sidecar + 99 diagram + 6 theme match, export-verify 31
+  fixtures × plantuml/c4plantuml semantically match (TZ=UTC)**; bless NO-OP;
+  bench recorded — dagre 1k groups unchanged, Layered +2.7–7.5% from the
+  wired port spread (µs-scale, R-5 gap stands). No tag (by design);
+  push/publish stay the user's call. The manual GUI smoke lists (M1–M5
+  wave rows) await a user-side interactive pass.
 
 ### P6 — GUI: dependency-arrow editing + help texts ✅ (2026-11-28, COMPLETE)
 
