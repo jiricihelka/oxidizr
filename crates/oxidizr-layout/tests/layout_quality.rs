@@ -351,9 +351,12 @@ fn corpus_quality_table_is_committed() {
         mixed-sizes         0→0          0→0          0→0         500→500     same
         odd-ids             0→0          0→0          0→0         600→600     same
         c4-like             0→1          0→0         20→9        2217→2072    WORSE
+        grouped-chains      0→0          0→0          6→3         697→772     same
+        groups-nested       0→0          0→0          6→2         610→590     same
+        c4-grouped          0→0          0→0         20→10       2217→2119    same
         tangled-90       1303→609       44→22      2474→226    594549→555214  better
         grid-120          199→394      244→169      404→211     65843→127147  WORSE
-        TOTAL            1503→1005     304→191     2974→498    675097→696049  
+        TOTAL            1503→1005     304→191     3006→513    678620→699530  
     "#]]
     .assert_eq(&table);
 }

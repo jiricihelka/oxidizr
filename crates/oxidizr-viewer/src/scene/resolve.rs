@@ -251,24 +251,36 @@ pub(super) struct Paint<'a> {
     pub(super) default_color: &'a str,
 }
 
+/// The identity fields every boundary accumulator carries (kind, stable
+/// id, label, metadata line, tag chain) — the argument bundle keeps
+/// [`boundary_from`] within the pedantic budget.
+pub(super) struct Identity<'a> {
+    pub(super) kind: BoundaryKind,
+    pub(super) id: String,
+    pub(super) label: String,
+    pub(super) metadata: Option<String>,
+    pub(super) tags: &'a str,
+}
+
 /// One boundary: member union + padding, style resolved through the
-/// Boundary tag chain.
+/// Boundary tag chain, carrying the explicit member ids the layout graph
+/// is built from (`crate::layout::graph_for`).
 pub(super) fn boundary_from(
     paint: &Paint<'_>,
-    kind: BoundaryKind,
-    id: String,
-    label: String,
-    metadata: Option<String>,
-    tags: &str,
+    identity: Identity<'_>,
     rect: Rect,
+    members: Vec<Id>,
 ) -> Boundary {
-    let style = paint.styles.element_style(tags, paint.color_scheme);
+    let style = paint
+        .styles
+        .element_style(identity.tags, paint.color_scheme);
     Boundary {
-        kind,
-        id,
-        label,
-        metadata,
+        kind: identity.kind,
+        id: identity.id,
+        label: identity.label,
+        metadata: identity.metadata,
         rect: rect.expand(BOUNDARY_PADDING),
+        members,
         background: style
             .background
             .unwrap_or_else(|| paint.default_background.to_string()),
@@ -283,6 +295,39 @@ pub(super) fn boundary_from(
         font_size: style.font_size.unwrap_or(24).max(1),
         opacity: style.opacity.unwrap_or(100).clamp(0, 100),
     }
+}
+
+/// Item ids behind sorted item indices — a boundary's member list in
+/// scene order.
+pub(super) fn member_ids(indices: &[usize], items: &[Item]) -> Vec<Id> {
+    indices.iter().map(|i| items[*i].id.clone()).collect()
+}
+
+/// Memoized transitive member items of a deployment node: direct child
+/// items plus the members of child nodes — the same closure [`dn_rect`]
+/// unions. Returns sorted item indices (scene order); the memo doubles as
+/// the cycle guard [`dn_rect`] uses (a hypothetical revisit sees the
+/// placeholder `Vec::new()` instead of recursing forever).
+pub(super) fn dn_member_items(
+    idx: usize,
+    child_items: &HashMap<usize, Vec<usize>>,
+    child_dns: &HashMap<usize, Vec<usize>>,
+    cache: &mut Vec<Option<Vec<usize>>>,
+) -> Vec<usize> {
+    if let Some(members) = &cache[idx] {
+        return members.clone();
+    }
+    cache[idx] = Some(Vec::new());
+    let mut out: Vec<usize> = child_items.get(&idx).cloned().unwrap_or_default();
+    if let Some(kids) = child_dns.get(&idx) {
+        for kid in kids.clone() {
+            out.extend(dn_member_items(kid, child_items, child_dns, cache));
+        }
+    }
+    out.sort_unstable();
+    out.dedup();
+    cache[idx] = Some(out.clone());
+    out
 }
 
 /// Memoized bottom-up deployment-node rect (the official UI: the deployment-node

@@ -36,5 +36,7 @@ pub use dagre::Dagre;
 #[cfg(feature = "dot-backend")]
 pub use dot::Dot;
 pub use engine::{EdgePlacement, LayoutEngine, LayoutError, LayoutResult, NodePlacement, Point};
-pub use graph::{Anchor, Edge, EdgeId, LayoutConfig, LayoutGraph, Node, NodeId, RankDirection};
+pub use graph::{
+    Anchor, Edge, EdgeId, Group, GroupId, LayoutConfig, LayoutGraph, Node, NodeId, RankDirection,
+};
 pub use layered::Layered;

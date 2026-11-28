@@ -55,13 +55,17 @@ use dagre::layout::layout as run_dagre;
 use dagre::{EdgeLabel, LayoutOptions, NodeLabel, RankDir};
 
 use crate::engine::{EdgePlacement, LayoutEngine, LayoutError, LayoutResult, NodePlacement, Point};
-use crate::graph::{LayoutConfig, LayoutGraph, RankDirection};
+use crate::graph::{GroupId, LayoutConfig, LayoutGraph, RankDirection};
 
 /// The node-name prefix: names are positional, never domain ids.
 const NODE_PREFIX: char = 'n';
 
 /// The edge-name prefix (the multigraph key that keeps parallel edges).
 const EDGE_PREFIX: char = 'e';
+
+/// The compound-parent prefix (parents live beside the positional node
+/// names and never enter the output).
+const GROUP_PREFIX: char = 'g';
 
 /// Laid-out graph with the crate's label types.
 type DagreGraph = Graph<NodeLabel, EdgeLabel>;
@@ -138,14 +142,51 @@ fn edge_name(index: usize) -> String {
     format!("{EDGE_PREFIX}{index}")
 }
 
+/// The group-parent name for group input position `index`.
+fn group_name(index: usize) -> String {
+    format!("{GROUP_PREFIX}{index}")
+}
+
+/// Which groups constrain the layout: a group is ACTIVE when it has
+/// members, or an active group sits inside it (containment is a forest —
+/// [`validate`](LayoutGraph::validate) guarantees resolvable, acyclic
+/// parent links, so the walk up each chain ends). Compound mode changes
+/// even parent-free pipeline behavior (empty-rank removal), so it switches
+/// on only when containment is real — all-empty groups lay out exactly
+/// like no groups.
+fn active_groups(graph: &LayoutGraph) -> Vec<bool> {
+    let mut at: BTreeMap<&str, usize> = BTreeMap::new();
+    for (index, group) in graph.groups.iter().enumerate() {
+        at.insert(group.id.as_str(), index);
+    }
+    let mut active = vec![false; graph.groups.len()];
+    for (index, group) in graph.groups.iter().enumerate() {
+        if group.members.is_empty() {
+            continue;
+        }
+        active[index] = true;
+        let mut parent = group.parent.as_ref().map(GroupId::as_str);
+        while let Some(id) = parent {
+            let up = at[id];
+            if active[up] {
+                break;
+            }
+            active[up] = true;
+            parent = graph.groups[up].parent.as_ref().map(GroupId::as_str);
+        }
+    }
+    active
+}
+
 /// The input graph in the engine's shape: directed, multigraph (parallel
-/// relationships must survive), non-compound (boundary grouping is a caller
-/// concern, added to the input graph, not to this translation).
+/// relationships must survive), compound only when the graph carries real
+/// containment ([`active_groups`]).
 fn build(graph: &LayoutGraph) -> Result<DagreGraph, LayoutError> {
+    let active = active_groups(graph);
     let mut laid = Graph::with_options(GraphOptions {
         directed: true,
         multigraph: true,
-        compound: false,
+        compound: active.iter().any(|on| *on),
     });
     for (index, node) in graph.nodes.iter().enumerate() {
         laid.set_node(
@@ -179,6 +220,48 @@ fn build(graph: &LayoutGraph) -> Result<DagreGraph, LayoutError> {
             Some(EdgeLabel::default()),
             Some(edge_name(index).as_str()),
         );
+    }
+    // Compound containment: parent nodes first (zero-size labels — the
+    // pipeline re-sizes compound parents from their border dummies), then
+    // the membership and nesting links. `validate` proved the forest, so
+    // the engine's own cycle guard cannot trip; nesting links go last so
+    // every active parent node exists when its children link in.
+    if active.iter().any(|on| *on) {
+        for (index, _group) in graph.groups.iter().enumerate() {
+            if active[index] {
+                laid.set_node(group_name(index), Some(NodeLabel::default()));
+            }
+        }
+        let mut group_at: BTreeMap<&str, usize> = BTreeMap::new();
+        for (index, group) in graph.groups.iter().enumerate() {
+            group_at.insert(group.id.as_str(), index);
+        }
+        for (index, group) in graph.groups.iter().enumerate() {
+            if !active[index] {
+                continue;
+            }
+            let parent_name = group_name(index);
+            for member in &group.members {
+                // Unreachable after `validate` (it resolves every member);
+                // naming a missing one loudly beats inventing a phantom.
+                let member_name = positions
+                    .get(member.as_str())
+                    .copied()
+                    .ok_or_else(|| {
+                        reject(format!("group {} names unknown node {member}", group.id))
+                    })
+                    .map(node_name)?;
+                laid.set_parent(&member_name, Some(parent_name.as_str()));
+            }
+            // An active group's parent is active (activation walks up), so
+            // the link below always names a node that exists.
+            if let Some(parent) = &group.parent {
+                let at = group_at.get(parent.as_str()).copied().ok_or_else(|| {
+                    reject(format!("group {} names unknown parent {parent}", group.id))
+                })?;
+                laid.set_parent(&parent_name, Some(&group_name(at)));
+            }
+        }
     }
     Ok(laid)
 }
@@ -567,5 +650,170 @@ mod tests {
         assert_eq!(result.nodes.len(), 4);
         assert_eq!(result.edges.len(), 3);
         assert!(result.nodes.iter().all(|n| n.position.x.is_finite()));
+    }
+
+    // ---- compound containment -----------------------------------------
+
+    use crate::graph::{Group, GroupId};
+
+    /// The cluster probe: two chains that a flat layout may interleave on
+    /// the cross axis, one per group, plus a third chain in no group.
+    fn clustered(direction: RankDirection) -> LayoutGraph {
+        let mut g = LayoutGraph::new();
+        g.config.rank_direction = direction;
+        for (chain, ids) in [
+            ("a", ["a1", "a2"]),
+            ("b", ["b1", "b2"]),
+            ("c", ["c1", "c2"]),
+        ] {
+            for id in ids {
+                g.add_node(Node::new(NodeId::new(id), 100.0, 50.0));
+            }
+            g.add_edge(Edge::new(
+                EdgeId::new(format!("{chain}12")),
+                NodeId::new(format!("{chain}1")),
+                NodeId::new(format!("{chain}2")),
+            ));
+        }
+        // A cross edge: the clusters are not independent islands, so
+        // ranking pulls them toward each other — clustering still holds.
+        g.add_edge(Edge::new(
+            EdgeId::new("a2b2"),
+            NodeId::new("a2"),
+            NodeId::new("b2"),
+        ));
+        g.add_group(Group::new(
+            GroupId::new("ga"),
+            vec![NodeId::new("a1"), NodeId::new("a2")],
+        ));
+        g.add_group(Group::new(
+            GroupId::new("gb"),
+            vec![NodeId::new("b1"), NodeId::new("b2")],
+        ));
+        g
+    }
+
+    /// Cross-axis interval of the named members (`x` for rank-vertical
+    /// layouts, `y` for rank-horizontal ones).
+    fn interval(result: &LayoutResult, ids: &[&str], horizontal: bool) -> (f64, f64) {
+        let mut lo = f64::INFINITY;
+        let mut hi = f64::NEG_INFINITY;
+        for id in ids {
+            let at = result
+                .nodes
+                .iter()
+                .find(|n| n.id.as_str() == *id)
+                .unwrap_or_else(|| panic!("{id} missing"));
+            let p = at.position;
+            let (start, end) = if horizontal {
+                (p.x, p.x + 100.0)
+            } else {
+                (p.y, p.y + 50.0)
+            };
+            lo = lo.min(start);
+            hi = hi.max(end);
+        }
+        (lo, hi)
+    }
+
+    #[test]
+    fn grouped_chains_cluster_apart() {
+        for direction in [
+            RankDirection::LeftRight,
+            RankDirection::TopDown,
+            RankDirection::RightLeft,
+            RankDirection::BottomUp,
+        ] {
+            let result = Dagre::new()
+                .layout(&clustered(direction))
+                .expect("clustered");
+            // The cluster axis is the sibling of the rank axis: y for
+            // LR/RL (rank runs on x), x for TB/BT.
+            let cross_x = matches!(direction, RankDirection::TopDown | RankDirection::BottomUp);
+            let (a_lo, a_hi) = interval(&result, &["a1", "a2"], cross_x);
+            let (b_lo, b_hi) = interval(&result, &["b1", "b2"], cross_x);
+            let apart = a_hi <= b_lo || b_hi <= a_lo;
+            assert!(
+                apart,
+                "{direction:?}: group frames overlap [{a_lo}..{a_hi}] vs [{b_lo}..{b_hi}]"
+            );
+            // No penetration: the ungrouped chain stays out of both frames.
+            for (id, (lo, hi)) in [("a", (a_lo, a_hi)), ("b", (b_lo, b_hi))] {
+                for c in ["c1", "c2"] {
+                    let (c_lo, c_hi) = interval(&result, &[c], cross_x);
+                    let inside = c_lo > lo && c_hi < hi;
+                    assert!(
+                        !inside,
+                        "{direction:?}: {c} sits inside the {id} cluster \
+                         [{lo}..{hi}] at [{c_lo}..{c_hi}]"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn compound_parents_never_enter_the_output() {
+        let result = Dagre::new()
+            .layout(&clustered(RankDirection::LeftRight))
+            .expect("clustered");
+        let ids: Vec<&str> = result.nodes.iter().map(|n| n.id.as_str()).collect();
+        assert_eq!(ids, ["a1", "a2", "b1", "b2", "c1", "c2"]);
+        assert_eq!(result.edges.len(), 4);
+    }
+
+    #[test]
+    fn nested_groups_place() {
+        let mut g = LayoutGraph::new();
+        g.config.rank_direction = RankDirection::LeftRight;
+        for id in ["outer1", "inner1", "inner2"] {
+            g.add_node(Node::new(NodeId::new(id), 100.0, 50.0));
+        }
+        g.add_edge(Edge::new(
+            EdgeId::new("e"),
+            NodeId::new("outer1"),
+            NodeId::new("inner2"),
+        ));
+        g.add_group(Group {
+            id: GroupId::new("outer"),
+            parent: None,
+            members: vec![NodeId::new("outer1")],
+        });
+        g.add_group(Group {
+            id: GroupId::new("inner"),
+            parent: Some(GroupId::new("outer")),
+            members: vec![NodeId::new("inner1"), NodeId::new("inner2")],
+        });
+        let result = Dagre::new().layout(&g).expect("nested");
+        assert_eq!(result.nodes.len(), 3);
+        assert!(
+            result
+                .nodes
+                .iter()
+                .all(|n| n.position.x.is_finite() && n.position.y.is_finite())
+        );
+    }
+
+    #[test]
+    fn inactive_groups_change_nothing() {
+        // A graph WITHOUT groups and one with ONLY empty groups must lay
+        // out byte-identically: compound mode stays off when no group
+        // constrains anything.
+        let mut plain = LayoutGraph::new();
+        plain.config.rank_direction = RankDirection::TopDown;
+        for id in ["a", "b"] {
+            plain.add_node(Node::new(NodeId::new(id), 90.0, 45.0));
+        }
+        plain.add_edge(Edge::new(
+            EdgeId::new("ab"),
+            NodeId::new("a"),
+            NodeId::new("b"),
+        ));
+        let mut with_empty = plain.clone();
+        with_empty.add_group(Group::new(GroupId::new("ghost"), Vec::new()));
+        assert_eq!(
+            Dagre::new().layout(&plain).expect("plain"),
+            Dagre::new().layout(&with_empty).expect("with_empty")
+        );
     }
 }

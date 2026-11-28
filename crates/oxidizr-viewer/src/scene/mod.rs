@@ -66,8 +66,8 @@ use label::{border_anchor, metadata_line, placement_rect, scene_title, wrap};
 mod resolve;
 
 use resolve::{
-    DnSpec, GroupSpec, Paint, Placement, ScopeSpec, boundary_from, boundary_tag, dn_rect,
-    group_scope, resolve, scope_targets, tags_csv,
+    DnSpec, GroupSpec, Identity, Paint, Placement, ScopeSpec, boundary_from, boundary_tag,
+    dn_member_items, dn_rect, group_scope, member_ids, resolve, scope_targets, tags_csv,
 };
 
 /// The official UI default stroke widths (`LIGHT_MODE_DEFAULTS` /
@@ -80,7 +80,8 @@ pub(crate) const DEFAULT_ITEM_WIDTH: f64 = 350.0;
 pub(crate) const DEFAULT_ITEM_HEIGHT: f64 = 150.0;
 /// Padding a boundary's member union grows by (chrome of ours — the
 /// the official UI computes boundary insets from its own layout passes).
-pub(crate) const BOUNDARY_PADDING: f64 = 20.0;
+/// Public: the compound-layout tests assert frames against it.
+pub const BOUNDARY_PADDING: f64 = 20.0;
 /// Margin around the [`Scene::bounds`] union.
 pub(crate) const SCENE_MARGIN: f64 = 20.0;
 
@@ -219,6 +220,12 @@ pub struct Boundary {
     pub metadata: Option<String>,
     /// Union of the member rects + `BOUNDARY_PADDING`.
     pub rect: Rect,
+    /// The scene items this boundary contains, in scene order. Direct
+    /// items plus the items of contained deployment nodes (transitively —
+    /// the same closure the rect is drawn from). This is also the
+    /// compound-membership input the layout graph is built from
+    /// (`crate::layout`).
+    pub members: Vec<Id>,
     /// Resolved background `#rrggbb` (Boundary tag chain, theme-stylable).
     pub background: String,
     /// Resolved stroke `#rrggbb`.
@@ -698,6 +705,9 @@ pub fn build(
         default_color,
     };
     let mut pending: Vec<(usize, Boundary)> = Vec::new();
+    // Shared memo for the transitive dn member walks (deployment-node
+    // boundaries here, group member closures below).
+    let mut dn_member_cache: Vec<Option<Vec<usize>>> = vec![None; dns.len()];
     for (dn_idx, dn) in dns.iter().enumerate() {
         let Some(rect) = dn_rects[dn_idx] else {
             continue; // memberless node: nothing to draw around
@@ -706,12 +716,18 @@ pub fn build(
             dn.order,
             boundary_from(
                 &paint,
-                BoundaryKind::DeploymentNode,
-                format!("deployment:{}", dn.id),
-                dn.label.clone(),
-                dn.metadata.clone(),
-                &dn.tags,
+                Identity {
+                    kind: BoundaryKind::DeploymentNode,
+                    id: format!("deployment:{}", dn.id),
+                    label: dn.label.clone(),
+                    metadata: dn.metadata.clone(),
+                    tags: &dn.tags,
+                },
                 rect,
+                member_ids(
+                    &dn_member_items(dn_idx, &dn_child_items, &dn_child_dns, &mut dn_member_cache),
+                    &items,
+                ),
             ),
         ));
     }
@@ -724,16 +740,31 @@ pub fn build(
         let Some(rect) = union_all(members) else {
             continue;
         };
+        let member_items: Vec<usize> = {
+            let mut set: std::collections::BTreeSet<usize> = group.items.iter().copied().collect();
+            for d in &group.dns {
+                set.extend(dn_member_items(
+                    *d,
+                    &dn_child_items,
+                    &dn_child_dns,
+                    &mut dn_member_cache,
+                ));
+            }
+            set.into_iter().collect()
+        };
         pending.push((
             group.order,
             boundary_from(
                 &paint,
-                BoundaryKind::Group,
-                group.id.clone(),
-                group.label.clone(),
-                None,
-                &group.tags,
+                Identity {
+                    kind: BoundaryKind::Group,
+                    id: group.id.clone(),
+                    label: group.label.clone(),
+                    metadata: None,
+                    tags: &group.tags,
+                },
                 rect,
+                member_ids(&member_items, &items),
             ),
         ));
     }
@@ -741,16 +772,23 @@ pub fn build(
         let Some(rect) = union_all(scope.items.iter().map(|i| items[*i].rect)) else {
             continue;
         };
+        let member_items: Vec<usize> = {
+            let set: std::collections::BTreeSet<usize> = scope.items.iter().copied().collect();
+            set.into_iter().collect()
+        };
         pending.push((
             scope.order,
             boundary_from(
                 &paint,
-                scope.kind,
-                scope.id.clone(),
-                scope.label.clone(),
-                scope.metadata.clone(),
-                &scope.tags,
+                Identity {
+                    kind: scope.kind,
+                    id: scope.id.clone(),
+                    label: scope.label.clone(),
+                    metadata: scope.metadata.clone(),
+                    tags: &scope.tags,
+                },
                 rect,
+                member_ids(&member_items, &items),
             ),
         ));
     }

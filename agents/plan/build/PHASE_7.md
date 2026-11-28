@@ -103,7 +103,7 @@ Ratification answers (questions tool, 2026-11-28 — the decision anchors):
 |---|---|---|
 | **P7-M0** | dep spike + engine framework: `dagre` behind the `dagre` feature; `Dagre` adapter implementing `LayoutEngine` (dagre `Graph` in, `LayoutResult` out — center→top-left, edge point polylines, multigraph + self-loops on); `Engine::available()`/dialog combo/CLI flag ride the framework; determinism property test; **quality-metric harness** (crossings + bends + edge length, E-3 metric, corpus table committed) | **DONE 2026-11-28. GATE V1 GREEN:** 116 corpus variants × 3 in-process repeats + 10 concurrent fresh processes, bit-exact (`tests/dagre_determinism.rs`, digest `32baf4be2345c6bf`, ~16 s); `Layered` covered by the same battery. V8 measured: default tree EMPTY; `dagre` feature adds 14 crates of which ONLY `dagre` is new to the viewer's headless tree (the `json`-feature serde pair already rides it) — zero windowing/GPU crates. MSRV/edition OK (dagre edition 2024, builds on our pin). Dialog combo live with `Engine::Dagre` (`Layered` stays default until M1). CLI flag lands at M6 with the rest of the CLI surface. See §M0 measured reality |
 | **P7-M1** | dagre becomes the default engine (auto-display + dialog default); Layered selectable; corpus metric table recorded (dagre vs Layered per fixture) | **DONE 2026-11-28.** Flip: viewer `default = ["dagre"]` (pure computation; `oxidizr-layout` keeps its `dagre` feature NON-default so the zero-dep library promise stands) + hand-written `Engine::default()` = `Dagre` when compiled, `Layered` in `--no-default-features` builds (the built-in floor); `apply()` — the display pass — rides the session default now. Adapter gained `simplify()`: the pipeline leaves a point on every rank border even on straight routes and interiors ARE waypoints we persist, so exactly-collinear interiors are dropped (cross-product zero, no epsilon — the route never moves); bend TOTAL fell 2385→498 on the re-blessed table. V2 gate GREEN on the amended shape (blessed table + `KNOWN_CROSSING_REGRESSIONS` + TOTAL crossings 1503→1005); **no scene-fixture snapshot needed re-blessing** — every viewer geometry/e2e test passed byte-unchanged under the new default (the assertions are structural, and `golden_paint` stores positions before the display pass). V8 kept: viewer headless tree still zero windowing crates (`tiny-skia` is the pre-existing pure raster). Benches (same 1k shapes as `benches/layered.rs`, new `benches/dagre.rs`, sample size 20 — dagre `mixed` costs ~5.7 s/run, 100 samples would be a 10-min leg): dagre mixed **5.75 s** vs Layered 4.45 ms, chain 107 ms vs 874 µs, star 240 ms vs 1.05 ms — dagre is 100–1300× slower at 1k nodes (recorded, not hidden; R-5). `cargo xtask bench` now passes `oxidizr-layout/dagre` so both engines record side by side. |
-| **P7-M2** | compound boundaries: `graph_for` emits boundary parents + membership for dagre runs; headless tests (members inside their boundary frame, cross-boundary edges attach sanely); Layered path untouched | V3 over every corpus view with boundaries |
+| **P7-M2** | compound boundaries: `graph_for` emits boundary parents + membership for dagre runs; headless tests (members inside their boundary frame, cross-boundary edges attach sanely); Layered path untouched | **DONE 2026-11-28** per the §M2 decomposition. (a) Seam: `LayoutGraph.groups: Vec<Group>` + five `validate` invariants (unique ids, resolvable member/parent, one group per node, acyclic parents). (b) Adapter: compound ON only when a group is ACTIVE (has members or an active child — compound mode changes even parent-free empty-rank removal, so all-empty groups lay out byte-identically to no groups); parents are zero-size `g{bi}` nodes re-sized by dagre's border machinery, membership + nesting via `set_parent`, parents never emitted. (c) Scene: `Boundary.members: Vec<Id>` (dn closure memoized beside `dn_rect`). (d) Forest: owner = smallest containing boundary (fewer members → kind rank → scene order), parent = smallest STRICT member superset. (e) V3: unit forest tests + corpus sweep `grouped_layout.rs` (frames = member unions, edges attached, re-Apply byte-identical, Layered ignores the forest). V1 stays GREEN on the enlarged corpus (134 variants incl. 3 group fixtures); the metric table re-blessed with the old rows byte-unchanged (Layered untouched — V2) and the new group rows 0 crosses / 0 pierces, bends 6→3, 6→2, 20→10 (TOTAL bends 3006→513) |
 | **P7-M3** | pinned tidy: overlay set = pins → Layered + anchor clamps (coordinate pass); exact-pin headless tests; pin badge + Shift-click unpin + "Apply (ignore pins)"; dialog explains the engine switch | V4: pinned elements byte-identical after Apply |
 | **P7-M4** | config: per-view params in the cache (+ legacy fallback), dialog seeds from stored view config, **"Remember in view"** = `ModelCommand::SetAutomaticLayout` through the model gate (undo restores prior/absent) | V5: P6-style gate matrix (`.json` allowed; `.dsl`/sidecar-preferred/stdin blocked) + write-back bytes are standard contract fields only |
 | **P7-M5** | `edgeSeparation` wired into Layered port spread; display fallback params re-checked against dagre defaults; dialog/labels honest again | metric-gated re-bless (V2) |
@@ -175,6 +175,41 @@ Also measured: the corpus metric harness initially over-counted crossings on
 **both** engines because `f64::signum(0.0) == 1.0` treats a point exactly on a
 segment's line as one side; the metric hand-rolls the sign now and carries a
 self-test (touching/collinear routes must not count).
+
+## M2 decomposition (charter: wave touches more than four modules)
+
+Measured reality up front: the scene's `Boundary` does NOT carry a member
+list — membership lives in the build accumulators (`GroupSpec.items/dns`,
+`ScopeSpec.items`, `dn_child_items/dns`), and an item can sit in several
+overlapping boundaries at once (group + parent container + software system).
+dagre compound wants a FOREST (one direct parent per node), so the wave is:
+
+- **(a) Seam** (`oxidizr-layout`): `LayoutGraph.groups: Vec<Group>` —
+  `Group { id: GroupId, parent: Option<GroupId>, members: Vec<NodeId> }`
+  (direct members only; nesting via `parent`); `validate` gains the group
+  invariants (unique ids, resolvable parent/member, acyclic parents, each
+  node in at most one group). `Layered`/`Dot` never read it (byte-identical).
+- **(b) Adapter** (`dagre.rs`): compound ON only when groups exist; parent
+  nodes named `g{bi}` (zero-size — dagre re-derives compound frames from the
+  border dummies; the seam result never emits them); membership + parent
+  chains via `set_parent`. Determinism path is NEW code → the corpus grows
+  boundary fixtures so V1 covers it, and the metric table re-blesses (old
+  fixture rows must stay byte-identical = Layered untouched).
+- **(c) Scene** (`oxidizr-viewer`): `Boundary` gains `members: Vec<Id>`
+  (direct members; deployment-node members transitive like its rect);
+  accumulation is position-free, so `graph_for` idempotency holds.
+- **(d) `graph_for`**: scene's overlapping memberships → forest: each item's
+  owner = the SMALLEST boundary containing it (fewer members first, then
+  boundary kind — group → deployment node → container scope → software-system
+  scope — then scene boundary order); each boundary's parent = its smallest
+  strict container (member set a STRICT superset — strictness is what makes
+  the parent links acyclic). Same containment rule makes groups nest (group ⊂
+  deployment node ⊂ …, container-scope ⊂ software-system-scope).
+- **(e) V3**: engine fixtures (a)–(b); viewer headless test over every
+  corpus view WITH boundaries: every member box lies inside its boundary
+  frame; every cross-boundary edge keeps attached endpoints + interior;
+  Apply twice reproduces byte-identical overrides (idempotency holds with
+  groups in the graph).
 
 ## Risks
 

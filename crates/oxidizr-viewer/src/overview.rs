@@ -423,6 +423,7 @@ mod tests {
                 label: "g".to_string(),
                 metadata: None,
                 rect: wr(0.0, 0.0, 1000.0, 600.0),
+                members: vec![Id::new("1"), Id::new("2")],
                 background: "#fafafa".to_string(),
                 stroke: "#c0c0c0".to_string(),
                 stroke_width: 2,

@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use crate::graph::{EdgeId, NodeId};
+use crate::graph::{EdgeId, GroupId, NodeId};
 
 /// A point in layout space (px). Placements are floats; consumers round when
 /// they write integer JSON geometry.
@@ -74,6 +74,29 @@ pub enum LayoutError {
         /// Reported value.
         value: i32,
     },
+    /// Two groups carry the same id.
+    DuplicateGroupId(GroupId),
+    /// A group names a node the graph does not contain.
+    UnknownGroupMember {
+        /// The offending group.
+        group: GroupId,
+        /// The unresolvable member.
+        node: NodeId,
+    },
+    /// A group names a parent the graph does not contain.
+    UnknownGroupParent {
+        /// The offending group.
+        group: GroupId,
+        /// The unresolvable parent.
+        parent: GroupId,
+    },
+    /// A node is a member of two groups: containment is a forest.
+    DuplicateGroupMembership(NodeId),
+    /// Group `parent` links form a cycle: containment is a forest.
+    GroupParentCycle {
+        /// A group on the cycle.
+        group: GroupId,
+    },
     /// Layering did not converge after cycle removal. Defensive only:
     /// the DFS reversal guarantees a DAG, so reaching this means an
     /// engine bug, never bad input.
@@ -103,6 +126,19 @@ impl fmt::Display for LayoutError {
             }
             Self::BadSeparation { name, value } => {
                 write!(f, "config separation {name} must be >= 0, got {value}")
+            }
+            Self::DuplicateGroupId(id) => write!(f, "duplicate group id: {id}"),
+            Self::UnknownGroupMember { group, node } => {
+                write!(f, "group {group} references unknown node {node}")
+            }
+            Self::UnknownGroupParent { group, parent } => {
+                write!(f, "group {group} references unknown parent group {parent}")
+            }
+            Self::DuplicateGroupMembership(node) => {
+                write!(f, "node {node} is a member of two groups")
+            }
+            Self::GroupParentCycle { group } => {
+                write!(f, "group {group} sits in a parent cycle")
             }
             Self::CycleRemovalFailed => write!(f, "layering did not converge"),
             #[cfg(feature = "dot-backend")]

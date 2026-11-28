@@ -129,6 +129,26 @@ mod tests {
     }
 
     #[test]
+    fn groups_do_not_reach_the_layered_engine() {
+        // The V2 baseline promise: Layered lays exactly the node set and
+        // containment is a feature it does not have — a graph and its
+        // group-annotated twin must place byte-identically.
+        use crate::graph::{Group, GroupId};
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "c"] {
+            g.add_node(node(id));
+        }
+        g.add_edge(edge("ab", "a", "b"));
+        g.add_edge(edge("bc", "b", "c"));
+        let plain = layout(&g);
+        g.add_group(Group::new(
+            GroupId::new("g"),
+            vec![NodeId::new("a"), NodeId::new("b")],
+        ));
+        assert_eq!(layout(&g), plain);
+    }
+
+    #[test]
     fn chain_lays_out_left_to_right_at_reference_separations() {
         let mut g = LayoutGraph::new();
         for id in ["a", "b", "c"] {

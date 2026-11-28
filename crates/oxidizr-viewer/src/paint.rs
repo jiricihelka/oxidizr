@@ -1018,6 +1018,7 @@ mod tests {
                     width: 800.0,
                     height: 200.0,
                 },
+                members: Vec::new(),
                 background: "#ffffff".to_string(),
                 stroke: "#888888".to_string(),
                 stroke_width: 2,

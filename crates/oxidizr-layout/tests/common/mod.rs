@@ -10,7 +10,8 @@
 #![allow(dead_code)] // each test file uses a subset
 
 use oxidizr_layout::{
-    Edge, EdgeId, LayoutEngine, LayoutGraph, LayoutResult, Node, NodeId, RankDirection,
+    Edge, EdgeId, Group, GroupId, LayoutEngine, LayoutGraph, LayoutResult, Node, NodeId,
+    RankDirection,
 };
 
 /// One named graph shape.
@@ -55,6 +56,9 @@ pub fn corpus() -> Vec<Fixture> {
         full("mixed-sizes", mixed_sizes),
         full("odd-ids", odd_ids),
         full("c4-like", c4_like),
+        full("grouped-chains", grouped_chains),
+        full("groups-nested", groups_nested),
+        full("c4-grouped", c4_grouped),
         Fixture {
             name: "tangled-90",
             build: || tangled(90, 170),
@@ -393,6 +397,69 @@ fn c4_like() -> LayoutGraph {
     for (index, (from, to)) in links.iter().enumerate() {
         g.add_edge(edge(&format!("rel{index}"), from, to));
     }
+    g
+}
+
+/// Two chains, one per group, plus an ungrouped chain and a cross edge:
+/// the compound shape the flat fixtures do not cover (P7-M2).
+fn grouped_chains() -> LayoutGraph {
+    let mut g = LayoutGraph::new();
+    for id in ["a1", "a2", "b1", "b2", "c1", "c2"] {
+        g.add_node(node(id, 110.0, 55.0));
+    }
+    g.add_edge(edge("a12", "a1", "a2"));
+    g.add_edge(edge("b12", "b1", "b2"));
+    g.add_edge(edge("c12", "c1", "c2"));
+    g.add_edge(edge("a2b2", "a2", "b2"));
+    g.add_group(Group::new(
+        GroupId::new("ga"),
+        vec![NodeId::new("a1"), NodeId::new("a2")],
+    ));
+    g.add_group(Group::new(
+        GroupId::new("gb"),
+        vec![NodeId::new("b1"), NodeId::new("b2")],
+    ));
+    g
+}
+
+/// Nested containment: an inner group inside an outer one, members at both
+/// levels, an edge crossing from the inner level out (R-3's nested shape).
+fn groups_nested() -> LayoutGraph {
+    let mut g = LayoutGraph::new();
+    for id in ["outer1", "outer2", "inner1", "inner2"] {
+        g.add_node(node(id, 120.0, 60.0));
+    }
+    g.add_edge(edge("i", "inner1", "inner2"));
+    g.add_edge(edge("x", "inner2", "outer2"));
+    g.add_edge(edge("o", "outer1", "outer2"));
+    g.add_group(Group {
+        id: GroupId::new("outer"),
+        parent: None,
+        members: vec![NodeId::new("outer1")],
+    });
+    g.add_group(Group {
+        id: GroupId::new("inner"),
+        parent: Some(GroupId::new("outer")),
+        members: vec![NodeId::new("inner1"), NodeId::new("inner2")],
+    });
+    g
+}
+
+/// The c4-like shape with its entry points and databases boxed: what a
+/// real component view with group boundaries feeds the engine.
+fn c4_grouped() -> LayoutGraph {
+    let mut g = c4_like();
+    g.add_group(Group::new(
+        GroupId::new("people"),
+        vec![NodeId::new("person:web-user"), NodeId::new("person:ops")],
+    ));
+    g.add_group(Group::new(
+        GroupId::new("stores"),
+        vec![
+            NodeId::new("database:sessions"),
+            NodeId::new("database:ledger"),
+        ],
+    ));
     g
 }
 

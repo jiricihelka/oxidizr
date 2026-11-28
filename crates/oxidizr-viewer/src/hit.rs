@@ -415,6 +415,7 @@ mod tests {
                 width,
                 height,
             },
+            members: Vec::new(),
             background: "#ffffff".to_string(),
             stroke: "#000000".to_string(),
             stroke_width: 2,

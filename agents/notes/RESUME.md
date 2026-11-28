@@ -1,88 +1,77 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 IN FLIGHT — waves P7-M0 + P7-M1 DONE (dagre adapter, V1 gate GREEN, quality harness; dagre is now the DEFAULT engine). NEXT = wave P7-M2 (compound boundary layout) and then M3…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 IN FLIGHT — waves P7-M0…P7-M2 DONE (dagre adapter + V1 gate; dagre DEFAULT engine; compound boundary layout). NEXT = wave P7-M3 (pinned tidy) and then M4…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P7 stands
 
-- **M1 committed**: dagre is the DEFAULT engine. Viewer `default =
-  ["dagre"]`; hand-written `Engine::default()` = `Dagre` when the feature is
-  compiled, `Layered` in `--no-default-features` builds (built-in floor);
-  `apply()` (the display pass) rides `Engine::default()`. Adapter `simplify()`
-  drops EXACTLY-collinear interior points (the pipeline ticks every rank
-  border; interiors are persisted waypoints) — bend TOTAL 2385→498 on the
-  re-blessed table. No scene-fixture re-bless was needed (all viewer/e2e
-  geometry tests byte-unchanged under the new default). Benches recorded
-  (`benches/dagre.rs`, sample 20; xtask bench passes `oxidizr-layout/dagre`):
-  dagre 5.75 s / 107 ms / 240 ms vs Layered 4.45 ms / 874 µs / 1.05 ms on the
-  shared 1k mixed/chain/star shapes — recorded, not hidden (R-5).
-- **M0 committed**: `dagre` 0.1.2 behind the NON-default `oxidizr-layout/dagre`
-  feature; `Dagre` adapter at the `LayoutEngine` seam
-  (`crates/oxidizr-layout/src/dagre.rs` — positional `n{i}`/`e{i}` names,
-  center→top-left, multigraph+self-loops, origin-anchored, anchors ignored,
-  non-finite guard ⇒ `LayoutError::Dagre`); viewer `Engine::Dagre` +
-  `dagre` passthrough feature (dialog combo live, `Layered` STILL the
-  default until M1).
-- **V1 determinism gate GREEN**: `tests/dagre_determinism.rs` — 116 corpus
-  variants × 3 in-process repeats + 10 concurrent fresh processes, bit-exact
-  (digest `32baf4be2345c6bf`, ~16 s); `Layered` runs the same battery.
-  No STOP needed (P7-D7).
-- **V2 harness committed**: `tests/layout_quality.rs` (crossings/pierces/
-  bends/length, TOTAL row, `expect!` table, re-bless = `UPDATE_EXPECT=1`).
-  Measured LR/contract separations (post-M1 simplify): TOTAL crossings
-  1503→1005, pierces 304→191, bends 2974→498. Gate = table +
-  `KNOWN_CROSSING_REGRESSIONS = ["c4-like", "grid-120"]` + aggregate-better
-  assertion (the "≥ Layered everywhere" wording was amended — 6 option
-  profiles swept, none dominates; PHASE_7 §M0 measured reality + amended V2).
-- **Two defects fixed on the way**: dagre 0.1.2 cannot build
-  `default-features = false` (ungated `graph/json.rs` ⇒ `features = ["json"]`
-  forced on; serde pair already in the viewer tree) — note
-  `env/dagre-crate-json-feature.md`; and `oxidizr-layout --features
-  dot-backend` was BROKEN since P5R-R5b (`e76ba12` left `pub(crate)` consts
-  on the `pub use` line ⇒ E0364, no CI leg enabled the feature) — fixed by
-  trimming the re-export to `pub use dot::Dot;`.
-  Metric pitfall: `f64::signum(0.0) == 1.0` — note
-  `pitfalls/f64-signum-zero-is-one.md`.
+- **M2 committed (2026-11-28)**: compound boundary layout end to end.
+  - Seam (`oxidizr-layout`): `LayoutGraph.groups: Vec<Group>`
+    (`Group { id: GroupId, parent: Option<GroupId>, members }` — DIRECT
+    members, containment is a forest) + `add_group` + five `validate`
+    invariants (`DuplicateGroupId`/`UnknownGroupMember`/`UnknownGroupParent`
+    /`DuplicateGroupMembership`/`GroupParentCycle` — bounded chain walk).
+    `Layered`/`Dot` NEVER read `groups` (test `groups_do_not_reach_the_
+    layered_engine` pins the V2 baseline).
+  - Adapter (`dagre.rs`): compound ON only when a group is ACTIVE (has
+    members or an active child — `active_groups`); parents = zero-size
+    `g{bi}` nodes (dagre re-derives frames from border dummies), links via
+    `set_parent`, nesting chains set last, parents never in the output.
+    All-empty groups ⇒ byte-identical to no groups (`inactive_groups_
+    change_nothing`).
+  - Scene: `Boundary.members: Vec<Id>` (dn closure memoized beside
+    `dn_rect` — `dn_member_items`); `boundary_from` takes an `Identity`
+    bundle (8-arg form tripped the pedantic budget); `BOUNDARY_PADDING`
+    is now `pub` (the V3 test asserts frames against it).
+  - Forest (`layout.rs::graph_for` → `emit_groups`): item owner =
+    SMALLEST containing boundary (fewer members → kind rank Group <
+    DeploymentNode < Container < SoftwareSystem → scene order); parent =
+    smallest STRICT member-set superset (strictness ⇒ acyclic).
+  - Verification: V1 GREEN on 134 corpus variants (3 group fixtures added
+    to `tests/common/mod.rs`); quality table re-blessed — old rows
+    byte-unchanged (Layered untouched), group rows 0 cross/0 pierce,
+    bends 6→3, 6→2, 20→10 (TOTAL bends 3006→513); V3 = unit forest tests
+    + `tests/grouped_layout.rs` corpus sweep (frames = member unions +
+    pad, edges attached, re-Apply byte-identical).
+- **M1 committed**: dagre DEFAULT engine (`default = ["dagre"]`,
+  hand-written `Engine::default()`, `simplify()` collinear drop). Quality
+  TOTAL cross 1503→1005, pierce 304→191, bend 2974→498. Benches recorded
+  (`benches/dagre.rs` sample 20): dagre 5.75 s vs Layered 4.45 ms mixed-1k.
+- **M0 committed**: `dagre` 0.1.2 behind the NON-default `dagre` feature
+  (`features = ["json"]` forced — note `env/dagre-crate-json-feature.md`);
+  `Dagre` adapter; V1 determinism gate GREEN; V2 harness = blessed table
+  + `KNOWN_CROSSING_REGRESSIONS = ["c4-like", "grid-120"]` + TOTAL improves.
 - User rulings anchoring everything (2026-11-28): dependency allowed ONLY
   crates.io + pure-Rust + statically linked + no multiplatform/compile
-  burden; **dagre first, but the abstraction must keep multiple engines**
-  (feature-enabled, GUI/CLI-selectable); **compound boundary layout**;
-  **pin what I moved** (overlay positions = pins, exact); **per-view
-  config + write-through** of the five standard `automaticLayout` fields;
-  **no new external dependencies** — dot stays frozen inside the engine
-  selection (no PATH discovery, no UX push).
+  burden; **dagre first, but the abstraction must keep multiple engines**;
+  **compound boundary layout** (M2 — done); **pin what I moved** (overlay
+  positions = pins, exact — M3); **per-view config + write-through** of
+  the five standard `automaticLayout` fields (M4); **no new external
+  dependencies** — dot stays frozen inside the engine selection.
 - Work autonomously per the wave table; commit every green wave-piece;
   questions ONLY on plan-contradicting reality (AGENTS.md style).
 
-## Implementation anchors (post-M0)
+## Implementation anchors (post-M2)
 
-- `oxidizr-layout`: default features = ZERO deps (V8 measured, tree EMPTY);
-  `--features dagre` = 14 crates, only `dagre` new vs the viewer tree, zero
-  windowing. Seam = `engine.rs::LayoutEngine` (results in graph input
-  order). `layered/` = own engine (M3 gains anchor clamps in the coordinate
-  pass; M5 wires `edge_separation` through `layered/routing.rs` port spread
-  — until M5 Layered IGNORES `edge_separation`, which flatters its
-  `grid-120` metric numbers). Tests share `tests/common/mod.rs` (14-shape
-  corpus, `Sweep::Full|Directions`, LCG fixtures, bit-exact encode + FNV
-  digest) — extend THAT, not new fixture sets.
+- `oxidizr-layout`: default features = ZERO deps; `--features dagre` =
+  dagre crate. Seam = `engine.rs::LayoutEngine` (results in graph input
+  order). `layered/` = own engine — **M3 gains anchor clamps in the
+  coordinate pass** (`layered/mod.rs` + placement); **M5 wires
+  `edge_separation` through `layered/routing.rs` port spread** (until M5
+  Layered IGNORES `edge_separation`). Tests share `tests/common/mod.rs`
+  (17-shape corpus incl. `grouped-chains`/`groups-nested`/`c4-grouped`,
+  `Sweep::Full|Directions`, LCG fixtures, bit-exact encode + FNV digest)
+  — extend THAT, not new fixture sets.
 - Viewer (`crates/oxidizr-viewer/src/layout.rs`): `Engine` enum =
-  Layered/Dagre(cfg)/Dot(cfg); `config_for`/`stored_for`/`display_params`
-  (display floors rank sep at 200); `graph_for(scene, config)` maps
-  items+edges ONLY — M2 adds boundary membership (scene `Boundary` carries
-  members) as dagre compound parents; `apply`/`apply_with` → `Overrides`;
-  `encode`/`decode` persist dialog params under `KEY_LAYOUT` (global) —
-  M4 per-view with legacy fallback. Dialog `shell/actions.rs::layout_window`
-  (combo lists `Engine::available()`); `run_layout` + `layout_engine` field
-  in `shell/mod.rs`; manual positions = `LayoutOverlay` element entries =
-  the M3 PIN source.
-- M2 specifics (compound boundaries): dagre has `compound: true` on the
-  graph builder + `set_parent(child, parent)` — audit
-  `/tmp/opencode/dagre-src/dagre-0.1.2/` (`src/parenting.rs`,
-  `addBorderNode`) for how borders get sizes; `LayoutGraph` (engine.rs)
-  needs a boundary concept (parents as layout nodes with own size? or
-  membership-only) — decide from the audit; `graph_for` must emit boundary
-  parents + membership ONLY for dagre runs (Layered path byte-identical —
-  its corpus numbers are the V2 baseline); scene `Boundary` already carries
-  members (M2 reads them); V3 = headless per-corpus-view assertions (members
-  inside boundary frames, cross-boundary edges attach sanely). Watch the
-  boundary pad: `crate::scene::BOUNDARY_PADDING` stays OUR chrome constant.
+  Layered/Dagre(cfg)/Dot(cfg), `Engine::default()` feature-aware;
+  `graph_for` = nodes + edges + the boundary FOREST; `emit_groups` = the
+  forest rule; `apply`/`apply_with` → `Overrides`; `encode`/`decode`
+  persist dialog params under `KEY_LAYOUT` (global) — **M4 per-view with
+  legacy fallback**. Dialog `shell/actions.rs::layout_window` (combo
+  lists `Engine::available()`); `run_layout` + `layout_engine` field in
+  `shell/mod.rs`; **manual positions = `LayoutOverlay` element entries =
+  the M3 PIN source** — M3 = "Apply (ignore pins)" action + pin badge +
+  Shift-click unpin + the overlay-as-pins wiring in the display pass
+  (`Overrides::display` already merges user ON TOP of auto).
+- dagre source audit lives at `/tmp/opencode/dagre-src/dagre-0.1.2/`
+  (re-unpack from the cargo registry cache if gone).
 - Write-back (M4): `ModelCommand::SetAutomaticLayout(view_key, from, to)`
   through `Viewer::run_model_edit` + gate `commands::model_editing_allowed`
   (plain `.json` only); undo restores prior `Option<AutomaticLayout>`;
@@ -93,17 +82,22 @@
 
 ## If a next session opens
 
-- Start wave **P7-M2** per the `build/PHASE_7.md` wave table (compound
-  boundary layout: boundary parents + membership into dagre runs, Layered
-  untouched, V3 headless). M0/M1 evidence is in the plan rows + §M0 measured
-  reality; do not re-derive it.
+- Start wave **P7-M3** per the `build/PHASE_7.md` wave table (pinned
+  tidy: overlay set = pins → engine choice flips to Layered + anchor
+  clamps; exact-pin headless tests = V4; pin badge + Shift-click unpin +
+  "Apply (ignore pins)"; dialog explains the engine switch). M2 evidence
+  is in the plan row + §M2 decomposition; do not re-derive it.
 - Feature-matrix sanity before commit (no CI leg covers these):
-  `cargo check -p oxidizr-layout --features dot-backend,dagre --all-targets`
-  and `cargo check -p oxidizr-viewer --features gui,dagre,dot-backend`.
+  `cargo clippy -p oxidizr-layout --features dot-backend,dagre --all-targets`
+  and `cargo clippy -p oxidizr-viewer --features gui,dagre,dot-backend --all-targets`.
 - Gates: EVERY commit `cargo xtask ci gui fmt clippy test refs` — FULL
   form, every leg named; a bare `ci gui` runs ONE leg and still says
   "all steps green" (pitfall `xtask-ci-steps-replace-defaults.md`).
   Bless NO-OP every wave; bench budget changes recorded with numbers.
+- Shipped-prose hygiene: milestone ids (`§M2`, `P7-M2`) in
+  `crates/oxidizr-*/src` comments FAIL the `test`+`refs` legs — the
+  self-gating xtask hygiene test scans them (note `refs-hygiene-prose-
+  patterns.md`). Kinds/roles in prose, process ids only in `agents/`.
 - Windows/Wine leg at close: dagre must cross-compile + run under Wine —
   it is pure Rust, but the leg is the proof (V7).
 - Tags `v0.1.0…v0.5.0` all LOCAL; P6 unpunctuated by tag by design; P7
@@ -126,9 +120,6 @@
   drafts go to the session tmp dir; apply after the chain, re-run `refs`.
 - GUI-leg drift: `gui-leg-lint-drift.md` — the quartet never compiles the
   shell, so a plain `ci` passing does NOT mean the gui leg does.
-- Shipped-text hygiene: bare F1..F19 / process ids in `crates/oxidizr-*/src`
-  comments fail the self-gating xtask tests inside the `test`/`refs` legs
-  (`refs-hygiene-prose-patterns.md`).
 
 ## Gates quick reference
 

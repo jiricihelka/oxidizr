@@ -36,11 +36,11 @@ use oxidizr_layout::Dagre;
 #[cfg(feature = "dot-backend")]
 use oxidizr_layout::Dot;
 use oxidizr_layout::{
-    Edge as GraphEdge, EdgeId, Layered, LayoutConfig, LayoutEngine, LayoutError, LayoutGraph,
-    LayoutResult, Node as GraphNode, NodeId, RankDirection as EngineDirection,
+    Edge as GraphEdge, EdgeId, Group, GroupId, Layered, LayoutConfig, LayoutEngine, LayoutError,
+    LayoutGraph, LayoutResult, Node as GraphNode, NodeId, RankDirection as EngineDirection,
 };
 
-use crate::scene::{Overrides, Scene};
+use crate::scene::{BoundaryKind, Overrides, Scene};
 
 /// Which engine a layout run uses. `Dagre` is the default whenever the
 /// `dagre` feature is compiled in; `Layered` is the built-in engine and
@@ -261,7 +261,8 @@ pub fn seed_overlay(
 
 /// The layout graph of `scene`: one node per ITEM (id + the
 /// style-resolved box size), one edge per relationship edge between
-/// items (the scene already dropped boundary/unresolvable endpoints).
+/// items (the scene already dropped boundary/unresolvable endpoints),
+/// and one compound GROUP per boundary (the forest rule, below).
 /// Content order = insertion order (deterministic).
 #[must_use]
 pub(crate) fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
@@ -281,7 +282,77 @@ pub(crate) fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
             NodeId::new(edge.destination.as_str()),
         ));
     }
+    emit_groups(scene, &mut graph);
     graph
+}
+
+/// How tight a boundary kind nests: a group box is the smallest intent,
+/// a software-system scope the largest — the tie-break between two
+/// boundaries of equal member count (the forest rule).
+const fn kind_rank(kind: BoundaryKind) -> u8 {
+    match kind {
+        BoundaryKind::Group => 0,
+        BoundaryKind::DeploymentNode => 1,
+        BoundaryKind::Container => 2,
+        BoundaryKind::SoftwareSystem => 3,
+    }
+}
+
+/// Scene boundaries overlap (an item sits in its group AND its parent
+/// scopes); the engine wants a FOREST. The rule: each item's OWNER is
+/// the smallest boundary containing it (fewest members first, then kind
+/// rank, then scene order); each boundary's members are its owned items
+/// and its parent the smallest boundary whose member set is a STRICT
+/// superset — strictness means the parent links cannot cycle. Ownership
+/// is position-free, so `graph_for` idempotency holds.
+fn emit_groups(scene: &Scene, graph: &mut LayoutGraph) {
+    use std::collections::HashSet;
+
+    let boundaries = &scene.boundaries;
+    if boundaries.is_empty() {
+        return;
+    }
+    let sets: Vec<HashSet<&Id>> = boundaries
+        .iter()
+        .map(|b| b.members.iter().collect())
+        .collect();
+    let smaller = |a: usize, b: usize| {
+        (sets[a].len(), kind_rank(boundaries[a].kind), a)
+            < (sets[b].len(), kind_rank(boundaries[b].kind), b)
+    };
+    // Ownership pass: one owner per item, so no node enters two groups.
+    let mut claimed: Vec<Vec<&Id>> = vec![Vec::new(); boundaries.len()];
+    for item in &scene.items {
+        let mut owner: Option<usize> = None;
+        for (index, set) in sets.iter().enumerate() {
+            if set.contains(&&item.id) && owner.is_none_or(|best| smaller(index, best)) {
+                owner = Some(index);
+            }
+        }
+        if let Some(index) = owner {
+            claimed[index].push(&item.id);
+        }
+    }
+    // Nesting pass: smallest STRICT member-set container as the parent.
+    for (index, boundary) in boundaries.iter().enumerate() {
+        let mut parent: Option<usize> = None;
+        for (candidate, set) in sets.iter().enumerate() {
+            if candidate == index || set.len() <= sets[index].len() || !sets[index].is_subset(set) {
+                continue;
+            }
+            if parent.is_none_or(|best| smaller(candidate, best)) {
+                parent = Some(candidate);
+            }
+        }
+        graph.add_group(Group {
+            id: GroupId::new(boundary.id.clone()),
+            parent: parent.map(|p| GroupId::new(boundaries[p].id.clone())),
+            members: claimed[index]
+                .iter()
+                .map(|id| NodeId::new(id.as_str()))
+                .collect(),
+        });
+    }
 }
 
 /// Run the session default engine ([`Engine::default`]) over `scene` —
@@ -405,12 +476,14 @@ pub fn decode(text: &str) -> Option<AutomaticLayout> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::scene;
+    use crate::scene::{self, Boundary, Item, Rect};
     use oxidizr_core::Workspace;
     use oxidizr_core::model::{ModelItem, Relationship};
     use oxidizr_core::tags::Tags;
+    use oxidizr_core::validate::ElementKind;
     use oxidizr_core::views::{
-        ColorScheme, ElementView, SystemLandscapeView, ViewBase, ViewContent,
+        ColorScheme, ElementView, IconPosition, LineStyle, Shape as ElementShape,
+        SystemLandscapeView, ViewBase, ViewContent,
     };
     use std::collections::HashMap;
 
@@ -718,6 +791,214 @@ mod tests {
         let first = apply(&scene_of(&ws, None), &AutomaticLayout::default()).unwrap();
         let second = apply(&scene_of(&ws, Some(&first)), &AutomaticLayout::default()).unwrap();
         assert_eq!(first, second);
+    }
+
+    // ---- group forest --------------------------------------------------
+
+    fn bare_item(n: u32) -> Item {
+        Item {
+            id: id(n),
+            kind: ElementKind::SoftwareSystem,
+            name: format!("e{n}"),
+            description: None,
+            metadata: None,
+            group: None,
+            url: None,
+            rect: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 50.0,
+            },
+            shape: ElementShape::Box,
+            background: "#ffffff".to_owned(),
+            stroke: "#000000".to_owned(),
+            stroke_width: 2,
+            border: LineStyle::Solid,
+            color: "#000000".to_owned(),
+            font_size: 24,
+            opacity: 100,
+            icon: None,
+            icon_position: IconPosition::Top,
+        }
+    }
+
+    fn boundary(kind: BoundaryKind, key: &str, members: &[u32]) -> Boundary {
+        Boundary {
+            kind,
+            id: key.to_owned(),
+            label: key.to_owned(),
+            metadata: None,
+            rect: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 50.0,
+            },
+            members: members.iter().map(|n| id(*n)).collect(),
+            background: "#ffffff".to_owned(),
+            stroke: "#888888".to_owned(),
+            stroke_width: 2,
+            border: LineStyle::Dashed,
+            color: "#555555".to_owned(),
+            font_size: 24,
+            opacity: 100,
+        }
+    }
+
+    fn forest_scene(items: &[u32], boundaries: Vec<Boundary>) -> Scene {
+        Scene {
+            view_key: "K".to_owned(),
+            title: "T".to_owned(),
+            background: "#ffffff".to_owned(),
+            boundaries,
+            items: items.iter().map(|n| bare_item(*n)).collect(),
+            edges: Vec::new(),
+            bounds: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            },
+        }
+    }
+
+    #[test]
+    fn forest_owns_items_by_smallest_boundary_and_nests_strictly() {
+        // Items 1,2 sit in a group AND the parent system scope; item 3
+        // only in the scope: the group owns 1+2, the scope owns 3, and
+        // the group nests into the scope (strict member superset).
+        let scene = forest_scene(
+            &[1, 2, 3],
+            vec![
+                boundary(BoundaryKind::Group, "group:root/Team", &[1, 2]),
+                boundary(
+                    BoundaryKind::SoftwareSystem,
+                    "software-system:s",
+                    &[1, 2, 3],
+                ),
+            ],
+        );
+        let graph = graph_for(&scene, LayoutConfig::default());
+        assert_eq!(graph.validate(), Ok(()), "the forest is engine-valid");
+        assert_eq!(graph.groups.len(), 2);
+        let group = &graph.groups[0];
+        assert_eq!(group.id.as_str(), "group:root/Team");
+        assert_eq!(
+            group.members.iter().map(NodeId::as_str).collect::<Vec<_>>(),
+            ["1", "2"]
+        );
+        assert_eq!(
+            group.parent.as_ref().map(GroupId::as_str),
+            Some("software-system:s")
+        );
+        let scope = &graph.groups[1];
+        assert_eq!(scope.id.as_str(), "software-system:s");
+        assert_eq!(
+            scope.members.iter().map(NodeId::as_str).collect::<Vec<_>>(),
+            ["3"]
+        );
+        assert_eq!(scope.parent, None);
+    }
+
+    #[test]
+    fn forest_ties_break_on_kind_before_scene_order() {
+        // A deployment node and a group box claim the SAME two items:
+        // fewer-member never fires (equal size), the tighter kind wins —
+        // and the loser keeps an empty member list, never a share.
+        let scene = forest_scene(
+            &[1, 2],
+            vec![
+                boundary(BoundaryKind::DeploymentNode, "deployment:d", &[1, 2]),
+                boundary(BoundaryKind::Group, "group:root/Team", &[1, 2]),
+            ],
+        );
+        let graph = graph_for(&scene, LayoutConfig::default());
+        assert_eq!(graph.validate(), Ok(()));
+        let dn = &graph.groups[0];
+        assert!(
+            dn.members.is_empty(),
+            "the group claims the items by kind rank"
+        );
+        let group = &graph.groups[1];
+        assert_eq!(group.members.len(), 2);
+        // Equal member sets are never STRICT supersets → no nesting.
+        assert_eq!(dn.parent, None);
+        assert_eq!(group.parent, None);
+    }
+
+    #[test]
+    fn forest_ignores_positions_and_repeats_exactly() {
+        // Membership-only forest: two scenes differing ONLY in boundary
+        // rects produce identical group lists (the idempotency root).
+        let base = forest_scene(
+            &[1, 2],
+            vec![boundary(BoundaryKind::Group, "group:root/Team", &[1, 2])],
+        );
+        let mut moved = base.clone();
+        moved.boundaries[0].rect.x = 9_000.0;
+        moved.items[0].rect.y = 4_200.0;
+        let config = LayoutConfig::default();
+        assert_eq!(
+            graph_for(&base, config).groups,
+            graph_for(&moved, config).groups
+        );
+    }
+
+    #[cfg(feature = "dagre")]
+    #[test]
+    fn applying_a_grouped_view_twice_is_idempotent() {
+        // The full seam with groups in the graph: the laid-out scene
+        // re-runs to byte-identical overrides.
+        let ws = chain_grouped();
+        let first = apply(&scene_of(&ws, None), &AutomaticLayout::default()).unwrap();
+        assert!(!first.elements.is_empty());
+        let laid = scene_of(&ws, Some(&first));
+        assert!(
+            laid.boundaries
+                .iter()
+                .any(|b| b.kind == BoundaryKind::Group),
+            "the fixture must render a group boundary"
+        );
+        let second = apply(&laid, &AutomaticLayout::default()).unwrap();
+        assert_eq!(first, second);
+    }
+
+    /// The `chain` fixture with the group attribute on systems 1+2 —
+    /// the shape a landscape view with a group box renders as.
+    fn chain_grouped() -> Workspace {
+        let mut ws = chain(None);
+        for system in &mut ws.model.software_systems {
+            if system.item.id == id(1) || system.item.id == id(2) {
+                system.group = Some("Team".to_owned());
+            }
+        }
+        ws
+    }
+
+    #[test]
+    fn layered_ignores_the_scene_boundaries() {
+        // V2 baseline at the viewer seam: the group forest changes only
+        // the compound engines — `Layered` places byte-identically with
+        // and without boundaries (identical graphs but for the forest).
+        let ws = chain_grouped();
+        let scene = scene_of(&ws, None);
+        assert!(
+            scene
+                .boundaries
+                .iter()
+                .any(|b| b.kind == BoundaryKind::Group),
+            "the fixture must render a group boundary"
+        );
+        let ungrouped = Scene {
+            boundaries: Vec::new(),
+            ..scene.clone()
+        };
+        let params = AutomaticLayout::default();
+        assert_eq!(
+            apply_with(Engine::Layered, &scene, &params).unwrap(),
+            apply_with(Engine::Layered, &ungrouped, &params).unwrap()
+        );
     }
 
     #[test]
