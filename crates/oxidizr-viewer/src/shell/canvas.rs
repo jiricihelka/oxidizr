@@ -3,7 +3,7 @@
 //! editing, lasso). The structs, the entry, the App wiring and the panels
 //! stay in the parent module; the interaction state rides `Viewer` fields.
 
-use crate::{commands, hit, overview, paint, scene};
+use crate::{commands, hit, overview, paint, scene, shortcuts};
 use eframe::egui::{self, Pos2, Vec2};
 use oxidizr_core::Id as ModelId;
 
@@ -449,11 +449,22 @@ impl Viewer {
                 egui::Color32::from_rgb(185, 60, 60),
             );
         } else {
+            //: the empty-canvas help line is LOOKED UP in the table,
+            // never hand-copied (same source as the overlay).
+            let help = shortcuts::all()
+                .iter()
+                .flat_map(|section| section.bindings)
+                .filter(|binding| binding.keys.starts_with("F1"))
+                .map(|binding| format!("{} — {}", binding.keys, binding.action))
+                .next()
+                .unwrap_or_default();
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
-                "Open a workspace: enter a path in the toolbar (or launch\n\
-                 with `oxidizr-viewer <file>`)",
+                format!(
+                    "Open a workspace: enter a path in the toolbar (or launch\n\
+                     with `oxidizr-viewer <file>`)\n\n{help}"
+                ),
                 egui::FontId::default(),
                 ui.visuals().weak_text_color(),
             );
@@ -547,13 +558,46 @@ impl Viewer {
         // rides this response's stable id, follows the pointer and keeps
         // the same 12 px gap.
         if let (Some(hit), Some(scene)) = (self.hover, &self.scene) {
-            let text = tooltip_text(scene, hit);
+            let mut text = tooltip_text(scene, hit);
+            //: the editing kit advertises itself — hovering a painted
+            // affordance appends its gesture line (wording mirrors the
+            // table; the V6 audit keeps them honest).
+            if let Some(hint) = self.affordance_hint(cursor) {
+                if !text.is_empty() {
+                    text.push('\n');
+                }
+                text.push_str(hint);
+            }
             if !text.is_empty() {
                 response.on_hover_ui_at_pointer(move |ui| {
                     ui.label(text);
                 });
             }
         }
+    }
+
+    /// The hover hint of an editing affordance under the pointer: the
+    /// FIRST hit in press-chain order (waypoint handles already ride the
+    /// plain edge tooltip — these are the three NEW grabs: insert dot,
+    /// endpoint square, port dot). `None` while any drag runs: the
+    /// pointer is busy, not advertised.
+    fn affordance_hint(&self, cursor: Option<Pos2>) -> Option<&'static str> {
+        if !matches!(self.drag, Drag::Idle) {
+            return None;
+        }
+        let screen = (f64::from(cursor?.x), f64::from(cursor?.y));
+        if self.insert_dot_hit(screen).is_some() {
+            return Some("drag to insert a waypoint and route it in one move");
+        }
+        if self.can_edit_model() {
+            if self.endpoint_handle_hit(screen).is_some() {
+                return Some("drag onto another element to reconnect this end");
+            }
+            if self.port_hit(screen).is_some() {
+                return Some("drag onto another element to create a relationship (Esc cancels)");
+            }
+        }
+        None
     }
 
     /// Decide what a fresh left-button press starts (/): a

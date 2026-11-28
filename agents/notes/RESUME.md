@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2+M3+M4+M5 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core, canvas model ops, details panel — gates green each); NEXT = M6 help overlay (F1/? table from shortcuts.rs + tooltips + V6 audit). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0…M6 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core, canvas model ops, details panel, help overlay — gates green each); NEXT = M7 documentation window (`!docs` sections, markdown + verbatim fallback — re-add the F2 row to shortcuts.rs WITH its handler). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -45,31 +45,29 @@
 
 ## If a next session opens
 
-- **M0+M1+M2+M3+M4+M5 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
-  details panel LIVE (`shell/panels.rs`): `selection_details()` builds an
-  owned `Details` snapshot (headless rows + `key::element` model facts +
-  edge `EdgeFields`), `info_block` renders element tags/properties/
-  MARKDOWN description (`Viewer.md` shared `CommonMarkCache`) + URL
-  hyperlink; an edge on a `.json` source gets Description/Technology/
-  ViewLabel fields — one `field_draft` at a time, commit = ONE
-  `run_model_edit` on Enter/focus-loss/field-vanished (`field_seen`
-  prune in `key_panel`), `ViewLabel` keyed by `(view_key, id)`.
-  Headless twin: `ModelCommand::SetRelationshipViewLabel` +
-  `set_relationship_view_label` factory + round-trip test; `key::element`
-  lookup + test. ALL interim `allow(dead_code)` marks are gone (only the
-  crate-level headless guard in `lib.rs` remains). 127 viewer lib tests.
-  Start wave **P6-M6** (help overlay): F1/`?` opens a centered
-  `egui::Window`/`Area` rendering `shortcuts::all()` sections; Esc closes
-  help BEFORE clearing selection (priority in `canvas_keys`); the
-  empty-canvas hint renders the same table; V6 audit = every table row
-  vs the actual handlers (the table is already current from M0); add
-  tooltips from the table where gestures are discoverable-poor.
-  Manual smoke (plain `.json`, run before close, M4+M5 lists):
-  port-drag create + select lands, Ctrl+Z trace-free, endpoint
-  reconnect, Del + restore, DSL source = no dots/squares + blocked note,
-  model-only save from a filtered view, chip clears on save; element
-  markdown/tags/props/link render; edge field Enter commits one undoable
-  step, ViewLabel changes only the current view's label.
+- **M0…M6 DONE 2026-11-28** (evidence in the PHASE_6 wave rows): canvas
+  model ops + details panel + help overlay all LIVE. Key pieces: press
+  chain waypoint → insert dot → endpoint handle → port dot (gated) in
+  `press_mode`; `Viewer::run_model_edit` funnel; gate
+  `commands::model_editing_allowed`; `PaintOptions.model_editing`; Del =
+  delete + Ctrl+Shift+K strip; `model_dirty`/`model_note` + save rules.
+  Details panel: `selection_details()` → `Details` snapshot → element
+  facts/markdown (`Viewer.md` `CommonMarkCache`)/link + edge fields
+  (`field_draft` one-at-a-time, ONE commit per Enter/focus-loss/
+  vanished-field, `ViewLabel(view_key, id)`). Headless twin:
+  `SetRelationshipViewLabel` + `set_relationship_view_label` +
+  `key::element`. Help: `Toggles.help`, `help_window` renders
+  `shortcuts::all()` (F1 / Shift+`?` / `?` chip; Esc closes help BEFORE
+  the selection clear), `affordance_hint` tooltips, empty-canvas hint
+  looks up the F1 row. **The table ships ONLY implemented bindings: the
+  F2/docs row was pulled at M6 — re-add it in M7 together with the F2
+  handler** (V6 audit recorded in the M6 wave row). 128 viewer lib tests.
+  Start wave **P7 = P6-M7** (documentation window): `!docs` `Section`s →
+  selected element + workspace-level, `order`-sorted; `Format::Markdown`
+  → egui_commonmark (reuse `Viewer.md`), AsciiDoc/absent → monospaced
+  verbatim + note; F2 opens it; docs button in the details panel; then
+  M8 close (manual smoke lists of M4+M5+M6 run by hand, `ci windows`,
+  Category B `TZ=UTC`, doc-zero, NO tag).
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
   clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing

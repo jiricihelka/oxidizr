@@ -150,11 +150,7 @@ const SECTIONS: &[Section] = &[
             },
             Binding {
                 keys: "F1 or ?",
-                action: "this help",
-            },
-            Binding {
-                keys: "F2",
-                action: "documentation window (workspace and selected element)",
+                action: "show / hide the keys & gestures overlay",
             },
         ],
     },
@@ -168,7 +164,7 @@ pub const fn all() -> &'static [Section] {
 
 #[cfg(test)]
 mod tests {
-    use super::all;
+    use super::{Binding, all};
 
     #[test]
     fn sections_are_populated() {
@@ -216,5 +212,18 @@ mod tests {
                 seen.push(binding.keys);
             }
         }
+    }
+
+    #[test]
+    fn help_row_survives_the_canvas_hint_lookup() {
+        // The empty-canvas hint looks the help line up by its `F1`
+        // key prefix — relabelling that row must trip this test, not
+        // silently drop the hint line.
+        let hits: Vec<&Binding> = all()
+            .iter()
+            .flat_map(|section| section.bindings)
+            .filter(|binding| binding.keys.starts_with("F1"))
+            .collect();
+        assert_eq!(hits.len(), 1, "exactly one help row for the hint");
     }
 }

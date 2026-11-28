@@ -31,6 +31,11 @@ release.
   to the opened `.json`. Workspaces backed by a DSL source never get
   model edits — the affordances stay hidden and Delete explains why in
   the status bar (the DSL text is never rewritten).
+- Help overlay: F1 or `?` (or the `?` chip in the status bar) opens a
+  window listing every key and canvas gesture from one table — the same
+  table the empty-canvas hint reads; Escape closes the overlay before it
+  clears the selection. Hovering a route-edit dot, endpoint square or
+  port dot now names its gesture in the tooltip.
 - The viewer's right panel became a details panel: selecting a box shows
   the element's stored tags, properties, description rendered as markdown,
   and a clickable URL link; selecting an arrow on a plain `.json` source

@@ -3,7 +3,7 @@
 //! diagnostics window. The App `ui` assembly in the parent shows them
 //! every frame; the canvas and browser legs live in the sibling files.
 
-use crate::{commands, key, overview, paint};
+use crate::{commands, key, overview, paint, shortcuts};
 use eframe::egui::{self};
 use oxidizr_core::Id as ModelId;
 
@@ -38,6 +38,15 @@ impl Viewer {
                 });
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                //: the hint chip doubles as the help overlay's mouse
+                // door (same toggle as F1 / `?`).
+                if ui
+                    .small_button("?")
+                    .on_hover_text("keys & gestures (F1)")
+                    .clicked()
+                {
+                    self.toggles.help = !self.toggles.help;
+                }
                 let issues = self.open_log.len() + self.icon_errors.len();
                 if issues > 0 {
                     let label = egui::RichText::new(format!("⚠ {issues} diagnostics"))
@@ -503,6 +512,44 @@ impl Viewer {
                 });
             }
         }
+    }
+
+    /// The help overlay: the [`shortcuts`] binding table rendered
+    /// verbatim — the ONE place keys and gestures are written down, so
+    /// the overlay cannot drift from the shell. F1 / `?` / the ? chip
+    /// toggle it; Esc closes it before clearing the selection.
+    pub(super) fn help_window(&mut self, ctx: &egui::Context) {
+        if !self.toggles.help {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Keys & gestures")
+            .open(&mut open)
+            .collapsible(false)
+            .default_pos([180.0, 96.0])
+            .default_size([560.0, 520.0])
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| {
+                        for section in shortcuts::all() {
+                            ui.strong(section.title);
+                            egui::Grid::new(format!("help-{}", section.title))
+                                .num_columns(2)
+                                .spacing([10.0, 2.0])
+                                .show(ui, |ui| {
+                                    for binding in section.bindings {
+                                        ui.monospace(binding.keys);
+                                        ui.label(binding.action);
+                                        ui.end_row();
+                                    }
+                                });
+                            ui.separator();
+                        }
+                        ui.weak("Esc closes this window.");
+                    });
+            });
+        self.toggles.help = open;
     }
 
     /// Full diagnostics list in a dismissible window;

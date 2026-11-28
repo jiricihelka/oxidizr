@@ -88,9 +88,16 @@ pub fn run(file: Option<&Path>, theme: ThemeArg) -> eframe::Result {
 /// bools on [`Viewer`] tripped `struct_excessive_bools`; they remain
 /// session flags, not state to model as enums — same reading as the
 /// CLI flags precedent (oxidizr-cli lib.rs)).
+//: four INDEPENDENT window/behavior toggles — no state machine fits,
+// and folding them would hide which window is which (same posture the
+// oxidizr-cli allow records).
+#[allow(clippy::struct_excessive_bools)]
 struct Toggles {
     /// Diagnostics window visibility (session).
     diagnostics: bool,
+    /// Help overlay visibility (session) — the rendered [`crate::shortcuts`]
+    /// table (F1 / `?` / the ? chip).
+    help: bool,
     /// Auto-layout dialog visibility.
     layout: bool,
     /// Grid-snap drags to multiples of [`commands::snapped`]'s step.
@@ -384,6 +391,7 @@ impl Viewer {
             viewport: hit::Viewport::new(1.0, (0.0, 0.0)),
             toggles: Toggles {
                 diagnostics: false,
+                help: false,
                 layout: false,
                 snap: false,
             },
@@ -727,15 +735,34 @@ impl Viewer {
     /// toolbar path field owns the keyboard (Ctrl+Z inside the path
     /// edit is egui's). Ctrl+S saves under the same focus guard.
     fn canvas_keys(&mut self, ctx: &egui::Context) {
+        //: F1 and `?` toggle the help overlay wherever the keyboard is
+        // free — an open workspace is NOT required (the table describes
+        // the app, not one view). egui has no `?` key, so it is the
+        // shifted slash.
+        if !self.text_focus
+            && ctx.input(|i| {
+                i.key_pressed(egui::Key::F1)
+                    || (i.modifiers.shift && i.key_pressed(egui::Key::Slash))
+            })
+        {
+            self.toggles.help = !self.toggles.help;
+        }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            //: Esc cancels an in-flight model drag first — its preview is
-            // transient (no overlay write), so cancelling is dropping the
-            // drag; the selection clear below stays the second duty.
-            if matches!(self.drag, Drag::Create { .. } | Drag::Reconnect { .. }) {
-                self.drag = Drag::Idle;
+            //: help first — Esc closes the overlay BEFORE its other
+            // duties (drag cancel, selection clear): dismissing a help
+            // screen never costs the selection.
+            if self.toggles.help {
+                self.toggles.help = false;
+            } else {
+                //: Esc cancels an in-flight model drag first — its preview is
+                // transient (no overlay write), so cancelling is dropping the
+                // drag; the selection clear below stays the second duty.
+                if matches!(self.drag, Drag::Create { .. } | Drag::Reconnect { .. }) {
+                    self.drag = Drag::Idle;
+                }
+                self.selection = None;
+                self.grabbed = None;
             }
-            self.selection = None;
-            self.grabbed = None;
         }
         if self.scene.is_none() || self.text_focus {
             return;
@@ -856,6 +883,7 @@ impl eframe::App for Viewer {
         }
         self.sync_icons(&ctx);
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
+        self.help_window(&ctx);
         self.diagnostics_window(&ctx);
         self.layout_window(&ctx);
     }
