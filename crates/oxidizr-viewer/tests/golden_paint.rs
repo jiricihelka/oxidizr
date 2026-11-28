@@ -56,6 +56,7 @@ fn paint_first_view(topic: &str, scheme: ColorScheme) -> (scene::Scene, Vec<Shap
                 selection: None,
                 hover_edge: None,
                 model_editing: false,
+                pinned: None,
             },
         )
     };

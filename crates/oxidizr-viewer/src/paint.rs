@@ -25,6 +25,7 @@
 //! - Below `MIN_TEXT_PX` text is skipped, and anything outside the
 //!   painted screen rect is culled — cheap paints at any zoom.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use epaint::emath::Align2;
@@ -39,6 +40,8 @@ use oxidizr_core::views::{IconPosition, LineStyle, Shape as ElementShape};
 /// Selection accent outline color (ours — the official UI uses its CSS
 /// accent; visual parity is out of contract).
 pub(crate) const SELECTION_COLOR: Color32 = Color32::from_rgb(0, 150, 215);
+/// Pin badge fill (the layout dialog marks pinned boxes with it).
+pub(crate) const PIN_COLOR: Color32 = Color32::from_rgb(210, 60, 60);
 /// Text below this many SCREEN pixels is not painted at all (zoomed-out
 /// culling; shapes stay, runs vanish).
 pub(crate) const MIN_TEXT_PX: f32 = 5.0;
@@ -105,6 +108,10 @@ pub struct PaintOptions<'a> {
     /// ENDPOINT squares (the reconnect grabs) only when true — a
     /// blocked affordance must not appear.
     pub model_editing: bool,
+    /// Pinned element ids, badged while the automatic-layout dialog is
+    /// open (a pin is an overlay element entry): a filled dot at the
+    /// box's top-right corner marks "Apply will hold this box exactly".
+    pub pinned: Option<&'a HashSet<Id>>,
 }
 
 /// Paint one scene into a shape list, background first, then boundaries,
@@ -256,6 +263,17 @@ fn paint_item(
             4.0,
             Stroke::new(3.0, SELECTION_COLOR),
             epaint::StrokeKind::Outside,
+        ));
+    }
+    // Pin badge (the automatic-layout dialog's marking): a dot at the
+    // top-right corner — Apply holds this box exactly.
+    if options.pinned.is_some_and(|pins| pins.contains(&item.id)) {
+        let corner = pos2(screen_rect.max.x, screen_rect.min.y);
+        out.push(Shape::circle_filled(corner, 5.0, PIN_COLOR));
+        out.push(Shape::circle_stroke(
+            corner,
+            5.0,
+            Stroke::new(1.0, Color32::WHITE),
         ));
     }
     let px = scaled_px(item.font_size, viewport);
@@ -1101,6 +1119,7 @@ mod tests {
                 selection,
                 hover_edge,
                 model_editing: true,
+                pinned: None,
             },
         )
     }
@@ -1216,6 +1235,7 @@ mod tests {
                 selection: Some(&Selection::Edge(id)),
                 hover_edge: None,
                 model_editing: false,
+                pinned: None,
             },
         );
         assert_eq!(white_circles(&blocked), 2, "insert dots survive the gate");

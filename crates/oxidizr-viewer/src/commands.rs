@@ -186,6 +186,19 @@ pub enum Command {
         /// New dimensions.
         to: Option<Dimensions>,
     },
+    /// Pin toggle (the layout dialog's Shift-click): the element's
+    /// overlay entry `from` → `to`; `None` = the entry is REMOVED, so
+    /// the element reverts to its stored/display geometry. A pin is
+    /// exactly an overlay element entry (module docs of
+    /// [`crate::layout::apply_pinned`]).
+    TogglePin {
+        /// The element.
+        id: Id,
+        /// Entry before the toggle (`None` = unpinned).
+        from: Option<(f64, f64)>,
+        /// Entry after the toggle.
+        to: Option<(f64, f64)>,
+    },
     /// "Clear layout": the whole overlay resets (the pre-clear state is
     /// the embedded snapshot, restored on undo).
     ClearView {
@@ -222,6 +235,17 @@ impl Command {
             }
             Self::SetCanvasSize { from, to } => {
                 overlay.dimensions = if forward { *to } else { *from };
+            }
+            Self::TogglePin { id, from, to } => {
+                match if forward { to } else { from } {
+                    Some(position) => {
+                        overlay.elements.insert(id.clone(), *position);
+                    }
+                    None => {
+                        overlay.elements.remove(id);
+                    }
+                }
+                {}
             }
             Self::ClearView { snapshot } => {
                 if forward {
@@ -1583,6 +1607,24 @@ pub(crate) fn insert_waypoint(
     }
 }
 
+/// Toggle one element's PIN (the layout dialog's Shift-click): a
+/// pinned element (an overlay entry) drops it and reverts to its
+/// stored/display geometry; a free element pins at its CURRENT
+/// rendered position — exactly what a pinned automatic-layout run
+/// will hold ([`crate::layout::apply_pinned`]). `None` when the scene
+/// renders no such element.
+#[must_use]
+pub(crate) fn toggle_pin(scene: &Scene, overlay: &LayoutOverlay, id: &Id) -> Option<Command> {
+    let item = scene.items.iter().find(|item| &item.id == id)?;
+    let from = overlay.elements.get(id).copied();
+    let to = from.map_or(Some((item.rect.x, item.rect.y)), |_| None);
+    Some(Command::TogglePin {
+        id: id.clone(),
+        from,
+        to,
+    })
+}
+
 /// Land one auto-layout run as a single undoable [`Command`]:
 /// the dialog Apply and the adopt-time pass are COMMANDS, not silent
 /// state — one Ctrl+Z reverts positions and routes together). `overrides`
@@ -2190,6 +2232,40 @@ mod tests {
             height: 150.0,
         };
         assert!(bring_back(&scene, &o, page).is_none());
+    }
+
+    #[test]
+    fn toggle_pin_round_trips_both_ways() {
+        let scene = scene();
+        let mut o = overlay();
+        // Pin a free element: the entry lands at its rendered position…
+        let cmd = toggle_pin(&scene, &o, &id(1)).unwrap();
+        assert_eq!(
+            cmd,
+            Command::TogglePin {
+                id: id(1),
+                from: None,
+                to: Some((0.0, 0.0)),
+            }
+        );
+        cmd.apply(&mut o, true);
+        assert_eq!(o.elements.get(&id(1)), Some(&(0.0, 0.0)));
+        // …toggling again REMOVES it, and the undo restores it.
+        let cmd = toggle_pin(&scene, &o, &id(1)).unwrap();
+        assert_eq!(
+            cmd,
+            Command::TogglePin {
+                id: id(1),
+                from: Some((0.0, 0.0)),
+                to: None,
+            }
+        );
+        cmd.apply(&mut o, true);
+        assert!(!o.elements.contains_key(&id(1)));
+        cmd.undo(&mut o);
+        assert_eq!(o.elements.get(&id(1)), Some(&(0.0, 0.0)));
+        // An id the scene does not render cannot be pinned.
+        assert!(toggle_pin(&scene, &o, &id(99)).is_none());
     }
 
     #[test]

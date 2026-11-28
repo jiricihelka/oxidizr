@@ -67,6 +67,11 @@ pub enum LayoutError {
         /// Reported height.
         height: f64,
     },
+    /// A node pin is non-finite.
+    BadPin {
+        /// The offending node.
+        id: NodeId,
+    },
     /// A config separation is negative.
     BadSeparation {
         /// Config field name.
@@ -124,6 +129,7 @@ impl fmt::Display for LayoutError {
             Self::BadNodeSize { id, width, height } => {
                 write!(f, "node {id} has a bad size: {width} x {height}")
             }
+            Self::BadPin { id } => write!(f, "node {id} has a non-finite pin"),
             Self::BadSeparation { name, value } => {
                 write!(f, "config separation {name} must be >= 0, got {value}")
             }

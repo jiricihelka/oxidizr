@@ -425,6 +425,18 @@ mod tests {
     }
 
     #[test]
+    fn pins_do_not_reach_the_compound_engine() {
+        // The clamp lives in the built-in engine's coordinate pass; the
+        // dagre adapter never reads `pin` — a pinned twin lays out
+        // byte-identical (the viewer runs the built-in engine whenever
+        // the pinned set is non-empty).
+        let mut g = chain(RankDirection::LeftRight);
+        let plain = Dagre::new().layout(&g).expect("chain");
+        g.nodes[1].pin = Some(Point { x: 900.0, y: 400.0 });
+        assert_eq!(Dagre::new().layout(&g).expect("pinned"), plain);
+    }
+
+    #[test]
     fn invalid_graph_is_rejected_before_the_pipeline() {
         let mut g = LayoutGraph::new();
         g.add_node(Node::new(NodeId::new("a"), 10.0, 10.0));

@@ -193,6 +193,95 @@ mod tests {
     }
 
     #[test]
+    fn pinned_node_holds_its_exact_position_and_the_rank_relaxes_around_it() {
+        // The diamond with `b` pinned far below the pack: the emission
+        // carries the pin verbatim, and the same-rank sibling is pushed
+        // clear of the pinned box (rank order and node_separation hold
+        // against the LIVE pinned centre).
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "c", "d"] {
+            g.add_node(node(id));
+        }
+        for (id, s, t) in [
+            ("ab", "a", "b"),
+            ("ac", "a", "c"),
+            ("bd", "b", "d"),
+            ("cd", "c", "d"),
+        ] {
+            g.add_edge(edge(id, s, t));
+        }
+        g.nodes[1].pin = Some(Point { x: 220.0, y: 500.0 });
+        let r = layout(&g);
+        assert_eq!(pos(&r, "b"), Point { x: 220.0, y: 500.0 });
+        // `c` keeps its rank slot after `b` — at separation distance.
+        assert!(pos(&r, "c").y >= 500.0 + 60.0 + 50.0);
+    }
+
+    #[test]
+    fn pinned_run_does_not_renormalise_and_repeats_bit_exactly() {
+        // Pins ARE the frame: no zero-line shift; and the whole
+        // pinned pipeline is deterministic.
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "c"] {
+            g.add_node(node(id));
+        }
+        g.add_edge(edge("ab", "a", "b"));
+        g.add_edge(edge("bc", "b", "c"));
+        g.nodes[0].pin = Some(Point { x: 40.0, y: 300.0 });
+        let first = layout(&g);
+        assert_eq!(pos(&first, "a"), Point { x: 40.0, y: 300.0 });
+        // `a` is the LOWEST box and the run still does not shift.
+        let second = layout(&g);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn pinned_mirrored_direction_emits_the_pin_verbatim() {
+        // The mirror directions map through a subtraction twice
+        // (inverse, then forward); floats would round the pin into a
+        // different value. The emission is the pin bit-for-bit.
+        for dir in [RankDirection::RightLeft, RankDirection::BottomUp] {
+            let mut g = LayoutGraph::new();
+            g.config.rank_direction = dir;
+            for id in ["a", "b", "c"] {
+                g.add_node(node(id));
+            }
+            g.add_edge(edge("ab", "a", "b"));
+            g.add_edge(edge("bc", "b", "c"));
+            let pin = Point {
+                x: 123.456_789_012_345_67,
+                y: 987.654_321_098_765_4,
+            };
+            g.nodes[1].pin = Some(pin);
+            let r = layout(&g);
+            assert_eq!(pos(&r, "b"), pin, "{dir:?}");
+        }
+    }
+
+    #[test]
+    fn unpinned_run_is_byte_identical_to_the_same_run_without_pins() {
+        // The V2 baseline at the unit level: `None` pins change
+        // nothing — the clamped code path and the plain one agree.
+        let mut g = LayoutGraph::new();
+        for id in ["a", "b", "c", "d"] {
+            g.add_node(node(id));
+        }
+        for (id, s, t) in [
+            ("ab", "a", "b"),
+            ("ac", "a", "c"),
+            ("bd", "b", "d"),
+            ("cd", "c", "d"),
+        ] {
+            g.add_edge(edge(id, s, t));
+        }
+        let plain = layout(&g);
+        for node in &mut g.nodes {
+            node.pin = None;
+        }
+        assert_eq!(layout(&g), plain);
+    }
+
+    #[test]
     fn cycle_is_broken_into_forward_ranks() {
         let mut g = LayoutGraph::new();
         for id in ["a", "b", "c"] {

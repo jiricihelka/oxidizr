@@ -428,20 +428,28 @@ impl Viewer {
         }
     }
 
-    /// One headless engine run over the current scene: [`layout::apply`]
-    /// plus [`commands::apply_layout`] — the result lands as ONE
-    /// undoable command (positions + routes revert together), then a
-    /// refit. A failing engine keeps the previous geometry and lands in
-    /// [`Self::layout_error`] — errors as values (P3 charter).
-    fn run_layout(&mut self, params: AutomaticLayout) {
-        let applied = self
-            .scene
-            .as_ref()
-            .map(|scene| layout::apply_with(self.layout_engine, scene, &params));
+    /// One headless engine run over the current scene:
+    /// [`layout::apply_pinned`] plus [`commands::apply_layout`] — the
+    /// result lands as ONE undoable command (positions + routes revert
+    /// together), then a refit. The session overlay's element entries
+    /// ARE the pins (they hold exactly; a non-empty pin map switches
+    /// the run to the built-in engine, whose coordinate pass clamps
+    /// them). `ignore_pins` is the dialog's escape hatch: the chosen
+    /// engine lays out everything fresh. A failing engine keeps the
+    /// previous geometry and lands in [`Self::layout_error`] — errors
+    /// as values (P3 charter).
+    fn run_layout(&mut self, params: AutomaticLayout, ignore_pins: bool) {
+        let overlay = self.overlay_for().clone();
+        let applied = self.scene.as_ref().map(|scene| {
+            if ignore_pins {
+                layout::apply_with(self.layout_engine, scene, &params)
+            } else {
+                layout::apply_pinned(self.layout_engine, scene, &params, &overlay.elements)
+            }
+        });
         match applied {
             Some(Ok(overrides)) => {
                 self.layout_error = None;
-                let overlay = self.overlay_for().clone();
                 let command = self
                     .scene
                     .as_ref()
@@ -648,10 +656,32 @@ impl Viewer {
                     ui.add(egui::DragValue::new(&mut params.edge_separation).range(0..=1000));
                 });
                 ui.checkbox(&mut params.vertices, "Route vertices");
+                // Pins are the session overlay's element positions; a
+                // pinned run holds them exactly and can only run on
+                // the built-in engine (its coordinate pass is the one
+                // that clamps), so the dialog says so.
+                let pins = self.pinned_ids();
+                if !pins.is_empty() {
+                    ui.separator();
+                    let engine_switches = self.layout_engine != layout::Engine::Layered;
+                    ui.label(format!(
+                        "{} pinned — Apply holds the pinned boxes exactly.",
+                        pins.len()
+                    ));
+                    ui.weak(if engine_switches {
+                        "Shift-click a box to toggle a pin; a pinned run runs on the built-in engine."
+                    } else {
+                        "Shift-click a box to toggle a pin."
+                    });
+                }
                 ui.horizontal(|ui| {
                     if ui.button("Apply").clicked() {
                         self.layout_params = params;
-                        self.run_layout(params);
+                        self.run_layout(params, false);
+                    }
+                    if !pins.is_empty() && ui.button("Apply (ignore pins)").clicked() {
+                        self.layout_params = params;
+                        self.run_layout(params, true);
                     }
                     if ui.button("Reset").clicked() {
                         let command = commands::clear_view(self.overlay_for());

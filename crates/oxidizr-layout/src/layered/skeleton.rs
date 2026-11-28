@@ -328,17 +328,29 @@ impl Skeleton {
     /// Fixed alternating passes; each pass pulls every vertex toward
     /// the mean CENTRE of one rank side's neighbours (current centre
     /// when it has none on that side) and re-places each rank in
-    /// priority order — dummies first, so long-edge chains straighten,
-    /// reals after them by current order. The move is clamped to the
-    /// slot the within-rank neighbours leave open (placed neighbours
-    /// bound with their LIVE centre, unplaced ones with their pass-
-    /// start centre), so rank order and `node_separation` are
-    /// preserved by construction; an over-constrained vertex resolves
-    /// to the upper bound (deterministic). The last pass wins; a
-    /// final shift returns the lowest box to the zero line.
+    /// priority order — pinned vertices first (immovable: their `pins`
+    /// slot seeds the exact cross-axis start and they never move, so
+    /// neighbours clamp against live pinned centres), then dummies, so
+    /// long-edge chains straighten, reals after them by current order.
+    /// The move is clamped to the slot the within-rank neighbours leave
+    /// open (placed neighbours bound with their LIVE centre, unplaced
+    /// ones with their pass-start centre), so rank order and
+    /// `node_separation` are preserved by construction; an
+    /// over-constrained vertex resolves to the upper bound
+    /// (deterministic). The last pass wins; a final shift returns the
+    /// lowest box to the zero line — skipped while any pin is set (the
+    /// pinned positions ARE the frame; a pinned run does not re-normalise).
     #[allow(clippy::cast_precision_loss)]
     // Means of exact coordinate sums over small degree counts.
-    fn priority(&self, verts: &mut [Vertex], node_sep: f64) {
+    fn priority(&self, verts: &mut [Vertex], node_sep: f64, pins: &[Option<f64>]) {
+        let has_pins = pins.iter().any(Option::is_some);
+        if has_pins {
+            for (vid, start) in pins.iter().enumerate() {
+                if let Some(b) = start {
+                    verts[vid].b = *b;
+                }
+            }
+        }
         for round in 0..PRIORITY_ROUNDS {
             let side = if round % 2 == 0 {
                 &self.preds
@@ -362,7 +374,14 @@ impl Skeleton {
                     .iter()
                     .enumerate()
                     .map(|(slot, &vid)| {
-                        let prio = u8::from(verts[vid].is_dummy());
+                        // Priority order: pins, then dummies, then
+                        // plain nodes — each fixed first clamps the
+                        // next class's slots.
+                        let prio = if pins[vid].is_some() {
+                            2
+                        } else {
+                            u8::from(verts[vid].is_dummy())
+                        };
                         (prio, slot)
                     })
                     .collect();
@@ -370,6 +389,11 @@ impl Skeleton {
                 let mut placed = vec![false; ids.len()];
                 for &(_, slot) in &order {
                     let vid = ids[slot];
+                    if pins[vid].is_some() {
+                        // Immovable: already at the pinned start.
+                        placed[slot] = true;
+                        continue;
+                    }
                     let half = verts[vid].cb / 2.0;
                     let mut low = f64::NEG_INFINITY;
                     let mut high = f64::INFINITY;
@@ -410,7 +434,7 @@ impl Skeleton {
             .filter(|vert| !vert.is_dummy())
             .map(|vert| vert.b)
             .fold(f64::INFINITY, f64::min);
-        if lowest.is_finite() {
+        if lowest.is_finite() && !has_pins {
             for vert in &mut *verts {
                 vert.b -= lowest;
             }
@@ -471,12 +495,37 @@ impl Skeleton {
                 verts[vid].b += shift;
             }
         }
-        // Step 5 refinement: straighten chains / shorten edges, then
-        // return the lowest box to the zero line.
-        self.priority(&mut verts, node_sep);
-
         let along = rank_a.last().copied().unwrap_or(0.0) + *rank_max_a.last().unwrap_or(&0.0);
         let dir = graph.config.rank_direction;
+
+        // ANCHOR CLAMPS: a pinned node holds its exact world box, so
+        // its canonical coordinates are its pin mapped INVERSELY
+        // through the direction mapping — the rank axis is set here,
+        // the cross axis inside the priority passes (where pinned
+        // vertices never move). Emission overwrites pinned positions
+        // with the pin itself: the mirrored directions round-trip
+        // through subtraction, which is not bit-exact, and the pin is
+        // the contract.
+        let pin_a = |pin: Point, ra: f64| match dir {
+            RankDirection::LeftRight => pin.x,
+            RankDirection::RightLeft => along - pin.x - ra,
+            RankDirection::TopDown => pin.y,
+            RankDirection::BottomUp => along - pin.y - ra,
+        };
+        let mut pin_b: Vec<Option<f64>> = vec![None; verts.len()];
+        for (i, node) in graph.nodes.iter().enumerate() {
+            if let Some(pin) = node.pin {
+                verts[i].a = pin_a(pin, verts[i].ra);
+                pin_b[i] = Some(match dir {
+                    RankDirection::LeftRight | RankDirection::RightLeft => pin.y,
+                    RankDirection::TopDown | RankDirection::BottomUp => pin.x,
+                });
+            }
+        }
+        // Step 5 refinement: straighten chains / shorten edges around
+        // the pinned vertices; the lowest box returns to the zero line
+        // only when nothing is pinned (pins ARE the frame).
+        self.priority(&mut verts, node_sep, &pin_b);
         // Canonical (rank-axis x, cross-axis y) → world box top-left.
         let map_box = |vert: &Vertex| match dir {
             RankDirection::LeftRight => Point {
@@ -512,11 +561,14 @@ impl Skeleton {
         };
 
         // World-space boxes (input w/h — the canonical swap maps back)
-        // and every vertex's world centre, for the route pass.
+        // and every vertex's world centre, for the route pass. A
+        // pinned node's box is its PIN verbatim (the inverse mapping
+        // above keeps the canonical coordinates consistent for routing;
+        // the emission must be byte-exact).
         let mut boxes = vec![(0.0, 0.0, 0.0, 0.0); graph.nodes.len()];
         let mut nodes = Vec::with_capacity(graph.nodes.len());
         for (i, node) in graph.nodes.iter().enumerate() {
-            let world = map_box(&verts[i]);
+            let world = node.pin.unwrap_or_else(|| map_box(&verts[i]));
             let (out_w, out_h) = if horizontal {
                 (verts[i].ra, verts[i].cb)
             } else {
@@ -530,11 +582,21 @@ impl Skeleton {
         }
         let centers: Vec<Point> = verts
             .iter()
-            .map(|vert| {
-                map_point(Point {
-                    x: vert.a + vert.ra / 2.0,
-                    y: vert.b + vert.cb / 2.0,
-                })
+            .enumerate()
+            .map(|(i, vert)| {
+                // A pinned node's route anchors are its EMITTED box,
+                // not the mirrored canonical mapping; dummies have no
+                // box and always map.
+                match boxes.get(i) {
+                    Some((x, y, w, h)) if graph.nodes[i].pin.is_some() => Point {
+                        x: x + w / 2.0,
+                        y: y + h / 2.0,
+                    },
+                    _ => map_point(Point {
+                        x: vert.a + vert.ra / 2.0,
+                        y: vert.b + vert.cb / 2.0,
+                    }),
+                }
             })
             .collect();
 

@@ -28,6 +28,8 @@
 //!   deliberately NOT persisted:
 //!   `encode`/`decode` keep their five-field `"LR|100|50|50|1"` format.
 
+use std::collections::HashMap;
+
 use oxidizr_core::Id;
 use oxidizr_core::Workspace;
 use oxidizr_core::views::{AutomaticLayout, RankDirection, View};
@@ -393,6 +395,37 @@ pub(crate) fn apply_with(
         }
     };
     Ok(translate(&result))
+}
+
+/// Run automatic layout while the `pins` keep their positions EXACTLY
+/// (anchor clamps). `pins` maps element id → box top-left (world px) —
+/// the manual overlay entries are the pin source; ids the graph does
+/// not carry (hidden in this view) are ignored. Only the built-in
+/// [`Layered`] engine has a coordinate pass we control, so a run with
+/// a non-empty pin map uses it whatever `engine` says (the dialog
+/// explains the switch); an empty map reproduces [`apply_with`]
+/// byte-identically.
+///
+/// # Errors
+///
+/// As `apply_with`.
+#[allow(clippy::implicit_hasher)] // pins are the shell's standard-hasher overlay map
+pub fn apply_pinned(
+    engine: Engine,
+    scene: &Scene,
+    layout: &AutomaticLayout,
+    pins: &HashMap<Id, (f64, f64)>,
+) -> Result<Overrides, LayoutError> {
+    if pins.is_empty() {
+        return apply_with(engine, scene, layout);
+    }
+    let mut graph = graph_for(scene, config_for(layout));
+    for node in &mut graph.nodes {
+        if let Some((x, y)) = pins.get(&Id::new(node.id.as_str())) {
+            node.pin = Some(oxidizr_layout::Point { x: *x, y: *y });
+        }
+    }
+    Ok(translate(&Layered::new().layout(&graph)?))
 }
 
 /// Engine placements → scene overrides (module docs): endpoints of
@@ -974,6 +1007,52 @@ mod tests {
             }
         }
         ws
+    }
+
+    #[test]
+    fn empty_pin_map_is_the_plain_engine_run() {
+        // No pins: `apply_pinned` must be the byte-identical `apply_with`
+        // (the escape hatch runs exactly what the engine alone would).
+        let ws = chain(None);
+        let scene = scene_of(&ws, None);
+        let params = AutomaticLayout::default();
+        assert_eq!(
+            apply_pinned(Engine::Layered, &scene, &params, &HashMap::new()).unwrap(),
+            apply_with(Engine::Layered, &scene, &params).unwrap()
+        );
+    }
+
+    #[test]
+    fn pinned_elements_hold_their_positions_byte_exactly() {
+        // The pin promise: a laid-out view re-Applying with one element
+        // pinned keeps THAT element at its exact coordinates; the rest
+        // re-runs (here to the same frame — the idempotency baseline).
+        let ws = chain(None);
+        let params = AutomaticLayout::default();
+        let laid = apply(&scene_of(&ws, None), &params).unwrap();
+        let mut pins: HashMap<Id, (f64, f64)> = HashMap::new();
+        pins.insert(id(2), (777.5, -123.25));
+        let scene = scene_of(&ws, Some(&laid));
+        let out = apply_pinned(Engine::Layered, &scene, &params, &pins).unwrap();
+        assert_eq!(out.elements[&id(2)], (777.5, -123.25));
+        assert_eq!(out.elements.len(), scene.items.len());
+    }
+
+    #[cfg(feature = "dagre")]
+    #[test]
+    fn a_pinned_run_forces_the_builtin_engine() {
+        // The engine switch under pins: Dagre says one thing, Layered
+        // another — with pins set BOTH requests lay out identically
+        // (the pin map forces the built-in engine).
+        let ws = chain(None);
+        let params = AutomaticLayout::default();
+        let scene = scene_of(&ws, None);
+        let mut pins: HashMap<Id, (f64, f64)> = HashMap::new();
+        pins.insert(id(1), (30.0, 40.0));
+        assert_eq!(
+            apply_pinned(Engine::Dagre, &scene, &params, &pins).unwrap(),
+            apply_pinned(Engine::Layered, &scene, &params, &pins).unwrap()
+        );
     }
 
     #[test]

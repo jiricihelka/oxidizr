@@ -415,11 +415,15 @@ impl Viewer {
         let painter = ui.painter_at(rect);
         if let Some(scene) = &self.scene {
             let hover_edge = self.hovered_edge();
+            // The layout dialog badges the session overlay's element
+            // entries: those positions are pins the next Apply holds.
+            let pinned = self.toggles.layout.then(|| self.pinned_ids());
             let options = paint::PaintOptions {
                 screen: rect,
                 selection: self.selection.as_ref(),
                 hover_edge: hover_edge.as_ref(),
                 model_editing: self.can_edit_model(),
+                pinned: pinned.as_ref(),
             };
             let shapes =
                 ctx.fonts_mut(|fonts| paint::paint_scene(scene, &self.viewport, fonts, &options));
@@ -1119,6 +1123,17 @@ impl Viewer {
     /// click selects (item over edge already decided by [`hit::pick`]),
     /// Shift-click TOGGLES membership (multi-select) and a click
     /// on empty canvas clears — Shift keeps the selection.
+    /// The view's pinned element ids: the session overlay's element
+    /// entries — positions a pinned automatic-layout run holds
+    /// exactly. The layout dialog badges them and counts them.
+    pub(super) fn pinned_ids(&self) -> std::collections::HashSet<ModelId> {
+        self.view_key
+            .as_deref()
+            .and_then(|key| self.overlays.get(key))
+            .map(|overlay| overlay.elements.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
     fn canvas_click(&mut self, point: Pos2, command: bool, shift: bool, ctx: &egui::Context) {
         let hit = self.scene.as_ref().and_then(|scene| {
             hit::pick(
@@ -1147,6 +1162,22 @@ impl Viewer {
                 else {
                     return;
                 };
+                // The layout dialog repurposes Shift-click into a PIN
+                // toggle (the badges mark the current pins): the edit
+                // lands on the overlay as one undoable step and the
+                // selection stays put. Elsewhere Shift-click keeps its
+                // multi-select meaning.
+                if shift && self.toggles.layout {
+                    let overlay = self.overlay_for().clone();
+                    if let Some(command) = self
+                        .scene
+                        .as_ref()
+                        .and_then(|scene| commands::toggle_pin(scene, &overlay, &id))
+                    {
+                        self.edit_current_view(command);
+                    }
+                    return;
+                }
                 let mut ids = if shift {
                     match &self.selection {
                         Some(paint::Selection::Items(ids)) => ids.clone(),

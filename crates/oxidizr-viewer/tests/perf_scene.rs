@@ -94,6 +94,7 @@ fn perf_scene_rebuild_and_paint() {
             selection: None,
             hover_edge: None,
             model_editing: false,
+            pinned: None,
         };
         let start = Instant::now();
         for _ in 0..ROUNDS {
@@ -185,6 +186,7 @@ fn perf_paint_budget_200_elements() {
         selection: None,
         hover_edge: None,
         model_editing: false,
+        pinned: None,
     };
     let start = Instant::now();
     for _ in 0..ROUNDS {

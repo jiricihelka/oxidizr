@@ -147,6 +147,8 @@ pub fn compose(scene: &Scene, fonts: &mut FontsView<'_>) -> Composed {
             //: exports carry no editing affordances (selection is
             // already dropped — the route kit never paints).
             model_editing: false,
+            // The pin badge is session chrome of the layout dialog.
+            pinned: None,
         },
     );
 

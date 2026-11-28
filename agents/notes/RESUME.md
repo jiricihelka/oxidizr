@@ -1,15 +1,46 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 IN FLIGHT — waves P7-M0…P7-M2 DONE (dagre adapter + V1 gate; dagre DEFAULT engine; compound boundary layout). NEXT = wave P7-M3 (pinned tidy) and then M4…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 IN FLIGHT — waves P7-M0…P7-M3 DONE (dagre adapter + V1 gate; dagre DEFAULT engine; compound boundary layout; pinned tidy with anchor clamps). NEXT = wave P7-M4 (per-view config + "Remember in view") and then M5…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P7 stands
 
-- **M2 committed (2026-11-28)**: compound boundary layout end to end.
+- **M3 committed (2026-11-28)**: pinned tidy — the overlay's element
+  entries ARE pins, a pinned Apply holds them EXACTLY.
+  - Engine seam (`oxidizr-layout`): `Node.pin: Option<Point>` +
+    `LayoutError::BadPin` (validate finiteness). Anchor clamps live in
+    `layered/skeleton.rs`: `priority(verts, node_sep, pins)` seeds pinned
+    vertices at their mapped positions, immovable (rank order + node_sep
+    clamp the live centres; priority pins > dummies > nodes); the
+    zero-line renormalisation is SKIPPED when any pin exists (pins ARE
+    the frame). `place()` maps pins INVERSELY to canonical coords
+    (all four directions), emits `pin` VERBATIM (the RL/BT mirror is a
+    subtraction — not round-trip bit-exact — the pin is the contract)
+    and takes pinned route-centres from the EMITTED boxes. Dagre/Dot
+    never read `pin` (`pins_do_not_reach_the_compound_engine`).
+  - Viewer seam (`layout.rs::apply_pinned(engine, scene, layout, pins)`):
+    empty map == `apply_with` byte-identical (the escape hatch runs
+    exactly what the engine alone would); non-empty forces Layered.
+    Shell `run_layout(params, ignore_pins)`; pins = `overlay.elements`.
+  - Command `TogglePin { id, from, to }` + `commands::toggle_pin`
+    factory (pin at the CURRENT rendered rect; unpin drops the entry so
+    stored geometry re-appears), round-trip test. GUI: Shift-click
+    toggles a pin ONLY while the layout dialog is open (elsewhere Shift
+    keeps multi-select); corner-dot badge (`paint::PIN_COLOR`,
+    `PaintOptions.pinned`, `pinned_ids` helper) while the dialog is
+    open; dialog shows pin count + engine-switch label + "Apply (ignore
+    pins)".
+  - V4: `tests/pinned_layout.rs` (big-bank-plc Components — engine-held
+    + user-dragged pins byte-exact through override→scene→re-Apply,
+    re-Apply bit-identical). V2 holds: quality table BYTE-UNCHANGED,
+    un-pinned Layered path byte-identical
+    (`unpinned_run_is_byte_identical_to_the_same_run_without_pins`),
+    bless NO-OP.
+- **M2 committed**: compound boundary layout end to end.
   - Seam (`oxidizr-layout`): `LayoutGraph.groups: Vec<Group>`
     (`Group { id: GroupId, parent: Option<GroupId>, members }` — DIRECT
     members, containment is a forest) + `add_group` + five `validate`
     invariants (`DuplicateGroupId`/`UnknownGroupMember`/`UnknownGroupParent`
     /`DuplicateGroupMembership`/`GroupParentCycle` — bounded chain walk).
-    `Layered`/`Dot` NEVER read `groups` (test `groups_do_not_reach_the_
-    layered_engine` pins the V2 baseline).
+    `Dot` NEVER reads `groups` (byte-identity test pins the V2 baseline;
+    since M3 `Layered` reads `pin` but not `groups`).
   - Adapter (`dagre.rs`): compound ON only when a group is ACTIVE (has
     members or an active child — `active_groups`); parents = zero-size
     `g{bi}` nodes (dagre re-derives frames from border dummies), links via
@@ -42,51 +73,54 @@
   crates.io + pure-Rust + statically linked + no multiplatform/compile
   burden; **dagre first, but the abstraction must keep multiple engines**;
   **compound boundary layout** (M2 — done); **pin what I moved** (overlay
-  positions = pins, exact — M3); **per-view config + write-through** of
-  the five standard `automaticLayout` fields (M4); **no new external
+  positions = pins, exact — M3 — done); **per-view config + write-through**
+  of the five standard `automaticLayout` fields (M4); **no new external
   dependencies** — dot stays frozen inside the engine selection.
 - Work autonomously per the wave table; commit every green wave-piece;
   questions ONLY on plan-contradicting reality (AGENTS.md style).
 
-## Implementation anchors (post-M2)
+## Implementation anchors (post-M3)
 
 - `oxidizr-layout`: default features = ZERO deps; `--features dagre` =
   dagre crate. Seam = `engine.rs::LayoutEngine` (results in graph input
-  order). `layered/` = own engine — **M3 gains anchor clamps in the
-  coordinate pass** (`layered/mod.rs` + placement); **M5 wires
-  `edge_separation` through `layered/routing.rs` port spread** (until M5
-  Layered IGNORES `edge_separation`). Tests share `tests/common/mod.rs`
-  (17-shape corpus incl. `grouped-chains`/`groups-nested`/`c4-grouped`,
-  `Sweep::Full|Directions`, LCG fixtures, bit-exact encode + FNV digest)
-  — extend THAT, not new fixture sets.
+  order). `layered/` = own engine — the coordinate pass carries the pin
+  clamps (M3); **M5 wires `edge_separation` through `layered/routing.rs`
+  port spread** (until M5 Layered IGNORES `edge_separation`). Tests share
+  `tests/common/mod.rs` (17-shape corpus incl. `grouped-chains`/
+  `groups-nested`/`c4-grouped`, `Sweep::Full|Directions`, LCG fixtures,
+  bit-exact encode + FNV digest) — extend THAT, not new fixture sets.
 - Viewer (`crates/oxidizr-viewer/src/layout.rs`): `Engine` enum =
   Layered/Dagre(cfg)/Dot(cfg), `Engine::default()` feature-aware;
-  `graph_for` = nodes + edges + the boundary FOREST; `emit_groups` = the
-  forest rule; `apply`/`apply_with` → `Overrides`; `encode`/`decode`
-  persist dialog params under `KEY_LAYOUT` (global) — **M4 per-view with
-  legacy fallback**. Dialog `shell/actions.rs::layout_window` (combo
-  lists `Engine::available()`); `run_layout` + `layout_engine` field in
-  `shell/mod.rs`; **manual positions = `LayoutOverlay` element entries =
-  the M3 PIN source** — M3 = "Apply (ignore pins)" action + pin badge +
-  Shift-click unpin + the overlay-as-pins wiring in the display pass
-  (`Overrides::display` already merges user ON TOP of auto).
+  `graph_for` = nodes + edges + the boundary FOREST; `apply`/`apply_with`
+  /`apply_pinned` → `Overrides`; `encode`/`decode` persist dialog params
+  under `KEY_LAYOUT` (global) — **M4 = per-view key `KEY_LAYOUT` + view
+  key, the legacy global entry stays as fallback default; the dialog
+  seeds from the stored view's `automaticLayout` FIRST**. Dialog
+  `shell/actions.rs::layout_window` (engine combo, pin count + "Apply
+  (ignore pins)" since M3); `run_layout(params, ignore_pins)`; pins =
+  `LayoutOverlay.elements`; Shift-click pin toggle while the dialog is
+  open (`shell/canvas.rs::canvas_click` + `pinned_ids`).
 - dagre source audit lives at `/tmp/opencode/dagre-src/dagre-0.1.2/`
   (re-unpack from the cargo registry cache if gone).
 - Write-back (M4): `ModelCommand::SetAutomaticLayout(view_key, from, to)`
   through `Viewer::run_model_edit` + gate `commands::model_editing_allowed`
-  (plain `.json` only); undo restores prior `Option<AutomaticLayout>`;
-  bless stays NO-OP.
+  (plain `.json` only, never DSL/sidecar-preferred/stdin — F13 posture);
+  undo restores the prior `Option<AutomaticLayout>`; the five STANDARD
+  fields only; bless stays NO-OP; V5 = P6-style gate matrix test
+  (`.json` allowed; `.dsl`/sidecar-preferred/stdin blocked) + write-back
+  bytes are standard contract fields only.
 - CLI (M6): `oxidizr view --layout-engine <layered|dagre|dot>` +
   completions; the CLI probably also wants a `dagre` passthrough feature
   (like viewer's) — decide there.
 
 ## If a next session opens
 
-- Start wave **P7-M3** per the `build/PHASE_7.md` wave table (pinned
-  tidy: overlay set = pins → engine choice flips to Layered + anchor
-  clamps; exact-pin headless tests = V4; pin badge + Shift-click unpin +
-  "Apply (ignore pins)"; dialog explains the engine switch). M2 evidence
-  is in the plan row + §M2 decomposition; do not re-derive it.
+- Start wave **P7-M4** per the `build/PHASE_7.md` wave table (per-view
+  params in the cache + legacy fallback, dialog seeds from stored view
+  config, "Remember in view" = `ModelCommand::SetAutomaticLayout` through
+  the model gate; V5 = `.json` allowed, `.dsl`/sidecar-preferred/stdin
+  blocked + write-back bytes standard-contract-only). M3 evidence is in
+  the plan row; do not re-derive it.
 - Feature-matrix sanity before commit (no CI leg covers these):
   `cargo clippy -p oxidizr-layout --features dot-backend,dagre --all-targets`
   and `cargo clippy -p oxidizr-viewer --features gui,dagre,dot-backend --all-targets`.

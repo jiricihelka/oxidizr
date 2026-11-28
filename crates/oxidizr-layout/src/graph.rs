@@ -96,13 +96,25 @@ pub struct Node {
     pub width: f64,
     /// Measured height, px.
     pub height: f64,
+    /// ANCHOR CLAMP: the exact world position (box top-left, px) this
+    /// node must hold. `None` lays out free. The built-in
+    /// [`Layered`](crate::Layered) engine pins the vertex and relaxes
+    /// the others around it; engines without a controllable coordinate
+    /// pass ignore the clamp (the viewer runs `Layered` whenever the
+    /// pinned set is non-empty).
+    pub pin: Option<crate::Point>,
 }
 
 impl Node {
-    /// Node with the given measured size.
+    /// Node with the given measured size, unpinned.
     #[must_use]
     pub fn new(id: NodeId, width: f64, height: f64) -> Self {
-        Self { id, width, height }
+        Self {
+            id,
+            width,
+            height,
+            pin: None,
+        }
     }
 }
 
@@ -271,6 +283,13 @@ impl LayoutGraph {
                     height: node.height,
                 });
             }
+            if let Some(pin) = node.pin
+                && !(pin.x.is_finite() && pin.y.is_finite())
+            {
+                return Err(LayoutError::BadPin {
+                    id: node.id.clone(),
+                });
+            }
         }
         for edge in &self.edges {
             for end in [&edge.source, &edge.target] {
@@ -434,6 +453,21 @@ mod tests {
         assert!(matches!(
             g.validate(),
             Err(crate::LayoutError::BadSeparation { value: -1, .. })
+        ));
+    }
+
+    #[test]
+    fn bad_pin_detected() {
+        let mut g = LayoutGraph::new();
+        let mut n = Node::new(NodeId::new("a"), 10.0, 10.0);
+        n.pin = Some(crate::Point {
+            x: f64::NAN,
+            y: 20.0,
+        });
+        g.add_node(n);
+        assert!(matches!(
+            g.validate(),
+            Err(crate::LayoutError::BadPin { .. })
         ));
     }
 
