@@ -12,7 +12,10 @@ cargo run -p oxidizr-cli --features gui -- view workspace.dsl --theme dark
 
 The `gui` feature compiles the eframe shell; the standalone binary and
 `oxidizr view` share one entry point. The core is headless — tests
-never window or touch a GPU. `--theme light|dark|system`, default `system`.
+never window or touch a GPU. `--theme light|dark|system` (default
+`system`) and `--layout-engine layered|dagre|dot` seed the window
+(an engine this build cannot run starts on the default and says so in
+the Layout dialog).
 
 ## What you get
 
@@ -30,8 +33,15 @@ never window or touch a GPU. `--theme light|dark|system`, default `system`.
   double-click inserts one, Alt+press deletes a vertex, arrow keys
   nudge (Shift = 10×) and **Ctrl+Shift+K** straightens the arrow. All
   edits live in a per-view overlay; views without stored coordinates
-  open laid out by the bundled engine, and the **Layout** dialog runs
-  it on demand (+ graphviz: `dot-backend` feature, `$OXIDZR_DOT_BIN`).
+  open laid out by the **dagre** engine, and the **Layout** dialog runs
+  an engine on demand — **Layered** (ours, hand-written) and graphviz
+  **dot** (`dot-backend` feature + `$OXIDZR_DOT_BIN`) are selectable
+  per session. **Shift-click** while the dialog is open pins a box:
+  the next run holds pinned boxes EXACTLY where they are and re-flows
+  the rest ("Apply (ignore pins)" overrides). The dialog's parameters
+  are PER VIEW — a view's stored `automaticLayout` seeds them — and
+  **"Remember in view"** writes the five standard fields back into the
+  view as one undoable step (plain `.json` sources).
 - Relationship editing on plain `.json` sources: hovering a box shows
   four port dots — drag one onto another box to CREATE a relationship
   (the new arrow lands selected); drag an endpoint square of a

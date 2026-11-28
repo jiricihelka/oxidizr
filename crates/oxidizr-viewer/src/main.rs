@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use oxidizr_viewer::shell::{self, ThemeArg};
+use oxidizr_viewer::shell::{self, LayoutEngineArg, ThemeArg};
 
 /// CLI arguments (flags + positional only).
 #[derive(Parser)]
@@ -23,9 +23,16 @@ struct Args {
     /// first, then the OS preference.
     #[arg(long, value_enum, default_value_t = ThemeArg::System)]
     theme: ThemeArg,
+    /// Startup layout engine; omitted = the viewer default. A build
+    /// that cannot run the named engine starts on its default and
+    /// reports the refusal in the layout dialog.
+    //: the doc comment alone would flatten `layout_engine` to
+    // `--layoutengine` (the cli's `--ignore-layout` precedent).
+    #[arg(long = "layout-engine", value_enum)]
+    layout_engine: Option<LayoutEngineArg>,
 }
 
 fn main() -> eframe::Result {
     let args = Args::parse();
-    shell::run(args.file.as_deref(), args.theme)
+    shell::run(args.file.as_deref(), args.theme, args.layout_engine)
 }

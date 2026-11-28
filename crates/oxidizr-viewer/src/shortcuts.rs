@@ -78,6 +78,10 @@ const SECTIONS: &[Section] = &[
                 action: "add to / remove from the selection",
             },
             Binding {
+                keys: "Shift+click while the layout dialog is open",
+                action: "pin / unpin the element for the next layout run",
+            },
+            Binding {
                 keys: "Ctrl+S",
                 action: "save the workspace",
             },

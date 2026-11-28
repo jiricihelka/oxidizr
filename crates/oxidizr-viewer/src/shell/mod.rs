@@ -55,9 +55,58 @@ pub enum ThemeArg {
     System,
 }
 
+/// `--layout-engine` values — the same shared-argv pattern as
+/// [`ThemeArg`]. The request seeds the SESSION engine choice (which is
+/// deliberately never persisted); a build that cannot run the named
+/// engine keeps its default and records why in the layout dialog.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum LayoutEngineArg {
+    /// The built-in layered engine — always available.
+    Layered,
+    /// The dagre pipeline (only when the `dagre` feature is compiled).
+    Dagre,
+    /// The external graphviz `dot` (only with the `dot-backend`
+    /// feature AND `$OXIDZR_DOT_BIN`).
+    Dot,
+}
+
+impl LayoutEngineArg {
+    /// The flag spelling (mirrors the `ValueEnum` value names).
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Layered => "layered",
+            Self::Dagre => "dagre",
+            Self::Dot => "dot",
+        }
+    }
+
+    /// The engine this request names in THIS build, when the
+    /// build+environment can run it (`Engine::available` is the same
+    /// gate the dialog's combo uses).
+    fn engine(self) -> Option<layout::Engine> {
+        let engine = match self {
+            Self::Layered => layout::Engine::Layered,
+            #[cfg(feature = "dagre")]
+            Self::Dagre => layout::Engine::Dagre,
+            #[cfg(not(feature = "dagre"))]
+            Self::Dagre => return None,
+            #[cfg(feature = "dot-backend")]
+            Self::Dot => layout::Engine::Dot,
+            #[cfg(not(feature = "dot-backend"))]
+            Self::Dot => return None,
+        };
+        layout::Engine::available()
+            .contains(&engine)
+            .then_some(engine)
+    }
+}
+
 /// Open `file` (if any) and run the viewer window until it closes — the
 /// ONE entry shared by the `oxidizr-viewer` binary and the
 /// `oxidizr view` subcommand .
+/// `engine` seeds the session engine choice when the caller names one
+/// (an unavailable request keeps the default and says so in the
+/// dialog — errors as values).
 ///
 /// # Errors
 ///
@@ -66,7 +115,11 @@ pub enum ThemeArg {
 /// become in-app state (the status bar) — errors are values (P3
 /// charter). A `.dsl` with an existing sidecar opens through the
 /// SIDECAR: the saved model + layout is the preferred source.
-pub fn run(file: Option<&Path>, theme: ThemeArg) -> eframe::Result {
+pub fn run(
+    file: Option<&Path>,
+    theme: ThemeArg,
+    engine: Option<LayoutEngineArg>,
+) -> eframe::Result {
     let target = file.map(|path| open_target(&path.to_string_lossy()));
     let opened = target
         .clone()
@@ -80,7 +133,7 @@ pub fn run(file: Option<&Path>, theme: ThemeArg) -> eframe::Result {
             ..Default::default()
         },
         Box::new(move |cc| {
-            viewer.startup(cc.storage, theme, path_shown, opened);
+            viewer.startup(cc.storage, theme, engine, path_shown, opened);
             Ok(Box::new(viewer))
         }),
     )
@@ -461,6 +514,7 @@ impl Viewer {
         &mut self,
         storage: Option<&dyn eframe::Storage>,
         theme: ThemeArg,
+        engine: Option<LayoutEngineArg>,
         path_shown: String,
         opened: Option<Result<Opened, Outcome>>,
     ) {
@@ -480,6 +534,22 @@ impl Viewer {
             .as_deref()
             .and_then(layout::decode);
         self.path_edit = path_shown;
+        // The session engine starts at the build default; a
+        // `--layout-engine` request this build cannot run is REPORTED
+        // (dialog error line, status bar) and the default KEPT —
+        // errors as values, the window still opens.
+        if let Some(request) = engine {
+            match request.engine() {
+                Some(engine) => self.layout_engine = engine,
+                None => {
+                    self.layout_error = Some(format!(
+                        "layout engine {} is unavailable in this build — starting on {}",
+                        request.as_str(),
+                        self.layout_engine.label(),
+                    ));
+                }
+            }
+        }
         match opened {
             Some(Ok(opened)) => self.adopt(opened),
             Some(Err(outcome)) => {

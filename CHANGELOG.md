@@ -16,6 +16,29 @@ release.
 
 ### Added
 
+- Layout engines: the viewer's auto-layout runs the `dagre` layered
+  pipeline by default (pure Rust, statically linked, compiled in by
+  default; the built-in `Layered` engine stays one click away and
+  graphviz `dot` remains an opt-in behind the `dot-backend` feature +
+  `$OXIDZR_DOT_BIN`). The Layout dialog gained an engine picker — a
+  session choice, the workspace format knows no engines — and dagre
+  runs lay out grouped views as compound boundaries: members stay
+  inside their boundary frames.
+- Layout pins: while the Layout dialog is open, Shift-click marks an
+  element as pinned (corner dot); the next run holds pinned elements
+  at their EXACT positions and re-flows the rest, and "Apply (ignore
+  pins)" runs the engine over everything.
+- Per-view layout configuration: the Layout dialog's parameters are
+  per view — a view's stored `automaticLayout` seeds them, edits carry
+  across view switches in the session and persist in the viewer cache
+  — and "Remember in view" writes the five standard `automaticLayout`
+  fields back into the stored view as ONE undoable model step (plain
+  `.json` sources; elsewhere the button says why it is disabled).
+- CLI grammar (additive): `oxidizr view --layout-engine
+  <layered|dagre|dot>` and the matching `oxidizr-viewer` flag seed the
+  session engine; a build that cannot run the named engine starts on
+  its default and reports the refusal in the Layout dialog instead of
+  failing. Generated shell completions carry the flag.
 - The viewer gained a documentation window: F2 (or the Documentation
   button in the details panel) opens a window listing the workspace's
   `!docs` sections plus those attached to the selected element, in
@@ -55,6 +78,12 @@ release.
 
 ### Changed
 
+- The built-in `Layered` engine now honours the dialog's edge
+  separation: arrows sharing a box side fan out with the requested
+  pixel gap, centred on the side, falling back to equal slots when the
+  side cannot fit the fan (the field was previously dagre-only). Views
+  opening without stored coordinates are laid out by dagre, so they
+  arrive with fewer crossings, fewer box pierces and far fewer bends.
 - The viewer keeps ONE undo/redo history for the whole session instead of
   one stack per view: Ctrl+Z walks back through edits made in other views
   too (the step remembers its view), matching how the edits around a

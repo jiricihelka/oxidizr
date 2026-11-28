@@ -318,6 +318,13 @@ pub enum Command {
         /// persisted runtime toggle.
         #[arg(long, value_enum, default_value_t = ViewTheme::System)]
         theme: ViewTheme,
+        /// Startup layout engine; omitted = the viewer default. A
+        /// build that cannot run the named engine starts on its
+        /// default and reports the refusal in the layout dialog.
+        //: the doc comment alone would flatten `layout_engine` to
+        // `--layoutengine` (the `--ignore-layout` precedent above).
+        #[arg(long = "layout-engine", value_enum)]
+        layout_engine: Option<ViewLayoutEngine>,
     },
 }
 
@@ -484,6 +491,22 @@ pub enum ViewTheme {
     System,
 }
 
+/// `oxidizr view --layout-engine` values — mirrors the viewer's own
+/// `LayoutEngineArg` so both entries read alike; mapped when the `gui`
+/// feature links the shell. A build that cannot run the named engine
+/// starts on its default and reports the refusal in the layout dialog.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum, Debug)]
+pub enum ViewLayoutEngine {
+    /// The built-in layered engine — always available.
+    Layered,
+    /// The dagre pipeline (only when the viewer is compiled with the
+    /// `dagre` feature).
+    Dagre,
+    /// The external graphviz `dot` (only with the viewer's
+    /// `dot-backend` feature AND `$OXIDZR_DOT_BIN`).
+    Dot,
+}
+
 /// Run the CLI. Returns the process exit code (usage errors exit via clap with `2`).
 ///
 /// `Ok(0)` success · `Ok(1)` diagnostics with an error (or a warning under
@@ -515,8 +538,13 @@ pub fn run() -> anyhow::Result<i32> {
     }
     // /: `view` is the GUI shell, not a pipeline command —
     // it dispatches before anything touches `oxidizr-api`.
-    if let Command::View { file, theme } = &cli.command {
-        return run_view(file.as_deref(), *theme);
+    if let Command::View {
+        file,
+        theme,
+        layout_engine,
+    } = &cli.command
+    {
+        return run_view(file.as_deref(), *theme, *layout_engine);
     }
     // `oracle` spawns the EXTERNAL official tooling binary —
     // no workspace is ever opened here, so it is not a `Request`
@@ -746,13 +774,22 @@ fn to_request(command: Command, quiet: bool) -> Option<Request> {
 /// drives, so the entries cannot drift. eframe faults (no display)
 /// travel through `anyhow` to the binary's exit-1 error arm.
 #[cfg(feature = "gui")]
-fn run_view(file: Option<&Path>, theme: ViewTheme) -> anyhow::Result<i32> {
+fn run_view(
+    file: Option<&Path>,
+    theme: ViewTheme,
+    layout_engine: Option<ViewLayoutEngine>,
+) -> anyhow::Result<i32> {
     let theme = match theme {
         ViewTheme::Light => oxidizr_viewer::shell::ThemeArg::Light,
         ViewTheme::Dark => oxidizr_viewer::shell::ThemeArg::Dark,
         ViewTheme::System => oxidizr_viewer::shell::ThemeArg::System,
     };
-    oxidizr_viewer::shell::run(file, theme)?;
+    let layout_engine = layout_engine.map(|engine| match engine {
+        ViewLayoutEngine::Layered => oxidizr_viewer::shell::LayoutEngineArg::Layered,
+        ViewLayoutEngine::Dagre => oxidizr_viewer::shell::LayoutEngineArg::Dagre,
+        ViewLayoutEngine::Dot => oxidizr_viewer::shell::LayoutEngineArg::Dot,
+    });
+    oxidizr_viewer::shell::run(file, theme, layout_engine)?;
     Ok(0)
 }
 
@@ -760,7 +797,11 @@ fn run_view(file: Option<&Path>, theme: ViewTheme) -> anyhow::Result<i32> {
 /// this binary links no shell — exit 1 via the binary's error arm with
 /// the rebuild hint (the request is unserveable).
 #[cfg(not(feature = "gui"))]
-fn run_view(_file: Option<&Path>, _theme: ViewTheme) -> anyhow::Result<i32> {
+fn run_view(
+    _file: Option<&Path>,
+    _theme: ViewTheme,
+    _layout_engine: Option<ViewLayoutEngine>,
+) -> anyhow::Result<i32> {
     anyhow::bail!(
         "`view` needs the `gui` feature: rebuild with `cargo build --features gui` \
          (or run the standalone `oxidizr-viewer` binary)"
