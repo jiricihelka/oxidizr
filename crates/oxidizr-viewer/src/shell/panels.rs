@@ -273,6 +273,7 @@ impl Viewer {
             tags,
             properties,
             url,
+            has_docs,
             fields,
         }) = self.selection_details()
         else {
@@ -322,6 +323,16 @@ impl Viewer {
         }
         if let Some(link) = &url {
             ui.hyperlink_to(truncate(link, 60), link);
+        }
+        //: the docs door only appears when the element has sections of
+        // its own (attached or embedded) — the window lists more.
+        if has_docs
+            && ui
+                .button("Documentation")
+                .on_hover_text("workspace + element sections (F2)")
+                .clicked()
+        {
+            self.toggles.docs = true;
         }
         if let Some(edge) = fields {
             ui.separator();
@@ -385,6 +396,9 @@ impl Viewer {
             .iter()
             .find(|(label, _)| *label == "Url")
             .map(|(_, url)| url.clone());
+        let has_docs = single
+            .zip(self.workspace.as_ref())
+            .is_some_and(|(id, workspace)| overview::has_element_docs(workspace, id));
         let fields = match selection {
             paint::Selection::Edge(id) if self.can_edit_model() => {
                 self.workspace.as_ref().and_then(|workspace| {
@@ -422,6 +436,7 @@ impl Viewer {
             tags,
             properties,
             url,
+            has_docs,
             fields,
         })
     }
@@ -552,6 +567,79 @@ impl Viewer {
         self.toggles.help = open;
     }
 
+    /// The documentation window (the other F-key / the details-panel docs
+    /// button): the [`crate::overview::doc_sections`] collector decides
+    /// the content — workspace-level `!docs` sections plus those attached
+    /// to the selected element. `Format::Markdown` renders through the
+    /// shared markdown cache; `AsciiDoc` and format-less sections show
+    /// VERBATIM in monospace (no `AsciiDoc` renderer ships).
+    pub(super) fn docs_window(&mut self, ctx: &egui::Context) {
+        if !self.toggles.docs {
+            return;
+        }
+        // Owned snapshot first (the [`Viewer::selection_details`]
+        // posture): the window closure renders through `self.md`, so
+        // nothing borrowed from the workspace may be alive there.
+        let element = match &self.selection {
+            Some(paint::Selection::Items(ids)) if ids.len() == 1 => Some(ids[0].clone()),
+            _ => None,
+        };
+        let subject = element
+            .as_ref()
+            .zip(self.workspace.as_ref())
+            .and_then(|(id, workspace)| key::element(&workspace.model, id))
+            .map(|item| item.name.clone());
+        let sections: Vec<DocPage> = self.workspace.as_ref().map_or_else(Vec::new, |workspace| {
+            overview::doc_sections(workspace, element.as_ref())
+                .into_iter()
+                .map(|section| DocPage {
+                    title: section
+                        .filename
+                        .clone()
+                        .unwrap_or_else(|| "Section".to_owned()),
+                    markdown: section.format == Some(oxidizr_core::docs::Format::Markdown),
+                    content: section.content.clone(),
+                })
+                .collect()
+        });
+        let mut open = true;
+        egui::Window::new("Documentation")
+            .open(&mut open)
+            .collapsible(false)
+            .default_pos([320.0, 120.0])
+            .default_size([620.0, 560.0])
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| {
+                        if let Some(name) = &subject {
+                            ui.weak(format!("Documentation for: {name}"));
+                        }
+                        if sections.is_empty() {
+                            ui.weak(
+                                "No documentation — this workspace has no `!docs` sections \
+                                 attached to it or to the selection.",
+                            );
+                        }
+                        for page in &sections {
+                            ui.strong(&page.title);
+                            if page.markdown {
+                                egui_commonmark::CommonMarkViewer::new().show(
+                                    ui,
+                                    &mut self.md,
+                                    &page.content,
+                                );
+                            } else {
+                                ui.weak("Not markdown — shown verbatim (no AsciiDoc renderer).");
+                                ui.label(egui::RichText::new(&page.content).monospace());
+                            }
+                            ui.separator();
+                        }
+                    });
+            });
+        self.toggles.docs = open;
+    }
+
     /// Full diagnostics list in a dismissible window;
     /// the status-bar count toggles it.
     pub(super) fn diagnostics_window(&mut self, ctx: &egui::Context) {
@@ -596,6 +684,17 @@ impl Viewer {
     }
 }
 
+/// One rendered section of the documentation window (owned, so the
+/// window closure can mutably borrow the markdown cache).
+struct DocPage {
+    /// Heading: the section's filename (`"Section"` when absent).
+    title: String,
+    /// `Format::Markdown` — the only format rendered, not printed.
+    markdown: bool,
+    /// The section text.
+    content: String,
+}
+
 /// The details panel's owned snapshot of the current selection — built by
 /// [`Viewer::selection_details`] so the render leg owns nothing borrowed
 /// (a field commit can rebuild the scene mid-frame).
@@ -610,6 +709,9 @@ struct Details {
     properties: Vec<(String, String)>,
     /// URL of the element or edge (the row value — rendered as a link).
     url: Option<String>,
+    /// Whether a single element has documentation of its own (the
+    /// docs-button gate — the window itself lists more).
+    has_docs: bool,
     /// Editable edge values — present only when the source may be
     /// model-edited.
     fields: Option<EdgeFields>,

@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0…M6 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core, canvas model ops, details panel, help overlay — gates green each); NEXT = M7 documentation window (`!docs` sections, markdown + verbatim fallback — re-add the F2 row to shortcuts.rs WITH its handler). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0…M7 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core, canvas model ops, details panel, help overlay, documentation window — gates green each); NEXT = M8 CLOSE (CHANGELOG review, viewer README + docs/ refresh incl. the README gesture list from the table, PHASE_6/PROGRESS/RESUME journals, full V-list: ci windows + Category B oracle TZ=UTC + doc-zero + V4 tree; manual smoke lists of M4+M5+M6+M7 rows; NO tag). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -45,10 +45,10 @@
 
 ## If a next session opens
 
-- **M0…M6 DONE 2026-11-28** (evidence in the PHASE_6 wave rows): canvas
-  model ops + details panel + help overlay all LIVE. Key pieces: press
-  chain waypoint → insert dot → endpoint handle → port dot (gated) in
-  `press_mode`; `Viewer::run_model_edit` funnel; gate
+- **M0…M7 DONE 2026-11-28** (evidence in the PHASE_6 wave rows): canvas
+  model ops + details panel + help overlay + documentation window all
+  LIVE. Key pieces: press chain waypoint → insert dot → endpoint handle →
+  port dot (gated) in `press_mode`; `Viewer::run_model_edit` funnel; gate
   `commands::model_editing_allowed`; `PaintOptions.model_editing`; Del =
   delete + Ctrl+Shift+K strip; `model_dirty`/`model_note` + save rules.
   Details panel: `selection_details()` → `Details` snapshot → element
@@ -59,15 +59,18 @@
   `key::element`. Help: `Toggles.help`, `help_window` renders
   `shortcuts::all()` (F1 / Shift+`?` / `?` chip; Esc closes help BEFORE
   the selection clear), `affordance_hint` tooltips, empty-canvas hint
-  looks up the F1 row. **The table ships ONLY implemented bindings: the
-  F2/docs row was pulled at M6 — re-add it in M7 together with the F2
-  handler** (V6 audit recorded in the M6 wave row). 128 viewer lib tests.
-  Start wave **P7 = P6-M7** (documentation window): `!docs` `Section`s →
-  selected element + workspace-level, `order`-sorted; `Format::Markdown`
-  → egui_commonmark (reuse `Viewer.md`), AsciiDoc/absent → monospaced
-  verbatim + note; F2 opens it; docs button in the details panel; then
-  M8 close (manual smoke lists of M4+M5+M6 run by hand, `ci windows`,
-  Category B `TZ=UTC`, doc-zero, NO tag).
+  looks up the F1 row. Docs: `overview::doc_sections` (workspace-level →
+  attached → embedded, each `order`-sorted) + `has_element_docs` gate;
+  `Toggles.docs` + `docs_window` over an owned `DocPage` snapshot
+  (markdown via `Viewer.md`, `AsciiDoc`/absent verbatim + note); F2
+  handler AND its table row landed together as promised; Documentation
+  button in `info_block`. 129 viewer lib tests.
+  Start wave **P7 = P6-M8 (CLOSE)**: CHANGELOG review, viewer README +
+  `docs/` refresh (README gesture list renders from the table), PHASE_6 +
+  PROGRESS + RESUME journals, FULL V-list — V4 `cargo tree` unchanged,
+  `cargo xtask ci windows`, Category B oracle `TZ=UTC`
+  (`$OXIDZR_STRUCTURIZR_BIN`), doc-zero, bless; run the manual smoke
+  lists of the M4/M5/M6/M7 wave rows BY HAND; NO tag.
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
   clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing

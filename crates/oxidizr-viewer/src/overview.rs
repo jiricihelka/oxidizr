@@ -14,9 +14,17 @@
 //! the shell's search field runs over element names/ids and view
 //! titles. So does the sidebar's kind split: [`section`] + [`grouped`]
 //! partition the view list into per-type sections.
+//!
+//! The documentation window reads [`doc_sections`]: the workspace-level
+//! `!docs` sections plus those attached to the selected element, each
+//! group `order`-sorted — the shell only renders what the collector
+//! returns.
 
 use epaint::{Color32, Rect as ERect, Shape, Stroke, pos2};
 use oxidizr_core::Id;
+use oxidizr_core::Workspace;
+use oxidizr_core::docs::{Documentation, Section};
+use oxidizr_core::model::Model;
 
 use crate::paint::Selection;
 use crate::scene::{Rect, Scene};
@@ -294,6 +302,71 @@ pub(crate) fn selection_info(scene: &Scene, selection: &Selection) -> Vec<(&'sta
     rows
 }
 
+/// The documentation window's content for a selection: the
+/// WORKSPACE-LEVEL `!docs` sections (no `elementId`) first, then the
+/// sections ATTACHED to `element` — those living in the workspace
+/// documentation with a matching `elementId`, plus the element's own
+/// embedded `documentation` (only software systems, containers and
+/// components carry one). Each group is stable-sorted by `order`, so
+/// same-`order` sections keep their definition sequence; `None` selects
+/// the workspace-level sections alone.
+pub(crate) fn doc_sections<'a>(workspace: &'a Workspace, element: Option<&Id>) -> Vec<&'a Section> {
+    let mut out = ordered_sections(&workspace.documentation, None);
+    if let Some(id) = element {
+        out.extend(ordered_sections(&workspace.documentation, Some(id)));
+        if let Some(own) = element_documentation(&workspace.model, id) {
+            out.extend(ordered_sections(own, None));
+        }
+    }
+    out
+}
+
+/// Whether `id` has documentation of its own (attached or embedded):
+/// the details panel's docs-button gate — the window opens even with no
+/// selection, so only element-attached sections advertise it.
+pub(crate) fn has_element_docs(workspace: &Workspace, id: &Id) -> bool {
+    workspace
+        .documentation
+        .sections
+        .iter()
+        .any(|section| section.element_id.as_ref() == Some(id))
+        || element_documentation(&workspace.model, id).is_some_and(|own| !own.sections.is_empty())
+}
+
+/// The sections of `doc` attached to `attached_to` (`None` = the
+/// workspace-level ones), `order`-sorted.
+fn ordered_sections<'a>(doc: &'a Documentation, attached_to: Option<&Id>) -> Vec<&'a Section> {
+    let mut out: Vec<&Section> = doc
+        .sections
+        .iter()
+        .filter(|section| section.element_id.as_ref() == attached_to)
+        .collect();
+    out.sort_by_key(|section| section.order);
+    out
+}
+
+/// The EMBEDDED documentation of `id` — the official model attaches one
+/// to software systems, containers and components only, so the walk
+/// stops at the person/deployment/custom kinds.
+fn element_documentation<'a>(model: &'a Model, id: &Id) -> Option<&'a Documentation> {
+    for system in &model.software_systems {
+        if system.item.id == *id {
+            return Some(&system.documentation);
+        }
+        for container in &system.containers {
+            if container.item.id == *id {
+                return Some(&container.documentation);
+            }
+            for component in &container.components {
+                if component.item.id == *id {
+                    return Some(&component.documentation);
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,6 +492,62 @@ mod tests {
             selection_info(&s, &Selection::Edge(Id::new("gone"))),
             Vec::new()
         );
+    }
+
+    #[test]
+    fn doc_sections_order_groups_and_attachments() {
+        use oxidizr_core::docs::Format;
+        use oxidizr_core::model::{ModelItem, SoftwareSystem};
+
+        let section = |order: i32, name: &str, element: Option<&str>| Section {
+            order,
+            filename: Some(name.to_owned()),
+            content: format!("# {name}"),
+            format: Some(Format::Markdown),
+            element_id: element.map(str::to_owned).map(Id::new),
+        };
+        let mut ws = Workspace::default();
+        ws.documentation.sections = vec![
+            section(2, "Workspace second", None),
+            section(1, "Workspace first", None),
+            section(1, "Attached to system", Some("4")),
+        ];
+        let mut system = SoftwareSystem {
+            item: ModelItem::new(Id::new("4"), "Bank"),
+            group: None,
+            containers: Vec::new(),
+            documentation: oxidizr_core::docs::Documentation::default(),
+            relationships: Vec::new(),
+        };
+        system.documentation.sections = vec![section(0, "Embedded own", None)];
+        ws.model.software_systems.push(system);
+        let names = |sections: Vec<&Section>| -> Vec<String> {
+            sections
+                .iter()
+                .map(|section| section.filename.clone().unwrap_or_default())
+                .collect()
+        };
+        // No selection: workspace-level only, `order`-sorted.
+        assert_eq!(
+            names(doc_sections(&ws, None)),
+            ["Workspace first", "Workspace second"]
+        );
+        // Element: workspace-level, then attached, then embedded — the
+        // groups in that order, each `order`-sorted within itself.
+        assert_eq!(
+            names(doc_sections(&ws, Some(&Id::new("4")))),
+            [
+                "Workspace first",
+                "Workspace second",
+                "Attached to system",
+                "Embedded own"
+            ]
+        );
+        // Unknown element: nothing attaches, the workspace set stands alone.
+        assert_eq!(names(doc_sections(&ws, Some(&Id::new("9")))).len(), 2);
+        // The docs-button gate: attached OR embedded counts, neither does not.
+        assert!(has_element_docs(&ws, &Id::new("4")));
+        assert!(!has_element_docs(&ws, &Id::new("9")));
     }
 
     fn box_rect() -> ERect {

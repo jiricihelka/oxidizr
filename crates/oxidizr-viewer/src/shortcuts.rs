@@ -152,6 +152,10 @@ const SECTIONS: &[Section] = &[
                 keys: "F1 or ?",
                 action: "show / hide the keys & gestures overlay",
             },
+            Binding {
+                keys: "F2",
+                action: "documentation window (workspace and selected element)",
+            },
         ],
     },
 ];

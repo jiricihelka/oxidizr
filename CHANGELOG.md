@@ -16,6 +16,11 @@ release.
 
 ### Added
 
+- The viewer gained a documentation window: F2 (or the Documentation
+  button in the details panel) opens a window listing the workspace's
+  `!docs` sections plus those attached to the selected element, in
+  `order`; markdown sections render, AsciiDoc and format-less ones show
+  verbatim in monospace.
 - The viewer canvas gained route-editing handles: a selected arrow shows
   a dot at every segment midpoint (press-drag one to splice a waypoint
   and route it in one move) and a square on each endpoint, the arrow

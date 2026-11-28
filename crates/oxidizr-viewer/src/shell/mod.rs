@@ -88,7 +88,7 @@ pub fn run(file: Option<&Path>, theme: ThemeArg) -> eframe::Result {
 /// bools on [`Viewer`] tripped `struct_excessive_bools`; they remain
 /// session flags, not state to model as enums — same reading as the
 /// CLI flags precedent (oxidizr-cli lib.rs)).
-//: four INDEPENDENT window/behavior toggles — no state machine fits,
+//: several INDEPENDENT window/behavior toggles — no state machine fits,
 // and folding them would hide which window is which (same posture the
 // oxidizr-cli allow records).
 #[allow(clippy::struct_excessive_bools)]
@@ -98,6 +98,9 @@ struct Toggles {
     /// Help overlay visibility (session) — the rendered [`crate::shortcuts`]
     /// table (F1 / `?` / the ? chip).
     help: bool,
+    /// Documentation window visibility (session) — the `!docs` sections
+    /// of the workspace plus the selected element (the other F-key).
+    docs: bool,
     /// Auto-layout dialog visibility.
     layout: bool,
     /// Grid-snap drags to multiples of [`commands::snapped`]'s step.
@@ -392,6 +395,7 @@ impl Viewer {
             toggles: Toggles {
                 diagnostics: false,
                 help: false,
+                docs: false,
                 layout: false,
                 snap: false,
             },
@@ -747,6 +751,12 @@ impl Viewer {
         {
             self.toggles.help = !self.toggles.help;
         }
+        //: the other F-key opens the documentation window — workspace
+        // sections plus those attached to the selected element (the
+        // details-panel docs button opens the same window).
+        if !self.text_focus && ctx.input(|i| i.key_pressed(egui::Key::F2)) {
+            self.toggles.docs = !self.toggles.docs;
+        }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             //: help first — Esc closes the overlay BEFORE its other
             // duties (drag cancel, selection clear): dismissing a help
@@ -884,6 +894,7 @@ impl eframe::App for Viewer {
         self.sync_icons(&ctx);
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.help_window(&ctx);
+        self.docs_window(&ctx);
         self.diagnostics_window(&ctx);
         self.layout_window(&ctx);
     }
