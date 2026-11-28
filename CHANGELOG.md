@@ -21,6 +21,13 @@ release.
   with the help-overlay and documentation waves. The headless library and
   CLI dependency trees are unchanged.
 
+### Changed
+
+- The viewer keeps ONE undo/redo history for the whole session instead of
+  one stack per view: Ctrl+Z walks back through edits made in other views
+  too (the step remembers its view), matching how the edits around a
+  shared relationship will have to undo as one story.
+
 ## [0.5.0] - 2026-11-26
 
 Phase 5R — the large-scale idiomatic-Rust refactor: the ten giant modules

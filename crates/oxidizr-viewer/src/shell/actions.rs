@@ -19,16 +19,13 @@ use super::{Viewer, companion_dsl, newest_by_mtime};
 
 impl Viewer {
     /// Run one editing command on the current view: apply through the
-    /// history, mark the view dirty, repaint. EVERY geometry mutation
-    /// in the shell lands here (editor rule).
+    /// SESSION history (the step carries the view), mark the view
+    /// dirty, repaint. EVERY geometry mutation in the shell lands here
+    /// (editor rule).
     pub(super) fn edit_current_view(&mut self, command: commands::Command) {
         let view_key = self.view_key.clone().unwrap_or_default();
-        let overlay = self
-            .overlays
-            .entry(view_key.clone())
-            .or_insert_with(|| commands::LayoutOverlay::for_view(&view_key));
-        let history = self.histories.entry(view_key.clone()).or_default();
-        history.run(overlay, command);
+        self.history
+            .run_geometry(&mut self.overlays, &view_key, command);
         self.dirty.insert(view_key);
         self.rebuild_scene();
     }
@@ -319,30 +316,19 @@ impl Viewer {
         self.reload_note = Some(note);
     }
 
-    /// Undo/redo one step of the current view (Ctrl+Z / Ctrl+Y).
+    /// Undo/redo one SESSION step (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y). The
+    /// step carries its view: undoing can move a view the user has
+    /// switched away from — that view is marked dirty and the scene
+    /// rebuilt; the current view repaints unchanged, the dirty dots in
+    /// the view list tell the rest.
     pub(super) fn step_history(&mut self, forward: bool) {
-        let moved = match &self.view_key {
-            Some(view_key) => {
-                match (
-                    self.overlays.get_mut(view_key),
-                    self.histories.get_mut(view_key),
-                ) {
-                    (Some(overlay), Some(history)) => {
-                        if forward {
-                            history.redo(overlay)
-                        } else {
-                            history.undo(overlay)
-                        }
-                    }
-                    _ => false,
-                }
-            }
-            None => false,
+        let moved = if forward {
+            self.history.redo(&mut self.overlays)
+        } else {
+            self.history.undo(&mut self.overlays)
         };
-        if moved {
-            if let Some(view_key) = &self.view_key {
-                self.dirty.insert(view_key.clone());
-            }
+        if let Some(view_key) = moved {
+            self.dirty.insert(view_key);
             self.rebuild_scene();
         }
     }

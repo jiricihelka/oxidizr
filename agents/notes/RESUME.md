@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0 DONE (egui_commonmark spike + shortcuts table, gates green); NEXT = M1 single session history. Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1 DONE (dep spike, binding table, single session history — gates green each); NEXT = M2 route UX (insert dots, nudge, endpoint-handle paint, Ctrl+Shift+K alias). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -42,11 +42,15 @@
 
 ## If a next session opens
 
-- **M0 DONE 2026-11-28** (evidence in the PHASE_6 wave row): egui_commonmark
-  0.26 pinned behind `gui` (V4 measured), `shortcuts::all()` binding table
-  live. Start wave **P6-M1** (single session history: `Edit` step enum,
-  `Viewer.history` replaces `histories`, tests re-targeted; CHANGELOG
-  "Changed" line for the undo-granularity change lands with it).
+- **M0+M1 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
+  egui_commonmark 0.26 behind `gui` (V4 measured), `shortcuts::all()`
+  binding table live; session `History` (Edit::Geometry steps, one stack,
+  `step_history` marks the STEP's view dirty, adopt resets). Start wave
+  **P6-M2** (route UX: midpoint insert dots on the selected edge —
+  paint + press-drag insert-and-route through one `set_waypoints`
+  command; endpoint-handle rendering (visual only until M4); arrow-key
+  nudge for selected element / grabbed waypoint; Ctrl+Shift+K added as
+  an alias for waypoint clearing — Del flips in M4).
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
   clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing

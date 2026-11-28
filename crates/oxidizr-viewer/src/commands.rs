@@ -17,8 +17,10 @@
 //!
 //! Layout semantics follow the official tooling's layout editor:
 //! `removeAllVertices` before every auto-layout run,
-//! Bring-elements-back and Remove-all-vertices as dialog-level commands,
-//! per-diagram undo stacks. Grid snap (10 px) is OURS (visual parity is
+//! Bring-elements-back and Remove-all-vertices as dialog-level commands —
+//! but NOT its per-diagram undo stacks: the session carries ONE history,
+//! because a model edit is global and undoable per-diagram is undoable
+//! incompletely. Grid snap (10 px) is OURS (visual parity is
 //! out of contract); the official tooling snaps nothing.
 
 use std::collections::HashMap;
@@ -242,54 +244,90 @@ impl Command {
     }
 }
 
-/// Undo/redo stacks over one view's [`LayoutOverlay`]: `Vec`
-/// stacks, cap [`HISTORY_CAP`] (oldest drops), a fresh [`History::run`]
-/// clears the redo branch. The shell keeps one instance per view.
+/// One step on the session history: a geometry command tagged with the
+/// view it edits (the model waves add their own step kind here). Undo
+/// walks ONE stack across views, so a global model edit can never be
+/// undone in one view and left standing in another.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Edit {
+    /// `command` on the overlay of `view_key`.
+    Geometry {
+        /// The view whose overlay this step edits.
+        view_key: String,
+        /// The geometry command.
+        command: Command,
+    },
+}
+
+/// The session's undo/redo stacks over the WHOLE open workspace: `Vec`
+/// stacks, cap [`HISTORY_CAP`] (oldest drops), a fresh [`History::run_geometry`]
+/// clears the redo branch. ONE instance lives on the shell: view
+/// switching no longer swaps stacks (geometry steps carry their view, so
+/// Ctrl+Z walks through views); opening a workspace resets.
 #[derive(Debug, Default)]
 pub(crate) struct History {
-    undo: Vec<Command>,
-    redo: Vec<Command>,
+    undo: Vec<Edit>,
+    redo: Vec<Edit>,
 }
 
 impl History {
-    /// Apply `command` forward and remember it for [`History::undo`].
-    pub fn run(&mut self, overlay: &mut LayoutOverlay, command: Command) {
+    /// Apply `command` to the overlay of `view_key` (created when the
+    /// view has no geometry yet) and remember the step.
+    pub fn run_geometry(
+        &mut self,
+        overlays: &mut HashMap<String, LayoutOverlay>,
+        view_key: &str,
+        command: Command,
+    ) {
+        let overlay = overlays
+            .entry(view_key.to_string())
+            .or_insert_with(|| LayoutOverlay::for_view(view_key));
         command.apply(overlay, true);
         if self.undo.len() == HISTORY_CAP {
             self.undo.remove(0);
         }
-        self.undo.push(command);
+        self.undo.push(Edit::Geometry {
+            view_key: view_key.to_string(),
+            command,
+        });
         self.redo.clear();
     }
 
-    /// Undo the most recent command; `false` = nothing to undo.
-    pub fn undo(&mut self, overlay: &mut LayoutOverlay) -> bool {
-        match self.undo.pop() {
-            Some(command) => {
-                command.undo(overlay);
-                self.redo.push(command);
-                true
+    /// Undo the most recent step; `Some(view_key)` names the view whose
+    /// geometry moved (dirty + repaint follow it), `None` = nothing left.
+    pub fn undo(&mut self, overlays: &mut HashMap<String, LayoutOverlay>) -> Option<String> {
+        let edit = self.undo.pop()?;
+        let view_key = match &edit {
+            Edit::Geometry { view_key, command } => {
+                if let Some(overlay) = overlays.get_mut(view_key) {
+                    command.undo(overlay);
+                }
+                view_key.clone()
             }
-            None => false,
-        }
+        };
+        self.redo.push(edit);
+        Some(view_key)
     }
 
-    /// Re-apply the most recently undone command; `false` = nothing to
-    /// redo.
-    pub fn redo(&mut self, overlay: &mut LayoutOverlay) -> bool {
-        match self.redo.pop() {
-            Some(command) => {
-                command.apply(overlay, true);
-                self.undo.push(command);
-                true
+    /// Re-apply the most recently undone step; same contract as
+    /// [`History::undo`].
+    pub fn redo(&mut self, overlays: &mut HashMap<String, LayoutOverlay>) -> Option<String> {
+        let edit = self.redo.pop()?;
+        let view_key = match &edit {
+            Edit::Geometry { view_key, command } => {
+                if let Some(overlay) = overlays.get_mut(view_key) {
+                    command.apply(overlay, true);
+                }
+                view_key.clone()
             }
-            None => false,
-        }
+        };
+        self.undo.push(edit);
+        Some(view_key)
     }
 
     /// Whether [`History::undo`] would do anything.
     #[must_use]
-    // test-only: the shipped shell never calls this (driven by unit tests)
+    // test-only: the shipped shell probes by the Option (driven by unit tests)
     #[cfg(test)]
     pub(crate) fn can_undo(&self) -> bool {
         !self.undo.is_empty()
@@ -297,17 +335,15 @@ impl History {
 
     /// Whether [`History::redo`] would do anything.
     #[must_use]
-    // test-only: the shipped shell never calls this (driven by unit tests)
+    // test-only: the shipped shell probes by the Option (driven by unit tests)
     #[cfg(test)]
     pub(crate) fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
 
-    /// Drop both stacks (view switch / workspace reload — history does
-    /// not survive a re-render from a new view).
-    // test-only: the shipped shell never calls this (driven by unit tests)
-    #[cfg(test)]
-    pub(crate) fn reset(&mut self) {
+    /// Drop both stacks (workspace open/reload — history does not
+    /// survive a new workspace; view SWITCHING deliberately does).
+    pub fn reset(&mut self) {
         self.undo.clear();
         self.redo.clear();
     }
@@ -1239,37 +1275,79 @@ mod tests {
     #[test]
     fn history_round_trips_clears_redo_and_caps() {
         let scene = scene();
-        let mut o = overlay();
+        let mut overlays = HashMap::from([("L1".to_string(), overlay())]);
         let mut h = History::default();
-        let one = move_by(&scene, &o, &[id(1)], (10.0, 0.0), false).unwrap();
-        h.run(&mut o, one);
+        let one = move_by(&scene, &overlays["L1"], &[id(1)], (10.0, 0.0), false).unwrap();
+        h.run_geometry(&mut overlays, "L1", one);
         assert!(h.can_undo() && !h.can_redo());
-        assert!(h.undo(&mut o));
+        assert_eq!(h.undo(&mut overlays).as_deref(), Some("L1"));
         assert!(!h.can_undo() && h.can_redo());
-        assert_eq!(o.position(&scene, &id(1)), Some((0.0, 0.0)));
-        assert!(h.redo(&mut o));
-        assert_eq!(o.position(&scene, &id(1)), Some((10.0, 0.0)));
+        assert_eq!(overlays["L1"].position(&scene, &id(1)), Some((0.0, 0.0)));
+        assert_eq!(h.redo(&mut overlays).as_deref(), Some("L1"));
+        assert_eq!(overlays["L1"].position(&scene, &id(1)), Some((10.0, 0.0)));
         // A fresh run kills the redo branch.
-        h.undo(&mut o);
-        let two = move_by(&scene, &o, &[id(2)], (0.0, 20.0), false).unwrap();
-        h.run(&mut o, two);
+        h.undo(&mut overlays);
+        let two = move_by(&scene, &overlays["L1"], &[id(2)], (0.0, 20.0), false).unwrap();
+        h.run_geometry(&mut overlays, "L1", two);
         assert!(!h.can_redo());
-        assert!(h.undo(&mut o));
+        assert!(h.undo(&mut overlays).is_some());
         assert!(
-            !h.undo(&mut o),
+            h.undo(&mut overlays).is_none(),
             "the fresh run dropped the redo branch — exhausted, no panic"
         );
         // Cap: 205 runs keep the newest 200.
         h.reset();
         for _ in 0..(HISTORY_CAP + 5) {
-            let cmd = move_by(&scene, &o, &[id(3)], (10.0, 0.0), false).unwrap();
-            h.run(&mut o, cmd);
+            let cmd = move_by(&scene, &overlays["L1"], &[id(3)], (10.0, 0.0), false).unwrap();
+            h.run_geometry(&mut overlays, "L1", cmd);
         }
         let mut undos = 0;
-        while h.undo(&mut o) {
+        while h.undo(&mut overlays).is_some() {
             undos += 1;
         }
         assert_eq!(undos, HISTORY_CAP);
+    }
+
+    #[test]
+    fn history_walks_through_views() {
+        let scene = scene();
+        let mut overlays: HashMap<String, LayoutOverlay> = HashMap::new();
+        let mut h = History::default();
+        // Two edits made while viewing two DIFFERENT views: overlays are
+        // created on demand, the steps carry their view.
+        let a = move_by(
+            &scene,
+            &LayoutOverlay::for_view("A"),
+            &[id(1)],
+            (10.0, 0.0),
+            false,
+        )
+        .unwrap();
+        h.run_geometry(&mut overlays, "A", a);
+        let b = move_by(
+            &scene,
+            &LayoutOverlay::for_view("B"),
+            &[id(2)],
+            (0.0, 20.0),
+            false,
+        )
+        .unwrap();
+        h.run_geometry(&mut overlays, "B", b);
+        // One stack: undo walks back through the views in LIFO order.
+        assert_eq!(h.undo(&mut overlays).as_deref(), Some("B"));
+        assert_eq!(h.undo(&mut overlays).as_deref(), Some("A"));
+        assert!(h.undo(&mut overlays).is_none());
+        assert_eq!(overlays["A"].position(&scene, &id(1)), Some((0.0, 0.0)));
+        assert_eq!(overlays["B"].position(&scene, &id(2)), Some((220.0, 60.0)));
+        // Redo walks forward through both again.
+        assert_eq!(h.redo(&mut overlays).as_deref(), Some("A"));
+        assert_eq!(h.redo(&mut overlays).as_deref(), Some("B"));
+        assert!(h.redo(&mut overlays).is_none());
+        assert_eq!(overlays["A"].position(&scene, &id(1)), Some((10.0, 0.0)));
+        assert_eq!(overlays["B"].position(&scene, &id(2)), Some((220.0, 80.0)));
+        // reset drops everything (workspace open).
+        h.reset();
+        assert!(h.undo(&mut overlays).is_none());
     }
 
     #[test]

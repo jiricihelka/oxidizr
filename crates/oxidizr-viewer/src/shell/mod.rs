@@ -185,8 +185,10 @@ struct Viewer {
     /// persisted — owns saving (editor rule). Kept across
     /// view switches, cleared when a workspace is adopted.
     overlays: HashMap<String, commands::LayoutOverlay>,
-    /// Undo/redo history per view key, parallel to [`Self::overlays`].
-    histories: HashMap<String, commands::History>,
+    /// Undo/redo history for the WHOLE session: geometry steps carry
+    /// their view, so one Ctrl+Z stack walks through views (a global
+    /// model edit needs exactly this — one stack, no per-view swap).
+    history: commands::History,
     /// The in-flight canvas interaction (pan / drag / lasso).
     drag: Drag,
     /// Views edited since the last adopt (dirty marker; save).
@@ -325,7 +327,7 @@ impl Viewer {
             icon_pixels: Vec::new(),
             icon_errors: Vec::new(),
             overlays: HashMap::new(),
-            histories: HashMap::new(),
+            history: commands::History::default(),
             drag: Drag::Idle,
             dirty: BTreeSet::new(),
             save_note: None,
@@ -411,7 +413,7 @@ impl Viewer {
         // Fresh workspace: every session edit dies with the old one
         // (scope cut — overlays survive VIEW switches, not OPENs).
         self.overlays.clear();
-        self.histories.clear();
+        self.history.reset();
         self.dirty.clear();
         self.save_note = None;
         // New workspace, new source set: the driver dies with the old
@@ -671,10 +673,11 @@ impl eframe::App for Viewer {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.selection = None;
         }
-        // Undo/redo: Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk the
-        // CURRENT view's history — skipped while the toolbar path field
-        // owns the keyboard (Ctrl+Z inside the path edit is egui's).
-        // Ctrl+S saves under the same focus guard.
+        // Undo/redo: Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk the SESSION
+        // history — the step carries its view, so undoing can land on a
+        // view the user has since switched away from. Skipped while the
+        // toolbar path field owns the keyboard (Ctrl+Z inside the path
+        // edit is egui's). Ctrl+S saves under the same focus guard.
         if self.scene.is_some() && !self.text_focus {
             let (undo, redo, save) = ctx.input(|i| {
                 let command = i.modifiers.command;
