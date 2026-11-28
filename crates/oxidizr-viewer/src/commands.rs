@@ -423,7 +423,6 @@ pub(crate) enum Endpoint {
 
 /// Which free-text slot of a relationship
 /// [`ModelCommand::SetRelationshipText`] relabels.
-#[allow(dead_code)] //: the details panel constructs these; the tests drive them meanwhile
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TextField {
     /// The `description`.
@@ -478,8 +477,6 @@ pub(crate) enum ModelCommand {
         from_slot: Option<usize>,
     },
     /// Relabel `description`/`technology` on the model row.
-    //: the details panel constructs this next; the tests drive it meanwhile.
-    #[allow(dead_code)]
     SetRelationshipText {
         /// The relationship to relabel.
         id: Id,
@@ -488,6 +485,19 @@ pub(crate) enum ModelCommand {
         /// The previous value (undo restores it exactly).
         from: Option<String>,
         /// The new value.
+        to: Option<String>,
+    },
+    /// Relabel the `description` override of one view's
+    /// `RelationshipView` — the label THAT view paints over the model
+    /// description. One command per view edit; the model row is untouched.
+    SetRelationshipViewLabel {
+        /// The view whose relationship-view row changes.
+        view_key: String,
+        /// The relationship whose row is relabeled.
+        id: Id,
+        /// The previous override (undo restores it exactly).
+        from: Option<String>,
+        /// The new override.
         to: Option<String>,
     },
 }
@@ -559,6 +569,11 @@ impl ModelCommand {
             }
             Self::SetRelationshipText { id, field, to, .. } => {
                 set_text(workspace, id, *field, to.clone());
+            }
+            Self::SetRelationshipViewLabel {
+                view_key, id, to, ..
+            } => {
+                set_view_label(workspace, view_key, id, to.clone());
             }
         }
     }
@@ -652,6 +667,11 @@ impl ModelCommand {
             } => {
                 set_text(workspace, id, *field, from.clone());
             }
+            Self::SetRelationshipViewLabel {
+                view_key, id, from, ..
+            } => {
+                set_view_label(workspace, view_key, id, from.clone());
+            }
         }
     }
 }
@@ -669,6 +689,17 @@ fn set_text(workspace: &mut Workspace, id: &Id, field: TextField, value: Option<
             TextField::Description => row.description = value,
             TextField::Technology => row.technology = value,
         }
+    }
+}
+
+/// Write one view's `RelationshipView.description` override (no-op when
+/// the view or its row is gone — an absent row is never recreated by an
+/// undo; delete sweeps own it).
+fn set_view_label(workspace: &mut Workspace, view_key: &str, id: &Id, value: Option<String>) {
+    if let Some(content) = content_of_key(workspace, view_key)
+        && let Some(row) = content.relationships.iter_mut().find(|r| r.id == *id)
+    {
+        row.description = value;
     }
 }
 
@@ -1065,7 +1096,6 @@ pub(crate) fn reconnect_relationship(
 /// Relabel `description`/`technology` on relationship `id`; an empty
 /// string clears the slot (the JSON omits absent slots). `None` when
 /// the id is unknown or the value would not change.
-#[allow(dead_code)] //: consumed by the details panel; the tests drive this meanwhile
 #[must_use]
 pub(crate) fn set_relationship_text(
     workspace: &Workspace,
@@ -1085,6 +1115,41 @@ pub(crate) fn set_relationship_text(
     Some(ModelCommand::SetRelationshipText {
         id: id.clone(),
         field,
+        from,
+        to,
+    })
+}
+
+/// Relabel the `description` override of `view_key`'s `RelationshipView`
+/// for `id` — the label THAT view paints (the model row is untouched).
+/// Empty text normalizes to absent; `None` when the view or its row is
+/// unknown (a view that does not show the relationship has nothing to
+/// override) or when the override already says `to`.
+#[must_use]
+pub(crate) fn set_relationship_view_label(
+    workspace: &Workspace,
+    view_key: &str,
+    id: &Id,
+    to: Option<String>,
+) -> Option<ModelCommand> {
+    let to = to.filter(|value| !value.is_empty());
+    let from = workspace
+        .views
+        .all_views()
+        .iter()
+        .find(|view| view.key() == view_key)?
+        .content()?
+        .relationships
+        .iter()
+        .find(|row| row.id == *id)?
+        .description
+        .clone();
+    if from == to {
+        return None;
+    }
+    Some(ModelCommand::SetRelationshipViewLabel {
+        view_key: view_key.to_owned(),
+        id: id.clone(),
         from,
         to,
     })
@@ -2903,6 +2968,56 @@ mod tests {
         assert!(
             set_relationship_text(&ws, &id(99), TextField::Description, Some("x".into())).is_none(),
             "unknown id"
+        );
+    }
+
+    #[test]
+    fn view_label_round_trips_and_clears() {
+        let ws = workspace();
+        // The fixture: L1 has a RelationshipView row for rel 3, Other
+        // does not show the relationship at all.
+        let cmd = set_relationship_view_label(&ws, "L1", &id(3), Some("sends".into())).unwrap();
+        let mut applied = ws.clone();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert_eq!(
+            applied
+                .views
+                .all_views()
+                .iter()
+                .find(|view| view.key() == "L1")
+                .and_then(|view| view.content())
+                .and_then(|content| content.relationships.iter().find(|row| row.id == id(3)))
+                .and_then(|row| row.description.as_deref()),
+            Some("sends")
+        );
+        cmd.undo(&mut applied, &mut HashMap::new());
+        assert_eq!(applied, ws, "undo restores the absent override");
+        // Empty text CLEARS the override.
+        let labeled = {
+            let mut w = ws.clone();
+            let content = content_of_key(&mut w, "L1").unwrap();
+            content.relationships[0].description = Some("sends".into());
+            w
+        };
+        let cmd = set_relationship_view_label(&labeled, "L1", &id(3), Some(String::new())).unwrap();
+        let ModelCommand::SetRelationshipViewLabel { to, from, .. } = &cmd else {
+            panic!("view-label edits build their own variant");
+        };
+        assert_eq!(*to, None, "empty normalizes to absent");
+        assert_eq!(from.as_deref(), Some("sends"));
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert!(
+            content_of_key(&mut applied, "L1").unwrap().relationships[0]
+                .description
+                .is_none()
+        );
+        // A view without the row, an unknown view and an unchanged
+        // override all refuse: nothing to override.
+        assert!(set_relationship_view_label(&ws, "Other", &id(3), Some("x".into())).is_none());
+        assert!(set_relationship_view_label(&ws, "Nope", &id(3), Some("x".into())).is_none());
+        assert!(
+            set_relationship_view_label(&labeled, "L1", &id(3), Some("sends".into())).is_none(),
+            "unchanged override"
         );
     }
 

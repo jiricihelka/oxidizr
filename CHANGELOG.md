@@ -31,9 +31,16 @@ release.
   to the opened `.json`. Workspaces backed by a DSL source never get
   model edits — the affordances stay hidden and Delete explains why in
   the status bar (the DSL text is never rewritten).
+- The viewer's right panel became a details panel: selecting a box shows
+  the element's stored tags, properties, description rendered as markdown,
+  and a clickable URL link; selecting an arrow on a plain `.json` source
+  adds editable Description, Technology and this-view label fields —
+  Enter or clicking away commits one undoable step, and clearing the text
+  clears the value.
 - The viewer's `gui` build gained a markdown rendering widget
-  (`egui_commonmark`, optional, `gui`-feature only); it becomes visible
-  with the help-overlay and documentation waves. The headless library and
+  (`egui_commonmark`, optional, `gui`-feature only); it renders the
+  description above and becomes visible with the help-overlay and
+  documentation waves too. The headless library and
   CLI dependency trees are unchanged.
 
 ### Changed

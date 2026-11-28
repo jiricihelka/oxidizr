@@ -171,6 +171,18 @@ struct Viewer {
     tag_sel: Vec<String>,
     /// Legend of the current scene (folded by [`key::legend`]).
     legend: key::Key,
+    /// Shared markdown cache of the details panel's `egui_commonmark`
+    /// renderer: ONE cache serves every rendered text (the crate keys
+    /// its internals per widget id itself).
+    md: egui_commonmark::CommonMarkCache,
+    /// Draft text of the details-panel field that currently holds
+    /// keyboard focus `(slot, text)` — the edit is committed as ONE
+    /// model command on Enter or focus-loss, so mid-typing never
+    /// touches the workspace. Only one field can focus at a time.
+    field_draft: Option<(FieldKey, String)>,
+    /// Field slots the details panel rendered this frame — a draft whose
+    /// field VANISHED (selection moved on) commits like a focus-loss.
+    field_seen: Vec<FieldKey>,
     /// Workspace file's directory — resolves file-path icon strings.
     base_dir: Option<PathBuf>,
     /// The single icon-atlas texture (uploaded when pixels change).
@@ -229,6 +241,20 @@ struct Viewer {
     /// Dialog engine choice — SESSION-only: the selection
     /// deliberately stays out of the persisted parameter string.
     layout_engine: layout::Engine,
+}
+
+/// Which editable text slot a details-panel field binds: a relationship's
+/// model `description`, its `technology`, or the `description` override
+/// of the current view's `RelationshipView` (keyed by the view it belongs
+/// to, so switching views can never commit a draft into the wrong one).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum FieldKey {
+    /// The model row's `description`.
+    Description(ModelId),
+    /// The model row's `technology`.
+    Technology(ModelId),
+    /// `view_key`'s `RelationshipView.description` override.
+    ViewLabel(String, ModelId),
 }
 
 /// The in-flight canvas interaction . The mode is decided at
@@ -376,6 +402,9 @@ impl Viewer {
             tag_mode: FilterMode::Exclude,
             tag_sel: Vec::new(),
             legend: key::Key::default(),
+            md: egui_commonmark::CommonMarkCache::default(),
+            field_draft: None,
+            field_seen: Vec::new(),
             base_dir: None,
             icon_texture: None,
             icon_uv: BTreeMap::new(),
@@ -477,6 +506,10 @@ impl Viewer {
         self.model_dirty = false;
         self.model_note = None;
         self.save_note = None;
+        // An in-flight field draft belongs to the OLD workspace — it
+        // dies with it, it never commits into the new one.
+        self.field_draft = None;
+        self.field_seen.clear();
         // New workspace, new source set: the driver dies with the old
         // one and the frame guard re-arms the watch from `display` +
         // `includes` on the next frame .

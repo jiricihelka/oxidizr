@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2+M3+M4 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core, canvas model ops — gates green each); NEXT = M5 details/inspector panel (markdown descriptions + editable edge fields). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2+M3+M4+M5 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core, canvas model ops, details panel — gates green each); NEXT = M6 help overlay (F1/? table from shortcuts.rs + tooltips + V6 audit). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -23,8 +23,9 @@
   shell split `shell/{mod,canvas,actions,panels,widgets,browser}.rs`.
   ALL edits funnel through `Viewer::edit_current_view` + `commands::History`;
   `Command` mutates only `LayoutOverlay` (P3-D4, amended by P6-D2).
-- `Viewer.workspace` is `Option<Arc<Workspace>>` → model commands run
-  `Arc::make_mut` + `rebuild_scene()`; new ids via
+- `Viewer.workspace` is `Option<Workspace>` (owned — M3 landed the model
+  commands mutating it directly) → `run_model_edit` +
+  `rebuild_scene()`; new ids via
   `oxidizr_core::ids::IdGenerator` re-registered from all ids (`found()` then
   `generate()` — the JSON reader's own dance).
 - Save: `shell/actions.rs::save_workspace` clones the workspace + applies
@@ -36,37 +37,39 @@
   M4); key handling in `shell/mod.rs::ui` (focus guard `text_focus`);
   tooltips `shell/widgets.rs::tooltip_text`. There is NO keybinding help
   anywhere today — `shortcuts.rs` (M0) becomes the single binding table.
-- egui_commonmark 0.26: `MarkdownUi::new(&mut markdown)` + `Markdown` state
-  objects cached on `Viewer` (content-keyed, capped); `load-images` OFF
-  (icons have their own pipeline).
+- egui_commonmark 0.26 (API verified in the vendored registry source):
+  `CommonMarkViewer::new().show(ui, &mut CommonMarkCache, text)` — ONE
+  shared `CommonMarkCache` on `Viewer` (the crate keys its internals per
+  widget id; the content-keyed capped `Markdown` objects were the OLDER
+  API — nothing to cap); `load-images` OFF (icons have their own pipeline).
 
 ## If a next session opens
 
-- **M0+M1+M2+M3+M4 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
-  canvas model ops LIVE — press chain order waypoint → insert dot →
-  endpoint handle → port dot (gated) in `shell/canvas.rs::press_mode`;
-  `Drag::Create`/`Drag::Reconnect` with transient preview lines (no
-  overlay writes — the preview==commit invariant stands); model edits
-  funnel through `Viewer::run_model_edit` (gate → factory → `run_model`
-  → `model_dirty` → repaint; created edges land SELECTED); gate =
-  `commands::model_editing_allowed` (pure path, headless V7 matrix test);
-  `PaintOptions.model_editing` hides endpoint squares on blocked
-  sources; Del = `delete_selected_edge` + Ctrl+Shift+K exclusive strip;
-  save fires on model OR geometry dirt, filtered-view block stays for
-  geometry-only, `model edited` chip + `model_note` in the status bar.
-  Interim `allow(dead_code)` marks REMOVED except `TextField`,
-  `SetRelationshipText` and `set_relationship_text` — **M5 (details
-  panel) constructs those and must REMOVE the three marks**.
-  125 viewer lib tests. Start wave **P6-M5** (details/inspector panel):
-  right panel above the legend — selected element facts + markdown
-  description (egui_commonmark, `Markdown` cache on `Viewer`,
-  content-keyed + capped), selected edge = editable description /
-  technology fields committing ONE `set_relationship_text` per
-  Enter/focus-loss (empty = None → clears), view-label override edit
-  later. M4 manual smoke (plain `.json`, run before close): port-drag
-  create + select lands, Ctrl+Z trace-free, endpoint reconnect, Del +
-  restore, DSL source = no dots/squares + blocked note, model-only save
-  from a filtered view, chip clears on save.
+- **M0+M1+M2+M3+M4+M5 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
+  details panel LIVE (`shell/panels.rs`): `selection_details()` builds an
+  owned `Details` snapshot (headless rows + `key::element` model facts +
+  edge `EdgeFields`), `info_block` renders element tags/properties/
+  MARKDOWN description (`Viewer.md` shared `CommonMarkCache`) + URL
+  hyperlink; an edge on a `.json` source gets Description/Technology/
+  ViewLabel fields — one `field_draft` at a time, commit = ONE
+  `run_model_edit` on Enter/focus-loss/field-vanished (`field_seen`
+  prune in `key_panel`), `ViewLabel` keyed by `(view_key, id)`.
+  Headless twin: `ModelCommand::SetRelationshipViewLabel` +
+  `set_relationship_view_label` factory + round-trip test; `key::element`
+  lookup + test. ALL interim `allow(dead_code)` marks are gone (only the
+  crate-level headless guard in `lib.rs` remains). 127 viewer lib tests.
+  Start wave **P6-M6** (help overlay): F1/`?` opens a centered
+  `egui::Window`/`Area` rendering `shortcuts::all()` sections; Esc closes
+  help BEFORE clearing selection (priority in `canvas_keys`); the
+  empty-canvas hint renders the same table; V6 audit = every table row
+  vs the actual handlers (the table is already current from M0); add
+  tooltips from the table where gestures are discoverable-poor.
+  Manual smoke (plain `.json`, run before close, M4+M5 lists):
+  port-drag create + select lands, Ctrl+Z trace-free, endpoint
+  reconnect, Del + restore, DSL source = no dots/squares + blocked note,
+  model-only save from a filtered view, chip clears on save; element
+  markdown/tags/props/link render; edge field Enter commits one undoable
+  step, ViewLabel changes only the current view's label.
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
   clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing

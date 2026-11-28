@@ -18,6 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use oxidizr_core::Id;
 use oxidizr_core::Workspace;
 use oxidizr_core::filter::{self, Included};
 use oxidizr_core::model::{DeploymentNode, Model, ModelItem, Relationship};
@@ -198,7 +199,7 @@ fn distinct_tags(tags: &Tags) -> Vec<String> {
 /// Visit EVERY element's [`ModelItem`] in model order: people, systems
 /// (+ containers + components), the deployment tree (nodes, children,
 /// infrastructure, instances) and custom elements.
-fn model_walk(model: &Model, visit: &mut impl FnMut(&ModelItem)) {
+pub(crate) fn model_walk<'a>(model: &'a Model, visit: &mut impl FnMut(&'a ModelItem)) {
     for person in &model.people {
         visit(&person.item);
     }
@@ -217,7 +218,7 @@ fn model_walk(model: &Model, visit: &mut impl FnMut(&ModelItem)) {
     }
 }
 
-fn walk_nodes(nodes: &[DeploymentNode], visit: &mut impl FnMut(&ModelItem)) {
+fn walk_nodes<'a>(nodes: &'a [DeploymentNode], visit: &mut impl FnMut(&'a ModelItem)) {
     for node in nodes {
         visit(&node.item);
         for infra in &node.infrastructure_nodes {
@@ -231,6 +232,19 @@ fn walk_nodes(nodes: &[DeploymentNode], visit: &mut impl FnMut(&ModelItem)) {
         }
         walk_nodes(&node.children, visit);
     }
+}
+
+/// The [`ModelItem`] with this id (`None` when the model holds no such
+/// element): the details panel's read side — stored tags, properties and
+/// the full description text, which the scene does not carry.
+pub(crate) fn element<'a>(model: &'a Model, id: &Id) -> Option<&'a ModelItem> {
+    let mut found = None;
+    model_walk(model, &mut |item| {
+        if found.is_none() && item.id == *id {
+            found = Some(item);
+        }
+    });
+    found
 }
 
 /// Evaluate the session chip selection ([`FilterMode`] + tag list)
@@ -294,6 +308,21 @@ mod tests {
             tags_.add(tag);
         }
         tags_
+    }
+
+    #[test]
+    fn element_finds_items_by_id() {
+        let ws = workspace();
+        // The walk reaches nested kinds (systems), not just people.
+        assert_eq!(
+            element(&ws.model, &id(4)).map(|item| item.name.as_str()),
+            Some("Bank")
+        );
+        assert_eq!(
+            element(&ws.model, &id(1)).map(|item| item.name.as_str()),
+            Some("Alice")
+        );
+        assert!(element(&ws.model, &id(99)).is_none());
     }
 
     fn rel(n: u32, from: u32, to: u32, tags: &[&str]) -> Relationship {
