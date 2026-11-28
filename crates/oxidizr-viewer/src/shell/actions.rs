@@ -12,10 +12,17 @@ use crate::{commands, export, icons, layout, paint, reload, scene};
 use eframe::egui;
 use oxidizr_api::{ApiOptions, Input, Opened};
 use oxidizr_core::Id as ModelId;
+use oxidizr_core::Workspace;
 use oxidizr_core::views::{AutomaticLayout, RankDirection, View};
 
 use super::widgets::{direction_label, summarize_log};
-use super::{Viewer, companion_dsl, newest_by_mtime};
+use super::{Viewer, newest_by_mtime};
+
+/// The status-bar line every model op shows when the source is not a
+/// plain `.json` (the DSL text is never rewritten, so its workspace
+/// stays model read-only — gate: [`commands::model_editing_allowed`]).
+const MODEL_BLOCKED: &str =
+    "model editing needs a plain .json source — the DSL file is never rewritten";
 
 impl Viewer {
     /// Run one editing command on the current view: apply through the
@@ -30,15 +37,89 @@ impl Viewer {
         self.rebuild_scene();
     }
 
+    /// Whether the open workspace may be MODEL-edited: a plain `.json`
+    /// source with no DSL sibling (gate: [`commands::model_editing_allowed`]).
+    /// Blocked affordances do not appear: no port dots, and Del on an
+    /// edge lands on the status note instead of a delete.
+    pub(super) fn can_edit_model(&self) -> bool {
+        self.workspace.is_some() && commands::model_editing_allowed(&self.display)
+    }
+
+    /// Run one headless MODEL factory and land its result as ONE
+    /// undoable step on the session stack (the model twin of
+    /// [`Self::edit_current_view`]): gate first (a blocked source only
+    /// sees [`MODEL_BLOCKED`]), then apply through [`commands::History::run_model`],
+    /// set `model_dirty` (the save rule follows it), repaint. A created
+    /// edge LANDS SELECTED — the route kit is on it immediately. A
+    /// `None` command (guard refused, nothing changes) leaves the scene
+    /// untouched and says nothing (the callers explain refusals).
+    pub(super) fn run_model_edit(
+        &mut self,
+        make: impl FnOnce(
+            &Workspace,
+            &HashMap<String, commands::LayoutOverlay>,
+        ) -> Option<commands::ModelCommand>,
+    ) -> bool {
+        self.model_note = None;
+        if !self.can_edit_model() {
+            self.model_note = Some(MODEL_BLOCKED.to_owned());
+            return false;
+        }
+        let command = match (&self.workspace, &self.overlays) {
+            (Some(workspace), overlays) => make(workspace, overlays),
+            (None, _) => None,
+        };
+        let Some(command) = command else {
+            return false;
+        };
+        let created = match &command {
+            commands::ModelCommand::CreateRelationship { relationship } => {
+                Some(relationship.id.clone())
+            }
+            _ => None,
+        };
+        if let Some(workspace) = &mut self.workspace {
+            self.history
+                .run_model(workspace, &mut self.overlays, command);
+        }
+        self.model_dirty = true;
+        if let Some(id) = created {
+            self.selection = Some(paint::Selection::Edge(id));
+            self.grabbed = None;
+        }
+        self.rebuild_scene();
+        true
+    }
+
+    /// Delete: remove the selected relationship from the model
+    /// (row + efferent list + every view row + overlay routes — the
+    /// factory's snapshot makes Ctrl+Z restore every position). A
+    /// blocked source only sees the status note; the selection and any
+    /// waypoint grab die with the edge.
+    pub(super) fn delete_selected_edge(&mut self) {
+        let Some(paint::Selection::Edge(id)) = self.selection.clone() else {
+            return;
+        };
+        let done = self.run_model_edit(move |workspace, overlays| {
+            commands::delete_relationship(workspace, overlays, &id)
+        });
+        if done {
+            self.selection = None;
+            self.grabbed = None;
+        }
+    }
+
     /// Save every dirty view's overlay into the workspace's stored
     /// geometry and write the JSON: the target comes from
     /// [`commands::save_target`] (opened `.json` in place, `<stem>.json`
     /// sidecar for DSL sources — the DSL text is never rewritten,
     ///), the bytes from the SHARED `oxidizr_json` writer through
     /// [`commands::write_workspace`] (temp+rename, posture). The
-    /// current view being FILTERED blocks the save: a filtered view has
-    /// no content of its own, its base view owns the layout (a silent
-    /// save there would write the wrong geometry or nothing). A failed
+    /// current view being FILTERED blocks a GEOMETRY-only save: a
+    /// filtered view has no content of its own, its base view owns the
+    /// layout (a silent save there would write the wrong geometry or
+    /// nothing) — a MODEL edit is view-independent, so a save carrying
+    /// one goes through from any view. A failed
     /// write keeps `dirty` — the note explains, the edit survives.
     pub(super) fn save_workspace(&mut self) {
         self.save_note = None;
@@ -46,7 +127,7 @@ impl Viewer {
             self.save_note = Some("nothing to save — open a workspace first".to_owned());
             return;
         };
-        if self.current_view_filtered() {
+        if !self.model_dirty && self.current_view_filtered() {
             self.save_note =
                 Some("save blocked: a filtered view has no layout of its own".to_owned());
             return;
@@ -61,8 +142,8 @@ impl Viewer {
             .filter(|key| self.overlays.contains_key(key.as_str()))
             .cloned()
             .collect();
-        if keys.is_empty() {
-            self.save_note = Some("nothing to save — no layout edits".to_owned());
+        if keys.is_empty() && !self.model_dirty {
+            self.save_note = Some("nothing to save — no edits".to_owned());
             return;
         }
         let mut applied = workspace.clone();
@@ -80,6 +161,7 @@ impl Viewer {
         match commands::write_workspace(&target, &applied) {
             Ok(()) => {
                 self.dirty.clear();
+                self.model_dirty = false;
                 self.save_note = Some(format!("saved {}", target.display()));
                 // Re-baseline the reload watch on the bytes we just
                 // wrote (and adopt the sidecar the save may have
@@ -177,7 +259,7 @@ impl Viewer {
         // The source DSL of an opened sidecar stays watched:
         // text edits must reach the window even while the sidecar is
         // the display.
-        set.extend(companion_dsl(&self.display));
+        set.extend(commands::companion_dsl(&self.display));
         set.extend(self.includes.iter().map(PathBuf::from));
         set
     }
@@ -195,7 +277,7 @@ impl Viewer {
         {
             candidates.push(sidecar);
         }
-        candidates.extend(companion_dsl(&self.display));
+        candidates.extend(commands::companion_dsl(&self.display));
         newest_by_mtime(&candidates).unwrap_or(display)
     }
 
@@ -337,6 +419,9 @@ impl Viewer {
                 self.rebuild_scene();
             }
             Some(commands::Stepped::Model) => {
+                // Stepping the model (forward or back) re-diverges it
+                // from the file: the save is owed either way.
+                self.model_dirty = true;
                 self.rebuild_scene();
             }
             None => {}

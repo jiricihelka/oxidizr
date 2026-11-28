@@ -93,6 +93,7 @@ fn perf_scene_rebuild_and_paint() {
             screen: ERect::from_min_max(pos2(0.0, 0.0), pos2(1920.0, 1080.0)),
             selection: None,
             hover_edge: None,
+            model_editing: false,
         };
         let start = Instant::now();
         for _ in 0..ROUNDS {
@@ -183,6 +184,7 @@ fn perf_paint_budget_200_elements() {
         screen: ERect::from_min_max(pos2(0.0, 0.0), pos2(1920.0, 1080.0)),
         selection: None,
         hover_edge: None,
+        model_editing: false,
     };
     let start = Instant::now();
     for _ in 0..ROUNDS {

@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2+M3 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core — gates green each); NEXT = M4 canvas model ops (the biggest shell diff: gate helper, port-drag CREATE, endpoint RECONNECT, Del flip, model_dirty + save rules). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2+M3+M4 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core, canvas model ops — gates green each); NEXT = M5 details/inspector panel (markdown descriptions + editable edge fields). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -42,24 +42,31 @@
 
 ## If a next session opens
 
-- **M0+M1+M2+M3 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
-  session `History` carries BOTH step kinds on one stack — `run_model` +
-  `Edit::Model`, `undo`/`redo` return `Stepped::Geometry(view)`/`Stepped::Model`
-  (shell `step_history`: geometry step → dirty + rebuild, model step →
-  rebuild; `run_model` + the not-yet-constructed `ModelCommand` surface
-  carry interim `#[allow(dead_code)]` marks — **M4 wires the canvas ops
-  and must REMOVE those marks**). `commands.rs` model helpers:
-  `create_relationship` (canonical row: no description, EMPTY stored tags,
-  shared-counter id, dup-guard on empty-description `a -> b`),
-  `delete_relationship` (exact-position snapshots incl. overlay routes),
-  `reconnect_relationship` (Source moves efferent-list membership),
-  `set_relationship_text` (empty → absent). 121 viewer lib tests. Start
-  wave **P6-M4** (canvas model ops): gate helper `model_editing_allowed`
-  (JSON source only — P6-D4, unit tests V7), port-dot-drag CREATE,
-  endpoint-square RECONNECT drag, Del = delete relationship (Ctrl+Shift+K
-  becomes the exclusive strip), `model_dirty` flag + save rule (P6-D8:
-  save fires on model-only dirt, DSL source never rewritten), CHANGELOG
-  Added lines land HERE (model editing becomes reachable).
+- **M0+M1+M2+M3+M4 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
+  canvas model ops LIVE — press chain order waypoint → insert dot →
+  endpoint handle → port dot (gated) in `shell/canvas.rs::press_mode`;
+  `Drag::Create`/`Drag::Reconnect` with transient preview lines (no
+  overlay writes — the preview==commit invariant stands); model edits
+  funnel through `Viewer::run_model_edit` (gate → factory → `run_model`
+  → `model_dirty` → repaint; created edges land SELECTED); gate =
+  `commands::model_editing_allowed` (pure path, headless V7 matrix test);
+  `PaintOptions.model_editing` hides endpoint squares on blocked
+  sources; Del = `delete_selected_edge` + Ctrl+Shift+K exclusive strip;
+  save fires on model OR geometry dirt, filtered-view block stays for
+  geometry-only, `model edited` chip + `model_note` in the status bar.
+  Interim `allow(dead_code)` marks REMOVED except `TextField`,
+  `SetRelationshipText` and `set_relationship_text` — **M5 (details
+  panel) constructs those and must REMOVE the three marks**.
+  125 viewer lib tests. Start wave **P6-M5** (details/inspector panel):
+  right panel above the legend — selected element facts + markdown
+  description (egui_commonmark, `Markdown` cache on `Viewer`,
+  content-keyed + capped), selected edge = editable description /
+  technology fields committing ONE `set_relationship_text` per
+  Enter/focus-loss (empty = None → clears), view-label override edit
+  later. M4 manual smoke (plain `.json`, run before close): port-drag
+  create + select lands, Ctrl+Z trace-free, endpoint reconnect, Del +
+  restore, DSL source = no dots/squares + blocked note, model-only save
+  from a filtered view, chip clears on save.
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
   clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing

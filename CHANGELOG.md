@@ -21,7 +21,16 @@ release.
   and route it in one move) and a square on each endpoint, the arrow
   keys nudge the selection by one grid step (Shift = 10×, the grabbed
   waypoint moves when an arrow route is being edited), and Ctrl+Shift+K
-  straightens the selected arrow alongside Delete.
+  straightens the selected arrow.
+- On plain `.json` sources the viewer canvas now edits relationships:
+  hovering a box shows four port dots, dragging one onto another box
+  creates a relationship (the new arrow lands selected), dragging an
+  endpoint square of the selected arrow reconnects that end, and Delete
+  removes the selected arrow. Every edit is undoable with Ctrl+Z, the
+  `model edited` chip marks unsaved model edits and Ctrl+S writes them
+  to the opened `.json`. Workspaces backed by a DSL source never get
+  model edits — the affordances stay hidden and Delete explains why in
+  the status bar (the DSL text is never rewritten).
 - The viewer's `gui` build gained a markdown rendering widget
   (`egui_commonmark`, optional, `gui`-feature only); it becomes visible
   with the help-overlay and documentation waves. The headless library and
@@ -33,6 +42,8 @@ release.
   one stack per view: Ctrl+Z walks back through edits made in other views
   too (the step remembers its view), matching how the edits around a
   shared relationship will have to undo as one story.
+- Delete/Backspace on a selected arrow now deletes the relationship; the
+  waypoint-strip it used to perform belongs to Ctrl+Shift+K alone.
 
 ## [0.5.0] - 2026-11-26
 

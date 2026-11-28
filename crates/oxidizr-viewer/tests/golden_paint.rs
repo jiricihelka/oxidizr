@@ -55,6 +55,7 @@ fn paint_first_view(topic: &str, scheme: ColorScheme) -> (scene::Scene, Vec<Shap
                 screen: ERect::from_min_max(pos2(0.0, 0.0), pos2(1200.0, 800.0)),
                 selection: None,
                 hover_edge: None,
+                model_editing: false,
             },
         )
     };

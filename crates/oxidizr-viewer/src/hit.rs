@@ -245,6 +245,54 @@ pub(crate) fn nearest_midpoint(
         .map(|(index, _)| index)
 }
 
+/// The four PORT points of an element box — the top/right/bottom/left
+/// side midpoints where a relationship-create drag starts (the shell
+/// paints dots there on hover).
+#[must_use]
+pub(crate) fn ports(rect: Rect) -> [(f64, f64); 4] {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    [
+        (cx, rect.y),
+        (rect.x + rect.width, cy),
+        (cx, rect.y + rect.height),
+        (rect.x, cy),
+    ]
+}
+
+/// The PORT of `rect` (see [`ports`]) sitting within `tol` world units of
+/// `point` — the create-drag press hit. The nearest port wins;
+/// `None` = no port pressed.
+#[must_use]
+pub(crate) fn nearest_port(point: (f64, f64), rect: Rect, tol: f64) -> Option<(f64, f64)> {
+    ports(rect)
+        .into_iter()
+        .map(|port| (distance(point, port), port))
+        .min_by(|(a, _), (b, _)| a.total_cmp(b))
+        .filter(|(at, _)| *at <= tol)
+        .map(|(_, port)| port)
+}
+
+/// Index of the polyline END pressed within `tol` world units — `0` (the
+/// source end) or `points.len() - 1` (the destination end), the reconnect
+/// grab of the selected edge. `None` when no end is pressed or the route
+/// is degenerate; a fully collapsed route reports the source end.
+#[must_use]
+pub(crate) fn nearest_endpoint(
+    point: (f64, f64),
+    points: &[(f64, f64)],
+    tol: f64,
+) -> Option<usize> {
+    if points.len() < 2 {
+        return None;
+    }
+    let last = points.len() - 1;
+    if distance(point, points[0]) <= tol {
+        return Some(0);
+    }
+    (distance(point, points[last]) <= tol).then_some(last)
+}
+
 /// Where a new vertex splices into `points`: the start of the segment
 /// nearest to `point` (a straight two-point edge inserts at 1; fewer
 /// than two points have nothing to split — the append index comes back).
@@ -602,6 +650,66 @@ mod tests {
         // the point sits within reach of both).
         let bent = [(0.0, 0.0), (4.0, 0.0), (8.0, 0.0)];
         assert_eq!(nearest_midpoint((4.5, 0.5), &bent, 6.0), Some(1));
+    }
+
+    #[test]
+    fn ports_are_the_four_side_midpoints() {
+        let rect = Rect {
+            x: 10.0,
+            y: 10.0,
+            width: 100.0,
+            height: 60.0,
+        };
+        assert_eq!(
+            ports(rect),
+            [(60.0, 10.0), (110.0, 40.0), (60.0, 70.0), (10.0, 40.0)]
+        );
+    }
+
+    #[test]
+    fn nearest_port_hits_the_side_midpoints() {
+        let rect = Rect {
+            x: 10.0,
+            y: 10.0,
+            width: 100.0,
+            height: 60.0,
+        };
+        // The top port is (60, 10): within tolerance → THE port.
+        assert_eq!(nearest_port((61.0, 10.5), rect, 6.0), Some((60.0, 10.0)));
+        assert_eq!(nearest_port((10.0, 41.0), rect, 6.0), Some((10.0, 40.0)));
+        // Out of tolerance → None; the box CENTRE is not a port.
+        assert_eq!(nearest_port((60.0, 40.0), rect, 6.0), None);
+        assert_eq!(nearest_port((100.0, 10.0), rect, 6.0), None);
+        // The NEARER of two in-tolerance ports wins (a tiny box: all four
+        // ports within reach of one corner press).
+        let tiny = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 8.0,
+            height: 8.0,
+        };
+        assert_eq!(nearest_port((4.5, 0.5), tiny, 6.0), Some((4.0, 0.0)));
+    }
+
+    #[test]
+    fn nearest_endpoint_hits_only_the_ends() {
+        let line = [(0.0, 0.0), (50.0, 25.0), (100.0, 0.0)];
+        // Source end → index 0; destination end → the LAST index.
+        assert_eq!(nearest_endpoint((1.0, 1.0), &line, 6.0), Some(0));
+        assert_eq!(nearest_endpoint((99.0, 1.0), &line, 6.0), Some(2));
+        // The interior vertex is a waypoint, not an end; the middle of a
+        // segment is neither.
+        assert_eq!(nearest_endpoint((50.0, 25.0), &line, 6.0), None);
+        assert_eq!(nearest_endpoint((25.0, 12.0), &line, 6.0), None);
+        // Out of tolerance → None; degenerate routes have no ends.
+        assert_eq!(nearest_endpoint((10.0, 10.0), &line, 6.0), None);
+        assert_eq!(nearest_endpoint((0.0, 0.0), &[], 6.0), None);
+        assert_eq!(nearest_endpoint((0.0, 0.0), &[(0.0, 0.0)], 6.0), None);
+        // A fully collapsed straight route: the source end wins the tie.
+        assert_eq!(
+            nearest_endpoint((0.0, 0.0), &[(0.0, 0.0), (0.0, 0.0)], 6.0),
+            Some(0)
+        );
     }
 
     #[test]

@@ -101,6 +101,10 @@ pub struct PaintOptions<'a> {
     ///): hovering advertises the handles, so they can be dragged
     /// or Alt+deleted before the edge is even selected.
     pub hover_edge: Option<&'a Id>,
+    /// Whether the source allows MODEL edits: the route kit paints its
+    /// ENDPOINT squares (the reconnect grabs) only when true — a
+    /// blocked affordance must not appear.
+    pub model_editing: bool,
 }
 
 /// Paint one scene into a shape list, background first, then boundaries,
@@ -337,7 +341,7 @@ fn paint_edge(
     // endpoint squares, see [`paint_route_kit`]). Hover does NOT paint
     // it: the kit serves the one route being edited.
     if selected && points.len() >= 2 {
-        paint_route_kit(out, &points);
+        paint_route_kit(out, &points, options.model_editing);
     }
     let px = scaled_px(edge.font_size, viewport);
     let label_at = point_at(
@@ -383,10 +387,10 @@ fn paint_edge(
 
 /// The route-editing kit of the SELECTED edge: a white insert dot with
 /// an accent rim at every SEGMENT midpoint (press-drag = insert a
-/// waypoint and route it in one move), and one accent square per
-/// ENDPOINT (the reconnect grabs — painted ahead of the wave that
-/// drags them). Sizes are screen px, like the waypoint handles.
-fn paint_route_kit(out: &mut Vec<Shape>, points: &[Pos2]) {
+/// waypoint and route it in one move), and — on model-editing sources —
+/// one accent square per ENDPOINT (the reconnect grabs). Sizes are
+/// screen px, like the waypoint handles.
+fn paint_route_kit(out: &mut Vec<Shape>, points: &[Pos2], endpoints: bool) {
     let accent = Stroke::new(1.0, SELECTION_COLOR);
     for segment in points.windows(2) {
         let mid = pos2(
@@ -395,6 +399,9 @@ fn paint_route_kit(out: &mut Vec<Shape>, points: &[Pos2]) {
         );
         out.push(Shape::circle_filled(mid, INSERT_DOT_PX, Color32::WHITE));
         out.push(Shape::circle_stroke(mid, INSERT_DOT_PX, accent));
+    }
+    if !endpoints {
+        return;
     }
     for at in [points[0], points[points.len() - 1]] {
         let rect = ERect::from_center_size(at, Vec2::splat(ENDPOINT_HANDLE_PX * 2.0));
@@ -1092,6 +1099,7 @@ mod tests {
                 screen: erct(-100.0, -100.0, 2000.0, 1500.0),
                 selection,
                 hover_edge,
+                model_editing: true,
             },
         )
     }
@@ -1190,9 +1198,31 @@ mod tests {
         assert_eq!(squares(&painted_with(&s, None, Some(&id))), 0);
         // Selected: one white dot per SEGMENT (2), one square per
         // ENDPOINT (2).
-        let picked = painted(&s, Some(&Selection::Edge(id)));
+        let picked = painted(&s, Some(&Selection::Edge(id.clone())));
         assert_eq!(white_circles(&picked), 2, "one insert dot per segment");
         assert_eq!(squares(&picked), 2, "an endpoint square at both ends");
+
+        // Blocked source: the insert dots stay (route editing works
+        // everywhere) — the RECONNECT squares do not appear.
+        let mut fonts = Fonts::new(TextOptions::default(), FontDefinitions::default());
+        let mut view = fonts.with_pixels_per_point(10.0);
+        let blocked = paint_scene(
+            &s,
+            &Viewport::new(1.0, (0.0, 0.0)),
+            &mut view,
+            &PaintOptions {
+                screen: erct(-100.0, -100.0, 2000.0, 1500.0),
+                selection: Some(&Selection::Edge(id)),
+                hover_edge: None,
+                model_editing: false,
+            },
+        );
+        assert_eq!(white_circles(&blocked), 2, "insert dots survive the gate");
+        assert_eq!(
+            squares(&blocked),
+            0,
+            "no reconnect grab on a blocked source"
+        );
     }
 
     #[test]

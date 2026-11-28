@@ -78,6 +78,21 @@ impl Viewer {
                     )
                     .on_hover_text(note.clone());
                 }
+                if self.model_dirty {
+                    // Unsaved MODEL edits — the write clears it with the
+                    // geometry dots (one Ctrl+S carries both).
+                    ui.label(
+                        egui::RichText::new("model edited")
+                            .color(egui::Color32::from_rgb(160, 130, 0)),
+                    )
+                    .on_hover_text("Ctrl+S writes the model edits to the opened .json");
+                }
+                if let Some(note) = &self.model_note {
+                    // Refused or blocked model ops (read-only source,
+                    // duplicate arrow): always a refusal, always red.
+                    ui.colored_label(egui::Color32::DARK_RED, truncate(note, 90))
+                        .on_hover_text(note.clone());
+                }
                 if let Some(error) = self
                     .open_error
                     .as_ref()

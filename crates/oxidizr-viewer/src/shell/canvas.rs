@@ -10,6 +10,14 @@ use oxidizr_core::Id as ModelId;
 use super::widgets::{lasso_drag, tooltip_text, url_at};
 use super::{Drag, InsertDotHit, Viewer, WaypointHit};
 
+/// World px → egui screen px for the canvas overlays painted by hand
+/// (preview line, port dots): the screen is the display resolution —
+/// truncation cannot lose what the pixels can show.
+#[allow(clippy::cast_possible_truncation)]
+fn to_pos(at: (f64, f64)) -> Pos2 {
+    egui::pos2(at.0 as f32, at.1 as f32)
+}
+
 impl Viewer {
     #[allow(clippy::too_many_lines)] // the canvas pass: input → fit → paint → tip
     pub(super) fn canvas(&mut self, ui: &mut egui::Ui) {
@@ -230,6 +238,60 @@ impl Viewer {
                     self.edit_current_view(command);
                 }
             }
+            Drag::Create { source, from } => {
+                if response.dragged() {
+                    // Nothing mutates during the drag — the preview
+                    // line paints from the ARMED state below, so the
+                    // arm is a pure hold.
+                    self.drag = Drag::Create { source, from };
+                } else if release {
+                    // Released: onto another element the CREATE lands
+                    // (the funnel selects the new edge); onto empty
+                    // canvas or the source itself it cancels silently —
+                    // a refused duplicate says why in the status bar.
+                    let target =
+                        cursor.and_then(|pos| self.item_at((f64::from(pos.x), f64::from(pos.y))));
+                    if let Some(target) = target.filter(|target| *target != source) {
+                        let (src, dst) = (source.clone(), target.clone());
+                        let done = self.run_model_edit(move |workspace, _| {
+                            commands::create_relationship(workspace, &src, &dst)
+                        });
+                        if !done && self.can_edit_model() {
+                            self.model_note = Some(format!(
+                                "create blocked: {source} → {target} is already connected \
+                                 without a description"
+                            ));
+                        }
+                    }
+                }
+            }
+            Drag::Reconnect { id, endpoint } => {
+                if response.dragged() {
+                    self.drag = Drag::Reconnect { id, endpoint };
+                } else if release {
+                    // Released: onto an element the END moves there
+                    // (factory-gated: no-ops and own-end drops are
+                    // silent); onto empty canvas the arrow stays put.
+                    if let Some(target) =
+                        cursor.and_then(|pos| self.item_at((f64::from(pos.x), f64::from(pos.y))))
+                    {
+                        let same =
+                            self.edge_ends(&id)
+                                .map(|(source, destination)| match endpoint {
+                                    commands::Endpoint::Source => source,
+                                    commands::Endpoint::Destination => destination,
+                                });
+                        let (edge, to) = (id.clone(), target.clone());
+                        let done = self.run_model_edit(move |workspace, _| {
+                            commands::reconnect_relationship(workspace, &edge, endpoint, &to)
+                        });
+                        if !done && self.can_edit_model() && same.as_ref() != Some(&target) {
+                            self.model_note =
+                                Some(format!("reconnect blocked: {id} cannot point at {target}"));
+                        }
+                    }
+                }
+            }
         }
         // gestures, split by scroll UNIT (winit reports the
         // mouse WHEEL in Line/Page notches and touchpad scroll/pinch in
@@ -357,6 +419,7 @@ impl Viewer {
                 screen: rect,
                 selection: self.selection.as_ref(),
                 hover_edge: hover_edge.as_ref(),
+                model_editing: self.can_edit_model(),
             };
             let shapes =
                 ctx.fonts_mut(|fonts| paint::paint_scene(scene, &self.viewport, fonts, &options));
@@ -406,6 +469,43 @@ impl Viewer {
                 egui::Stroke::new(1.0, paint::SELECTION_COLOR),
                 egui::StrokeKind::Inside,
             );
+        }
+        //: model-op affordances (model-editing sources only): PORT dots
+        // on the hovered box — the create-drag grabs — and, while a
+        // create/reconnect drag runs, its transient preview line plus an
+        // accent rim on the hovered drop target. Drawing only: no edit
+        // exists before the release, so the overlay never sees a
+        // preview it would have to commit.
+        if let Some(scene) = self.scene.as_ref().filter(|_| self.can_edit_model()) {
+            let hover_item = self.hover.and_then(|hover| match hover {
+                hit::Hit::Item(index) => scene.items.get(index),
+                hit::Hit::Edge(_) => None,
+            });
+            if matches!(self.drag, Drag::Create { .. } | Drag::Reconnect { .. }) {
+                if let (Some(from), Some(pos)) = (self.drag_preview_from(), cursor) {
+                    let from = to_pos(self.viewport.world_to_screen(from));
+                    painter
+                        .line_segment([from, pos], egui::Stroke::new(1.5, paint::SELECTION_COLOR));
+                    if let Some(item) = hover_item {
+                        painter.rect_stroke(
+                            paint::to_screen_rect(item.rect, &self.viewport),
+                            0.0,
+                            egui::Stroke::new(2.0, paint::SELECTION_COLOR),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                }
+            } else if let Some(item) = hover_item {
+                for port in hit::ports(item.rect) {
+                    let at = to_pos(self.viewport.world_to_screen(port));
+                    painter.circle_filled(at, paint::INSERT_DOT_PX, egui::Color32::WHITE);
+                    painter.circle_stroke(
+                        at,
+                        paint::INSERT_DOT_PX,
+                        egui::Stroke::new(1.0, paint::SELECTION_COLOR),
+                    );
+                }
+            }
         }
         //: minimap (the navigator.jspf analogue) — the whole
         // scene overview + the live viewport rect, bottom-right. The
@@ -460,11 +560,14 @@ impl Viewer {
     /// waypoint handle of the SELECTED edge grabs FIRST (Alt+press
     /// deletes that vertex, a plain press drags it), then a segment-
     /// midpoint INSERT dot of the selected edge starts an
-    /// insert-and-route drag, then a box under the cursor begins a group
-    /// MOVE (the box joins the selection first; Shift keeps the group, a
-    /// plain press elsewhere selects just it), anything else PANS (: the
-    /// LASSO moved to the right button and never hit-tests). `ctrl`
-    /// detaches the carried arrow handles from the move .
+    /// insert-and-route drag, then — on model-editing sources — an
+    /// ENDPOINT handle of the selected edge (reconnect drag) and a PORT
+    /// dot of a box (create drag), then a box under the cursor begins a
+    /// group MOVE (the box joins the selection first; Shift keeps the
+    /// group, a plain press elsewhere selects just it), anything else
+    /// PANS (: the LASSO
+    /// moved to the right button and never hit-tests). `ctrl` detaches
+    /// the carried arrow handles from the move .
     fn press_mode(&mut self, origin: Pos2, shift: bool, alt: bool, ctrl: bool) -> Drag {
         let screen = (f64::from(origin.x), f64::from(origin.y));
         if let Some((id, mut from, index)) = self.waypoint_hit(screen) {
@@ -501,6 +604,22 @@ impl Viewer {
                 press: self.viewport.screen_to_world(screen),
                 delta: (0.0, 0.0),
             };
+        }
+        // Then an ENDPOINT handle of the selected edge: press-drag onto
+        // an element RECONNECTS that end (model-editing sources only —
+        // blocked sources keep the plain box press).
+        if self.can_edit_model()
+            && let Some((id, endpoint)) = self.endpoint_handle_hit(screen)
+        {
+            return Drag::Reconnect { id, endpoint };
+        }
+        // Then a PORT dot (a box side midpoint): press-drag onto another
+        // element CREATES a relationship (the dots paint on the hovered
+        // box only, and only for model-editing sources).
+        if self.can_edit_model()
+            && let Some((source, from)) = self.port_hit(screen)
+        {
+            return Drag::Create { source, from };
         }
         let picked = self
             .scene
@@ -663,6 +782,92 @@ impl Viewer {
         ))
     }
 
+    /// Press on an ENDPOINT handle of the SELECTED edge (the squares
+    /// the route kit paints there): within [`hit::HIT_TOLERANCE_PX`]
+    /// screen px of one polyline end. Maps the hit end onto the model
+    /// endpoint it drags.
+    fn endpoint_handle_hit(&self, screen: (f64, f64)) -> Option<(ModelId, commands::Endpoint)> {
+        let id = match &self.selection {
+            Some(paint::Selection::Edge(id)) => id.clone(),
+            _ => return None,
+        };
+        let scene = self.scene.as_ref()?;
+        let edge = scene.edges.iter().find(|edge| edge.id == id)?;
+        let world = self.viewport.screen_to_world(screen);
+        let tol = hit::HIT_TOLERANCE_PX / self.viewport.scale();
+        let end = hit::nearest_endpoint(world, &edge.points, tol)?;
+        Some((
+            id,
+            if end == 0 {
+                commands::Endpoint::Source
+            } else {
+                commands::Endpoint::Destination
+            },
+        ))
+    }
+
+    /// Press on a PORT dot (a box side midpoint, [`hit::ports`]) — the
+    /// dots paint on the hovered box, and a press near another box's
+    /// port is that box's press (nearest port per box, first box in
+    /// content order wins). Returns the element plus the pressed port
+    /// (world px, where the preview line starts).
+    fn port_hit(&self, screen: (f64, f64)) -> Option<(ModelId, (f64, f64))> {
+        let scene = self.scene.as_ref()?;
+        let world = self.viewport.screen_to_world(screen);
+        let tol = hit::HIT_TOLERANCE_PX / self.viewport.scale();
+        scene.items.iter().find_map(|item| {
+            hit::nearest_port(world, item.rect, tol).map(|at| (item.id.clone(), at))
+        })
+    }
+
+    /// The element under a screen point — the create/reconnect drop
+    /// target (an edge press is not a drop).
+    fn item_at(&self, screen: (f64, f64)) -> Option<ModelId> {
+        let scene = self.scene.as_ref()?;
+        let index = match hit::pick(scene, self.viewport, screen)? {
+            hit::Hit::Item(index) => index,
+            hit::Hit::Edge(_) => return None,
+        };
+        scene.items.get(index).map(|item| item.id.clone())
+    }
+
+    /// The model ends of a scene edge — the elements an endpoint drag
+    /// already points at (a drop there is a silent no-op). `None` when
+    /// the edge has left the scene.
+    fn edge_ends(&self, id: &ModelId) -> Option<(ModelId, ModelId)> {
+        self.scene
+            .as_ref()?
+            .edges
+            .iter()
+            .find(|edge| &edge.id == id)
+            .map(|edge| (edge.source.clone(), edge.destination.clone()))
+    }
+
+    /// The fixed end of the create/reconnect preview line (world px):
+    /// the pressed port, or the endpoint the selected edge paints
+    /// today. `None` = no model drag armed (or its edge is gone).
+    fn drag_preview_from(&self) -> Option<(f64, f64)> {
+        match &self.drag {
+            Drag::Create { from, .. } => Some(*from),
+            Drag::Reconnect { id, endpoint } => {
+                let points = self
+                    .scene
+                    .as_ref()?
+                    .edges
+                    .iter()
+                    .find(|edge| &edge.id == id)?
+                    .points
+                    .as_slice();
+                match endpoint {
+                    commands::Endpoint::Source => points.first(),
+                    commands::Endpoint::Destination => points.last(),
+                }
+                .copied()
+            }
+            _ => None,
+        }
+    }
+
     /// Arrow-key nudge: one step (`dx`/`dy` in world px, multiples of
     /// [`commands::GRID_PX`]) moves the GRABBED waypoint of the still-
     /// selected edge, else the selected ELEMENTS (enclosed routes
@@ -716,11 +921,12 @@ impl Viewer {
         }
     }
 
-    /// Delete/Backspace or Ctrl+Shift+K on the selected edge: drop ALL
+    /// Ctrl+Shift+K on the selected edge: drop ALL
     /// its interior waypoints — the inverse of double-click insert, one
     /// history step so Ctrl+Z restores the route. `set_waypoints(..,
     /// vec![])` straightens (the "remove vertices" edit); a plain
-    /// click-select or hover keeps every other state intact.
+    /// click-select or hover keeps every other state intact. (Del went
+    /// to deleting the relationship itself once model editing landed.)
     pub(super) fn clear_selected_waypoints(&mut self) {
         let Some(paint::Selection::Edge(id)) = self.selection.clone() else {
             return;

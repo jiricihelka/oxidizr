@@ -197,6 +197,12 @@ struct Viewer {
     grabbed: Option<(ModelId, usize)>,
     /// Views edited since the last adopt (dirty marker; save).
     dirty: BTreeSet<String>,
+    /// Unsaved MODEL edits (create / delete / reconnect / relabel) —
+    /// separate from the geometry dirty set; one write clears both.
+    model_dirty: bool,
+    /// Last model-op outcome line (status bar, red): blocked source,
+    /// refused duplicate. Cleared by the next attempt and by any adopt.
+    model_note: Option<String>,
     /// Last Save outcome line: green in the status bar, cleared
     /// by the next save attempt and by any adopt.
     save_note: Option<String>,
@@ -297,6 +303,27 @@ enum Drag {
         /// Latest preview delta (world px); release commits exactly it.
         delta: (f64, f64),
     },
+    /// Press began on a PORT dot (a box side midpoint) of an element:
+    /// dragging onto another element CREATES a `source → destination`
+    /// relationship when released there (Esc / empty release cancels; the
+    /// new edge lands selected). The preview is a transient line drawn
+    /// over the canvas — the overlay never sees it, so the geometry
+    /// preview==commit invariant is untouched.
+    Create {
+        /// The pressed element (the new relationship's source).
+        source: ModelId,
+        /// The pressed port (world px) — the preview line starts here.
+        from: (f64, f64),
+    },
+    /// Press began on an ENDPOINT handle of the selected edge: dragging
+    /// onto an element moves that END when released there (empty release
+    /// cancels). Transient preview line, same invariant as [`Self::Create`].
+    Reconnect {
+        /// The selected edge whose endpoint moves.
+        id: ModelId,
+        /// Which end the press grabbed.
+        endpoint: commands::Endpoint,
+    },
     /// Press began INSIDE the minimap box: every frame the
     /// pointer position re-centers the viewport (click = one recenter,
     /// drag = continuous). No scene edit, no history entry.
@@ -359,6 +386,8 @@ impl Viewer {
             drag: Drag::Idle,
             grabbed: None,
             dirty: BTreeSet::new(),
+            model_dirty: false,
+            model_note: None,
             save_note: None,
             includes: Vec::new(),
             reload: None,
@@ -445,6 +474,8 @@ impl Viewer {
         self.history.reset();
         self.grabbed = None;
         self.dirty.clear();
+        self.model_dirty = false;
+        self.model_note = None;
         self.save_note = None;
         // New workspace, new source set: the driver dies with the old
         // one and the frame guard re-arms the watch from `display` +
@@ -655,6 +686,83 @@ impl Viewer {
             egui::Visuals::light()
         });
     }
+
+    /// The keyboard leg of one frame: Escape, then the canvas chords.
+    /// Undo/redo: Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk the SESSION
+    /// history — the step carries its view, so undoing can land on a
+    /// view the user has since switched away from. Skipped while the
+    /// toolbar path field owns the keyboard (Ctrl+Z inside the path
+    /// edit is egui's). Ctrl+S saves under the same focus guard.
+    fn canvas_keys(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            //: Esc cancels an in-flight model drag first — its preview is
+            // transient (no overlay write), so cancelling is dropping the
+            // drag; the selection clear below stays the second duty.
+            if matches!(self.drag, Drag::Create { .. } | Drag::Reconnect { .. }) {
+                self.drag = Drag::Idle;
+            }
+            self.selection = None;
+            self.grabbed = None;
+        }
+        if self.scene.is_none() || self.text_focus {
+            return;
+        }
+        let (undo, redo, save) = ctx.input(|i| {
+            let command = i.modifiers.command;
+            let z = i.key_pressed(egui::Key::Z);
+            (
+                command && z && !i.modifiers.shift,
+                (command && z && i.modifiers.shift) || (command && i.key_pressed(egui::Key::Y)),
+                command && i.key_pressed(egui::Key::S),
+            )
+        });
+        if save {
+            self.save_workspace();
+        }
+        if undo {
+            self.step_history(false);
+        } else if redo {
+            self.step_history(true);
+        }
+        // Delete/Backspace DELETES the selected relationship (undoable
+        // model edit; blocked sources only see the status note).
+        // Ctrl+Shift+K owns the waypoint-strip chord alone — Del kept
+        // that meaning until the model ops landed.
+        let (del, straighten) = ctx.input(|i| {
+            (
+                i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
+                i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::K),
+            )
+        });
+        if del {
+            self.delete_selected_edge();
+        }
+        if straighten {
+            self.clear_selected_waypoints();
+        }
+        // Arrow keys: nudge by one grid step (Shift = 10x) — the
+        // GRABBED waypoint of the selected edge if there is one,
+        // else the selected elements (enclosed routes follow).
+        let nudge = ctx.input(|i| {
+            let step = if i.modifiers.shift { 10.0 } else { 1.0 };
+            let mut nudge = (0.0, 0.0);
+            for (key, (dx, dy)) in [
+                (egui::Key::ArrowLeft, (-1.0, 0.0)),
+                (egui::Key::ArrowRight, (1.0, 0.0)),
+                (egui::Key::ArrowUp, (0.0, -1.0)),
+                (egui::Key::ArrowDown, (0.0, 1.0)),
+            ] {
+                if i.key_pressed(key) {
+                    nudge.0 += dx * step;
+                    nudge.1 += dy * step;
+                }
+            }
+            nudge
+        });
+        if nudge != (0.0, 0.0) {
+            self.nudge_selection(nudge.0 * commands::GRID_PX, nudge.1 * commands::GRID_PX);
+        }
+    }
 }
 
 impl eframe::App for Viewer {
@@ -700,69 +808,7 @@ impl eframe::App for Viewer {
         {
             self.restart_watch();
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            self.selection = None;
-            self.grabbed = None;
-        }
-        // Undo/redo: Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk the SESSION
-        // history — the step carries its view, so undoing can land on a
-        // view the user has since switched away from. Skipped while the
-        // toolbar path field owns the keyboard (Ctrl+Z inside the path
-        // edit is egui's). Ctrl+S saves under the same focus guard.
-        if self.scene.is_some() && !self.text_focus {
-            let (undo, redo, save) = ctx.input(|i| {
-                let command = i.modifiers.command;
-                let z = i.key_pressed(egui::Key::Z);
-                (
-                    command && z && !i.modifiers.shift,
-                    (command && z && i.modifiers.shift) || (command && i.key_pressed(egui::Key::Y)),
-                    command && i.key_pressed(egui::Key::S),
-                )
-            });
-            if save {
-                self.save_workspace();
-            }
-            if undo {
-                self.step_history(false);
-            } else if redo {
-                self.step_history(true);
-            }
-            // Delete/Backspace: strip the selected
-            // edge's handles — the discoverable counterpart of the
-            // Alt+click-per-handle and double-click-to-insert bindings.
-            // Ctrl+Shift+K is the explicit straighten chord (Del flips
-            // to deleting the relationship when model editing lands).
-            let del = ctx.input(|i| {
-                i.key_pressed(egui::Key::Delete)
-                    || i.key_pressed(egui::Key::Backspace)
-                    || (i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::K))
-            });
-            if del {
-                self.clear_selected_waypoints();
-            }
-            // Arrow keys: nudge by one grid step (Shift = 10x) — the
-            // GRABBED waypoint of the selected edge if there is one,
-            // else the selected elements (enclosed routes follow).
-            let nudge = ctx.input(|i| {
-                let step = if i.modifiers.shift { 10.0 } else { 1.0 };
-                let mut nudge = (0.0, 0.0);
-                for (key, (dx, dy)) in [
-                    (egui::Key::ArrowLeft, (-1.0, 0.0)),
-                    (egui::Key::ArrowRight, (1.0, 0.0)),
-                    (egui::Key::ArrowUp, (0.0, -1.0)),
-                    (egui::Key::ArrowDown, (0.0, 1.0)),
-                ] {
-                    if i.key_pressed(key) {
-                        nudge.0 += dx * step;
-                        nudge.1 += dy * step;
-                    }
-                }
-                nudge
-            });
-            if nudge != (0.0, 0.0) {
-                self.nudge_selection(nudge.0 * commands::GRID_PX, nudge.1 * commands::GRID_PX);
-            }
-        }
+        self.canvas_keys(&ctx);
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status(ui));
         if self.workspace.is_some() {
@@ -821,22 +867,6 @@ fn open_target(raw: &str) -> PathBuf {
         }
         _ => given,
     }
-}
-
-/// The `.dsl` sibling of an opened sidecar JSON: when the
-/// viewer's own sidecar is the display, its source DSL stays watched
-/// so later text edits still reach the window. Exact stem, the
-/// lowercase extension `save_target` writes; no sibling ⇒ `None`.
-fn companion_dsl(display: &str) -> Option<PathBuf> {
-    let path = Path::new(display);
-    if !path
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-    {
-        return None;
-    }
-    let dsl = path.with_extension("dsl");
-    dsl.exists().then_some(dsl)
 }
 
 /// File mtime, `None` when un-stat-able.

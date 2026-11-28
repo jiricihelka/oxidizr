@@ -269,8 +269,6 @@ pub(crate) enum Edit {
     /// routes, e.g. a delete), so undo/redo receive both. Boxed: the
     /// delete snapshot (row + per-view rows + routes) outweighs a
     /// geometry step, and the stack stores thousands of steps.
-    //: the canvas model ops construct this next; the tests drive it meanwhile.
-    #[allow(dead_code)]
     Model(Box<ModelCommand>),
 }
 
@@ -322,9 +320,6 @@ impl History {
     /// moves waypoints, to the overlays) and remember the step — the
     /// model twin of [`History::run_geometry`] on the SAME session
     /// stack: one Ctrl+Z walks geometry and model edits together.
-    //: consumed by the canvas model-op wiring; until it lands the
-    // tests drive this (the undo/redo arms keep the shape live).
-    #[allow(dead_code)]
     pub fn run_model(
         &mut self,
         workspace: &mut Workspace,
@@ -418,7 +413,6 @@ impl History {
 /// moves. `Source` also MOVES the relationship id between the two
 /// elements' efferent `relationships` lists (the JSON nests them there);
 /// `Destination` edits the model row alone.
-#[allow(dead_code)] //: the canvas model ops construct these next; the tests drive them meanwhile
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Endpoint {
     /// The `sourceId` end.
@@ -429,7 +423,7 @@ pub(crate) enum Endpoint {
 
 /// Which free-text slot of a relationship
 /// [`ModelCommand::SetRelationshipText`] relabels.
-#[allow(dead_code)] //: the canvas model ops construct these next; the tests drive them meanwhile
+#[allow(dead_code)] //: the details panel constructs these; the tests drive them meanwhile
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TextField {
     /// The `description`.
@@ -442,7 +436,6 @@ pub(crate) enum TextField {
 /// positions the inverse has to restore (model index, efferent-list
 /// slot, per-view row index, overlay routes) so undo is byte-identical,
 /// not merely equivalent — the JSON keeps list order.
-#[allow(dead_code)] //: the canvas model ops construct these next; the tests drive them meanwhile
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ModelCommand {
     /// Append a brand-new relationship: the model row, its id in the
@@ -485,6 +478,8 @@ pub(crate) enum ModelCommand {
         from_slot: Option<usize>,
     },
     /// Relabel `description`/`technology` on the model row.
+    //: the details panel constructs this next; the tests drive it meanwhile.
+    #[allow(dead_code)]
     SetRelationshipText {
         /// The relationship to relabel.
         id: Id,
@@ -771,7 +766,6 @@ fn node_list_mut<'a>(nodes: &'a mut [DeploymentNode], id: &Id) -> Option<&'a mut
 
 /// Read-only twin of [`relationship_list_mut`] (factories probe on
 /// `&Workspace`).
-#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
 fn element_relationships<'a>(model: &'a Model, id: &Id) -> Option<&'a Vec<Id>> {
     if let Some(p) = model.people.iter().find(|p| &p.item.id == id) {
         return Some(&p.relationships);
@@ -797,7 +791,6 @@ fn element_relationships<'a>(model: &'a Model, id: &Id) -> Option<&'a Vec<Id>> {
     node_relationships(&model.deployment_nodes, id)
 }
 
-#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
 fn node_relationships<'a>(nodes: &'a [DeploymentNode], id: &Id) -> Option<&'a Vec<Id>> {
     for n in nodes {
         if &n.item.id == id {
@@ -827,7 +820,6 @@ fn node_relationships<'a>(nodes: &'a [DeploymentNode], id: &Id) -> Option<&'a Ve
 
 /// Visit EVERY element id in the model (the shared-counter registration
 /// walk of [`next_relationship_id`]).
-#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
 fn for_each_element_id(model: &Model, visit: &mut impl FnMut(&Id)) {
     for p in &model.people {
         visit(&p.item.id);
@@ -847,7 +839,6 @@ fn for_each_element_id(model: &Model, visit: &mut impl FnMut(&Id)) {
     for_each_node_id(&model.deployment_nodes, visit);
 }
 
-#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
 fn for_each_node_id(nodes: &[DeploymentNode], visit: &mut impl FnMut(&Id)) {
     for n in nodes {
         visit(&n.item.id);
@@ -867,7 +858,6 @@ fn for_each_node_id(nodes: &[DeploymentNode], visit: &mut impl FnMut(&Id)) {
 /// The next relationship id from the SHARED counter: register every
 /// element and relationship id, then allocate — exactly how the core
 /// builder numbers a new relationship (the counter never collides).
-#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
 fn next_relationship_id(model: &Model) -> Id {
     let mut counter = IdGenerator::new();
     for_each_element_id(model, &mut |id| counter.found(id));
@@ -879,7 +869,6 @@ fn next_relationship_id(model: &Model) -> Id {
 
 /// `(key, content)` for every CONTENT-BEARING view (delete's sweep —
 /// filtered and image views carry no rows of their own).
-#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
 fn all_contents(views: &ViewSet) -> Vec<(&str, &ViewContent)> {
     let mut out: Vec<(&str, &ViewContent)> = Vec::new();
     macro_rules! collect {
@@ -953,7 +942,6 @@ fn static_contents_mut(views: &mut ViewSet) -> Vec<(&str, &mut ViewContent)> {
 /// `source -> destination` relationship with an already-empty
 /// description exists — the official duplicate check would reject the
 /// second one, and saved output must load there.
-#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
 #[must_use]
 pub(crate) fn create_relationship(
     workspace: &Workspace,
@@ -996,7 +984,6 @@ pub(crate) fn create_relationship(
 /// Delete relationship `id`, snapshotting every position undo has to
 /// restore (model row index, efferent slot, per-view rows, overlay
 /// routes). `None` when the id names no model row.
-#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
 #[must_use]
 pub(crate) fn delete_relationship(
     workspace: &Workspace,
@@ -1046,7 +1033,6 @@ pub(crate) fn delete_relationship(
 /// already points there (a no-op), or the move would point the
 /// relationship at its own other end (the self-loop the tooling
 /// rejects).
-#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
 #[must_use]
 pub(crate) fn reconnect_relationship(
     workspace: &Workspace,
@@ -1079,7 +1065,7 @@ pub(crate) fn reconnect_relationship(
 /// Relabel `description`/`technology` on relationship `id`; an empty
 /// string clears the slot (the JSON omits absent slots). `None` when
 /// the id is unknown or the value would not change.
-#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
+#[allow(dead_code)] //: consumed by the details panel; the tests drive this meanwhile
 #[must_use]
 pub(crate) fn set_relationship_text(
     workspace: &Workspace,
@@ -1734,6 +1720,38 @@ pub(crate) fn save_target(display: &str) -> Option<PathBuf> {
     } else {
         Some(path)
     }
+}
+
+/// The `.dsl` sibling of an opened sidecar JSON: when the display is a
+/// saved `<stem>.json` and a `<stem>.dsl` sits beside it, that DSL stays
+/// the source of record — exact stem, the lowercase extension
+/// [`save_target`] writes; no sibling ⇒ `None`.
+#[must_use]
+pub(crate) fn companion_dsl(display: &str) -> Option<PathBuf> {
+    let path = Path::new(display);
+    if !path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+    {
+        return None;
+    }
+    let dsl = path.with_extension("dsl");
+    dsl.exists().then_some(dsl)
+}
+
+/// The model-editing gate: model edits are only rewritable when the
+/// JSON is the SOLE source. True iff the display names a `.json` file
+/// (case-insensitive) — never stdin (`"-"`) — and NO `.dsl` sits beside
+/// it: the DSL text is never rewritten, so a workspace with a DSL
+/// sibling stays model read-only even when it opens through our own
+/// saved sidecar.
+#[must_use]
+pub(crate) fn model_editing_allowed(display: &str) -> bool {
+    display != "-"
+        && Path::new(display)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        && companion_dsl(display).is_none()
 }
 
 /// Serialize with the SHARED JSON writer (the save path adds no second
@@ -2550,6 +2568,30 @@ mod tests {
             Some(PathBuf::from("/tmp/Demo.json"))
         );
         assert_eq!(save_target("-"), None);
+    }
+
+    #[test]
+    fn model_editing_gate_matrix() {
+        // Plain .json (not even on disk) is the only editable source;
+        // the extension is case-insensitive.
+        assert!(model_editing_allowed("/tmp/oxidizr-none/plan.json"));
+        assert!(model_editing_allowed("/tmp/oxidizr-none/PLAN.JSON"));
+        // A .dsl source, stdin and a nameless display are blocked.
+        assert!(!model_editing_allowed("/tmp/oxidizr-none/plan.dsl"));
+        assert!(!model_editing_allowed("-"));
+        assert!(!model_editing_allowed(""));
+        // A .json with a .dsl sibling is a saved sidecar of DSL source —
+        // model editing stays blocked (the DSL text is never rewritten).
+        let dir = std::env::temp_dir().join(format!("oxidizr-gate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = dir.join("demo.json");
+        let dsl = dir.join("demo.dsl");
+        std::fs::write(&dsl, "workspace \"Gate\" { }").unwrap();
+        assert!(!model_editing_allowed(json.to_str().unwrap()));
+        std::fs::remove_file(&dsl).unwrap();
+        assert!(model_editing_allowed(json.to_str().unwrap()));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
