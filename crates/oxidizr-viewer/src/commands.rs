@@ -36,7 +36,9 @@ use oxidizr_core::Workspace;
 use oxidizr_core::model::{DeploymentNode, Model, Relationship};
 use oxidizr_core::properties::Properties;
 use oxidizr_core::tags::Tags;
-use oxidizr_core::views::{Dimensions, RelationshipView, Vertex, ViewContent, ViewSet};
+use oxidizr_core::views::{
+    AutomaticLayout, Dimensions, RelationshipView, Vertex, ViewContent, ViewSet,
+};
 
 use crate::scene::{Overrides, Rect, Scene};
 
@@ -524,6 +526,19 @@ pub(crate) enum ModelCommand {
         /// The new override.
         to: Option<String>,
     },
+    /// "Remember in view": the stored view's `automaticLayout` block —
+    /// the five standard fields the dialog carries. One undoable
+    /// MODEL step; the save path writes the block like any other view
+    /// field (the dialog's engine choice is NOT part of it — that
+    /// selection is outside the format's contract).
+    SetAutomaticLayout {
+        /// The view whose block changes.
+        view_key: String,
+        /// The view's previous block (`None` = the view had none).
+        from: Option<AutomaticLayout>,
+        /// The view's new block.
+        to: Option<AutomaticLayout>,
+    },
 }
 
 impl ModelCommand {
@@ -598,6 +613,11 @@ impl ModelCommand {
                 view_key, id, to, ..
             } => {
                 set_view_label(workspace, view_key, id, to.clone());
+            }
+            Self::SetAutomaticLayout { view_key, to, .. } => {
+                if let Some(content) = content_of_key(workspace, view_key) {
+                    content.automatic_layout = *to;
+                }
             }
         }
     }
@@ -695,6 +715,11 @@ impl ModelCommand {
                 view_key, id, from, ..
             } => {
                 set_view_label(workspace, view_key, id, from.clone());
+            }
+            Self::SetAutomaticLayout { view_key, from, .. } => {
+                if let Some(content) = content_of_key(workspace, view_key) {
+                    content.automatic_layout = *from;
+                }
             }
         }
     }
@@ -1174,6 +1199,32 @@ pub(crate) fn set_relationship_view_label(
     Some(ModelCommand::SetRelationshipViewLabel {
         view_key: view_key.to_owned(),
         id: id.clone(),
+        from,
+        to,
+    })
+}
+
+/// "Remember in view": store the dialog's five standard fields as the
+/// stored view's `automaticLayout` block (`None` drops the block —
+/// automatic layout off for that view). `None` when the view has no
+/// content slot or the block already carries EXACTLY these values, so
+/// the shell never pushes a no-op step. Undo restores the previous
+/// block — or its absence.
+#[must_use]
+pub(crate) fn set_automatic_layout(
+    workspace: &Workspace,
+    view_key: &str,
+    to: Option<AutomaticLayout>,
+) -> Option<ModelCommand> {
+    let from = workspace
+        .views
+        .all_views()
+        .iter()
+        .find(|view| view.key() == view_key)?
+        .content()?
+        .automatic_layout;
+    (from != to).then(|| ModelCommand::SetAutomaticLayout {
+        view_key: view_key.to_owned(),
         from,
         to,
     })
@@ -3095,6 +3146,113 @@ mod tests {
             set_relationship_view_label(&labeled, "L1", &id(3), Some("sends".into())).is_none(),
             "unchanged override"
         );
+    }
+
+    #[test]
+    fn automatic_layout_remembers_in_view_and_round_trips() {
+        let ws = workspace(); // no view carries a block
+        let layout = AutomaticLayout {
+            rank_direction: Some(oxidizr_core::views::RankDirection::TopBottom),
+            rank_separation: 300,
+            node_separation: 60,
+            edge_separation: 40,
+            vertices: false,
+        };
+        // Absent -> write: the block lands; undo restores the ABSENCE.
+        let cmd = set_automatic_layout(&ws, "L1", Some(layout)).unwrap();
+        let mut applied = ws.clone();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert_eq!(
+            content_of_key(&mut applied, "L1").unwrap().automatic_layout,
+            Some(layout)
+        );
+        cmd.undo(&mut applied, &mut HashMap::new());
+        assert_eq!(applied, ws, "undo restores the absent block");
+        // Present -> rewrite: undo restores the PRIOR block exactly.
+        let stored = {
+            let mut w = ws.clone();
+            content_of_key(&mut w, "L1").unwrap().automatic_layout =
+                Some(AutomaticLayout::default());
+            w
+        };
+        let cmd = set_automatic_layout(&stored, "L1", Some(layout)).unwrap();
+        let mut applied = stored.clone();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert_eq!(
+            content_of_key(&mut applied, "L1").unwrap().automatic_layout,
+            Some(layout)
+        );
+        cmd.undo(&mut applied, &mut HashMap::new());
+        assert_eq!(applied, stored, "undo restores the prior block");
+        // REMOVING the block rides the same rail in both directions.
+        let cmd = set_automatic_layout(&stored, "L1", None).unwrap();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert!(
+            content_of_key(&mut applied, "L1")
+                .unwrap()
+                .automatic_layout
+                .is_none()
+        );
+        cmd.undo(&mut applied, &mut HashMap::new());
+        assert_eq!(applied, stored);
+        // No-ops and unknown views refuse: no dead steps on the stack.
+        assert!(
+            set_automatic_layout(&ws, "L1", None).is_none(),
+            "absent onto absent"
+        );
+        assert!(
+            set_automatic_layout(&stored, "L1", Some(AutomaticLayout::default())).is_none(),
+            "the block already carries exactly these values"
+        );
+        assert!(
+            set_automatic_layout(&ws, "Nope", Some(layout)).is_none(),
+            "unknown view"
+        );
+    }
+
+    #[test]
+    fn remembered_block_writes_only_the_standard_fields() {
+        // The write-back is contract-only BY CONSTRUCTION: the emitted
+        // `automaticLayout` carries exactly the five standard JSON
+        // keys the shared writer emits — nothing else can ride in.
+        let ws = workspace();
+        let layout = AutomaticLayout {
+            rank_direction: Some(oxidizr_core::views::RankDirection::TopBottom),
+            rank_separation: 300,
+            node_separation: 60,
+            edge_separation: 40,
+            vertices: false,
+        };
+        let cmd = set_automatic_layout(&ws, "L1", Some(layout)).unwrap();
+        let mut applied = ws;
+        cmd.apply(&mut applied, &mut HashMap::new());
+        let bytes = oxidizr_json::to_vec(&applied).unwrap();
+        let root: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let view = root["views"]["systemLandscapeViews"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["key"] == "L1")
+            .unwrap();
+        let block = view["automaticLayout"].as_object().unwrap();
+        let mut keys: Vec<&str> = block.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "edgeSeparation",
+                "nodeSeparation",
+                "rankDirection",
+                "rankSeparation",
+                "vertices"
+            ],
+            "exactly the five standard fields"
+        );
+        assert_eq!(block["rankDirection"], "TopBottom");
+        assert_eq!(block["rankSeparation"], 300);
+        assert_eq!(block["nodeSeparation"], 60);
+        assert_eq!(block["edgeSeparation"], 40);
+        assert_eq!(block["vertices"], false);
     }
 
     #[test]

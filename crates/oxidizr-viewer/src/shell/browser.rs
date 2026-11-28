@@ -210,6 +210,9 @@ impl Viewer {
         // the sidecar map before the switch resets the viewport.
         self.record_view();
         self.view_key = Some(key);
+        // each view carries its OWN dialog state (stored config,
+        // cache, legacy, defaults) — the parameters re-seed with it.
+        self.seed_layout_params();
         self.selection = None;
         self.latches.needs_fit = true;
         self.restore_scale = None;

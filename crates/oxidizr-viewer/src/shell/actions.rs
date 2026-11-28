@@ -592,11 +592,15 @@ impl Viewer {
         })
     }
 
-    /// The auto-layout dialog — mirrors the official UI the official layout dialog
+    /// The auto-layout dialog — mirrors the official layout dialog
     /// (direction, rank/node/edge separation, route vertices). `Apply`
     /// runs the engine on the CURRENT scene; `Reset` drops the session
-    /// geometry. Only the PARAMETERS persist; the engine
-    /// ignores edge separation at MVP scope (parity field only).
+    /// geometry. Parameters are PER VIEW: they re-seed with the view
+    /// (the stored `automaticLayout` first, then the per-view cache,
+    /// then the legacy entry, then the defaults) and persist in the
+    /// viewer cache; "Remember in view" writes the five standard
+    /// fields back into the STORED view — one undoable model step
+    /// through the same gate every other model edit rides.
     pub(super) fn layout_window(&mut self, ctx: &egui::Context) {
         if !self.toggles.layout {
             return;
@@ -676,11 +680,11 @@ impl Viewer {
                 }
                 ui.horizontal(|ui| {
                     if ui.button("Apply").clicked() {
-                        self.layout_params = params;
+                        self.cache_layout_params(params);
                         self.run_layout(params, false);
                     }
                     if !pins.is_empty() && ui.button("Apply (ignore pins)").clicked() {
-                        self.layout_params = params;
+                        self.cache_layout_params(params);
                         self.run_layout(params, true);
                     }
                     if ui.button("Reset").clicked() {
@@ -688,6 +692,9 @@ impl Viewer {
                         self.edit_current_view(command);
                         self.layout_error = None;
                     }
+                });
+                ui.horizontal(|ui| {
+                    self.remember_in_view_row(ui, params);
                 });
                 ui.separator();
                 self.editing_buttons(ui);
@@ -697,6 +704,34 @@ impl Viewer {
                 ui.weak("Session geometry — not saved to the workspace.");
             });
         self.toggles.layout = open;
+    }
+
+    /// The "Remember in view" row — the dialog state written into the
+    /// STORED view as ONE undoable model step through the same gate
+    /// every other model edit rides: a DSL source, a stdin source or
+    /// a `.json` with a DSL sibling keeps the button disabled, with
+    /// the reason on hover. A run whose fields already match the
+    /// block produces no command, hence no step.
+    fn remember_in_view_row(&mut self, ui: &mut egui::Ui, params: AutomaticLayout) {
+        let view = self.view_key.clone();
+        let response = ui.add_enabled(
+            view.is_some() && self.can_edit_model(),
+            egui::Button::new("Remember in view"),
+        );
+        let response = if view.is_none() {
+            response.on_disabled_hover_text("open a view first")
+        } else {
+            response.on_disabled_hover_text(MODEL_BLOCKED)
+        };
+        if response.clicked()
+            && let Some(key) = view
+        {
+            self.cache_layout_params(params);
+            self.run_model_edit(move |workspace, _overlays| {
+                commands::set_automatic_layout(workspace, &key, Some(params))
+            });
+        }
+        ui.weak("stores the five fields in the view");
     }
 
     /// Rebuild the icon atlas when the scene changed: rasterize

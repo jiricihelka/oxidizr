@@ -39,6 +39,8 @@ use oxidizr_core::{Id as ModelId, Workspace};
 const KEY_THEME: &str = "oxidizr.viewer/theme";
 const KEY_ZOOM: &str = "oxidizr.viewer/zoom";
 const KEY_VIEW: &str = "oxidizr.viewer/view";
+/// The dialog's GLOBAL default entry (the legacy one): the
+/// per-view entries are written under `KEY_LAYOUT/<view-key>`.
 const KEY_LAYOUT: &str = "oxidizr.viewer/layout";
 
 /// `--theme` values — shared by the `oxidizr-viewer` argv and
@@ -246,8 +248,19 @@ struct Viewer {
     /// Last auto-layout failure (dialog + status bar).
     layout_error: Option<String>,
     /// Dialog parameters — a persisted preference, mirroring
-    /// the official UI the official layout dialog fields.
+    /// the official UI the official layout dialog fields. Seeded
+    /// per view (see [`Self::layout_by_view`]).
     layout_params: AutomaticLayout,
+    /// Per-view dialog parameters (session). The cache hydrates at
+    /// STARTUP from the `KEY_LAYOUT/<view>` entries of the OPENED
+    /// workspace's views — eframe hands out the storage handle only
+    /// in `startup`/`save` and the trait cannot enumerate keys, so
+    /// that is the one moment the entries can be read — re-seeds on
+    /// every view switch, and is written back whole on save.
+    layout_by_view: HashMap<String, AutomaticLayout>,
+    /// The legacy GLOBAL parameter entry (the pre-per-view cache):
+    /// the fallback default for views with no entry of their own.
+    layout_legacy: Option<AutomaticLayout>,
     /// Dialog engine choice — SESSION-only: the selection
     /// deliberately stays out of the persisted parameter string.
     layout_engine: layout::Engine,
@@ -437,6 +450,8 @@ impl Viewer {
             repaint_ctx: None,
             layout_error: None,
             layout_params: AutomaticLayout::default(),
+            layout_by_view: HashMap::new(),
+            layout_legacy: None,
             layout_engine: layout::Engine::default(),
         }
     }
@@ -460,11 +475,10 @@ impl Viewer {
             .and_then(|s| s.get_string(KEY_ZOOM))
             .and_then(|zoom| zoom.parse::<f64>().ok());
         self.pending_view = storage.and_then(|s| s.get_string(KEY_VIEW));
-        self.layout_params = storage
+        self.layout_legacy = storage
             .and_then(|s| s.get_string(KEY_LAYOUT))
             .as_deref()
-            .and_then(layout::decode)
-            .unwrap_or_default();
+            .and_then(layout::decode);
         self.path_edit = path_shown;
         match opened {
             Some(Ok(opened)) => self.adopt(opened),
@@ -474,6 +488,24 @@ impl Viewer {
             }
             None => {}
         }
+        // Per-view dialog entries live under `KEY_LAYOUT/<view-key>`.
+        // The storage handle exists ONLY in startup/save and the trait
+        // cannot enumerate keys, so the opened workspace's view keys
+        // are the one set that can be read back here; an in-session
+        // OPEN cannot, and the seed order falls through to the stored
+        // view config, the legacy entry and the defaults.
+        if let Some(workspace) = self.workspace.as_ref() {
+            for view in workspace.views.all_views() {
+                let key = view.key().to_owned();
+                if let Some(params) = storage
+                    .and_then(|s| s.get_string(&format!("{KEY_LAYOUT}/{key}")))
+                    .and_then(|text| layout::decode(&text))
+                {
+                    self.layout_by_view.insert(key, params);
+                }
+            }
+        }
+        self.seed_layout_params();
     }
 
     /// Take over a freshly opened workspace: first (or restored) view,
@@ -539,7 +571,46 @@ impl Viewer {
             .and_then(|key| self.sidecar.views.get(key))
             .copied();
         self.latches.needs_fit = self.pending_viewport.is_none() && self.restore_scale.is_none();
+        // Fresh workspace: the dialog re-seeds from THIS workspace's
+        // per-view state (stored config first, then cache, legacy,
+        // defaults — a just-opened file's views are their own truth).
+        self.seed_layout_params();
         self.rebuild_scene();
+    }
+
+    /// Re-seed the dialog parameters for the CURRENT view. Seed order:
+    /// the stored view's own `automaticLayout` block (the workspace is
+    /// the contract), then this session's per-view cache entry, then
+    /// the legacy GLOBAL entry, then the defaults. The engine choice is
+    /// deliberately NOT seeded — it is outside the format. Called when
+    /// a view becomes current and when a workspace is adopted.
+    fn seed_layout_params(&mut self) {
+        let Some(key) = self.view_key.as_deref() else {
+            return;
+        };
+        let stored = self.workspace.as_ref().and_then(|workspace| {
+            workspace
+                .views
+                .all_views()
+                .iter()
+                .find(|view| view.key() == key)
+                .and_then(|view| view.content())
+                .and_then(|content| content.automatic_layout)
+        });
+        self.layout_params = stored
+            .or_else(|| self.layout_by_view.get(key).copied())
+            .or(self.layout_legacy)
+            .unwrap_or_default();
+    }
+
+    /// Record the dialog's state as the CURRENT view's per-view entry
+    /// (the map that `save` flushes; view keys are app-global, like the
+    /// eframe storage that backs them).
+    fn cache_layout_params(&mut self, params: AutomaticLayout) {
+        self.layout_params = params;
+        if let Some(key) = &self.view_key {
+            self.layout_by_view.insert(key.clone(), params);
+        }
     }
 
     /// Record the current viewport into the in-memory sidecar map
@@ -913,6 +984,16 @@ impl eframe::App for Viewer {
         storage.set_string(KEY_ZOOM, self.viewport.scale().to_string());
         if let Some(key) = &self.view_key {
             storage.set_string(KEY_VIEW, key.clone());
+        }
+        // The dialog's parameters are PER VIEW: every cached entry
+        // flushes under its own `KEY_LAYOUT/<view-key>`; the legacy
+        // GLOBAL entry keeps receiving the current dialog state so an
+        // older build still finds its default.
+        if let Some(key) = &self.view_key {
+            self.layout_by_view.insert(key.clone(), self.layout_params);
+        }
+        for (view, params) in &self.layout_by_view {
+            storage.set_string(&format!("{KEY_LAYOUT}/{view}"), layout::encode(params));
         }
         storage.set_string(KEY_LAYOUT, layout::encode(&self.layout_params));
         // closing the window flushes the per-file
