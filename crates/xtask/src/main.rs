@@ -395,8 +395,10 @@ fn cmd_bench() -> Result<()> {
         .args([
             "bench",
             "--workspace",
+            // `oxidizr-layout/dagre`: the dagre bench is required-feature
+            // gated, and P7 wants both engines recorded side by side.
             "--features",
-            "oxidizr-e2e/e2e-bench",
+            "oxidizr-e2e/e2e-bench,oxidizr-layout/dagre",
         ])
         .status()
         .context("failed to run cargo bench")?;

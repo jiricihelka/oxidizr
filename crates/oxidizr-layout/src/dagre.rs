@@ -26,8 +26,11 @@
 //! * Edge routes come back as polylines that already run source → target
 //!   (edges reversed for cycle removal are undone and their points flipped)
 //!   and are clipped to the box borders; the interior points are the
-//!   waypoints. With `generate_vertices` off, only the two endpoints
-//!   survive.
+//!   waypoints. The pipeline splits long routes over dummy vertices and
+//!   leaves a point on every rank border even when the route goes straight,
+//!   so exactly-collinear interior points are dropped before handing the
+//!   route over (interior means WAYPOINT — callers persist these). With
+//!   `generate_vertices` off, only the two endpoints survive.
 //! * Endpoint anchors ([`Anchor`](crate::Anchor)s) name the box side a
 //!   route leaves. That pipeline has no port concept, so anchors are
 //!   ignored here — [`Layered`](crate::Layered) is the engine that honours
@@ -246,8 +249,9 @@ fn edge_placements(
             if route.iter().any(|p| !(p.x.is_finite() && p.y.is_finite())) {
                 return Err(reject(format!("edge {} has a non-finite point", edge.id)));
             }
+            let route = simplify(route);
             let points = if graph.config.generate_vertices {
-                route.clone()
+                route
             } else {
                 route
                     .first()
@@ -262,6 +266,35 @@ fn edge_placements(
             })
         })
         .collect()
+}
+
+/// Drop interior points that continue the previous segment exactly
+/// straight. The pipeline splits long routes over dummy vertices, so a
+/// straight route comes back with one point per rank border — collinear
+/// points that are not waypoints. The seam defines interior points AS
+/// waypoints (and callers persist them), so simplification removes only
+/// EXACT collinearity (an `f64` cross product of zero, no epsilon): the
+/// route never moves and the result stays deterministic.
+fn simplify(route: &[Point]) -> Vec<Point> {
+    let Some((&first, rest)) = route.split_first() else {
+        return Vec::new();
+    };
+    let mut out = vec![first];
+    for &point in rest {
+        // A point that only continues the current leg replaces the previous
+        // one (the leg keeps its direction and gains the further reach).
+        if out.len() >= 2 {
+            let one = out[out.len() - 2];
+            let two = out[out.len() - 1];
+            let straight =
+                (two.x - one.x) * (point.y - two.y) - (two.y - one.y) * (point.x - two.x);
+            if straight == 0.0 {
+                out.pop();
+            }
+        }
+        out.push(point);
+    }
+    out
 }
 
 /// The engine-side failure shape (the graph itself is valid — the pipeline
@@ -466,6 +499,55 @@ mod tests {
                 .all(|n| n.position.x.is_finite() && n.position.y.is_finite()),
             "degenerate separations produced a non-finite placement"
         );
+    }
+
+    #[test]
+    fn straight_routes_keep_no_interior_points() {
+        // The pipeline leaves one point per rank border even on a straight
+        // route; the seam persists interiors as waypoints, so a straight
+        // chain must come back with bare endpoints.
+        let result = Dagre::new()
+            .layout(&chain(RankDirection::LeftRight))
+            .expect("chain");
+        for edge in &result.edges {
+            assert_eq!(
+                edge.points.len(),
+                2,
+                "route {} keeps a collinear interior: {:?}",
+                edge.id,
+                edge.points
+            );
+        }
+    }
+
+    #[test]
+    fn simplify_keeps_bends_and_drops_straights() {
+        let point = |x: f64, y: f64| Point { x, y };
+        // Straight with two border ticks → endpoints only.
+        let straight = vec![
+            point(0.0, 0.0),
+            point(1.0, 0.0),
+            point(2.0, 0.0),
+            point(3.0, 0.0),
+        ];
+        assert_eq!(simplify(&straight), vec![point(0.0, 0.0), point(3.0, 0.0)]);
+        // A real bend survives untouched.
+        let bent = vec![point(0.0, 0.0), point(1.0, 0.0), point(1.0, 1.0)];
+        assert_eq!(simplify(&bent), bent);
+        // A bend whose NEXT leg runs on through the bend point: the bend
+        // stays (it is a true corner), the trailing tick goes.
+        let corner = vec![
+            point(0.0, 0.0),
+            point(0.0, 1.0),
+            point(0.0, 2.0),
+            point(1.0, 2.0),
+        ];
+        assert_eq!(
+            simplify(&corner),
+            vec![point(0.0, 0.0), point(0.0, 2.0), point(1.0, 2.0)]
+        );
+        let empty: Vec<Point> = Vec::new();
+        assert_eq!(simplify(&empty).len(), 0);
     }
 
     #[test]

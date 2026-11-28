@@ -45,3 +45,10 @@ expect-test = { workspace = true }
 [[bench]]
 name = "layered"
 harness = false
+
+[[bench]]
+name = "dagre"
+harness = false
+# Same reason as the feature-gated tests: the bench only compiles when the
+# engine does (`cargo bench -p oxidizr-layout --features dagre`).
+required-features = ["dagre"]

@@ -1,7 +1,18 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 IN FLIGHT — wave P7-M0 DONE (dagre adapter + V1 determinism gate GREEN + quality-metric harness + engine framework). NEXT = wave P7-M1 (dagre becomes the default engine) and then M2…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 IN FLIGHT — waves P7-M0 + P7-M1 DONE (dagre adapter, V1 gate GREEN, quality harness; dagre is now the DEFAULT engine). NEXT = wave P7-M2 (compound boundary layout) and then M3…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P7 stands
 
+- **M1 committed**: dagre is the DEFAULT engine. Viewer `default =
+  ["dagre"]`; hand-written `Engine::default()` = `Dagre` when the feature is
+  compiled, `Layered` in `--no-default-features` builds (built-in floor);
+  `apply()` (the display pass) rides `Engine::default()`. Adapter `simplify()`
+  drops EXACTLY-collinear interior points (the pipeline ticks every rank
+  border; interiors are persisted waypoints) — bend TOTAL 2385→498 on the
+  re-blessed table. No scene-fixture re-bless was needed (all viewer/e2e
+  geometry tests byte-unchanged under the new default). Benches recorded
+  (`benches/dagre.rs`, sample 20; xtask bench passes `oxidizr-layout/dagre`):
+  dagre 5.75 s / 107 ms / 240 ms vs Layered 4.45 ms / 874 µs / 1.05 ms on the
+  shared 1k mixed/chain/star shapes — recorded, not hidden (R-5).
 - **M0 committed**: `dagre` 0.1.2 behind the NON-default `oxidizr-layout/dagre`
   feature; `Dagre` adapter at the `LayoutEngine` seam
   (`crates/oxidizr-layout/src/dagre.rs` — positional `n{i}`/`e{i}` names,
@@ -15,11 +26,11 @@
   No STOP needed (P7-D7).
 - **V2 harness committed**: `tests/layout_quality.rs` (crossings/pierces/
   bends/length, TOTAL row, `expect!` table, re-bless = `UPDATE_EXPECT=1`).
-  Measured LR/contract separations: TOTAL crossings 1503→1005, pierces
-  304→191, bends 2974→2385. Gate = table + `KNOWN_CROSSING_REGRESSIONS =
-  ["c4-like", "grid-120"]` + aggregate-better assertion (the "≥ Layered
-  everywhere" wording was amended — 6 option profiles swept, none
-  dominates; PHASE_7 §M0 measured reality + amended V2).
+  Measured LR/contract separations (post-M1 simplify): TOTAL crossings
+  1503→1005, pierces 304→191, bends 2974→498. Gate = table +
+  `KNOWN_CROSSING_REGRESSIONS = ["c4-like", "grid-120"]` + aggregate-better
+  assertion (the "≥ Layered everywhere" wording was amended — 6 option
+  profiles swept, none dominates; PHASE_7 §M0 measured reality + amended V2).
 - **Two defects fixed on the way**: dagre 0.1.2 cannot build
   `default-features = false` (ungated `graph/json.rs` ⇒ `features = ["json"]`
   forced on; serde pair already in the viewer tree) — note
@@ -61,13 +72,17 @@
   (combo lists `Engine::available()`); `run_layout` + `layout_engine` field
   in `shell/mod.rs`; manual positions = `LayoutOverlay` element entries =
   the M3 PIN source.
-- M1 specifics: default switch = `Engine::default()` → `Dagre` **when the
-  feature is compiled** (`#[cfg]` the `#[default]` — or make `available()`
-  order the source of truth and seed `layout_engine` from
-  `Engine::available()[0]`); auto-display uses `apply` → route it through
-  the default engine too; scene-fixture snapshots (`golden_paint.rs`)
-  re-bless ONLY where the metric improves; `bench cmp` recorded (dagre may
-  be slower — record, don't hide).
+- M2 specifics (compound boundaries): dagre has `compound: true` on the
+  graph builder + `set_parent(child, parent)` — audit
+  `/tmp/opencode/dagre-src/dagre-0.1.2/` (`src/parenting.rs`,
+  `addBorderNode`) for how borders get sizes; `LayoutGraph` (engine.rs)
+  needs a boundary concept (parents as layout nodes with own size? or
+  membership-only) — decide from the audit; `graph_for` must emit boundary
+  parents + membership ONLY for dagre runs (Layered path byte-identical —
+  its corpus numbers are the V2 baseline); scene `Boundary` already carries
+  members (M2 reads them); V3 = headless per-corpus-view assertions (members
+  inside boundary frames, cross-boundary edges attach sanely). Watch the
+  boundary pad: `crate::scene::BOUNDARY_PADDING` stays OUR chrome constant.
 - Write-back (M4): `ModelCommand::SetAutomaticLayout(view_key, from, to)`
   through `Viewer::run_model_edit` + gate `commands::model_editing_allowed`
   (plain `.json` only); undo restores prior `Option<AutomaticLayout>`;
@@ -78,9 +93,10 @@
 
 ## If a next session opens
 
-- Start wave **P7-M1** per the `build/PHASE_7.md` wave table (dagre default
-  + metric re-check + bench cmp + snapshot policy V2). M0 evidence is in the
-  plan §M0 measured reality; do not re-derive it.
+- Start wave **P7-M2** per the `build/PHASE_7.md` wave table (compound
+  boundary layout: boundary parents + membership into dagre runs, Layered
+  untouched, V3 headless). M0/M1 evidence is in the plan rows + §M0 measured
+  reality; do not re-derive it.
 - Feature-matrix sanity before commit (no CI leg covers these):
   `cargo check -p oxidizr-layout --features dot-backend,dagre --all-targets`
   and `cargo check -p oxidizr-viewer --features gui,dagre,dot-backend`.

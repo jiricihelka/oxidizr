@@ -301,6 +301,9 @@ fn row(name: &str, layered: Quality, dagre: Quality, verdict: &str) -> String {
 const KNOWN_CROSSING_REGRESSIONS: &[&str] = &["c4-like", "grid-120"];
 
 #[test]
+// `expect-test` rewrites the literal with `r#"` hashes on bless; keeping
+// them means a re-bless never churns the source beyond the table itself.
+#[allow(clippy::needless_raw_string_hashes)]
 fn corpus_quality_table_is_committed() {
     let table = table();
     // The WORSE rows are exactly the known set: no new shape may regress, and
@@ -334,24 +337,24 @@ fn corpus_quality_table_is_committed() {
         "the candidate engine must cross less than the built-in one in total: \
          layered {layered}, dagre {dagre}"
     );
-    expect![[r"
+    expect![[r#"
         fixture          cross L>D   pierce L>D   bend L>D    len L>D      verdict
         single              0→0          0→0          0→0           0→0       same
-        chain-8             0→0          0→0          0→7         700→700     same
+        chain-8             0→0          0→0          0→0         700→700     same
         diamond             0→0          0→0          8→4         593→424     same
-        fan-out             0→0          8→0         16→9        2970→2307    same
-        fan-in              0→0          8→0         16→9        2970→2307    same
-        cycle               1→1          0→0         18→19       2425→2149    same
+        fan-out             0→0          8→0         16→8        2970→2307    same
+        fan-in              0→0          8→0         16→8        2970→2307    same
+        cycle               1→1          0→0         18→7        2425→2149    same
         self-loops          0→0          0→0          0→17        290→1022    same
-        parallel            0→0          0→0         16→9        1089→1307    same
-        disconnected        0→0          0→0          2→3         350→300     same
-        mixed-sizes         0→0          0→0          0→5         500→500     same
-        odd-ids             0→0          0→0          0→6         600→600     same
-        c4-like             0→1          0→0         20→14       2217→2072    WORSE
-        tangled-90       1303→609       44→22      2474→2068   594549→555214  better
-        grid-120          199→394      244→169      404→215     65843→127147  WORSE
-        TOTAL            1503→1005     304→191     2974→2385   675097→696049  
-    "]]
+        parallel            0→0          0→0         16→8        1089→1307    same
+        disconnected        0→0          0→0          2→0         350→300     same
+        mixed-sizes         0→0          0→0          0→0         500→500     same
+        odd-ids             0→0          0→0          0→0         600→600     same
+        c4-like             0→1          0→0         20→9        2217→2072    WORSE
+        tangled-90       1303→609       44→22      2474→226    594549→555214  better
+        grid-120          199→394      244→169      404→211     65843→127147  WORSE
+        TOTAL            1503→1005     304→191     2974→498    675097→696049  
+    "#]]
     .assert_eq(&table);
 }
 

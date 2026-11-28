@@ -1,5 +1,7 @@
 //! The auto-layout seam: scene → neutral [`LayoutGraph`] →
-//! the bundled engine (`oxidizr_layout::Layered`) → [`Overrides`]
+//! the session default engine (`Dagre` when the `dagre` feature is
+//! compiled — it is the app default; [`Layered`] is the built-in
+//! fallback) → [`Overrides`]
 //! that [`crate::scene::build`] overlays on the stored geometry. The GUI shell
 //! (feature `gui`) only wires button + dialog + the ONE pass — every
 //! decision lives here, tested headlessly (boundary guard).
@@ -15,8 +17,9 @@
 //!   route points are world-space polylines whose FIRST and LAST points
 //!   are endpoint anchors — those are re-derived from the (moved) boxes
 //!   by the scene, so only `points[1..len-1]` become interior waypoints.
-//! - The engine ignores `edge_separation`; the dialog keeps the field
-//!   because the stored format has it.
+//! - `edge_separation`: the `Dagre` engine honours it; the built-in
+//!   `Layered` engine ignores it (wiring it into the port spread is the
+//!   point at which the dialog field becomes honest for both engines).
 //! - The ENGINE is a session choice ([`Engine`]) — the dialog
 //!   combo lists [`Engine::available`], so graphviz `dot` appears only
 //!   when the `dot-backend` feature is compiled in AND `$OXIDZR_DOT_BIN`
@@ -39,15 +42,14 @@ use oxidizr_layout::{
 
 use crate::scene::{Overrides, Scene};
 
-/// Which engine a layout run uses. `Layered` is the bundled
-/// engine; `Dagre` exists only behind the viewer's `dagre` feature;
-/// `Dot` exists only behind the viewer's `dot-backend` feature and
-/// shells to graphviz.
+/// Which engine a layout run uses. `Dagre` is the default whenever the
+/// `dagre` feature is compiled in; `Layered` is the built-in engine and
+/// the default of builds without it; `Dot` exists only behind the
+/// viewer's `dot-backend` feature and shells to graphviz.
 /// Session-only: the selection is never persisted.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Engine {
     /// The bundled layered engine — always available.
-    #[default]
     Layered,
     /// The `dagre` layered pipeline (feature `dagre` only) — pure
     /// computation, available whenever compiled in.
@@ -56,6 +58,22 @@ pub enum Engine {
     /// The external graphviz `dot` (feature `dot-backend` only).
     #[cfg(feature = "dot-backend")]
     Dot,
+}
+
+impl Default for Engine {
+    /// The default layout engine: `Dagre` when the feature is compiled in,
+    /// `Layered` otherwise (the only hand-written `Default` in the crate —
+    /// the derive cannot answer a feature question).
+    fn default() -> Self {
+        #[cfg(feature = "dagre")]
+        {
+            Self::Dagre
+        }
+        #[cfg(not(feature = "dagre"))]
+        {
+            Self::Layered
+        }
+    }
 }
 
 impl Engine {
@@ -199,8 +217,8 @@ pub(crate) fn display_params(workspace: &Workspace, view_key: &str) -> Automatic
 }
 
 /// The display auto-layout for an un-laid-out view: `Some(engine
-/// geometry)` when [`view_needs_layout`] holds and the bundled
-/// [`Engine::Layered`] run succeeds, `None` when the view HAS stored
+/// geometry)` when [`view_needs_layout`] holds and the session default
+/// engine ([`Engine::default`]) run succeeds, `None` when the view HAS stored
 /// coordinates (it renders verbatim) or the engine run failed. The shell
 /// merges this UNDER the user overlay ([`Overrides::display`]), so one
 /// drag pins that element and leaves the engine's other placements.
@@ -266,14 +284,15 @@ pub(crate) fn graph_for(scene: &Scene, config: LayoutConfig) -> LayoutGraph {
     graph
 }
 
-/// Run [`Engine::Layered`] over `scene` — the dialog default and the
-/// headless-test entry point (module docs for the translation).
+/// Run the session default engine ([`Engine::default`]) over `scene` —
+/// the display pass and the headless-test entry point (module docs for
+/// the translation).
 ///
 /// # Errors
 ///
 /// As `apply_with`.
 pub fn apply(scene: &Scene, layout: &AutomaticLayout) -> Result<Overrides, LayoutError> {
-    apply_with(Engine::Layered, scene, layout)
+    apply_with(Engine::default(), scene, layout)
 }
 
 /// Run `engine` over `scene` and translate the result into scene
@@ -716,21 +735,29 @@ mod tests {
     }
 
     #[test]
-    fn apply_with_layered_is_apply() {
-        // The session-engine seam must not change the default
-        // path at all — byte-identical overrides.
-        let ws = chain(None);
-        let scene = scene_of(&ws, None);
-        let plain = apply(&scene, &AutomaticLayout::default()).unwrap();
-        let layered = apply_with(Engine::Layered, &scene, &AutomaticLayout::default()).unwrap();
-        assert_eq!(plain, layered);
+    fn layered_is_always_listed_and_dagre_is_the_default() {
+        assert_eq!(Engine::available().first(), Some(&Engine::Layered));
+        assert_eq!(Engine::Layered.label(), "Layered");
+        // The default engine: dagre when compiled in (the app default),
+        // Layered in `--no-default-features` builds (the built-in floor).
+        #[cfg(feature = "dagre")]
+        assert_eq!(Engine::default(), Engine::Dagre);
+        #[cfg(not(feature = "dagre"))]
+        assert_eq!(Engine::default(), Engine::Layered);
     }
 
     #[test]
-    fn layered_is_always_available_and_default() {
-        assert_eq!(Engine::available().first(), Some(&Engine::Layered));
-        assert_eq!(Engine::default(), Engine::Layered);
-        assert_eq!(Engine::Layered.label(), "Layered");
+    fn apply_is_the_default_engine() {
+        // The display path rides the session default — the same run
+        // `apply_with(Engine::default(), …)` performs, byte-identical.
+        let ws = chain(None);
+        let scene = scene_of(&ws, None);
+        let plain = apply(&scene, &AutomaticLayout::default()).unwrap();
+        let explicit = apply_with(Engine::default(), &scene, &AutomaticLayout::default()).unwrap();
+        assert_eq!(plain, explicit);
+        // The dialog can still pick `Layered`, and it lays the same chain.
+        let layered = apply_with(Engine::Layered, &scene, &AutomaticLayout::default()).unwrap();
+        assert_eq!(layered.elements.len(), 3, "the fallback engine still runs");
     }
 
     #[cfg(feature = "dagre")]

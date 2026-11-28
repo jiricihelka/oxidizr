@@ -17,7 +17,15 @@ workspace = true
 # core with ZERO GPU/windowing need; `cargo build --features gui` (CI
 # M0-4 leg, and end-user builds) compiles the binary. `clap` rides the
 # shell (argv parsing) so the headless dep graph stays lean.
-default = []
+#
+# `dagre` is a DEFAULT feature: the dagre engine is this app's default
+# layout engine (pure computation — it adds no windowing or IO surface, and
+# the serde pair it drags in is already a viewer dependency). `Layered`
+# stays the built-in fallback and the engine of pinned runs; builds that
+# drop the default (`--no-default-features`) lose the combo entry and the
+# default reverts to `Layered`. The `oxidizr-layout` crate keeps its own
+# `dagre` feature NON-default, so the zero-dep library promise stands.
+default = ["dagre"]
 gui = ["dep:eframe", "dep:clap", "dep:egui_commonmark"]
 # M4-6: the optional graphviz `dot` layout backend — pure passthrough to
 # `oxidizr-layout/dot-backend` (which is itself OFF by default). The
