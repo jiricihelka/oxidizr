@@ -754,6 +754,29 @@ pub(crate) fn drag_waypoint(
     })
 }
 
+/// Insert-and-route as ONE command: the commit of a press-drag on a
+/// segment-midpoint insert dot of the selected edge. `from` is the
+/// INTERIOR route captured at press (same preview/commit contract as
+/// [`drag_waypoint`]); `segment` counts the edge's POLYLINE segments
+/// (dot `s` sits between points `s` and `s + 1`), which maps to an
+/// insert at INTERIOR index `segment` (appending at the last dot);
+/// `at` is the already-snapped release point. Undo removes exactly the
+/// spliced vertex — always a command, the press on a dot is never a
+/// no-op.
+#[must_use]
+pub(crate) fn insert_waypoint(
+    id: &Id,
+    from: &[(f64, f64)],
+    segment: usize,
+    at: (f64, f64),
+) -> Command {
+    let mut to = from.to_vec();
+    to.insert(segment.min(to.len()), at);
+    Command::SetWaypoints {
+        changes: vec![(id.clone(), from.to_vec(), to)],
+    }
+}
+
 /// Land one auto-layout run as a single undoable [`Command`]:
 /// the dialog Apply and the adopt-time pass are COMMANDS, not silent
 /// state — one Ctrl+Z reverts positions and routes together). `overrides`
@@ -1507,6 +1530,40 @@ mod tests {
         // outside the route never mutates anything either.
         assert!(drag_waypoint(&id(10), &from, 1, (4.0, 0.0), true).is_none());
         assert!(drag_waypoint(&id(10), &from, 2, (10.0, 0.0), false).is_none());
+    }
+
+    #[test]
+    fn insert_waypoint_splices_one_vertex_undone_exactly() {
+        let scene = scene();
+        let mut o = overlay();
+        // Press on the midpoint dot of SEGMENT 1 (polyline points 1→2):
+        // the commit splices the dragged point at INTERIOR index 1.
+        let from = vec![(120.0, 40.0), (200.0, 80.0)];
+        let cmd = insert_waypoint(&id(10), &from, 1, (150.0, 60.0));
+        cmd.apply(&mut o, true);
+        assert_eq!(
+            o.interior(&scene, &id(10)),
+            vec![(120.0, 40.0), (150.0, 60.0), (200.0, 80.0)]
+        );
+        // Undo removes exactly the spliced vertex.
+        cmd.undo(&mut o);
+        assert_eq!(o.interior(&scene, &id(10)), from);
+        // The LAST dot (segment == interior count) appends.
+        let cmd = insert_waypoint(&id(10), &from, 2, (240.0, 85.0));
+        cmd.apply(&mut o, true);
+        assert_eq!(
+            o.interior(&scene, &id(10)),
+            vec![(120.0, 40.0), (200.0, 80.0), (240.0, 85.0)]
+        );
+        cmd.undo(&mut o);
+        assert_eq!(o.interior(&scene, &id(10)), from);
+        // A straight edge (no interior route): its single dot inserts
+        // the first vertex.
+        let cmd = insert_waypoint(&id(11), &[], 0, (385.0, 55.0));
+        cmd.apply(&mut o, true);
+        assert_eq!(o.interior(&scene, &id(11)), vec![(385.0, 55.0)]);
+        cmd.undo(&mut o);
+        assert_eq!(o.interior(&scene, &id(11)), Vec::new());
     }
 
     #[test]

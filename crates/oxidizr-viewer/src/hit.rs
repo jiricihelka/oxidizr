@@ -214,6 +214,37 @@ pub(crate) fn nearest_waypoint(
         .map(|(index, _)| index)
 }
 
+/// Index of the SEGMENT whose midpoint sits within `tol` world units of
+/// `point` — the insert-dot hit of the selected edge (the dot splices a
+/// waypoint into segment `i`, i.e. `points[i]`→`points[i + 1]`). The
+/// nearest dot wins; `None` when the polyline has no segment or no dot
+/// is in tolerance.
+#[must_use]
+pub(crate) fn nearest_midpoint(
+    point: (f64, f64),
+    points: &[(f64, f64)],
+    tol: f64,
+) -> Option<usize> {
+    points
+        .windows(2)
+        .enumerate()
+        .map(|(index, segment)| {
+            (
+                index,
+                distance(
+                    point,
+                    (
+                        f64::midpoint(segment[0].0, segment[1].0),
+                        f64::midpoint(segment[0].1, segment[1].1),
+                    ),
+                ),
+            )
+        })
+        .filter(|(_, at)| *at <= tol)
+        .min_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(index, _)| index)
+}
+
 /// Where a new vertex splices into `points`: the start of the segment
 /// nearest to `point` (a straight two-point edge inserts at 1; fewer
 /// than two points have nothing to split — the append index comes back).
@@ -547,6 +578,30 @@ mod tests {
         // The NEARER of two interior vertices wins.
         let bent = [(0.0, 0.0), (100.0, 0.0), (200.0, 0.0), (300.0, 100.0)];
         assert_eq!(nearest_waypoint((101.0, 1.0), &bent, 6.0), Some(1));
+    }
+
+    #[test]
+    fn nearest_midpoint_hits_segment_midpoints() {
+        let line = [(0.0, 0.0), (100.0, 20.0), (200.0, 0.0)];
+        // Midpoint of segment 1 is (150, 10): within tolerance → the SEGMENT
+        // index (the new vertex splices at points[1] → interior index 1).
+        assert_eq!(nearest_midpoint((152.0, 11.0), &line, 6.0), Some(1));
+        // Segment 0's midpoint is (50, 10).
+        assert_eq!(nearest_midpoint((49.0, 8.0), &line, 6.0), Some(0));
+        // Out of tolerance → None; the interior VERTEX is not a dot.
+        assert_eq!(nearest_midpoint((100.0, 20.0), &line, 6.0), None);
+        assert_eq!(nearest_midpoint((150.0, 20.0), &line, 6.0), None);
+        // A straight edge has exactly one dot; degenerate lines have none.
+        assert_eq!(
+            nearest_midpoint((100.0, 2.0), &[(0.0, 0.0), (200.0, 0.0)], 6.0),
+            Some(0)
+        );
+        assert_eq!(nearest_midpoint((0.0, 0.0), &[], 6.0), None);
+        assert_eq!(nearest_midpoint((0.0, 0.0), &[(0.0, 0.0)], 6.0), None);
+        // The NEARER of two in-tolerance dots wins (dots 4 apart, tol 6:
+        // the point sits within reach of both).
+        let bent = [(0.0, 0.0), (4.0, 0.0), (8.0, 0.0)];
+        assert_eq!(nearest_midpoint((4.5, 0.5), &bent, 6.0), Some(1));
     }
 
     #[test]

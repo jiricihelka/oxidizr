@@ -16,6 +16,12 @@ release.
 
 ### Added
 
+- The viewer canvas gained route-editing handles: a selected arrow shows
+  a dot at every segment midpoint (press-drag one to splice a waypoint
+  and route it in one move) and a square on each endpoint, the arrow
+  keys nudge the selection by one grid step (Shift = 10×, the grabbed
+  waypoint moves when an arrow route is being edited), and Ctrl+Shift+K
+  straightens the selected arrow alongside Delete.
 - The viewer's `gui` build gained a markdown rendering widget
   (`egui_commonmark`, optional, `gui`-feature only); it becomes visible
   with the help-overlay and documentation waves. The headless library and

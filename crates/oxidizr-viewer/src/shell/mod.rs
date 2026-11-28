@@ -191,6 +191,10 @@ struct Viewer {
     history: commands::History,
     /// The in-flight canvas interaction (pan / drag / lasso).
     drag: Drag,
+    /// The last-touched waypoint handle: `(edge, INTERIOR index)` —
+    /// the arrow keys nudge it while that edge stays selected (a
+    /// waypoint-drag or insert-dot commit grabs, Esc / adopt drop).
+    grabbed: Option<(ModelId, usize)>,
     /// Views edited since the last adopt (dirty marker; save).
     dirty: BTreeSet<String>,
     /// Last Save outcome line: green in the status bar, cleared
@@ -274,6 +278,25 @@ enum Drag {
         /// Latest preview delta (world px); release commits exactly it.
         delta: (f64, f64),
     },
+    /// Press began on a segment-midpoint INSERT dot of the selected
+    /// edge: the route `from` is captured at press, the dot of segment
+    /// `segment` sits at `at` (world px) and drags to the new vertex —
+    /// the commit is ONE `SetWaypoints` splicing it in (undo removes
+    /// exactly the insert).
+    Insert {
+        /// The edge whose route gains the vertex.
+        id: ModelId,
+        /// Press-time INTERIOR waypoints (world px).
+        from: Vec<(f64, f64)>,
+        /// SEGMENT whose dot was pressed (insert index into `from`).
+        segment: usize,
+        /// Dot position at press (world px) — target measures from it.
+        at: (f64, f64),
+        /// Press point (world px) — deltas measure from here.
+        press: (f64, f64),
+        /// Latest preview delta (world px); release commits exactly it.
+        delta: (f64, f64),
+    },
     /// Press began INSIDE the minimap box: every frame the
     /// pointer position re-centers the viewport (click = one recenter,
     /// drag = continuous). No scene edit, no history entry.
@@ -283,6 +306,11 @@ enum Drag {
 /// What a press on a waypoint handle finds: the edge id, its
 /// press-time INTERIOR route, and the route-relative vertex index.
 type WaypointHit = (ModelId, Vec<(f64, f64)>, usize);
+
+/// What a press on an INSERT dot of the selected edge finds: the edge
+/// id, its press-time INTERIOR route, the hit SEGMENT index (the route
+/// insert position) and the dot's world position.
+type InsertDotHit = (ModelId, Vec<(f64, f64)>, usize, (f64, f64));
 
 impl Viewer {
     fn new() -> Self {
@@ -329,6 +357,7 @@ impl Viewer {
             overlays: HashMap::new(),
             history: commands::History::default(),
             drag: Drag::Idle,
+            grabbed: None,
             dirty: BTreeSet::new(),
             save_note: None,
             includes: Vec::new(),
@@ -414,6 +443,7 @@ impl Viewer {
         // (scope cut — overlays survive VIEW switches, not OPENs).
         self.overlays.clear();
         self.history.reset();
+        self.grabbed = None;
         self.dirty.clear();
         self.save_note = None;
         // New workspace, new source set: the driver dies with the old
@@ -672,6 +702,7 @@ impl eframe::App for Viewer {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.selection = None;
+            self.grabbed = None;
         }
         // Undo/redo: Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk the SESSION
         // history — the step carries its view, so undoing can land on a
@@ -699,10 +730,37 @@ impl eframe::App for Viewer {
             // Delete/Backspace: strip the selected
             // edge's handles — the discoverable counterpart of the
             // Alt+click-per-handle and double-click-to-insert bindings.
-            let del = ctx
-                .input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace));
+            // Ctrl+Shift+K is the explicit straighten chord (Del flips
+            // to deleting the relationship when model editing lands).
+            let del = ctx.input(|i| {
+                i.key_pressed(egui::Key::Delete)
+                    || i.key_pressed(egui::Key::Backspace)
+                    || (i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::K))
+            });
             if del {
                 self.clear_selected_waypoints();
+            }
+            // Arrow keys: nudge by one grid step (Shift = 10x) — the
+            // GRABBED waypoint of the selected edge if there is one,
+            // else the selected elements (enclosed routes follow).
+            let nudge = ctx.input(|i| {
+                let step = if i.modifiers.shift { 10.0 } else { 1.0 };
+                let mut nudge = (0.0, 0.0);
+                for (key, (dx, dy)) in [
+                    (egui::Key::ArrowLeft, (-1.0, 0.0)),
+                    (egui::Key::ArrowRight, (1.0, 0.0)),
+                    (egui::Key::ArrowUp, (0.0, -1.0)),
+                    (egui::Key::ArrowDown, (0.0, 1.0)),
+                ] {
+                    if i.key_pressed(key) {
+                        nudge.0 += dx * step;
+                        nudge.1 += dy * step;
+                    }
+                }
+                nudge
+            });
+            if nudge != (0.0, 0.0) {
+                self.nudge_selection(nudge.0 * commands::GRID_PX, nudge.1 * commands::GRID_PX);
             }
         }
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));

@@ -61,6 +61,15 @@ pub(crate) const FALLBACK_INK: Color32 = Color32::BLACK;
 /// edge — fixed pixels, so they stay grabbable at any zoom.
 pub(crate) const WAYPOINT_HANDLE_PX: f32 = 4.0;
 
+/// Screen-space radius of the segment-midpoint INSERT dots painted on
+/// the selected edge: press-drag one to splice a waypoint and route it
+/// in one move (fixed pixels, like the handles).
+pub(crate) const INSERT_DOT_PX: f32 = 3.0;
+
+/// Screen-space half-side of the endpoint squares painted on the
+/// selected edge — the reconnect grabs.
+pub(crate) const ENDPOINT_HANDLE_PX: f32 = 4.0;
+
 /// What the shell selects (id-based so the selection survives scene
 /// rebuilds across zoom-band/filter changes).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -324,6 +333,12 @@ fn paint_edge(
             ));
         }
     }
+    //: SELECTED edge only: the route-editing kit (insert dots +
+    // endpoint squares, see [`paint_route_kit`]). Hover does NOT paint
+    // it: the kit serves the one route being edited.
+    if selected && points.len() >= 2 {
+        paint_route_kit(out, &points);
+    }
     let px = scaled_px(edge.font_size, viewport);
     let label_at = point_at(
         &points,
@@ -363,6 +378,33 @@ fn paint_edge(
             color,
         );
         out.push(galley_shape(Align2::CENTER_CENTER, at, digits));
+    }
+}
+
+/// The route-editing kit of the SELECTED edge: a white insert dot with
+/// an accent rim at every SEGMENT midpoint (press-drag = insert a
+/// waypoint and route it in one move), and one accent square per
+/// ENDPOINT (the reconnect grabs — painted ahead of the wave that
+/// drags them). Sizes are screen px, like the waypoint handles.
+fn paint_route_kit(out: &mut Vec<Shape>, points: &[Pos2]) {
+    let accent = Stroke::new(1.0, SELECTION_COLOR);
+    for segment in points.windows(2) {
+        let mid = pos2(
+            f32::midpoint(segment[0].x, segment[1].x),
+            f32::midpoint(segment[0].y, segment[1].y),
+        );
+        out.push(Shape::circle_filled(mid, INSERT_DOT_PX, Color32::WHITE));
+        out.push(Shape::circle_stroke(mid, INSERT_DOT_PX, accent));
+    }
+    for at in [points[0], points[points.len() - 1]] {
+        let rect = ERect::from_center_size(at, Vec2::splat(ENDPOINT_HANDLE_PX * 2.0));
+        out.push(Shape::Rect(epaint::RectShape::new(
+            rect,
+            0.0,
+            Color32::WHITE,
+            accent,
+            epaint::StrokeKind::Middle,
+        )));
     }
 }
 
@@ -1109,9 +1151,48 @@ mod tests {
         };
         // Unselected: no handles at all…
         assert_eq!(circles(&painted(&s, None)), 0);
-        // …selected: filled + ring per interior vertex (endpoints skip).
+        // …selected: filled + ring per interior vertex (endpoints skip),
+        // plus white filled + ring per SEGMENT midpoint insert dot
+        // (3 segments) — the fill color tells handles from dots.
         let picked = painted(&s, Some(&Selection::Edge(id)));
-        assert_eq!(circles(&picked), 4);
+        assert_eq!(circles(&picked), 10);
+        let handles = picked
+            .iter()
+            .filter(|shape| matches!(shape, Shape::Circle(c) if c.fill == SELECTION_COLOR))
+            .count();
+        assert_eq!(handles, 2, "one accent-filled handle per interior vertex");
+    }
+
+    #[test]
+    fn selected_edge_paints_insert_dots_and_endpoint_squares() {
+        let mut s = scene();
+        s.edges[0].points = vec![(175.0, 75.0), (500.0, 300.0), (900.0, 75.0)];
+        s.edges[0].order = None;
+        let id = s.edges[0].id.clone();
+        let white_circles = |shapes: &[Shape]| {
+            shapes
+                .iter()
+                .filter(|shape| matches!(shape, Shape::Circle(c) if c.fill == Color32::WHITE))
+                .count()
+        };
+        let squares = |shapes: &[Shape]| {
+            shapes
+                .iter()
+                .filter(|shape| {
+                    matches!(shape, Shape::Rect(r)
+                    if r.fill == Color32::WHITE && r.stroke.color == SELECTION_COLOR)
+                })
+                .count()
+        };
+        // Hover shows the waypoint handles but NEVER the insert kit:
+        // the dots serve the one route being edited.
+        assert_eq!(white_circles(&painted_with(&s, None, Some(&id))), 0);
+        assert_eq!(squares(&painted_with(&s, None, Some(&id))), 0);
+        // Selected: one white dot per SEGMENT (2), one square per
+        // ENDPOINT (2).
+        let picked = painted(&s, Some(&Selection::Edge(id)));
+        assert_eq!(white_circles(&picked), 2, "one insert dot per segment");
+        assert_eq!(squares(&picked), 2, "an endpoint square at both ends");
     }
 
     #[test]

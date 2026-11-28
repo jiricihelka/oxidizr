@@ -8,7 +8,7 @@ use eframe::egui::{self, Pos2, Vec2};
 use oxidizr_core::Id as ModelId;
 
 use super::widgets::{lasso_drag, tooltip_text, url_at};
-use super::{Drag, Viewer, WaypointHit};
+use super::{Drag, InsertDotHit, Viewer, WaypointHit};
 
 impl Viewer {
     #[allow(clippy::too_many_lines)] // the canvas pass: input → fit → paint → tip
@@ -180,6 +180,7 @@ impl Viewer {
                     if let Some(command) =
                         commands::drag_waypoint(&id, &from, index, world_delta, self.toggles.snap)
                     {
+                        self.grabbed = Some((id.clone(), index));
                         self.edit_current_view(command);
                     } else {
                         // Nothing moved: restore the press route the
@@ -190,6 +191,43 @@ impl Viewer {
                         }
                         self.rebuild_scene();
                     }
+                }
+            }
+            Drag::Insert {
+                id,
+                from,
+                segment,
+                at,
+                press,
+                delta: last,
+            } => {
+                // Same measuring as Waypoint: the release commits ONE
+                // SetWaypoints splicing the dragged point in, so one
+                // Ctrl+Z removes the insert again.
+                let world_delta = cursor.map_or(last, |pos| {
+                    let world = self
+                        .viewport
+                        .screen_to_world((f64::from(pos.x), f64::from(pos.y)));
+                    (world.0 - press.0, world.1 - press.1)
+                });
+                if response.dragged() {
+                    self.preview_insert(&id, &from, segment, at, world_delta);
+                    self.drag = Drag::Insert {
+                        id,
+                        from,
+                        segment,
+                        at,
+                        press,
+                        delta: world_delta,
+                    };
+                } else if release {
+                    // Preview and commit write the SAME route (both
+                    // splice the snapped target at `segment`).
+                    let target = commands::drag_target(at, world_delta, self.toggles.snap);
+                    let index = segment.min(from.len());
+                    let command = commands::insert_waypoint(&id, &from, segment, target);
+                    self.grabbed = Some((id.clone(), index));
+                    self.edit_current_view(command);
                 }
             }
         }
@@ -420,16 +458,18 @@ impl Viewer {
 
     /// Decide what a fresh left-button press starts (/): a
     /// waypoint handle of the SELECTED edge grabs FIRST (Alt+press
-    /// deletes that vertex, a plain press drags it), then a box under
-    /// the cursor begins a group MOVE (the box joins the selection
-    /// first; Shift keeps the group, a plain press elsewhere selects
-    /// just it), anything else PANS (: the LASSO moved to the
-    /// right button and never hit-tests). `ctrl` detaches the carried
-    /// arrow handles from the move .
+    /// deletes that vertex, a plain press drags it), then a segment-
+    /// midpoint INSERT dot of the selected edge starts an
+    /// insert-and-route drag, then a box under the cursor begins a group
+    /// MOVE (the box joins the selection first; Shift keeps the group, a
+    /// plain press elsewhere selects just it), anything else PANS (: the
+    /// LASSO moved to the right button and never hit-tests). `ctrl`
+    /// detaches the carried arrow handles from the move .
     fn press_mode(&mut self, origin: Pos2, shift: bool, alt: bool, ctrl: bool) -> Drag {
         let screen = (f64::from(origin.x), f64::from(origin.y));
         if let Some((id, mut from, index)) = self.waypoint_hit(screen) {
             if alt {
+                self.drop_grab(&id);
                 from.remove(index);
                 let overlay = self.overlay_for().clone();
                 let command = self
@@ -445,6 +485,19 @@ impl Viewer {
                 id,
                 from,
                 index,
+                press: self.viewport.screen_to_world(screen),
+                delta: (0.0, 0.0),
+            };
+        }
+        // Then a segment-midpoint INSERT dot of the selected edge:
+        // the press-drag splices a waypoint and routes it in one move
+        // (checked before boxes: dots sit ON the route, never on a box).
+        if let Some((id, from, segment, at)) = self.insert_dot_hit(screen) {
+            return Drag::Insert {
+                id,
+                from,
+                segment,
+                at,
                 press: self.viewport.screen_to_world(screen),
                 delta: (0.0, 0.0),
             };
@@ -559,7 +612,111 @@ impl Viewer {
         self.rebuild_scene();
     }
 
-    /// Delete/Backspace on the selected edge: drop ALL
+    /// Live INSERT preview frame: write exactly the route the release
+    /// will commit (the press route with the snapped target spliced in
+    /// at `segment`), then repaint — preview frames EQUAL the committed
+    /// geometry, so the commit re-applies idempotently.
+    fn preview_insert(
+        &mut self,
+        id: &ModelId,
+        from: &[(f64, f64)],
+        segment: usize,
+        at: (f64, f64),
+        delta: (f64, f64),
+    ) {
+        let mut route = from.to_vec();
+        let target = commands::drag_target(at, delta, self.toggles.snap);
+        route.insert(segment.min(route.len()), target);
+        {
+            let overlay = self.overlay_for();
+            overlay.relationships.insert(id.clone(), route);
+        }
+        self.rebuild_scene();
+    }
+
+    /// Press on a segment-midpoint INSERT dot of the SELECTED edge (the
+    /// dots paint there only): the scene polyline IS the effective
+    /// route, dots sit at every segment midpoint within
+    /// [`hit::HIT_TOLERANCE_PX`] screen px. Returns the press-time
+    /// INTERIOR route, the hit SEGMENT index (= its insert index into
+    /// the route, the last dot appends) and the dot's world position
+    /// (targets measure from it).
+    fn insert_dot_hit(&self, screen: (f64, f64)) -> Option<InsertDotHit> {
+        let id = match &self.selection {
+            Some(paint::Selection::Edge(id)) => id.clone(),
+            _ => return None,
+        };
+        let scene = self.scene.as_ref()?;
+        let edge = scene.edges.iter().find(|edge| edge.id == id)?;
+        if edge.points.len() < 2 {
+            return None;
+        }
+        let world = self.viewport.screen_to_world(screen);
+        let tol = hit::HIT_TOLERANCE_PX / self.viewport.scale();
+        let segment = hit::nearest_midpoint(world, &edge.points, tol)?;
+        let (a, b) = (edge.points[segment], edge.points[segment + 1]);
+        Some((
+            id,
+            edge.points[1..edge.points.len() - 1].to_vec(),
+            segment,
+            (f64::midpoint(a.0, b.0), f64::midpoint(a.1, b.1)),
+        ))
+    }
+
+    /// Arrow-key nudge: one step (`dx`/`dy` in world px, multiples of
+    /// [`commands::GRID_PX`]) moves the GRABBED waypoint of the still-
+    /// selected edge, else the selected ELEMENTS (enclosed routes
+    /// follow). Every key press is its own command — Ctrl+Z walks the
+    /// nudges one by one. No snap on the way: the step IS the geometry.
+    pub(super) fn nudge_selection(&mut self, dx: f64, dy: f64) {
+        // A grab lives only while its edge stays the selection.
+        let grabbed = self.grabbed.clone().filter(
+            |(id, _)| matches!(&self.selection, Some(paint::Selection::Edge(edge)) if edge == id),
+        );
+        if let Some((id, index)) = grabbed {
+            let overlay = self.overlay_for().clone();
+            let command = self.scene.as_ref().and_then(|scene| {
+                let from = overlay.interior(scene, &id);
+                commands::drag_waypoint(&id, &from, index, (dx, dy), false)
+            });
+            if let Some(command) = command {
+                self.edit_current_view(command);
+            }
+            return;
+        }
+        let ids: Vec<ModelId> = match &self.selection {
+            Some(paint::Selection::Items(ids)) => ids.clone(),
+            _ => return,
+        };
+        let origins = self.press_origins(&ids);
+        if origins.is_empty() {
+            return;
+        }
+        let carries = {
+            let overlay = self.overlay_for().clone();
+            self.scene.as_ref().map_or_else(Vec::new, |scene| {
+                commands::carried_interiors(scene, &overlay, &ids)
+            })
+        };
+        if let Some(command) = commands::drag_group(&origins, &carries, (dx, dy), false, true) {
+            self.edit_current_view(command);
+        }
+    }
+
+    /// A non-drag route edit (double-click insert, Alt+press removal,
+    /// straighten) shifts or deletes vertices: a grab on THAT edge
+    /// would nudge the wrong vertex, so drop it.
+    fn drop_grab(&mut self, id: &ModelId) {
+        if self
+            .grabbed
+            .as_ref()
+            .is_some_and(|(grabbed, _)| grabbed == id)
+        {
+            self.grabbed = None;
+        }
+    }
+
+    /// Delete/Backspace or Ctrl+Shift+K on the selected edge: drop ALL
     /// its interior waypoints — the inverse of double-click insert, one
     /// history step so Ctrl+Z restores the route. `set_waypoints(..,
     /// vec![])` straightens (the "remove vertices" edit); a plain
@@ -568,6 +725,7 @@ impl Viewer {
         let Some(paint::Selection::Edge(id)) = self.selection.clone() else {
             return;
         };
+        self.drop_grab(&id);
         let overlay = self.overlay_for().clone();
         let command = self
             .scene
@@ -601,6 +759,7 @@ impl Viewer {
         if points.len() < 2 {
             return;
         }
+        self.drop_grab(&id);
         let world = self.viewport.screen_to_world(screen);
         let splice = hit::insert_waypoint(world, &points).saturating_sub(1);
         let mut interior = points[1..points.len() - 1].to_vec();

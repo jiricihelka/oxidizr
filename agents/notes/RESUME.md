@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1 DONE (dep spike, binding table, single session history — gates green each); NEXT = M2 route UX (insert dots, nudge, endpoint-handle paint, Ctrl+Shift+K alias). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2 DONE (dep spike, binding table, session history, route UX: insert dots / nudge / endpoint paint / Ctrl+Shift+K — gates green each); NEXT = M3 headless ModelCommand core. Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -42,15 +42,21 @@
 
 ## If a next session opens
 
-- **M0+M1 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
+- **M0+M1+M2 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
   egui_commonmark 0.26 behind `gui` (V4 measured), `shortcuts::all()`
   binding table live; session `History` (Edit::Geometry steps, one stack,
-  `step_history` marks the STEP's view dirty, adopt resets). Start wave
-  **P6-M2** (route UX: midpoint insert dots on the selected edge —
-  paint + press-drag insert-and-route through one `set_waypoints`
-  command; endpoint-handle rendering (visual only until M4); arrow-key
-  nudge for selected element / grabbed waypoint; Ctrl+Shift+K added as
-  an alias for waypoint clearing — Del flips in M4).
+  `step_history` marks the STEP's view dirty, adopt resets); route UX —
+  `Drag::Insert` press-drag on `paint::paint_route_kit`'s midpoint dots
+  (commit = `commands::insert_waypoint`, ONE SetWaypoints), endpoint
+  squares painted (reconnect lands M4), `Viewer.grabbed` +
+  `nudge_selection` (arrows/Shift, grabbed-else-elements), Ctrl+Shift+K
+  alias (Del flips in M4). Start wave **P6-M3** (headless model core:
+  `commands::ModelCommand` variants + apply on `Arc<Workspace>` via
+  `Arc::make_mut`, id helper (`IdGenerator` found()→generate()),
+  RelationshipView injection into STATIC views on create / full removal
+  on delete, `Edit::Model` step on the session History, V1 round-trip
+  tests + V2 first half = re-read the pinned `Relationship` constructor
+  for the create payload, default description/tags).
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
   clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing
