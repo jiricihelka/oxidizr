@@ -195,6 +195,30 @@ output (Phase 1 flag); F9 is the Phase 1T interlude (test infra, `build/PHASE_1T
 - Compatibility: read-only presentation; no files touched beyond the
   existing save path; none.
 
+### F15 — auto-layout engine framework: dagre default, compound boundaries, pinned tidy, per-view config ✅ (signed off 2026-11-28, questions tool)
+
+- Problem: the MVP `Layered` engine's quality ceiling is structural
+  (longest-path ranks, barycenter-only ordering, boundaries not layout
+  inputs), Apply destroys manual placements, and dialog parameters are one
+  global set — the five `automaticLayout` fields exist per view but nothing
+  per-view remembers or writes them.
+- Feature: `dagre` (dagre.js port, crates.io, pure Rust, statically
+  linked) behind a non-default `dagre` cargo feature of `oxidizr-layout`
+  becomes the DEFAULT engine (network-simplex ranks, Brandes-Köpf
+  coordinates, COMPOUND graphs — boundaries enter the layout). Engines
+  become first-class: feature + availability driven, selectable in the
+  viewer dialog and `oxidizr view --layout-engine` (the frozen
+  `dot-backend` rides the same framework). Pinned tidy: elements with
+  manual (overlay) positions hold their EXACT coordinates while the rest
+  lays out around them. Per-view layout params in the viewer cache +
+  opt-in "Remember in view" writing the five STANDARD `automaticLayout`
+  fields back through the model-edit gate. Decomposition:
+  `build/PHASE_7.md`.
+- Compatibility: written bytes stay contract-exact — write-back touches
+  only the standard fields via the shared writer, plain `.json` sources
+  only; no new formats, nothing the official tooling cannot read.
+
+
 ## Ideas (💡 not agreed — sign-off required before implementing)
 
 | # | Idea | Compat analysis |

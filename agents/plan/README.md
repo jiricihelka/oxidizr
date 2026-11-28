@@ -30,6 +30,7 @@ disagree, the source wins — update the notes.
 | `build/PHASE_4D.md`           | Phase 4D plan: docs reset — short human-first text, READMEs everywhere  | Implementing the 4D interlude   |
 | `build/PHASE_5R.md`           | Phase 5R plan: large-scale idiomatic refactor → v0.5.0 (error texts loosened) | Implementing P5R            |
 | `build/PHASE_6.md`            | Phase 6 plan: GUI arrow model-editing + help texts (F13+F14, D17)      | Implementing P6              |
+| `build/PHASE_7.md`            | Phase 7 plan: auto-layout quality (dagre) + configuration (F15, D18, O2 superseded) | Implementing P7              |
 | `DEVIATIONS.md`               | Agreed, compat-safe differences from the reference + Locked list       | Before implementing ANY behavior   |
 | `ADDITIONAL_FEATURES.md`      | Registry of features Structurizr doesn't have (✅ agreed / 💡 ideas)    | Adding anything beyond parity      |
 | `research/notes-features.md`  | Raw deep notes behind FEATURES.md (see errata!)                        | Deep dive on a specific feature    |

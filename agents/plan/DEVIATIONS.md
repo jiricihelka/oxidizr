@@ -289,6 +289,19 @@ as a tombstone so old references keep resolving.
 - Compatibility impact: none — undo state is session memory; every written
   byte still goes through the shared JSON writer (P6-D2/D8, `build/PHASE_6.md`).
 
+## D18 — Apply-layout pins manual placements (layout editor: relayouts everything)
+
+- Official layout editor (Structurizr web): applying the automatic layout
+  re-positions EVERY element; manual tweaks are lost and must be redone.
+- oxidizr (P7-D3/D8): elements the user dragged (overlay positions exist)
+  hold their exact coordinates; the engine lays out the rest around them
+  (pinned runs select the `Layered` engine — its coordinate pass gains
+  anchor clamps). "Apply (ignore pins)" and Shift-click unpin keep the
+  official semantics one click away.
+- Compatibility impact: none — pin state lives in the session overlay, the
+  layout result lands as ordinary `{x,y}`/vertices through the shared JSON
+  writer (`build/PHASE_7.md`).
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact

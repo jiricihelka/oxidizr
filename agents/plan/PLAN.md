@@ -135,6 +135,21 @@ descriptions (`egui_commonmark`, gui-feature-only), and a `!docs`
 documentation window. P3-D4 editor rule amended; D17 registered;
 F13+F14 signed off. No tag at close. Decisions + waves: `build/PHASE_6.md`.
 
+## Phase 7 — Auto-layout quality + configuration (added 2026-11-28)
+
+Goal: views without stored geometry finally look GOOD. Layout quality
+comes from a battle-tested dependency — `dagre` (pure-Rust dagre.js port,
+statically linked, crates.io-only per the user) becomes the default engine
+behind the `LayoutEngine` seam, while the own `Layered` engine stays the
+pinned-run and fallback path; engines become first-class, feature-enabled,
+GUI/CLI-selectable (dot-backend joins the selection, frozen otherwise —
+no new external dependencies). Boundaries become real layout inputs
+(dagre compound graphs); Apply learns to PIN what the user moved; layout
+configuration goes per-view, with an opt-in write-back of the standard
+`automaticLayout` fields (plain `.json` sources, shared writer). O2
+superseded; P3-D1 default-tree zero-dep promise preserved; F15 signed
+off. No tag at close. Decisions + waves: `build/PHASE_7.md`.
+
 ## Out of scope for this roadmap
 
 Server/lite/playground/web-UI equivalents, MCP server, static-site/PNG/SVG export,
@@ -148,7 +163,9 @@ Resolved 2026-11-14 (decisions in the phase plans):
 
 - O1 GUI toolkit → **egui/eframe (wgpu)** — `build/PHASE_3.md` P3-D2.
 - O2 Layout engine → **own deterministic layered engine + optional `dot-backend`
-  cargo feature** — `build/PHASE_3.md` P3-D5.
+  cargo feature** — `build/PHASE_3.md` P3-D5. **SUPERSEDED 2026-11-28:** quality
+  engine becomes `dagre` (crates.io, pure Rust, static) behind the seam, Layered
+  kept for pinned runs, dot frozen in the engine selection — `build/PHASE_7.md` P7-D0.
 - O3 C4-PlantUML dialect/version → **mirror the reference at the pinned commit**:
   `c4plantuml.stdlib` property (default true) selects `!include <C4/…>` stdlib form vs
   raw master-URL includes — `build/PHASE_2.md` P2-D6.
