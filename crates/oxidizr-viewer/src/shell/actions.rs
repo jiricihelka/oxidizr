@@ -317,19 +317,29 @@ impl Viewer {
     }
 
     /// Undo/redo one SESSION step (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y). The
-    /// step carries its view: undoing can move a view the user has
-    /// switched away from — that view is marked dirty and the scene
-    /// rebuilt; the current view repaints unchanged, the dirty dots in
-    /// the view list tell the rest.
+    /// step carries what it moved: a geometry step names its view (that
+    /// view is marked dirty), a MODEL step repaints every view (the
+    /// scene shows the model; the save rule follows with the canvas
+    /// model ops). Undoing can move a view the user has switched away
+    /// from — the dirty dots in the view list tell the rest.
     pub(super) fn step_history(&mut self, forward: bool) {
-        let moved = if forward {
-            self.history.redo(&mut self.overlays)
-        } else {
-            self.history.undo(&mut self.overlays)
+        let Some(workspace) = self.workspace.as_mut() else {
+            return;
         };
-        if let Some(view_key) = moved {
-            self.dirty.insert(view_key);
-            self.rebuild_scene();
+        let moved = if forward {
+            self.history.redo(workspace, &mut self.overlays)
+        } else {
+            self.history.undo(workspace, &mut self.overlays)
+        };
+        match moved {
+            Some(commands::Stepped::Geometry(view_key)) => {
+                self.dirty.insert(view_key);
+                self.rebuild_scene();
+            }
+            Some(commands::Stepped::Model) => {
+                self.rebuild_scene();
+            }
+            None => {}
         }
     }
 

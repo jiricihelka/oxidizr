@@ -1,9 +1,13 @@
 //! Invertible editing commands + undo/redo stacks:
-//! every edit is a [`Command`] mutating only the [`LayoutOverlay`] —
-//! geometry deltas over the read-only workspace; the model and DSL text
-//! are immutable (the editor rule). Commands carry their own inverse
-//! (`from`/`to` pairs), so undo is a symmetric re-apply — no closures
-//! on the stack, and a saved session never needs to serialise one.
+//! every geometry edit is a [`Command`] mutating only the
+//! [`LayoutOverlay`] — deltas over the stored geometry — while every
+//! MODEL edit is a [`ModelCommand`] mutating the workspace itself
+//! (relationship create/delete/reconnect/relabel). The DSL text is
+//! NEVER rewritten: the shell gates model editing to `.json` sources.
+//! Commands carry their own inverse (`from`/`to` pairs, or exact
+//! captured positions for model rows), so undo is a symmetric re-apply —
+//! no closures on the stack, and a saved session never needs to
+//! serialise one.
 //!
 //! Factories (`move_by`, `align`, `distribute`, `centre_view`,
 //! `bring_back`, `remove_all_vertices`, `set_waypoints`, ...)
@@ -27,8 +31,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use oxidizr_core::Id;
+use oxidizr_core::IdGenerator;
 use oxidizr_core::Workspace;
-use oxidizr_core::views::{Dimensions, Vertex, ViewContent};
+use oxidizr_core::model::{DeploymentNode, Model, Relationship};
+use oxidizr_core::properties::Properties;
+use oxidizr_core::tags::Tags;
+use oxidizr_core::views::{Dimensions, RelationshipView, Vertex, ViewContent, ViewSet};
 
 use crate::scene::{Overrides, Rect, Scene};
 
@@ -245,7 +253,7 @@ impl Command {
 }
 
 /// One step on the session history: a geometry command tagged with the
-/// view it edits (the model waves add their own step kind here). Undo
+/// view it edits, or a model command over the whole workspace. Undo
 /// walks ONE stack across views, so a global model edit can never be
 /// undone in one view and left standing in another.
 #[derive(Debug, Clone, PartialEq)]
@@ -257,6 +265,23 @@ pub(crate) enum Edit {
         /// The geometry command.
         command: Command,
     },
+    /// A model command — it mutates the workspace (and may move overlay
+    /// routes, e.g. a delete), so undo/redo receive both. Boxed: the
+    /// delete snapshot (row + per-view rows + routes) outweighs a
+    /// geometry step, and the stack stores thousands of steps.
+    //: the canvas model ops construct this next; the tests drive it meanwhile.
+    #[allow(dead_code)]
+    Model(Box<ModelCommand>),
+}
+
+/// What one undo/redo step MOVED: the named view's geometry, or the
+/// model itself (every view can repaint; the workspace needs a save).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Stepped {
+    /// Geometry of this view changed.
+    Geometry(String),
+    /// The workspace's model changed.
+    Model,
 }
 
 /// The session's undo/redo stacks over the WHOLE open workspace: `Vec`
@@ -293,36 +318,74 @@ impl History {
         self.redo.clear();
     }
 
-    /// Undo the most recent step; `Some(view_key)` names the view whose
-    /// geometry moved (dirty + repaint follow it), `None` = nothing left.
-    pub fn undo(&mut self, overlays: &mut HashMap<String, LayoutOverlay>) -> Option<String> {
+    /// Apply a MODEL command to the open workspace (and, where the edit
+    /// moves waypoints, to the overlays) and remember the step — the
+    /// model twin of [`History::run_geometry`] on the SAME session
+    /// stack: one Ctrl+Z walks geometry and model edits together.
+    //: consumed by the canvas model-op wiring; until it lands the
+    // tests drive this (the undo/redo arms keep the shape live).
+    #[allow(dead_code)]
+    pub fn run_model(
+        &mut self,
+        workspace: &mut Workspace,
+        overlays: &mut HashMap<String, LayoutOverlay>,
+        command: ModelCommand,
+    ) {
+        command.apply(workspace, overlays);
+        if self.undo.len() == HISTORY_CAP {
+            self.undo.remove(0);
+        }
+        self.undo.push(Edit::Model(Box::new(command)));
+        self.redo.clear();
+    }
+
+    /// Undo the most recent step; `Some(Stepped)` names what moved —
+    /// the view whose geometry changed (dirty + repaint follow it), or
+    /// the model itself. `None` = nothing left.
+    pub fn undo(
+        &mut self,
+        workspace: &mut Workspace,
+        overlays: &mut HashMap<String, LayoutOverlay>,
+    ) -> Option<Stepped> {
         let edit = self.undo.pop()?;
-        let view_key = match &edit {
+        let moved = match &edit {
             Edit::Geometry { view_key, command } => {
                 if let Some(overlay) = overlays.get_mut(view_key) {
                     command.undo(overlay);
                 }
-                view_key.clone()
+                Stepped::Geometry(view_key.clone())
+            }
+            Edit::Model(command) => {
+                command.undo(workspace, overlays);
+                Stepped::Model
             }
         };
         self.redo.push(edit);
-        Some(view_key)
+        Some(moved)
     }
 
     /// Re-apply the most recently undone step; same contract as
     /// [`History::undo`].
-    pub fn redo(&mut self, overlays: &mut HashMap<String, LayoutOverlay>) -> Option<String> {
+    pub fn redo(
+        &mut self,
+        workspace: &mut Workspace,
+        overlays: &mut HashMap<String, LayoutOverlay>,
+    ) -> Option<Stepped> {
         let edit = self.redo.pop()?;
-        let view_key = match &edit {
+        let moved = match &edit {
             Edit::Geometry { view_key, command } => {
                 if let Some(overlay) = overlays.get_mut(view_key) {
                     command.apply(overlay, true);
                 }
-                view_key.clone()
+                Stepped::Geometry(view_key.clone())
+            }
+            Edit::Model(command) => {
+                command.apply(workspace, overlays);
+                Stepped::Model
             }
         };
         self.undo.push(edit);
-        Some(view_key)
+        Some(moved)
     }
 
     /// Whether [`History::undo`] would do anything.
@@ -347,6 +410,698 @@ impl History {
         self.undo.clear();
         self.redo.clear();
     }
+}
+
+// ---- model commands ----------------------------------------------------------
+
+/// Which ENDPOINT of a relationship [`ModelCommand::ReconnectRelationship`]
+/// moves. `Source` also MOVES the relationship id between the two
+/// elements' efferent `relationships` lists (the JSON nests them there);
+/// `Destination` edits the model row alone.
+#[allow(dead_code)] //: the canvas model ops construct these next; the tests drive them meanwhile
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Endpoint {
+    /// The `sourceId` end.
+    Source,
+    /// The `destinationId` end.
+    Destination,
+}
+
+/// Which free-text slot of a relationship
+/// [`ModelCommand::SetRelationshipText`] relabels.
+#[allow(dead_code)] //: the canvas model ops construct these next; the tests drive them meanwhile
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TextField {
+    /// The `description`.
+    Description,
+    /// The `technology`.
+    Technology,
+}
+
+/// One MODEL edit over the open workspace. Deletes snapshot the EXACT
+/// positions the inverse has to restore (model index, efferent-list
+/// slot, per-view row index, overlay routes) so undo is byte-identical,
+/// not merely equivalent — the JSON keeps list order.
+#[allow(dead_code)] //: the canvas model ops construct these next; the tests drive them meanwhile
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ModelCommand {
+    /// Append a brand-new relationship: the model row, its id in the
+    /// source element's efferent list, and a fresh `RelationshipView`
+    /// in every STATIC view (landscape/context/container/component)
+    /// that already shows both endpoints.
+    CreateRelationship {
+        /// The row to insert (fresh id from the shared counter).
+        relationship: Relationship,
+    },
+    /// Remove a relationship everywhere it is stored: model row,
+    /// efferent-list slot, every content-bearing view's
+    /// `RelationshipViews`, and every overlay route keyed by its id.
+    DeleteRelationship {
+        /// The removed row.
+        row: Relationship,
+        /// Its index in `model.relationships`.
+        model_index: usize,
+        /// Its slot in the source element's efferent list (`None` for a
+        /// ghost relationship the source never listed).
+        source_slot: Option<usize>,
+        /// `(view key, index, row)` per stored `RelationshipView`.
+        view_rows: Vec<(String, usize, RelationshipView)>,
+        /// `(view key, route)` per overlay that carried waypoints.
+        overlay_rows: Vec<(String, Vec<(f64, f64)>)>,
+    },
+    /// Move one endpoint; `Source` re-homes the id in the efferent
+    /// lists at apply time (membership is recomputed, never assumed).
+    ReconnectRelationship {
+        /// The relationship to move.
+        id: Id,
+        /// Which end moves.
+        endpoint: Endpoint,
+        /// The endpoint's current id.
+        from: Id,
+        /// The endpoint's new id.
+        to: Id,
+        /// Slot `id` held in `from`'s efferent list — the undo restore
+        /// point (`None` for `Destination`, which touches no list).
+        from_slot: Option<usize>,
+    },
+    /// Relabel `description`/`technology` on the model row.
+    SetRelationshipText {
+        /// The relationship to relabel.
+        id: Id,
+        /// Which slot changes.
+        field: TextField,
+        /// The previous value (undo restores it exactly).
+        from: Option<String>,
+        /// The new value.
+        to: Option<String>,
+    },
+}
+
+impl ModelCommand {
+    /// Apply the edit forward to the workspace (+ overlay routes).
+    pub(crate) fn apply(
+        &self,
+        workspace: &mut Workspace,
+        overlays: &mut HashMap<String, LayoutOverlay>,
+    ) {
+        match self {
+            Self::CreateRelationship { relationship } => {
+                workspace.model.relationships.push(relationship.clone());
+                if let Some(list) =
+                    relationship_list_mut(&mut workspace.model, &relationship.source)
+                    && !list.contains(&relationship.id)
+                {
+                    list.push(relationship.id.clone());
+                }
+                for (_, content) in static_contents_mut(&mut workspace.views) {
+                    inject_relationship_view(content, relationship);
+                }
+            }
+            Self::DeleteRelationship {
+                row, overlay_rows, ..
+            } => {
+                workspace.model.relationships.retain(|r| r.id != row.id);
+                if let Some(list) = relationship_list_mut(&mut workspace.model, &row.source) {
+                    list.retain(|r| r != &row.id);
+                }
+                for (_, content) in all_contents_mut(&mut workspace.views) {
+                    content.relationships.retain(|r| r.id != row.id);
+                }
+                for (key, _) in overlay_rows {
+                    if let Some(overlay) = overlays.get_mut(key) {
+                        overlay.relationships.remove(&row.id);
+                    }
+                }
+            }
+            Self::ReconnectRelationship {
+                id,
+                endpoint,
+                from,
+                to,
+                ..
+            } => {
+                if let Some(row) = workspace
+                    .model
+                    .relationships
+                    .iter_mut()
+                    .find(|r| r.id == *id)
+                {
+                    match endpoint {
+                        Endpoint::Source => row.source = to.clone(),
+                        Endpoint::Destination => row.destination = to.clone(),
+                    }
+                }
+                if matches!(endpoint, Endpoint::Source) {
+                    if let Some(list) = relationship_list_mut(&mut workspace.model, from) {
+                        list.retain(|r| r != id);
+                    }
+                    if let Some(list) = relationship_list_mut(&mut workspace.model, to)
+                        && !list.contains(id)
+                    {
+                        list.push(id.clone());
+                    }
+                }
+            }
+            Self::SetRelationshipText { id, field, to, .. } => {
+                set_text(workspace, id, *field, to.clone());
+            }
+        }
+    }
+
+    /// Apply the inverse: every position the forward step moved is put
+    /// back at its captured index, so an undone step leaves no trace in
+    /// the written JSON.
+    pub(crate) fn undo(
+        &self,
+        workspace: &mut Workspace,
+        overlays: &mut HashMap<String, LayoutOverlay>,
+    ) {
+        match self {
+            Self::CreateRelationship { relationship } => {
+                workspace
+                    .model
+                    .relationships
+                    .retain(|r| r.id != relationship.id);
+                if let Some(list) =
+                    relationship_list_mut(&mut workspace.model, &relationship.source)
+                {
+                    list.retain(|r| r != &relationship.id);
+                }
+                // The id is brand-new, so removing it EVERYWHERE is the
+                // exact inverse of the injection (LIFO: later edits —
+                // e.g. a reconnect — undo first).
+                for (_, content) in all_contents_mut(&mut workspace.views) {
+                    content.relationships.retain(|r| r.id != relationship.id);
+                }
+            }
+            Self::DeleteRelationship {
+                row,
+                model_index,
+                source_slot,
+                view_rows,
+                overlay_rows,
+            } => {
+                insert_at(
+                    &mut workspace.model.relationships,
+                    *model_index,
+                    row.clone(),
+                );
+                if let Some(slot) = source_slot
+                    && let Some(list) = relationship_list_mut(&mut workspace.model, &row.source)
+                {
+                    insert_at(list, *slot, row.id.clone());
+                }
+                for (key, index, view_row) in view_rows {
+                    if let Some(content) = content_of_key(workspace, key) {
+                        insert_at(&mut content.relationships, *index, view_row.clone());
+                    }
+                }
+                for (key, route) in overlay_rows {
+                    overlays
+                        .entry(key.clone())
+                        .or_insert_with(|| LayoutOverlay::for_view(key))
+                        .relationships
+                        .insert(row.id.clone(), route.clone());
+                }
+            }
+            Self::ReconnectRelationship {
+                id,
+                endpoint,
+                from,
+                to,
+                from_slot,
+            } => {
+                if let Some(row) = workspace
+                    .model
+                    .relationships
+                    .iter_mut()
+                    .find(|r| r.id == *id)
+                {
+                    match endpoint {
+                        Endpoint::Source => row.source = from.clone(),
+                        Endpoint::Destination => row.destination = from.clone(),
+                    }
+                }
+                if matches!(endpoint, Endpoint::Source) {
+                    if let Some(list) = relationship_list_mut(&mut workspace.model, to) {
+                        list.retain(|r| r != id);
+                    }
+                    if let Some(list) = relationship_list_mut(&mut workspace.model, from) {
+                        let at = from_slot.unwrap_or(list.len());
+                        insert_at(list, at, id.clone());
+                    }
+                }
+            }
+            Self::SetRelationshipText {
+                id, field, from, ..
+            } => {
+                set_text(workspace, id, *field, from.clone());
+            }
+        }
+    }
+}
+
+/// Write one text slot of one relationship row (no-op when the id is
+/// gone — the row's absence is never recreated by an undo).
+fn set_text(workspace: &mut Workspace, id: &Id, field: TextField, value: Option<String>) {
+    if let Some(row) = workspace
+        .model
+        .relationships
+        .iter_mut()
+        .find(|r| r.id == *id)
+    {
+        match field {
+            TextField::Description => row.description = value,
+            TextField::Technology => row.technology = value,
+        }
+    }
+}
+
+/// Insert `value` at `index`, clamped to the list end (the clamped
+/// fallback only fires on a model that changed shape since the capture
+/// — history LIFO normally guarantees the exact slot is free).
+fn insert_at<T>(list: &mut Vec<T>, index: usize, value: T) {
+    list.insert(index.min(list.len()), value);
+}
+
+/// The fresh `RelationshipView` the view-add semantics store for a
+/// relationship no view has seen — id only, every other slot empty (the
+/// same shape the builder's add-relationship writes).
+fn inject_relationship_view(content: &mut ViewContent, relationship: &Relationship) {
+    let shown = |id: &Id| content.elements.iter().any(|e| &e.id == id);
+    if shown(&relationship.source)
+        && shown(&relationship.destination)
+        && !content
+            .relationships
+            .iter()
+            .any(|r| r.id == relationship.id)
+    {
+        content.relationships.push(RelationshipView {
+            id: relationship.id.clone(),
+            description: None,
+            url: None,
+            order: None,
+            response: None,
+            properties: Properties::new(),
+            vertices: Vec::new(),
+            routing: None,
+            jump: None,
+            position: None,
+        });
+    }
+}
+
+/// Mutable efferent-list access for ONE element, mirroring the core
+/// builder's private traversal: people, systems → containers →
+/// components, custom elements, deployment nodes recursively. Every
+/// element kind has such a list, so `Some` doubles as the
+/// element-exists probe.
+fn relationship_list_mut<'a>(model: &'a mut Model, id: &Id) -> Option<&'a mut Vec<Id>> {
+    if let Some(p) = model.people.iter_mut().find(|p| &p.item.id == id) {
+        return Some(&mut p.relationships);
+    }
+    for s in &mut model.software_systems {
+        if &s.item.id == id {
+            return Some(&mut s.relationships);
+        }
+        for c in &mut s.containers {
+            if &c.item.id == id {
+                return Some(&mut c.relationships);
+            }
+            for k in &mut c.components {
+                if &k.item.id == id {
+                    return Some(&mut k.relationships);
+                }
+            }
+        }
+    }
+    if let Some(c) = model.custom_elements.iter_mut().find(|c| &c.item.id == id) {
+        return Some(&mut c.relationships);
+    }
+    node_list_mut(&mut model.deployment_nodes, id)
+}
+
+#[allow(clippy::needless_pass_by_value)] // recursion needs the slice reborrow explicit
+fn node_list_mut<'a>(nodes: &'a mut [DeploymentNode], id: &Id) -> Option<&'a mut Vec<Id>> {
+    for n in nodes {
+        if &n.item.id == id {
+            return Some(&mut n.relationships);
+        }
+        for i in &mut n.infrastructure_nodes {
+            if &i.item.id == id {
+                return Some(&mut i.relationships);
+            }
+        }
+        for s in &mut n.software_system_instances {
+            if &s.item.id == id {
+                return Some(&mut s.relationships);
+            }
+        }
+        for c in &mut n.container_instances {
+            if &c.item.id == id {
+                return Some(&mut c.relationships);
+            }
+        }
+        if let Some(found) = node_list_mut(&mut n.children, id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Read-only twin of [`relationship_list_mut`] (factories probe on
+/// `&Workspace`).
+#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
+fn element_relationships<'a>(model: &'a Model, id: &Id) -> Option<&'a Vec<Id>> {
+    if let Some(p) = model.people.iter().find(|p| &p.item.id == id) {
+        return Some(&p.relationships);
+    }
+    for s in &model.software_systems {
+        if &s.item.id == id {
+            return Some(&s.relationships);
+        }
+        for c in &s.containers {
+            if &c.item.id == id {
+                return Some(&c.relationships);
+            }
+            for k in &c.components {
+                if &k.item.id == id {
+                    return Some(&k.relationships);
+                }
+            }
+        }
+    }
+    if let Some(c) = model.custom_elements.iter().find(|c| &c.item.id == id) {
+        return Some(&c.relationships);
+    }
+    node_relationships(&model.deployment_nodes, id)
+}
+
+#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
+fn node_relationships<'a>(nodes: &'a [DeploymentNode], id: &Id) -> Option<&'a Vec<Id>> {
+    for n in nodes {
+        if &n.item.id == id {
+            return Some(&n.relationships);
+        }
+        for i in &n.infrastructure_nodes {
+            if &i.item.id == id {
+                return Some(&i.relationships);
+            }
+        }
+        for s in &n.software_system_instances {
+            if &s.item.id == id {
+                return Some(&s.relationships);
+            }
+        }
+        for c in &n.container_instances {
+            if &c.item.id == id {
+                return Some(&c.relationships);
+            }
+        }
+        if let Some(found) = node_relationships(&n.children, id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Visit EVERY element id in the model (the shared-counter registration
+/// walk of [`next_relationship_id`]).
+#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
+fn for_each_element_id(model: &Model, visit: &mut impl FnMut(&Id)) {
+    for p in &model.people {
+        visit(&p.item.id);
+    }
+    for s in &model.software_systems {
+        visit(&s.item.id);
+        for c in &s.containers {
+            visit(&c.item.id);
+            for k in &c.components {
+                visit(&k.item.id);
+            }
+        }
+    }
+    for c in &model.custom_elements {
+        visit(&c.item.id);
+    }
+    for_each_node_id(&model.deployment_nodes, visit);
+}
+
+#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
+fn for_each_node_id(nodes: &[DeploymentNode], visit: &mut impl FnMut(&Id)) {
+    for n in nodes {
+        visit(&n.item.id);
+        for i in &n.infrastructure_nodes {
+            visit(&i.item.id);
+        }
+        for s in &n.software_system_instances {
+            visit(&s.item.id);
+        }
+        for c in &n.container_instances {
+            visit(&c.item.id);
+        }
+        for_each_node_id(&n.children, visit);
+    }
+}
+
+/// The next relationship id from the SHARED counter: register every
+/// element and relationship id, then allocate — exactly how the core
+/// builder numbers a new relationship (the counter never collides).
+#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
+fn next_relationship_id(model: &Model) -> Id {
+    let mut counter = IdGenerator::new();
+    for_each_element_id(model, &mut |id| counter.found(id));
+    for row in &model.relationships {
+        counter.found(&row.id);
+    }
+    Id::from_num(counter.generate())
+}
+
+/// `(key, content)` for every CONTENT-BEARING view (delete's sweep —
+/// filtered and image views carry no rows of their own).
+#[allow(dead_code)] //: consumed by the model factories; the tests drive this meanwhile
+fn all_contents(views: &ViewSet) -> Vec<(&str, &ViewContent)> {
+    let mut out: Vec<(&str, &ViewContent)> = Vec::new();
+    macro_rules! collect {
+        ($field:ident) => {
+            out.extend(
+                views
+                    .$field
+                    .iter()
+                    .map(|view| (view.base.key.as_str(), &view.content)),
+            );
+        };
+    }
+    collect!(custom_views);
+    collect!(system_landscape_views);
+    collect!(system_context_views);
+    collect!(container_views);
+    collect!(component_views);
+    collect!(dynamic_views);
+    collect!(deployment_views);
+    out
+}
+
+/// Mutable [`all_contents`].
+fn all_contents_mut(views: &mut ViewSet) -> Vec<(&str, &mut ViewContent)> {
+    let mut out: Vec<(&str, &mut ViewContent)> = Vec::new();
+    macro_rules! collect {
+        ($field:ident) => {
+            out.extend(
+                views
+                    .$field
+                    .iter_mut()
+                    .map(|view| (view.base.key.as_str(), &mut view.content)),
+            );
+        };
+    }
+    collect!(custom_views);
+    collect!(system_landscape_views);
+    collect!(system_context_views);
+    collect!(container_views);
+    collect!(component_views);
+    collect!(dynamic_views);
+    collect!(deployment_views);
+    out
+}
+
+/// The four STATIC model views (create's injection sweep: relationship
+/// rows land only where the endpoint boxes are already laid out).
+fn static_contents_mut(views: &mut ViewSet) -> Vec<(&str, &mut ViewContent)> {
+    let mut out: Vec<(&str, &mut ViewContent)> = Vec::new();
+    macro_rules! collect {
+        ($field:ident) => {
+            out.extend(
+                views
+                    .$field
+                    .iter_mut()
+                    .map(|view| (view.base.key.as_str(), &mut view.content)),
+            );
+        };
+    }
+    collect!(system_landscape_views);
+    collect!(system_context_views);
+    collect!(container_views);
+    collect!(component_views);
+    out
+}
+
+/// Create a `source -> destination` relationship as the tooling stores
+/// one: NO `description` key, EMPTY stored tags (the `Relationship` tag
+/// is DERIVED at serialization), id from the shared counter. `None`
+/// when an end is unknown or the ends coincide, or when an efferent
+/// `source -> destination` relationship with an already-empty
+/// description exists — the official duplicate check would reject the
+/// second one, and saved output must load there.
+#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
+#[must_use]
+pub(crate) fn create_relationship(
+    workspace: &Workspace,
+    source: &Id,
+    destination: &Id,
+) -> Option<ModelCommand> {
+    if source == destination {
+        return None;
+    }
+    if element_relationships(&workspace.model, source).is_none()
+        || element_relationships(&workspace.model, destination).is_none()
+    {
+        return None;
+    }
+    let duplicate = workspace.model.relationships.iter().any(|r| {
+        &r.source == source
+            && &r.destination == destination
+            && r.description.as_deref().unwrap_or("").is_empty()
+    });
+    if duplicate {
+        return None;
+    }
+    Some(ModelCommand::CreateRelationship {
+        relationship: Relationship {
+            id: next_relationship_id(&workspace.model),
+            source: source.clone(),
+            destination: destination.clone(),
+            description: None,
+            technology: None,
+            tags: Tags::new(),
+            url: None,
+            properties: Properties::new(),
+            perspectives: Vec::new(),
+            interaction_style: None,
+            linked_relationship_id: None,
+        },
+    })
+}
+
+/// Delete relationship `id`, snapshotting every position undo has to
+/// restore (model row index, efferent slot, per-view rows, overlay
+/// routes). `None` when the id names no model row.
+#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
+#[must_use]
+pub(crate) fn delete_relationship(
+    workspace: &Workspace,
+    overlays: &HashMap<String, LayoutOverlay>,
+    id: &Id,
+) -> Option<ModelCommand> {
+    let model_index = workspace
+        .model
+        .relationships
+        .iter()
+        .position(|r| r.id == *id)?;
+    let row = workspace.model.relationships[model_index].clone();
+    let source_slot = element_relationships(&workspace.model, &row.source)
+        .and_then(|list| list.iter().position(|r| r == id));
+    let view_rows: Vec<(String, usize, RelationshipView)> = all_contents(&workspace.views)
+        .into_iter()
+        .flat_map(|(key, content)| {
+            content
+                .relationships
+                .iter()
+                .enumerate()
+                .filter(|(_, view_row)| view_row.id == *id)
+                .map(move |(index, view_row)| (key.to_string(), index, view_row.clone()))
+        })
+        .collect();
+    let overlay_rows: Vec<(String, Vec<(f64, f64)>)> = overlays
+        .iter()
+        .filter_map(|(key, overlay)| {
+            overlay
+                .relationships
+                .get(id)
+                .cloned()
+                .map(|route| (key.clone(), route))
+        })
+        .collect();
+    Some(ModelCommand::DeleteRelationship {
+        row,
+        model_index,
+        source_slot,
+        view_rows,
+        overlay_rows,
+    })
+}
+
+/// Reconnect one endpoint of relationship `id` to element `to`. `None`
+/// when the relationship or the new element is unknown, the endpoint
+/// already points there (a no-op), or the move would point the
+/// relationship at its own other end (the self-loop the tooling
+/// rejects).
+#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
+#[must_use]
+pub(crate) fn reconnect_relationship(
+    workspace: &Workspace,
+    id: &Id,
+    endpoint: Endpoint,
+    to: &Id,
+) -> Option<ModelCommand> {
+    let row = workspace.model.relationships.iter().find(|r| r.id == *id)?;
+    let (from, other) = match endpoint {
+        Endpoint::Source => (&row.source, &row.destination),
+        Endpoint::Destination => (&row.destination, &row.source),
+    };
+    if from == to || to == other || element_relationships(&workspace.model, to).is_none() {
+        return None;
+    }
+    let from_slot = match endpoint {
+        Endpoint::Source => element_relationships(&workspace.model, from)
+            .and_then(|list| list.iter().position(|r| r == id)),
+        Endpoint::Destination => None,
+    };
+    Some(ModelCommand::ReconnectRelationship {
+        id: id.clone(),
+        endpoint,
+        from: from.clone(),
+        to: to.clone(),
+        from_slot,
+    })
+}
+
+/// Relabel `description`/`technology` on relationship `id`; an empty
+/// string clears the slot (the JSON omits absent slots). `None` when
+/// the id is unknown or the value would not change.
+#[allow(dead_code)] //: consumed by the canvas model ops; the tests drive this meanwhile
+#[must_use]
+pub(crate) fn set_relationship_text(
+    workspace: &Workspace,
+    id: &Id,
+    field: TextField,
+    to: Option<String>,
+) -> Option<ModelCommand> {
+    let to = to.filter(|value| !value.is_empty());
+    let row = workspace.model.relationships.iter().find(|r| r.id == *id)?;
+    let from = match field {
+        TextField::Description => row.description.clone(),
+        TextField::Technology => row.technology.clone(),
+    };
+    if from == to {
+        return None;
+    }
+    Some(ModelCommand::SetRelationshipText {
+        id: id.clone(),
+        field,
+        from,
+        to,
+    })
 }
 
 // ---- command factories -------------------------------------------------------
@@ -1110,6 +1865,124 @@ mod tests {
         LayoutOverlay::for_view("L1")
     }
 
+    fn system(n: u32) -> oxidizr_core::model::SoftwareSystem {
+        oxidizr_core::model::SoftwareSystem {
+            item: oxidizr_core::model::ModelItem::new(id(n), format!("S{n}")),
+            group: None,
+            containers: Vec::new(),
+            documentation: oxidizr_core::docs::Documentation::default(),
+            relationships: Vec::new(),
+        }
+    }
+
+    fn rel(n: u32, source: u32, destination: u32) -> Relationship {
+        Relationship {
+            id: id(n),
+            source: id(source),
+            destination: id(destination),
+            description: None,
+            technology: None,
+            tags: Tags::new(),
+            url: None,
+            properties: Properties::new(),
+            perspectives: Vec::new(),
+            interaction_style: None,
+            linked_relationship_id: None,
+        }
+    }
+
+    fn element_view(n: u32) -> oxidizr_core::views::ElementView {
+        oxidizr_core::views::ElementView {
+            id: id(n),
+            x: 0,
+            y: 0,
+        }
+    }
+
+    fn relationship_view(n: u32) -> RelationshipView {
+        RelationshipView {
+            id: id(n),
+            description: None,
+            url: None,
+            order: None,
+            response: None,
+            properties: Properties::new(),
+            vertices: Vec::new(),
+            routing: None,
+            jump: None,
+            position: None,
+        }
+    }
+
+    /// Systems 1–3, `1 -[3]-> 2` listed in 1's efferent list; landscape
+    /// view `L1` shows boxes 1/2/3 and carries row 3; dynamic view `D1`
+    /// also carries row 3 (delete sweeps it, create never injects it);
+    /// `Other` shows only box 1 (create never injects there).
+    fn workspace() -> Workspace {
+        let mut s1 = system(1);
+        s1.relationships.push(id(3));
+        let landscape = oxidizr_core::views::SystemLandscapeView {
+            base: oxidizr_core::views::ViewBase::new("L1", 1),
+            content: ViewContent {
+                elements: vec![element_view(1), element_view(2), element_view(3)],
+                relationships: vec![relationship_view(3)],
+                paper_size: None,
+                dimensions: None,
+                automatic_layout: None,
+            },
+            enterprise_boundary_visible: true,
+            animations: Vec::new(),
+        };
+        let other = oxidizr_core::views::SystemLandscapeView {
+            base: oxidizr_core::views::ViewBase::new("Other", 2),
+            content: ViewContent {
+                elements: vec![element_view(1)],
+                relationships: Vec::new(),
+                paper_size: None,
+                dimensions: None,
+                automatic_layout: None,
+            },
+            enterprise_boundary_visible: true,
+            animations: Vec::new(),
+        };
+        let dynamic = oxidizr_core::views::DynamicView {
+            base: oxidizr_core::views::ViewBase::new("D1", 3),
+            content: ViewContent {
+                elements: vec![element_view(1), element_view(2)],
+                relationships: vec![relationship_view(3)],
+                paper_size: None,
+                dimensions: None,
+                automatic_layout: None,
+            },
+            element_id: None,
+            deployment_environment: None,
+            external_boundaries_visible: false,
+        };
+        Workspace {
+            model: Model {
+                people: Vec::new(),
+                custom_elements: Vec::new(),
+                software_systems: vec![s1, system(2), system(3)],
+                deployment_nodes: Vec::new(),
+                relationships: vec![rel(3, 1, 2)],
+                properties: Properties::new(),
+            },
+            views: ViewSet {
+                custom_views: Vec::new(),
+                system_landscape_views: vec![landscape, other],
+                system_context_views: Vec::new(),
+                container_views: Vec::new(),
+                component_views: Vec::new(),
+                dynamic_views: vec![dynamic],
+                deployment_views: Vec::new(),
+                filtered_views: Vec::new(),
+                image_views: Vec::new(),
+                configuration: oxidizr_core::views::ViewConfiguration::default(),
+            },
+            ..Workspace::default()
+        }
+    }
+
     #[test]
     fn move_by_round_trips_and_snaps() {
         let scene = scene();
@@ -1298,24 +2171,31 @@ mod tests {
     #[test]
     fn history_round_trips_clears_redo_and_caps() {
         let scene = scene();
+        let mut ws = Workspace::default();
         let mut overlays = HashMap::from([("L1".to_string(), overlay())]);
         let mut h = History::default();
         let one = move_by(&scene, &overlays["L1"], &[id(1)], (10.0, 0.0), false).unwrap();
         h.run_geometry(&mut overlays, "L1", one);
         assert!(h.can_undo() && !h.can_redo());
-        assert_eq!(h.undo(&mut overlays).as_deref(), Some("L1"));
+        assert_eq!(
+            h.undo(&mut ws, &mut overlays),
+            Some(Stepped::Geometry("L1".to_string()))
+        );
         assert!(!h.can_undo() && h.can_redo());
         assert_eq!(overlays["L1"].position(&scene, &id(1)), Some((0.0, 0.0)));
-        assert_eq!(h.redo(&mut overlays).as_deref(), Some("L1"));
+        assert_eq!(
+            h.redo(&mut ws, &mut overlays),
+            Some(Stepped::Geometry("L1".to_string()))
+        );
         assert_eq!(overlays["L1"].position(&scene, &id(1)), Some((10.0, 0.0)));
         // A fresh run kills the redo branch.
-        h.undo(&mut overlays);
+        h.undo(&mut ws, &mut overlays);
         let two = move_by(&scene, &overlays["L1"], &[id(2)], (0.0, 20.0), false).unwrap();
         h.run_geometry(&mut overlays, "L1", two);
         assert!(!h.can_redo());
-        assert!(h.undo(&mut overlays).is_some());
+        assert!(h.undo(&mut ws, &mut overlays).is_some());
         assert!(
-            h.undo(&mut overlays).is_none(),
+            h.undo(&mut ws, &mut overlays).is_none(),
             "the fresh run dropped the redo branch — exhausted, no panic"
         );
         // Cap: 205 runs keep the newest 200.
@@ -1325,7 +2205,7 @@ mod tests {
             h.run_geometry(&mut overlays, "L1", cmd);
         }
         let mut undos = 0;
-        while h.undo(&mut overlays).is_some() {
+        while h.undo(&mut ws, &mut overlays).is_some() {
             undos += 1;
         }
         assert_eq!(undos, HISTORY_CAP);
@@ -1334,6 +2214,7 @@ mod tests {
     #[test]
     fn history_walks_through_views() {
         let scene = scene();
+        let mut ws = Workspace::default();
         let mut overlays: HashMap<String, LayoutOverlay> = HashMap::new();
         let mut h = History::default();
         // Two edits made while viewing two DIFFERENT views: overlays are
@@ -1357,20 +2238,32 @@ mod tests {
         .unwrap();
         h.run_geometry(&mut overlays, "B", b);
         // One stack: undo walks back through the views in LIFO order.
-        assert_eq!(h.undo(&mut overlays).as_deref(), Some("B"));
-        assert_eq!(h.undo(&mut overlays).as_deref(), Some("A"));
-        assert!(h.undo(&mut overlays).is_none());
+        assert_eq!(
+            h.undo(&mut ws, &mut overlays),
+            Some(Stepped::Geometry("B".to_string()))
+        );
+        assert_eq!(
+            h.undo(&mut ws, &mut overlays),
+            Some(Stepped::Geometry("A".to_string()))
+        );
+        assert!(h.undo(&mut ws, &mut overlays).is_none());
         assert_eq!(overlays["A"].position(&scene, &id(1)), Some((0.0, 0.0)));
         assert_eq!(overlays["B"].position(&scene, &id(2)), Some((220.0, 60.0)));
         // Redo walks forward through both again.
-        assert_eq!(h.redo(&mut overlays).as_deref(), Some("A"));
-        assert_eq!(h.redo(&mut overlays).as_deref(), Some("B"));
-        assert!(h.redo(&mut overlays).is_none());
+        assert_eq!(
+            h.redo(&mut ws, &mut overlays),
+            Some(Stepped::Geometry("A".to_string()))
+        );
+        assert_eq!(
+            h.redo(&mut ws, &mut overlays),
+            Some(Stepped::Geometry("B".to_string()))
+        );
+        assert!(h.redo(&mut ws, &mut overlays).is_none());
         assert_eq!(overlays["A"].position(&scene, &id(1)), Some((10.0, 0.0)));
         assert_eq!(overlays["B"].position(&scene, &id(2)), Some((220.0, 80.0)));
         // reset drops everything (workspace open).
         h.reset();
-        assert!(h.undo(&mut overlays).is_none());
+        assert!(h.undo(&mut ws, &mut overlays).is_none());
     }
 
     #[test]
@@ -1742,5 +2635,258 @@ mod tests {
         let parsed = oxidizr_json::from_slice(&bytes).unwrap();
         assert_eq!(parsed.name.as_deref(), Some("Save Demo"), "model untouched");
         assert_eq!(oxidizr_json::to_vec(&parsed).unwrap(), bytes);
+    }
+
+    // ---- model commands -----------------------------------------------------
+
+    #[test]
+    fn create_relationship_stores_the_canonical_row() {
+        let ws = workspace();
+        let cmd = create_relationship(&ws, &id(1), &id(3)).unwrap();
+        let ModelCommand::CreateRelationship { relationship } = &cmd else {
+            panic!("create builds its own variant");
+        };
+        // The shared counter knows 1/2/3 (elements) + 3 (relationship).
+        assert_eq!(relationship.id, id(4), "fresh id from the shared counter");
+        assert_eq!(relationship.source, id(1));
+        assert_eq!(relationship.destination, id(3));
+        assert!(
+            relationship.description.is_none(),
+            "bare arrows carry no description"
+        );
+        assert!(
+            relationship.tags.stored().is_empty(),
+            "the Relationship tag is DERIVED, never stored"
+        );
+    }
+
+    #[test]
+    fn create_and_undo_round_trip_the_workspace() {
+        let ws = workspace();
+        let cmd = create_relationship(&ws, &id(1), &id(3)).unwrap();
+        let mut applied = ws.clone();
+        let mut overlays = HashMap::from([("Other".to_string(), LayoutOverlay::for_view("Other"))]);
+        cmd.apply(&mut applied, &mut overlays);
+        // Model row + efferent list.
+        assert!(applied.model.relationships.iter().any(|r| r.id == id(4)));
+        let s1 = applied
+            .model
+            .software_systems
+            .iter()
+            .find(|s| s.item.id == id(1))
+            .unwrap();
+        assert_eq!(
+            s1.relationships,
+            vec![id(3), id(4)],
+            "appended to the source's list"
+        );
+        // Injected where BOTH endpoints show (L1), not into `Other`
+        // (only box 1) and never into the dynamic view (not static).
+        let row_in = |key: &str| {
+            let content = all_contents(&applied.views)
+                .into_iter()
+                .find(|(k, _)| *k == key)
+                .unwrap()
+                .1;
+            content.relationships.iter().any(|r| r.id == id(4))
+        };
+        assert!(row_in("L1"), "both boxes show in L1");
+        assert!(!row_in("Other"), "box 3 absent there");
+        assert!(!row_in("D1"), "dynamic views are not an injection target");
+        cmd.undo(&mut applied, &mut overlays);
+        assert_eq!(applied, ws, "undo leaves no trace");
+    }
+
+    #[test]
+    fn create_rejects_unknown_ends_loops_and_duplicates() {
+        let mut ws = workspace();
+        assert!(
+            create_relationship(&ws, &id(1), &id(99)).is_none(),
+            "unknown destination"
+        );
+        assert!(
+            create_relationship(&ws, &id(99), &id(1)).is_none(),
+            "unknown source"
+        );
+        assert!(
+            create_relationship(&ws, &id(1), &id(1)).is_none(),
+            "self-loop"
+        );
+        assert!(
+            create_relationship(&ws, &id(1), &id(2)).is_none(),
+            "1 -[3]-> 2 already has an empty description — the duplicate check would reject a second"
+        );
+        // A described sibling does NOT block: empty-description uniqueness only.
+        ws.model.relationships[0].description = Some("uses".to_string());
+        assert!(create_relationship(&ws, &id(1), &id(2)).is_some());
+    }
+
+    #[test]
+    fn delete_and_undo_round_trip_the_workspace() {
+        let ws = workspace();
+        let mut overlays = HashMap::from([(
+            "L1".to_string(),
+            LayoutOverlay {
+                relationships: HashMap::from([(id(3), vec![(1.0, 2.0), (3.0, 4.0)])]),
+                ..LayoutOverlay::for_view("L1")
+            },
+        )]);
+        let cmd = delete_relationship(&ws, &overlays, &id(3)).unwrap();
+        let mut applied = ws.clone();
+        cmd.apply(&mut applied, &mut overlays);
+        assert_eq!(applied.model.relationships, [] as [Relationship; 0]);
+        assert_eq!(
+            applied.model.software_systems[0].relationships,
+            [] as [Id; 0],
+            "the efferent slot is gone"
+        );
+        for (_, content) in all_contents(&applied.views) {
+            assert!(
+                content.relationships.iter().all(|r| r.id != id(3)),
+                "row swept from every content-bearing view"
+            );
+        }
+        assert!(
+            !overlays["L1"].relationships.contains_key(&id(3)),
+            "the overlay route goes too"
+        );
+        cmd.undo(&mut applied, &mut overlays);
+        assert_eq!(
+            applied, ws,
+            "row, slot and per-view rows restore at their exact index"
+        );
+        assert_eq!(
+            overlays["L1"].relationships[&id(3)],
+            vec![(1.0, 2.0), (3.0, 4.0)]
+        );
+        assert!(
+            delete_relationship(&ws, &overlays, &id(99)).is_none(),
+            "unknown id"
+        );
+    }
+
+    #[test]
+    fn reconnect_moves_efferent_membership_and_round_trips() {
+        let ws = workspace();
+        // Source move: the id re-homes from system 1's list into 3's.
+        let cmd = reconnect_relationship(&ws, &id(3), Endpoint::Source, &id(3)).unwrap();
+        let mut applied = ws.clone();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert_eq!(applied.model.relationships[0].source, id(3));
+        assert_eq!(
+            applied.model.software_systems[0].relationships,
+            [] as [Id; 0]
+        );
+        assert_eq!(applied.model.software_systems[2].relationships, vec![id(3)]);
+        cmd.undo(&mut applied, &mut HashMap::new());
+        assert_eq!(applied, ws, "list slot and endpoint restore");
+        // Destination move: model row only, no list is touched.
+        let cmd = reconnect_relationship(&ws, &id(3), Endpoint::Destination, &id(3)).unwrap();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert_eq!(applied.model.relationships[0].destination, id(3));
+        assert_eq!(
+            applied.model.software_systems[1].relationships,
+            ws.model.software_systems[1].relationships,
+            "the destination owns no list"
+        );
+        cmd.undo(&mut applied, &mut HashMap::new());
+        assert_eq!(applied, ws);
+    }
+
+    #[test]
+    fn reconnect_rejects_no_ops_own_ends_and_unknowns() {
+        let ws = workspace();
+        assert!(
+            reconnect_relationship(&ws, &id(3), Endpoint::Source, &id(1)).is_none(),
+            "already there"
+        );
+        assert!(
+            reconnect_relationship(&ws, &id(3), Endpoint::Source, &id(2)).is_none(),
+            "would point at its own destination"
+        );
+        assert!(
+            reconnect_relationship(&ws, &id(3), Endpoint::Destination, &id(99)).is_none(),
+            "unknown element"
+        );
+        assert!(
+            reconnect_relationship(&ws, &id(99), Endpoint::Source, &id(3)).is_none(),
+            "unknown relationship"
+        );
+    }
+
+    #[test]
+    fn set_text_round_trips_and_clears() {
+        let ws = workspace();
+        let cmd = set_relationship_text(&ws, &id(3), TextField::Description, Some("uses".into()))
+            .unwrap();
+        let mut applied = ws.clone();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert_eq!(
+            applied.model.relationships[0].description.as_deref(),
+            Some("uses")
+        );
+        cmd.undo(&mut applied, &mut HashMap::new());
+        assert_eq!(applied, ws);
+        // Empty text CLEARS the slot (the JSON omits absent slots).
+        let described = {
+            let mut w = ws.clone();
+            w.model.relationships[0].description = Some("uses".into());
+            w
+        };
+        let cmd = set_relationship_text(
+            &described,
+            &id(3),
+            TextField::Description,
+            Some(String::new()),
+        )
+        .unwrap();
+        let ModelCommand::SetRelationshipText { to, .. } = &cmd else {
+            panic!("text edits build their own variant");
+        };
+        assert_eq!(*to, None, "empty normalizes to absent");
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert!(applied.model.relationships[0].description.is_none());
+        // Technology rides the same rail; unchanged values are no-ops.
+        let cmd =
+            set_relationship_text(&ws, &id(3), TextField::Technology, Some("HTTP".into())).unwrap();
+        cmd.apply(&mut applied, &mut HashMap::new());
+        assert_eq!(
+            applied.model.relationships[0].technology.as_deref(),
+            Some("HTTP")
+        );
+        assert!(
+            set_relationship_text(&ws, &id(3), TextField::Description, None).is_none(),
+            "absent onto absent changes nothing"
+        );
+        assert!(
+            set_relationship_text(&ws, &id(99), TextField::Description, Some("x".into())).is_none(),
+            "unknown id"
+        );
+    }
+
+    #[test]
+    fn history_walks_model_and_geometry_together() {
+        let scene = scene();
+        let mut ws = workspace();
+        let mut overlays = HashMap::from([("L1".to_string(), overlay())]);
+        let mut h = History::default();
+        // A geometry step, then a model step: one stack, LIFO across kinds.
+        let geo = move_by(&scene, &overlays["L1"], &[id(1)], (10.0, 0.0), false).unwrap();
+        h.run_geometry(&mut overlays, "L1", geo);
+        let create = create_relationship(&ws, &id(1), &id(3)).unwrap();
+        let expected = ws.clone();
+        h.run_model(&mut ws, &mut overlays, create);
+        assert_ne!(ws, expected, "the create landed on the workspace");
+        assert_eq!(h.undo(&mut ws, &mut overlays), Some(Stepped::Model));
+        assert_eq!(ws, expected, "the model step undid");
+        assert_eq!(
+            h.undo(&mut ws, &mut overlays),
+            Some(Stepped::Geometry("L1".to_string()))
+        );
+        assert!(!h.can_undo());
+        // And forward again, model last.
+        assert!(h.redo(&mut ws, &mut overlays).is_some());
+        assert_eq!(h.redo(&mut ws, &mut overlays), Some(Stepped::Model));
+        assert_ne!(ws, expected);
     }
 }

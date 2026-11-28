@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2 DONE (dep spike, binding table, session history, route UX: insert dots / nudge / endpoint paint / Ctrl+Shift+K — gates green each); NEXT = M3 headless ModelCommand core. Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0+M1+M2+M3 DONE (dep spike, binding table, session history, route UX, headless ModelCommand core — gates green each); NEXT = M4 canvas model ops (the biggest shell diff: gate helper, port-drag CREATE, endpoint RECONNECT, Del flip, model_dirty + save rules). Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -42,21 +42,24 @@
 
 ## If a next session opens
 
-- **M0+M1+M2 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
-  egui_commonmark 0.26 behind `gui` (V4 measured), `shortcuts::all()`
-  binding table live; session `History` (Edit::Geometry steps, one stack,
-  `step_history` marks the STEP's view dirty, adopt resets); route UX —
-  `Drag::Insert` press-drag on `paint::paint_route_kit`'s midpoint dots
-  (commit = `commands::insert_waypoint`, ONE SetWaypoints), endpoint
-  squares painted (reconnect lands M4), `Viewer.grabbed` +
-  `nudge_selection` (arrows/Shift, grabbed-else-elements), Ctrl+Shift+K
-  alias (Del flips in M4). Start wave **P6-M3** (headless model core:
-  `commands::ModelCommand` variants + apply on `Arc<Workspace>` via
-  `Arc::make_mut`, id helper (`IdGenerator` found()→generate()),
-  RelationshipView injection into STATIC views on create / full removal
-  on delete, `Edit::Model` step on the session History, V1 round-trip
-  tests + V2 first half = re-read the pinned `Relationship` constructor
-  for the create payload, default description/tags).
+- **M0+M1+M2+M3 DONE 2026-11-28** (evidence in the PHASE_6 wave rows):
+  session `History` carries BOTH step kinds on one stack — `run_model` +
+  `Edit::Model`, `undo`/`redo` return `Stepped::Geometry(view)`/`Stepped::Model`
+  (shell `step_history`: geometry step → dirty + rebuild, model step →
+  rebuild; `run_model` + the not-yet-constructed `ModelCommand` surface
+  carry interim `#[allow(dead_code)]` marks — **M4 wires the canvas ops
+  and must REMOVE those marks**). `commands.rs` model helpers:
+  `create_relationship` (canonical row: no description, EMPTY stored tags,
+  shared-counter id, dup-guard on empty-description `a -> b`),
+  `delete_relationship` (exact-position snapshots incl. overlay routes),
+  `reconnect_relationship` (Source moves efferent-list membership),
+  `set_relationship_text` (empty → absent). 121 viewer lib tests. Start
+  wave **P6-M4** (canvas model ops): gate helper `model_editing_allowed`
+  (JSON source only — P6-D4, unit tests V7), port-dot-drag CREATE,
+  endpoint-square RECONNECT drag, Del = delete relationship (Ctrl+Shift+K
+  becomes the exclusive strip), `model_dirty` flag + save rule (P6-D8:
+  save fires on model-only dirt, DSL source never rewritten), CHANGELOG
+  Added lines land HERE (model editing becomes reachable).
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
   clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing
