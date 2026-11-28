@@ -277,6 +277,18 @@ as a tombstone so old references keep resolving.
   output loads and re-exports unchanged in the official tooling; date-safe +
   svg-only fixtures keep the byte goldens reproducible.
 
+## D17 — Viewer undo: one session history (layout editor: per-diagram stacks)
+
+- Official layout editor (Structurizr web): undo/redo stacks are PER DIAGRAM.
+- oxidizr viewer (P6): ONE session history walks both geometry and model
+  edits. Necessity, not taste: model commands (relationship create/delete/
+  reconnect) are global — a per-diagram stack could undo a global edit in
+  one view only and desync the model against the others. Geometry steps
+  still apply to the view they were made in (that view goes dirty even when
+  undoing from another view).
+- Compatibility impact: none — undo state is session memory; every written
+  byte still goes through the shared JSON writer (P6-D2/D8, `build/PHASE_6.md`).
+
 ## Locked — must NEVER deviate (for contributors and future agents)
 
 Shared sequential integer id counter (elements+relationships, definition order) · exact

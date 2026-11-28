@@ -1,41 +1,57 @@
-# RESUME — session checkpoint (updated 2026-11-26, **PHASE 5R CLOSED — tag `v0.5.0` LOCAL (annotated, on the close commit); tree clean, nothing pending. Never pushed — push/publish stay the user's call. Previous arcs: P4 → `v0.4.0`, P3 → `v0.3.0`**
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 PLANNED — GUI: arrow model-editing + help texts. Plan ratified by the user (questions tool); implementation NOT started — start at wave P6-M0. Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
-## State at close
+## Where P6 stands
 
-- **P5R = the large-scale idiomatic-Rust refactor**, waves R0…R7 + release
-  close, all green per the evidence rows in `agents/plan/build/PHASE_5R.md`
-  (Status: CLOSED) and the PROGRESS milestone-log entry. Commits
-  `75ce39d` (R0a) → close; the release ritual followed `docs/RELEASING.md`
-  end-to-end on the final tree (quartet+gui, lint, full tier, bless
-  307×unchanged NO-OP, doc-zero, `dist plan` EXIT 0, `ci windows` green,
-  Category B: oracle 4 json + 4 sidecar + 99 diagram + 6 theme, export-verify
-  31/31 ×3 TZ=UTC).
-- **Two REAL bugs were found by the windows leg and fixed (`a48b306`)**:
-  fmt swallowed content after a continuation-joined comment ending in a
-  backslash (proptest regression replay = cross-platform proof; never delete
-  a regression line — it is evidence); `!docs` filename trim hardcoded `/`
-  where the tooling checks `File.separator` (Linux bytes identical after the
-  fix, bless-proved). The Java source at the pinned monorepo commit decided
-  this — fetched `DefaultDocumentationImporter.java`, read it, don't guess.
-- Bench: baseline `5R` in `bench-baseline/` remains the P5R reference;
-  `bench cmp 5R` at R6 close showed every leg ≤ 1.01 with the wave targets
-  faster. The NEXT phase starts by `bench save <newlabel>` if it wants a new
-  reference (never mid-phase).
+- Plan: `agents/plan/build/PHASE_6.md` (Status PLANNED; decisions P6-D0…D8,
+  waves M0…M8, verification V1…V9, risks). Registry rows F13+F14 in
+  `agents/plan/ADDITIONAL_FEATURES.md`; deviation **D17** (single session
+  history vs the layout editor's per-diagram undo) in `agents/plan/DEVIATIONS.md`.
+- User rulings anchoring everything (2026-11-28): full scope accepted (route
+  UX + model editing + help overlay + details panel + markdown/docs);
+  **single session history**; create = **port-dot drag**; **Del deletes the
+  edge**, Ctrl+Shift+K strips waypoints; **egui_commonmark allowed** (0.26 =
+  egui ^0.37, verified on crates.io; add behind `gui`, `default-features =
+  false`, no image loading); **model edits BLOCKED for DSL sources** —
+  plain `.json` only, sidecar-preferred reopens stay blocked (gate fn per
+  P6-D4; the DSL file is never rewritten).
+- Work autonomously per the wave table; commit every green wave-piece;
+  questions ONLY on plan-contradicting reality (AGENTS.md style).
+
+## Implementation anchors (measured 2026-11-28, P5R tree)
+
+- Viewer = headless lib core + eframe/egui **0.37** shell behind `gui`;
+  shell split `shell/{mod,canvas,actions,panels,widgets,browser}.rs`.
+  ALL edits funnel through `Viewer::edit_current_view` + `commands::History`;
+  `Command` mutates only `LayoutOverlay` (P3-D4, amended by P6-D2).
+- `Viewer.workspace` is `Option<Arc<Workspace>>` → model commands run
+  `Arc::make_mut` + `rebuild_scene()`; new ids via
+  `oxidizr_core::ids::IdGenerator` re-registered from all ids (`found()` then
+  `generate()` — the JSON reader's own dance).
+- Save: `shell/actions.rs::save_workspace` clones the workspace + applies
+  overlays through the SHARED `oxidizr_json` writer; add the `model_dirty`
+  leg per P6-D8 (save fires on model-only dirt; filtered-view block stays
+  for geometry-only saves).
+- Today's arrow gestures live in `shell/canvas.rs` (waypoint insert on
+  dblclick, drag, Alt+press delete, Del strip — the Del meaning flips in
+  M4); key handling in `shell/mod.rs::ui` (focus guard `text_focus`);
+  tooltips `shell/widgets.rs::tooltip_text`. There is NO keybinding help
+  anywhere today — `shortcuts.rs` (M0) becomes the single binding table.
+- egui_commonmark 0.26: `MarkdownUi::new(&mut markdown)` + `Markdown` state
+  objects cached on `Viewer` (content-keyed, capped); `load-images` OFF
+  (icons have their own pipeline).
 
 ## If a next session opens
 
-- No open tasks. A new phase needs a `agents/plan/build/PHASE_N.md` with the
-  charter/decision-register pattern (see PHASE_5R.md as template) and user
-  sign-off for scope; post-release backlog candidates only:
-  - Windows target support is now green in CI's sense (full suite via Wine
-    locally, `cargo xtask ci windows`), but NEW filesystem tests must run
-    that leg EARLY (pitfall `windows-path-separator-assertions.md` — three
-    trap shapes now documented there, incl. canonicalize-verbatim vs the
-    lexical `getAbsolutePath` port).
-  - Registry publishing remains explicitly skipped (RELEASING.md decision
-    row) unless the user opens it.
-- Tags `v0.1.0…v0.5.0` all LOCAL — pushing them is the user's act; CI then
-  builds/publishes per `.github/workflows/release.yml`.
+- Start wave **P6-M0** (dep spike + `shortcuts.rs` draft; verify
+  `cargo tree -e normal -p oxidizr-viewer` unchanged WITHOUT `gui` — V4).
+- Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
+  clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always;
+  CHANGELOG `[Unreleased]` lines from M0 on.
+- Windows-target watch: M4+ touches filesystem only through the existing
+  save path; run `cargo xtask ci windows` at close (V9) — pitfalls note
+  `windows-path-separator-assertions.md` still governs any NEW fs test.
+- Tags `v0.1.0…v0.5.0` all LOCAL — pushing them is the user's act. P6 does
+  NOT close with a tag unless the user asks.
 
 ## Workflow (measured, `agents/notes/process/parallelism.md`)
 
@@ -51,10 +67,9 @@
 - Gate-log reading: `grep -c` exits 1 on zero matches — printed `0`/
   `FAILED 0` is GREEN; verify `ci: all steps green` in the log body.
 - Never edit tracked files while a gate/bench/bless chain runs; journal
-  drafts go to the session tmp dir (`/tmp/opencode/p5r-close-stamps.md` was
-  this close's pattern — apply after the chain, then re-run `refs`).
-- `sed` pin sweeps must allow digits in crate names (`e2e`); a missed pin
-  surfaces as a `cargo update` resolution error, not silently.
+  drafts go to the session tmp dir; apply after the chain, re-run `refs`.
+- GUI-leg drift: `gui-leg-lint-drift.md` — the quartet never compiles the
+  shell, so a plain `ci` passing does NOT mean the gui leg does.
 
 ## Gates quick reference
 
@@ -67,11 +82,6 @@
 - Category B env: `$OXIDZR_STRUCTURIZR_BIN=/nix/store/
   5yil7chk3cjg3qmsabq1vzdxv0v4bwm0-structurizr-2026.10.26/bin/structurizr`
   (dev shell exports it), legs `TZ=UTC`, background only.
-- Windows leg: `cargo xtask ci windows` (Wine, dev shell; full suite, slow —
-  for triage use `cargo test -p <crate> --target x86_64-pc-windows-gnu
-  --no-fail-fast`).
-- `dist plan` = `nix develop --command dist plan` (cargo-dist binary; NOT an
-  xtask subcommand).
-- Pitfalls to honor: `windows-path-separator-assertions.md` (now 3 shapes +
-  Wine lessons), `gui-leg-lint-drift.md`, `msrv-bump-clippy-wave.md`,
-  `bench-machine-drift-ab.md`, `cargo-dist-installer-panic.md`.
+- Windows leg: `cargo xtask ci windows` (Wine, dev shell; full suite, slow).
+- `dist plan` = `nix develop --command dist plan` (not an xtask subcommand).
+- Bench baseline `5R` stands unless P6 close saves a new label.

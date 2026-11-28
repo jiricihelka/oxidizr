@@ -122,6 +122,19 @@ classes and OXZ codes stay frozen; the Rust API churns freely with every
 line recorded in the changelog `[Unreleased]`. Closes with the v0.5.0
 release ritual + local tag. Decisions + waves: `build/PHASE_5R.md`.
 
+## Phase 6 — GUI improvements: arrow editing + help texts (added 2026-11-28)
+
+Goal: the viewer becomes a real diagram EDITOR and finally documents
+itself. Dependency arrows become first-class editable objects — create by
+port-drag, reconnect by endpoint handle, delete with Del, relabel in a
+details panel — through invertible model commands on a single session
+history, saved via the shared JSON writer, gated to plain `.json` sources
+(the DSL file is never rewritten). Help texts land as an F1 keybinding
+overlay (one headless table), a selection details panel with markdown
+descriptions (`egui_commonmark`, gui-feature-only), and a `!docs`
+documentation window. P3-D4 editor rule amended; D17 registered;
+F13+F14 signed off. No tag at close. Decisions + waves: `build/PHASE_6.md`.
+
 ## Out of scope for this roadmap
 
 Server/lite/playground/web-UI equivalents, MCP server, static-site/PNG/SVG export,

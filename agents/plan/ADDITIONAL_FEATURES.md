@@ -157,6 +157,44 @@ output (Phase 1 flag); F9 is the Phase 1T interlude (test infra, `build/PHASE_1T
   SEMANTIC (element/relationship sets match the source diagram, like the
   P2 exports), not byte-level — there is no reference output to match.
 
+### F13 — viewer dependency-arrow model editing ✅ (signed off 2026-11-28, questions tool)
+
+- Problem: the viewer edits layout only (P3-D4 editor rule) — arrows can be
+  bent but never created, re-targeted, deleted or relabeled; every such
+  change means leaving for a text editor. The reference has no GUI editing
+  at all, so there is nothing to diverge FROM — pure UX gain (user charter:
+  "This can diverge from structurizr, if it makes UX better").
+- Feature: create a relationship by dragging from an element's port dot onto
+  another element; reconnect an endpoint by dragging the endpoint handle;
+  delete the selected relationship with Del; edit description/technology/view
+  label in the details panel. Model edits land through invertible
+  `ModelCommand`s in a single session history; saves go through the SAME
+  shared JSON writer. Blocked for DSL-sourced workspaces (the DSL file is
+  never rewritten and the sidecar must not silently become the model of
+  record) — plain `.json` sources only. Decomposition + decisions:
+  `build/PHASE_6.md` (P6-D2…D8).
+- Compatibility: purely additive GUI surface — parity paths untouched
+  (bless 307×unchanged stays the tripwire); a saved edited workspace must
+  load and re-export cleanly in the official tooling (P6-V2 oracle witness).
+  Undo granularity diverges from the official layout editor's per-diagram
+  stacks: DEVIATIONS.md D17.
+
+### F14 — viewer help overlay, selection details + markdown docs ✅ (signed off 2026-11-28, questions tool)
+
+- Problem: the viewer documents nothing — no keybinding reference exists,
+  hover tooltips truncate, and the model's rich text (descriptions,
+  properties, `!docs` markdown sections) is never rendered. The reference
+  web UI shows a properties popup; oxidizr's native shell can do it from the
+  same model data, better.
+- Feature: F1/`?` help overlay rendered from a single headless keybinding
+  table (`shortcuts.rs` — the only place bindings are written down); a
+  selection details panel (full description, metadata, tags, properties,
+  URL, editable edge fields); a documentation window rendering `!docs`
+  sections (markdown via `egui_commonmark`, gui-feature-only dep; AsciiDoc
+  shown verbatim). Decomposition: `build/PHASE_6.md` P6-D7.
+- Compatibility: read-only presentation; no files touched beyond the
+  existing save path; none.
+
 ## Ideas (💡 not agreed — sign-off required before implementing)
 
 | # | Idea | Compat analysis |
