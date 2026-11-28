@@ -25,3 +25,4 @@ tools, not guessed.
 | [gui-leg-lint-drift.md](gui-leg-lint-drift.md) | the quartet never compiles `--features gui` code — clippy drift piles up silently in the gui-only shell (10 `collapsible_if` found pre-existing at HEAD by a stash check); run `cargo xtask ci gui` in the same wave that touches the viewer |
 | [refs-hygiene-prose-patterns.md](refs-hygiene-prose-patterns.md) | `refs` prose traps: bare F1/F2 keys in comments = "feature tag" (string literals exempt); "the reference" phrase = narration anywhere; big const DATA belongs in an item, not a fn |
 | [xtask-ci-steps-replace-defaults.md](xtask-ci-steps-replace-defaults.md) | `cargo xtask ci <STEP…>` REPLACES the quartet — a bare `ci gui` runs one leg and says "all steps green"; name every leg |
+| [f64-signum-zero-is-one.md](f64-signum-zero-is-one.md) | `f64::signum(0.0) == 1.0` — side-of-line predicates need a hand-rolled three-way sign or touching routes count as crossings |

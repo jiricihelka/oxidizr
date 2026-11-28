@@ -17,16 +17,30 @@ workspace = true
 # the zero-dep pure engine; enabling only adds std::process usage.
 default = []
 dot-backend = []
+# P7-D0: the `dagre` engine (oxidizr_layout::Dagre, the dagre.js port).
+# OFF by default so the DEFAULT dependency tree stays empty (V8: `cargo tree
+# -e normal -p oxidizr-layout` is empty). Enabling adds `dagre` + `log` plus
+# the `json` feature's `serde`/`serde_json` — pure computation, no IO and no
+# windowing crate, and the JSON pair is already in the workspace graph (see
+# the workspace `dagre` line for why that feature cannot be turned off).
+# `Layered` remains the built-in engine.
+dagre = ["dep:dagre"]
 
 [dependencies]
-# NO dependencies — not even thiserror (P3-D1 zero-dep promise beats the
-# thiserror convention for THIS crate; the error type hand-rolls Display +
-# Error, std-only). Neutral graph types in/out: no oxidizr-core, no IO, no GUI.
+# No dependencies by default — not even thiserror (P3-D1 zero-dep promise
+# beats the thiserror convention for THIS crate; the error type hand-rolls
+# Display + Error, std-only). Neutral graph types in/out: no oxidizr-core, no
+# IO, no GUI. The single OPTIONAL dep is `dagre` above, reachable only through
+# the non-default `dagre` feature (P7-D0).
+dagre = { workspace = true, optional = true }
 
 [dev-dependencies]
-# Bench-only: `criterion` is not a dependency of the shipped crate (§P3-D1
-# governs `[dependencies]`; `cargo tree -e normal` stays empty).
+# Test/bench-only: neither crate is a dependency of the shipped crate
+# (`cargo tree -e normal` stays empty). `criterion` drives the layered
+# benchmark; `expect-test` carries the committed layout-quality table
+# (`tests/layout_quality.rs`, re-blessed with `UPDATE_EXPECT=1`).
 criterion = { workspace = true }
+expect-test = { workspace = true }
 
 [[bench]]
 name = "layered"

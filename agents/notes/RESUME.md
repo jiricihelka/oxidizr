@@ -1,12 +1,34 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 PLANNED — auto-layout quality (dagre) + configuration. Scope ratified via questions tool (two rounds); plan `build/PHASE_7.md` written; F15+D18 registered, O2 superseded. NEXT = wave P7-M0 (dagre spike + engine framework + determinism gate + quality-metric harness) and work autonomously through M0…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 7 IN FLIGHT — wave P7-M0 DONE (dagre adapter + V1 determinism gate GREEN + quality-metric harness + engine framework). NEXT = wave P7-M1 (dagre becomes the default engine) and then M2…M7. Previous arcs: P6 CLOSED 2026-11-28 (`9c4a4bf`…`41f9ddf`, no tag); P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P7 stands
 
-- Plan: `agents/plan/build/PHASE_7.md` (Status PLANNED; decisions P7-D0…D7,
-  waves M0…M7, verification V1…V8, risks). Registry row **F15**
-  (`ADDITIONAL_FEATURES.md`); deviation **D18** (Apply pins manual
-  placements vs the layout editor's relayout-everything); roadmap **O2**
-  superseded in `PLAN.md`; board row PLANNED in `PROGRESS.md`.
+- **M0 committed**: `dagre` 0.1.2 behind the NON-default `oxidizr-layout/dagre`
+  feature; `Dagre` adapter at the `LayoutEngine` seam
+  (`crates/oxidizr-layout/src/dagre.rs` — positional `n{i}`/`e{i}` names,
+  center→top-left, multigraph+self-loops, origin-anchored, anchors ignored,
+  non-finite guard ⇒ `LayoutError::Dagre`); viewer `Engine::Dagre` +
+  `dagre` passthrough feature (dialog combo live, `Layered` STILL the
+  default until M1).
+- **V1 determinism gate GREEN**: `tests/dagre_determinism.rs` — 116 corpus
+  variants × 3 in-process repeats + 10 concurrent fresh processes, bit-exact
+  (digest `32baf4be2345c6bf`, ~16 s); `Layered` runs the same battery.
+  No STOP needed (P7-D7).
+- **V2 harness committed**: `tests/layout_quality.rs` (crossings/pierces/
+  bends/length, TOTAL row, `expect!` table, re-bless = `UPDATE_EXPECT=1`).
+  Measured LR/contract separations: TOTAL crossings 1503→1005, pierces
+  304→191, bends 2974→2385. Gate = table + `KNOWN_CROSSING_REGRESSIONS =
+  ["c4-like", "grid-120"]` + aggregate-better assertion (the "≥ Layered
+  everywhere" wording was amended — 6 option profiles swept, none
+  dominates; PHASE_7 §M0 measured reality + amended V2).
+- **Two defects fixed on the way**: dagre 0.1.2 cannot build
+  `default-features = false` (ungated `graph/json.rs` ⇒ `features = ["json"]`
+  forced on; serde pair already in the viewer tree) — note
+  `env/dagre-crate-json-feature.md`; and `oxidizr-layout --features
+  dot-backend` was BROKEN since P5R-R5b (`e76ba12` left `pub(crate)` consts
+  on the `pub use` line ⇒ E0364, no CI leg enabled the feature) — fixed by
+  trimming the re-export to `pub use dot::Dot;`.
+  Metric pitfall: `f64::signum(0.0) == 1.0` — note
+  `pitfalls/f64-signum-zero-is-one.md`.
 - User rulings anchoring everything (2026-11-28): dependency allowed ONLY
   crates.io + pure-Rust + statically linked + no multiplatform/compile
   burden; **dagre first, but the abstraction must keep multiple engines**
@@ -16,71 +38,52 @@
   **no new external dependencies** — dot stays frozen inside the engine
   selection (no PATH discovery, no UX push).
 - Work autonomously per the wave table; commit every green wave-piece;
-  questions ONLY on plan-contradicting reality (AGENTS.md style). **M0 is
-  a HARD GATE: if dagre cannot pass the 10×-identical determinism property
-  over the corpus (V1), the default switch (P7-D1) does not happen — stop
-  and report with the evidence.**
+  questions ONLY on plan-contradicting reality (AGENTS.md style).
 
-## Implementation anchors (measured 2026-11-28, post-P6 tree)
+## Implementation anchors (post-M0)
 
-- `oxidizr-layout`: ZERO-dep crate (`thiserror` hand-rolled error, P3-D1 —
-  preserve for DEFAULT features; `dagre` goes behind a new NON-default
-  `dagre` feature, mirroring how `dot-backend` was added). Seam =
-  `engine.rs::LayoutEngine` (`layout(&LayoutGraph) -> LayoutResult`,
-  results in graph input order = determinism contract). Graph types
-  `graph.rs` (`LayoutGraph`/`Node`/`Edge`/`LayoutConfig`/`RankDirection`);
-  `layered/` = own engine (cycle DFS, longest-path layering, dummy chains,
-  barycenter sweeps with `crossings` metric, priority-method coordinates
-  — THE pass that gains anchor clamps in M3); `layered/routing.rs` =
-  port-spread fan (`edge_separation` wiring point, M5) + channel lanes;
-  `dot.rs` behind `dot-backend` (env-var discovery only).
-- `dagre` 0.1.2 (crates.io, Apache-2.0, edition 2024 ≥1.85 ≤ MSRV 1.88 —
-  re-verify at M0): **verified signature**
-  `dagre::layout(g: &mut Graph<NodeLabel, EdgeLabel>, opts: Option<LayoutOptions>)`
-  — mutates in place (no Result), input per node `width`/`height` (per
-  edge `minlen`/`weight`), output per node `x`/`y`/`rank`/`order`, per
-  edge `points` (the waypoints). `Graph` (module `graph`) supports
-  directed/multi/COMPOUND (parent/children); `LayoutOptions` = rankdir
-  TB/BT/LR/RL, ranksep/nodesep/edgesep/…; ONLY mandatory dep `log`;
-  serde/serde_json ride the `json` DEFAULT feature — **use
-  `default-features = false`**. dagre semantics put node `x`/`y` at the
-  CENTER (dagre.js parity) — the adapter converts to top-left and MUST
-  re-verify against a fixture at M0. Output determinism UNCLAIMED —
-  prove, then wrap.
-- Viewer side (`crates/oxidizr-viewer/src/layout.rs`): `config_for` maps
-  core `AutomaticLayout` → `LayoutConfig` (null direction = default LR);
-  `stored_for`/`display_params` (display lower-bounds rank_separation at
-  `DISPLAY_FALLBACK` = 200); `graph_for(scene, config)` maps items+edges
-  ONLY — M2 adds boundary membership (scene `Boundary` already carries
-  members) as dagre parents; `apply`/`apply_with(Engine, …)` →
-  `Overrides`; `encode`/`decode` persist dialog params under `KEY_LAYOUT`
-  (global) — M4 makes it per-view with legacy fallback. Dialog
-  `shell/actions.rs::layout_window` (engine combo appears only when a
-  second engine CAN run); `run_layout` + `layout_engine` field in
-  `shell/mod.rs`; manual positions = `LayoutOverlay` element entries =
+- `oxidizr-layout`: default features = ZERO deps (V8 measured, tree EMPTY);
+  `--features dagre` = 14 crates, only `dagre` new vs the viewer tree, zero
+  windowing. Seam = `engine.rs::LayoutEngine` (results in graph input
+  order). `layered/` = own engine (M3 gains anchor clamps in the coordinate
+  pass; M5 wires `edge_separation` through `layered/routing.rs` port spread
+  — until M5 Layered IGNORES `edge_separation`, which flatters its
+  `grid-120` metric numbers). Tests share `tests/common/mod.rs` (14-shape
+  corpus, `Sweep::Full|Directions`, LCG fixtures, bit-exact encode + FNV
+  digest) — extend THAT, not new fixture sets.
+- Viewer (`crates/oxidizr-viewer/src/layout.rs`): `Engine` enum =
+  Layered/Dagre(cfg)/Dot(cfg); `config_for`/`stored_for`/`display_params`
+  (display floors rank sep at 200); `graph_for(scene, config)` maps
+  items+edges ONLY — M2 adds boundary membership (scene `Boundary` carries
+  members) as dagre compound parents; `apply`/`apply_with` → `Overrides`;
+  `encode`/`decode` persist dialog params under `KEY_LAYOUT` (global) —
+  M4 per-view with legacy fallback. Dialog `shell/actions.rs::layout_window`
+  (combo lists `Engine::available()`); `run_layout` + `layout_engine` field
+  in `shell/mod.rs`; manual positions = `LayoutOverlay` element entries =
   the M3 PIN source.
-- Write-back (M4): new `ModelCommand::SetAutomaticLayout(view_key, from,
-  to)` through `Viewer::run_model_edit` + gate
-  `commands::model_editing_allowed` (plain `.json` only — the P6 V7 matrix
-  extends: `.dsl`, sidecar-preferred reopen, stdin all blocked); undo
-  restores the prior `Option<AutomaticLayout>` (absent ⇒ remove). The
-  JSON writer already round-trips the five `automaticLayout` fields —
-  bless must stay NO-OP.
-- CLI (M6): `oxidizr view --layout-engine <layered|dagre|dot>` via the
-  existing clap surface + `completions` regenerate; flag validated as a
-  value (no panics), cached choice.
+- M1 specifics: default switch = `Engine::default()` → `Dagre` **when the
+  feature is compiled** (`#[cfg]` the `#[default]` — or make `available()`
+  order the source of truth and seed `layout_engine` from
+  `Engine::available()[0]`); auto-display uses `apply` → route it through
+  the default engine too; scene-fixture snapshots (`golden_paint.rs`)
+  re-bless ONLY where the metric improves; `bench cmp` recorded (dagre may
+  be slower — record, don't hide).
+- Write-back (M4): `ModelCommand::SetAutomaticLayout(view_key, from, to)`
+  through `Viewer::run_model_edit` + gate `commands::model_editing_allowed`
+  (plain `.json` only); undo restores prior `Option<AutomaticLayout>`;
+  bless stays NO-OP.
+- CLI (M6): `oxidizr view --layout-engine <layered|dagre|dot>` +
+  completions; the CLI probably also wants a `dagre` passthrough feature
+  (like viewer's) — decide there.
 
 ## If a next session opens
 
-- Start wave **P7-M0** per `build/PHASE_7.md` wave table: add `dagre`
-  (default-features=false) behind `oxidizr-layout/dagre`; `Dagre` adapter
-  at the seam; determinism property test (10× byte-identical, corpus incl.
-  parallel edges + self-loops); quality-metric harness (crossings + bends
-  + length, E-3 metric) with a committed corpus table; engine framework
-  (`Engine::available()` + dialog combo + CLI flag skeleton); V4 tree
-  check (+dagre +log headless, ZERO windowing crates; default-feature
-  `cargo tree -e normal -p oxidizr-layout` still empty). **If V1 is red →
-  STOP, report to the user with evidence** (P7-D7).
+- Start wave **P7-M1** per the `build/PHASE_7.md` wave table (dagre default
+  + metric re-check + bench cmp + snapshot policy V2). M0 evidence is in the
+  plan §M0 measured reality; do not re-derive it.
+- Feature-matrix sanity before commit (no CI leg covers these):
+  `cargo check -p oxidizr-layout --features dot-backend,dagre --all-targets`
+  and `cargo check -p oxidizr-viewer --features gui,dagre,dot-backend`.
 - Gates: EVERY commit `cargo xtask ci gui fmt clippy test refs` — FULL
   form, every leg named; a bare `ci gui` runs ONE leg and still says
   "all steps green" (pitfall `xtask-ci-steps-replace-defaults.md`).

@@ -83,6 +83,12 @@ pub enum LayoutError {
     /// parser rejects.
     #[cfg(feature = "dot-backend")]
     DotBackend(String),
+    /// `dagre` only: the pipeline failed to place a valid graph — a node
+    /// label or edge route went missing, or a coordinate came back
+    /// non-finite. The graph itself passed validation, so this is always
+    /// the engine failing, never the input.
+    #[cfg(feature = "dagre")]
+    Dagre(String),
 }
 
 impl fmt::Display for LayoutError {
@@ -101,6 +107,8 @@ impl fmt::Display for LayoutError {
             Self::CycleRemovalFailed => write!(f, "layering did not converge"),
             #[cfg(feature = "dot-backend")]
             Self::DotBackend(message) => write!(f, "dot backend: {message}"),
+            #[cfg(feature = "dagre")]
+            Self::Dagre(message) => write!(f, "dagre: {message}"),
         }
     }
 }

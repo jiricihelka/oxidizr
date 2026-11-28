@@ -101,7 +101,7 @@ Ratification answers (questions tool, 2026-11-28 — the decision anchors):
 
 | Wave | Deliverable | Notes / verification |
 |---|---|---|
-| **P7-M0** | dep spike + engine framework: `dagre` behind the `dagre` feature; `Dagre` adapter implementing `LayoutEngine` (dagre `Graph` in, `LayoutResult` out — center→top-left, edge point polylines, multigraph + self-loops on); `Engine::available()`/dialog combo/CLI flag ride the framework; determinism property test; **quality-metric harness** (crossings + bends + edge length, E-3 metric, corpus table committed) | **GATE: V1 determinism 10×-identical over the corpus incl. parallel edges/self-loops; if red — STOP, report.** V4: headless `cargo tree` = +dagre +log ONLY, zero windowing crates; MSRV/edition check (dagre 2024 ≥1.85 ≤ our 1.88) |
+| **P7-M0** | dep spike + engine framework: `dagre` behind the `dagre` feature; `Dagre` adapter implementing `LayoutEngine` (dagre `Graph` in, `LayoutResult` out — center→top-left, edge point polylines, multigraph + self-loops on); `Engine::available()`/dialog combo/CLI flag ride the framework; determinism property test; **quality-metric harness** (crossings + bends + edge length, E-3 metric, corpus table committed) | **DONE 2026-11-28. GATE V1 GREEN:** 116 corpus variants × 3 in-process repeats + 10 concurrent fresh processes, bit-exact (`tests/dagre_determinism.rs`, digest `32baf4be2345c6bf`, ~16 s); `Layered` covered by the same battery. V8 measured: default tree EMPTY; `dagre` feature adds 14 crates of which ONLY `dagre` is new to the viewer's headless tree (the `json`-feature serde pair already rides it) — zero windowing/GPU crates. MSRV/edition OK (dagre edition 2024, builds on our pin). Dialog combo live with `Engine::Dagre` (`Layered` stays default until M1). CLI flag lands at M6 with the rest of the CLI surface. See §M0 measured reality |
 | **P7-M1** | dagre becomes the default engine (auto-display + dialog default); Layered selectable; corpus metric table recorded (dagre vs Layered per fixture) | V2: quality never below Layered on the corpus; scene-fixture snapshots re-blessed ONLY where metrics improve; bench cmp recorded |
 | **P7-M2** | compound boundaries: `graph_for` emits boundary parents + membership for dagre runs; headless tests (members inside their boundary frame, cross-boundary edges attach sanely); Layered path untouched | V3 over every corpus view with boundaries |
 | **P7-M3** | pinned tidy: overlay set = pins → Layered + anchor clamps (coordinate pass); exact-pin headless tests; pin badge + Shift-click unpin + "Apply (ignore pins)"; dialog explains the engine switch | V4: pinned elements byte-identical after Apply |
@@ -114,9 +114,16 @@ Ratification answers (questions tool, 2026-11-28 — the decision anchors):
 
 - V1 determinism: every enabled engine, corpus graphs, 10× byte-identical
   runs (property test, M0 gate before any default switch).
-- V2 quality metric: committed per-fixture table (crossings/bends/length);
-  dagre ≥ Layered everywhere it becomes default; snapshots re-blessed only
-  where the metric improves, per-fixture in the row stamp (E-3 posture).
+- V2 quality metric: committed per-fixture table (crossings/pierces/bends/
+  length, `tests/layout_quality.rs`). **Amended 2026-11-28 at M0**: "dagre ≥
+  Layered on every shape" is NOT attainable — six option profiles (network
+  simplex / tight tree × greedy acyclicer × rank align) were swept and none
+  dominates. The gate is now: the blessed table + the explicit
+  `KNOWN_CROSSING_REGRESSIONS = ["c4-like", "grid-120"]` set (a NEW worse
+  shape fails; silently fixing a listed one also fails — both force a
+  deliberate re-read) + the TOTAL crossing count must improve. Snapshots
+  re-blessed only where the metric improves, per-fixture in the row stamp
+  (E-3 posture kept).
 - V3 compound boundaries: headless scene tests over the corpus.
 - V4 exact pinning: pinned coords unchanged; others moved.
 - V5 write-through gate matrix + byte contract: `e2e bless` NO-OP every
@@ -130,7 +137,44 @@ Ratification answers (questions tool, 2026-11-28 — the decision anchors):
   with evidence (dagre is allowed to be slower — recorded, not hidden).
 - V8 tree promise: `oxidizr-layout` default features = zero deps (measured
   in CI-visible wave row); viewer headless tree = no windowing crates
-  (dagre/log are pure computation).
+  (everything dagre brings is pure computation). The `dagre` feature cannot
+  ship `default-features = false` — dagre 0.1.2's ungated `graph/json.rs`
+  makes the `json` feature (serde/serde_json) mandatory; the pair already
+  rides the viewer tree, `dagre` itself is the only genuinely new crate
+  (`agents/notes/env/dagre-crate-json-feature.md`).
+
+## M0 measured reality (2026-11-28)
+
+Three findings the plan could not have carried, each resolved inside M0's
+scope (none contradicts P7-D0…D7, so no STOP per P7-D7):
+
+1. **dagre 0.1.2 does not build `default-features = false`.** `graph/json.rs`
+   is an ungated `pub mod` that unconditionally uses `serde` — turning the
+   `json` feature off is a compile error, not a dependency win. `features =
+   ["json"]` is forced on; serde/serde_json already ride the viewer tree, so
+   the V8 promise holds in substance (the only new crate is `dagre` itself).
+   Upstream defect + measured trees: `agents/notes/env/dagre-crate-json-feature.md`.
+2. **V2 redesigned** (see the amended bullet): no option profile dominates,
+   the committed table + named-regression-set + aggregate gate replaced the
+   per-shape floor. Measured LR/contract separations: TOTAL crossings
+   1503→1005, pierces 304→191, bends 2974→2385; regressions only on
+   `c4-like` (+1 crossing, against fewer bends/shorter routes) and the
+   random `grid-120` torture shape (Layered's channel lanes win; its grid
+   numbers are additionally flattered by the `edge_separation` gap that M5
+   closes for both engines).
+3. **`oxidizr-layout --features dot-backend` was broken since P5R-R5b**
+   (`e76ba12` demoted `PX_PER_INCH`/`COMPONENT_GAP_PX` to `pub(crate)` but
+   left them on the `pub use` line → E0364; no CI leg enables the feature,
+   so it stayed latent). Fixed by dropping the two private names from the
+   re-export — a frozen backend cannot "join the engine selection" if it
+   does not compile. Lesson noted: the dagre feature now has a local check
+   (`cargo check -p oxidizr-layout --features dot-backend,dagre`) but no CI
+   leg either — closing that is M7's call.
+
+Also measured: the corpus metric harness initially over-counted crossings on
+**both** engines because `f64::signum(0.0) == 1.0` treats a point exactly on a
+segment's line as one side; the metric hand-rolls the sign now and carries a
+self-test (touching/collinear routes must not count).
 
 ## Risks
 

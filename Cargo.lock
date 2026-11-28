@@ -1049,6 +1049,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
+name = "dagre"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a166e8da25772821025c6c965c8a43825ccdce2b60ab0386fa876ae884f0806"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dark-light"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3174,6 +3185,8 @@ name = "oxidizr-layout"
 version = "0.5.0"
 dependencies = [
  "criterion",
+ "dagre",
+ "expect-test",
 ]
 
 [[package]]

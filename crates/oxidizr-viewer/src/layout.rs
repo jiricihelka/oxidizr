@@ -20,12 +20,16 @@
 //! - The ENGINE is a session choice ([`Engine`]) — the dialog
 //!   combo lists [`Engine::available`], so graphviz `dot` appears only
 //!   when the `dot-backend` feature is compiled in AND `$OXIDZR_DOT_BIN`
-//!   names a binary. The choice is deliberately NOT persisted:
+//!   names a binary, and `Dagre` appears whenever the `dagre` feature is
+//!   compiled in (pure computation — nothing to discover). The choice is
+//!   deliberately NOT persisted:
 //!   `encode`/`decode` keep their five-field `"LR|100|50|50|1"` format.
 
 use oxidizr_core::Id;
 use oxidizr_core::Workspace;
 use oxidizr_core::views::{AutomaticLayout, RankDirection, View};
+#[cfg(feature = "dagre")]
+use oxidizr_layout::Dagre;
 #[cfg(feature = "dot-backend")]
 use oxidizr_layout::Dot;
 use oxidizr_layout::{
@@ -36,14 +40,19 @@ use oxidizr_layout::{
 use crate::scene::{Overrides, Scene};
 
 /// Which engine a layout run uses. `Layered` is the bundled
-/// engine; `Dot` exists only behind the viewer's
-/// `dot-backend` feature and shells to graphviz.
+/// engine; `Dagre` exists only behind the viewer's `dagre` feature;
+/// `Dot` exists only behind the viewer's `dot-backend` feature and
+/// shells to graphviz.
 /// Session-only: the selection is never persisted.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Engine {
     /// The bundled layered engine — always available.
     #[default]
     Layered,
+    /// The `dagre` layered pipeline (feature `dagre` only) — pure
+    /// computation, available whenever compiled in.
+    #[cfg(feature = "dagre")]
+    Dagre,
     /// The external graphviz `dot` (feature `dot-backend` only).
     #[cfg(feature = "dot-backend")]
     Dot,
@@ -51,16 +60,24 @@ pub enum Engine {
 
 impl Engine {
     /// The engines THIS build+environment can actually run: `Layered`
-    /// always, `Dot` only when compiled in and `$OXIDZR_DOT_BIN` is
-    /// set (the dialog lists exactly these).
+    /// always, `Dagre` when the feature is compiled in, `Dot` only when
+    /// compiled in and `$OXIDZR_DOT_BIN` is set (the dialog lists
+    /// exactly these).
     #[must_use]
     pub fn available() -> Vec<Self> {
-        // Shape avoids `mut` in the feature-OFF build (no unused-mut).
+        // `engines` is only mutated when an optional engine is compiled in
+        // — the allow keeps the both-features-OFF build warning-free (and a
+        // combinatorial per-feature-`vec!` return would cost more to read
+        // than it saves).
+        #[allow(unused_mut)]
+        let mut engines = vec![Self::Layered];
+        #[cfg(feature = "dagre")]
+        engines.push(Self::Dagre);
         #[cfg(feature = "dot-backend")]
         if Dot::from_env().is_some() {
-            return vec![Self::Layered, Self::Dot];
+            engines.push(Self::Dot);
         }
-        vec![Self::Layered]
+        engines
     }
 
     /// The dialog label.
@@ -68,6 +85,8 @@ impl Engine {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Layered => "Layered",
+            #[cfg(feature = "dagre")]
+            Self::Dagre => "Dagre",
             #[cfg(feature = "dot-backend")]
             Self::Dot => "Graphviz dot",
         }
@@ -274,6 +293,8 @@ pub(crate) fn apply_with(
     let graph = graph_for(scene, config_for(layout));
     let result = match engine {
         Engine::Layered => Layered::new().layout(&graph)?,
+        #[cfg(feature = "dagre")]
+        Engine::Dagre => Dagre::new().layout(&graph)?,
         #[cfg(feature = "dot-backend")]
         Engine::Dot => {
             let dot = Dot::from_env()
@@ -710,6 +731,31 @@ mod tests {
         assert_eq!(Engine::available().first(), Some(&Engine::Layered));
         assert_eq!(Engine::default(), Engine::Layered);
         assert_eq!(Engine::Layered.label(), "Layered");
+    }
+
+    #[cfg(feature = "dagre")]
+    #[test]
+    fn dagre_is_listed_and_lays_the_chain_out() {
+        // Feature-compiled, the engine joins the dialog list right after
+        // the default and runs through the same scene seam.
+        assert_eq!(Engine::available().get(1), Some(&Engine::Dagre));
+        assert_eq!(Engine::Dagre.label(), "Dagre");
+        let ws = chain(None);
+        let overrides = apply_with(
+            Engine::Dagre,
+            &scene_of(&ws, None),
+            &AutomaticLayout::default(),
+        )
+        .unwrap();
+        assert_eq!(overrides.elements.len(), 3);
+        let x = |n: u32| overrides.elements.get(&id(n)).map(|p| p.0);
+        let (Some(a), Some(b), Some(c)) = (x(1), x(2), x(3)) else {
+            panic!("every chain element must be placed: {overrides:?}");
+        };
+        assert!(
+            a < b && b < c,
+            "left-right ranks out of order: {overrides:?}"
+        );
     }
 
     #[cfg(feature = "dot-backend")]

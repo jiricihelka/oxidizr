@@ -602,8 +602,9 @@ impl Viewer {
                 let mut params = self.layout_params;
                 let engines = layout::Engine::available();
                 if engines.len() > 1 {
-                    //: the choice appears exactly when a second
-                    // engine CAN run (feature + $OXIDZR_DOT_BIN).
+                    // The choice appears exactly when a second engine
+                    // CAN run (compiled feature; graphviz additionally
+                    // needs $OXIDZR_DOT_BIN).
                     ui.horizontal(|ui| {
                         ui.label("Engine:");
                         egui::ComboBox::from_id_salt("layout-engine")

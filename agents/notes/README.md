@@ -14,6 +14,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [toolbox.md](env/toolbox.md) | gates + verification tools on PATH, when/how; what's absent |
 | [triage-toolkit.md](env/triage-toolkit.md) | inspection/search tools + env knobs |
 | [gui-runtime-nixos.md](env/gui-runtime-nixos.md) | viewer `NoWaylandLib` on NixOS — dev-shell `LD_LIBRARY_PATH` feeds winit's runtime dlopens |
+| [dagre-crate-json-feature.md](env/dagre-crate-json-feature.md) | dagre 0.1.2 can't build `default-features = false`; forced `json` feature, measured trees, determinism audit |
 
 ## pitfalls/ — traps already paid for ([index](pitfalls/README.md))
 
@@ -33,6 +34,7 @@ subdir README (policy: [process/notes-policy.md](process/notes-policy.md)).
 | [cargo-dist-installer-panic.md](pitfalls/cargo-dist-installer-panic.md) | `installers` without GitHub hosting panics dist (`couldn't find the release!?`); v1 `dist-workspace.toml` + `ci`/`hosting` fixes it |
 | [epaint-037-font-stack.md](pitfalls/epaint-037-font-stack.md) | epaint 0.37: `default_fonts` OFF by default; skrifa-not-ab_glyph ⇒ companion-dep glyph outlines |
 | [notify-windows-modify-any.md](pitfalls/notify-windows-modify-any.md) | notify 8 Windows backend: plain writes are `Modify(Any)` never `Modify(Data)` ⇒ reload edges dead on Windows CI; hash layer is the contract; `#[cfg]` illegal in `matches!` patterns |
+| [f64-signum-zero-is-one.md](pitfalls/f64-signum-zero-is-one.md) | `f64::signum(0.0) == 1.0` — side-of-line predicates need a hand-rolled three-way sign or touching routes count as crossings |
 
 ## testing/ — test architecture ([index](testing/README.md))
 

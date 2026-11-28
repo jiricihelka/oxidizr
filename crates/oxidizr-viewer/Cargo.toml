@@ -25,6 +25,11 @@ gui = ["dep:eframe", "dep:clap", "dep:egui_commonmark"]
 # `$OXIDZR_DOT_BIN` names a binary; the shipped default build has zero
 # subprocess surface.
 dot-backend = ["oxidizr-layout/dot-backend"]
+# P7: the `dagre` layout engine — pure passthrough to
+# `oxidizr-layout/dagre` (itself OFF by default). The dialog's engine
+# combo lists `Dagre` whenever this is compiled in: the engine is pure
+# computation, so unlike graphviz it needs no binary in the environment.
+dagre = ["oxidizr-layout/dagre"]
 
 [[bin]]
 name = "oxidizr-viewer"

@@ -9,3 +9,4 @@
 | [triage-toolkit.md](triage-toolkit.md) | inspection/search tools (jq, ast-grep, …) + env knobs |
 | [fuzz-host-toolchain.md](fuzz-host-toolchain.md) | `cargo xtask fuzz` strips the shell's mingw `CC/CXX/AR/RANLIB` (cc-rs leak) |
 | [gui-runtime-nixos.md](gui-runtime-nixos.md) | viewer `NoWaylandLib` on NixOS — shellHook `LD_LIBRARY_PATH` feeds winit's runtime dlopens |
+| [dagre-crate-json-feature.md](dagre-crate-json-feature.md) | dagre 0.1.2 won't build `default-features = false` (ungated `graph/json.rs`); forced `json`, measured trees, determinism audit |

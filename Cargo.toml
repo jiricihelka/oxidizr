@@ -58,6 +58,26 @@ clap_complete = "4"
 miette = { version = "7", features = ["fancy"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 
+# P7 (build/PHASE_7.md P7-D0): the layout quality engine — a pure-Rust port of
+# dagre.js (Sugiyama: network-simplex ranking, Brandes-Köpf coordinates,
+# COMPOUND graphs). Adopted under the user's dependency rule (crates.io only,
+# pure Rust, statically linked, no multiplatform/compile burden) and only
+# behind `oxidizr-layout`'s NON-default `dagre` feature, so the published
+# crate's default tree stays dependency-free (P3-D1). Apache-2.0, edition 2024
+# (>= 1.85, within our 1.88 MSRV). ELK ports were measured and rejected: 17
+# exactly-pinned crates / 56k SLoC / a JSON API boundary / a second license
+# family (EPL-2.0) — `build/PHASE_7.md` P7-D0 rationale.
+#
+# `features = ["json"]` is NOT a wish for JSON I/O (this crate never calls it):
+# dagre 0.1.2 declares `json` in `default` and gates nothing on it —
+# `graph/json.rs` is a plain `pub mod` that unconditionally uses `serde`, so a
+# `default-features = false` build fails to compile (measured: six E0432/E0659
+# errors in `graph/json.rs`). The `json` feature is therefore forced on; the
+# extra `serde`/`serde_json` it brings are already in the workspace graph (the
+# JSON layer uses them), so the viewer tree grows by `dagre` + `log` only.
+# Measured tree + the defect: `agents/notes/env/dagre-crate-json-feature.md`.
+dagre = { version = "0.1.2", default-features = false, features = ["json"] }
+
 expect-test = "1"
 criterion = "0.5"
 proptest = "1"
