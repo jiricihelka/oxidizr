@@ -18,7 +18,7 @@ workspace = true
 # M0-4 leg, and end-user builds) compiles the binary. `clap` rides the
 # shell (argv parsing) so the headless dep graph stays lean.
 default = []
-gui = ["dep:eframe", "dep:clap"]
+gui = ["dep:eframe", "dep:clap", "dep:egui_commonmark"]
 # M4-6: the optional graphviz `dot` layout backend — pure passthrough to
 # `oxidizr-layout/dot-backend` (which is itself OFF by default). The
 # dialog's engine combo lists `Dot` only when this is compiled in AND
@@ -62,6 +62,7 @@ ab_glyph = { workspace = true }
 dark-light = { workspace = true }
 clap = { workspace = true, optional = true }
 eframe = { workspace = true, optional = true }
+egui_commonmark = { workspace = true, optional = true }
 
 # Release packaging (dist-workspace.toml at the workspace root): the GUI
 # binary ships in the GitHub release via this per-package feature override

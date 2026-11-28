@@ -85,6 +85,13 @@ eframe = "0.37"
 # alone; the export glyph-outline pass (export.rs) needs the embedded
 # bytes in BOTH builds, so the feature is pinned explicitly here.
 epaint = { version = "0.37", features = ["default_fonts"] }
+# P6 (build/PHASE_6.md P6-D7): markdown rendering for help texts — the
+# details panel and the documentation window. `gui`-feature-only (the
+# headless dep graph must not move: P6-V4). `default-features = false`
+# drops image loading (icons already have their own pipeline) and the
+# optional regex; the 0.26 line pins egui ^0.37 (verified crates.io
+# dependency data, 2026-11-28) — it unifies with eframe above.
+egui_commonmark = { version = "0.26", default-features = false }
 notify = "8"
 # Icon rasterization (P3-D7, M1-5). Seam decision recorded 2026-11-20:
 # tiny-skia 0.12 REMOVED the 0.11 usvg `Renderer`, so the sanctioned

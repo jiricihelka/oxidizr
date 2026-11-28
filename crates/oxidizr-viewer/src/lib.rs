@@ -42,6 +42,7 @@ pub mod reload;
 pub mod scene;
 #[cfg(feature = "gui")]
 pub mod shell;
+pub mod shortcuts;
 pub(crate) mod statefile;
 
 #[cfg(test)]
@@ -99,8 +100,8 @@ mod tests {
         }
         assert_eq!(
             files.len(),
-            14,
-            "lib core = lib.rs + ten module files + the scene tree \
+            15,
+            "lib core = lib.rs + twelve module files + the scene tree \
              (mod.rs + resolve.rs + label.rs)"
         );
     }

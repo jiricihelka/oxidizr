@@ -14,6 +14,13 @@ Rust-API churn lands here as it happens (each breaking-ish change gets its
 line in the same commit); the section is cut into the next version at its
 release.
 
+### Added
+
+- The viewer's `gui` build gained a markdown rendering widget
+  (`egui_commonmark`, optional, `gui`-feature only); it becomes visible
+  with the help-overlay and documentation waves. The headless library and
+  CLI dependency trees are unchanged.
+
 ## [0.5.0] - 2026-11-26
 
 Phase 5R — the large-scale idiomatic-Rust refactor: the ten giant modules

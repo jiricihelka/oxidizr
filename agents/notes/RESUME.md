@@ -1,4 +1,4 @@
-# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 PLANNED — GUI: arrow model-editing + help texts. Plan ratified by the user (questions tool); implementation NOT started — start at wave P6-M0. Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
+# RESUME — session checkpoint (updated 2026-11-28, **PHASE 6 IN FLIGHT — GUI: arrow model-editing + help texts. M0 DONE (egui_commonmark spike + shortcuts table, gates green); NEXT = M1 single session history. Previous arc: P5R CLOSED 2026-11-26, tag `v0.5.0` LOCAL. Never pushed — push/publish stay the user's call**)
 
 ## Where P6 stands
 
@@ -42,11 +42,13 @@
 
 ## If a next session opens
 
-- Start wave **P6-M0** (dep spike + `shortcuts.rs` draft; verify
-  `cargo tree -e normal -p oxidizr-viewer` unchanged WITHOUT `gui` — V4).
+- **M0 DONE 2026-11-28** (evidence in the PHASE_6 wave row): egui_commonmark
+  0.26 pinned behind `gui` (V4 measured), `shortcuts::all()` binding table
+  live. Start wave **P6-M1** (single session history: `Edit` step enum,
+  `Viewer.history` replaces `histories`, tests re-targeted; CHANGELOG
+  "Changed" line for the undo-granularity change lands with it).
 - Gate per commit: `cargo xtask ci` quartet AND `cargo xtask ci gui fmt
-  clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always;
-  CHANGELOG `[Unreleased]` lines from M0 on.
+  clippy test refs` (every viewer/gui commit); bless NO-OP tripwire always.
 - Windows-target watch: M4+ touches filesystem only through the existing
   save path; run `cargo xtask ci windows` at close (V9) — pitfalls note
   `windows-path-separator-assertions.md` still governs any NEW fs test.
